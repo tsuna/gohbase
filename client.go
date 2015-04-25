@@ -11,7 +11,9 @@ import (
 	"sync"
 
 	"github.com/cznic/b"
+	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
+	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
 	"github.com/tsuna/gohbase/zk"
 )
@@ -89,8 +91,9 @@ func NewClient(zkquorum string) *Client {
 }
 
 // CheckTable returns an error if the given table name doesn't exist.
-func (c *Client) CheckTable(table string) error {
-	return c.sendRpcToRegion(hrpc.NewGetStr(table, ""))
+func (c *Client) CheckTable(table string) (*pb.GetResponse, error) {
+	resp, err := c.sendRpcToRegion(hrpc.NewGetStr(table, ""))
+	return resp.(*pb.GetResponse), err
 }
 
 // Creates the META key to search for in order to locate the given key.
@@ -151,7 +154,8 @@ func (c *Client) clientFor(region *region.Info) *region.Client {
 }
 
 // Sends an RPC targeted at a particular region to the right RegionServer.
-func (c *Client) sendRpcToRegion(rpc hrpc.Call) error {
+// Returns the response (for now, as the call is synchronous).
+func (c *Client) sendRpcToRegion(rpc hrpc.Call) (proto.Message, error) {
 	table := rpc.Table()
 	key := rpc.Key()
 	reg := c.getRegion(table, key)
@@ -163,7 +167,7 @@ func (c *Client) sendRpcToRegion(rpc hrpc.Call) error {
 		var err error
 		client, reg, err = c.locateRegion(table, key)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 	rpc.SetRegion(reg.RegionName)

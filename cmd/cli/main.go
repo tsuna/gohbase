@@ -17,8 +17,9 @@ var zkquorum = flag.String("zkquorum", "localhost",
 
 func main() {
 	client := gohbase.NewClient(*zkquorum)
-	err := client.CheckTable("aeris")
+	resp, err := client.CheckTable("aeris")
 	if err != nil {
 		log.Fatalf("Fail: %s", err)
 	}
+	log.Printf("get returned: %s", resp)
 }

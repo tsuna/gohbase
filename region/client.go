@@ -96,7 +96,8 @@ func (c *Client) sendHello() error {
 }
 
 // Sends an RPC out to the wire.
-func (c *Client) SendRpc(rpc hrpc.Call) error {
+// Returns the response (for now, as the call is synchronous).
+func (c *Client) SendRpc(rpc hrpc.Call) (proto.Message, error) {
 	// Header.
 	c.id++
 	reqheader := &pb.RequestHeader{
@@ -107,13 +108,13 @@ func (c *Client) SendRpc(rpc hrpc.Call) error {
 
 	payload, err := rpc.Serialize()
 	if err != nil {
-		return fmt.Errorf("Failed to serialize RPC: %s", err)
+		return nil, fmt.Errorf("Failed to serialize RPC: %s", err)
 	}
 	payloadLen := proto.EncodeVarint(uint64(len(payload)))
 
 	headerData, err := proto.Marshal(reqheader)
 	if err != nil {
-		return fmt.Errorf("Failed to marshal Get request: %s", err)
+		return nil, fmt.Errorf("Failed to marshal Get request: %s", err)
 	}
 
 	buf := make([]byte, 5, 4+1+len(headerData)+len(payloadLen)+len(payload))
@@ -125,33 +126,33 @@ func (c *Client) SendRpc(rpc hrpc.Call) error {
 
 	err = c.write(buf)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var sz [4]byte
 	err = c.readFully(sz[:])
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	buf = make([]byte, binary.BigEndian.Uint32(sz[:]))
 	err = c.readFully(buf)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	resp := &pb.ResponseHeader{}
 	err = proto.UnmarshalMerge(buf[1:1+buf[0]], resp)
 	if err != nil {
-		return fmt.Errorf("Failed to deserialize the response header: %s", err)
+		return nil, fmt.Errorf("Failed to deserialize the response header: %s", err)
 	}
 	if resp.CallId == nil {
-		return fmt.Errorf("Response doesn't have a call ID!")
+		return nil, fmt.Errorf("Response doesn't have a call ID!")
 	} else if *resp.CallId != c.id {
-		return fmt.Errorf("Not the callId we expected: %d", *resp.CallId)
+		return nil, fmt.Errorf("Not the callId we expected: %d", *resp.CallId)
 	}
 	rpcResp := rpc.NewResponse()
 	err = proto.UnmarshalMerge(buf[2+buf[0]:], rpcResp)
 
-	return nil
+	return rpcResp, nil
 }
