@@ -45,3 +45,7 @@ func (g *Get) Serialize() ([]byte, error) {
 	}
 	return proto.Marshal(get)
 }
+
+func (g *Get) NewResponse() proto.Message {
+	return &pb.GetResponse{}
+}

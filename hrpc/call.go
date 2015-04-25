@@ -6,6 +6,7 @@
 package hrpc
 
 import (
+	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
 )
 
@@ -17,6 +18,9 @@ type Call interface {
 	SetRegion(region []byte)
 	Name() string
 	Serialize() ([]byte, error)
+	// Returns a newly created (default-state) protobuf in which to store the
+	// response of this call.
+	NewResponse() proto.Message
 }
 
 type base struct {

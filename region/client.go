@@ -148,7 +148,7 @@ func (c *Client) SendRpc(rpc hrpc.Call) error {
 	} else if *resp.CallId != c.id {
 		return fmt.Errorf("Not the callId we expected: %d", *resp.CallId)
 	}
-	rpcResp := &pb.GetResponse{}
+	rpcResp := rpc.NewResponse()
 	err = proto.UnmarshalMerge(buf[2+buf[0]:], rpcResp)
 
 	return nil
