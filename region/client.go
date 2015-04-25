@@ -49,6 +49,7 @@ func NewClient(host string, port uint16) (*Client, error) {
 
 // Sends the given buffer to the RegionServer.
 func (c *Client) write(buf []byte) error {
+	// TODO: Handle short writes.
 	n, err := c.conn.Write(buf)
 	if err != nil {
 		return fmt.Errorf("Failed to write to the RS: %s", err)
@@ -60,6 +61,7 @@ func (c *Client) write(buf []byte) error {
 
 // Tries to read enough data to fully fill up the given buffer.
 func (c *Client) readFully(buf []byte) error {
+	// TODO: Handle short reads.
 	n, err := c.conn.Read(buf)
 	if err != nil {
 		return fmt.Errorf("Failed to read from the RS: %s", err)
