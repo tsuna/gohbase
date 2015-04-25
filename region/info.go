@@ -1,0 +1,125 @@
+// Copyright (C) 2015  The GoHBase Authors.  All rights reserved.
+// This file is part of GoHBase.
+// Use of this source code is governed by the Apache License 2.0
+// that can be found in the COPYING file.
+
+package region
+
+import (
+	"fmt"
+)
+
+// Info describes a region.
+type Info struct {
+	// Table name.
+	Table []byte
+
+	// RegionName.
+	RegionName []byte
+
+	// StopKey.
+	StopKey []byte
+}
+
+func (i *Info) String() string {
+	return fmt.Sprintf("*region.Info{Table: %q, RegionName: %q, StopKey: %q}",
+		i.Table, i.RegionName, i.StopKey)
+}
+
+// CompareGeneric is the same thing as Compare but for interface{}.
+func CompareGeneric(a, b interface{}) int {
+	return Compare(a.([]byte), b.([]byte))
+}
+
+// Compare compares two region names.
+// We can't just use bytes.Compare() because it doesn't play nicely
+// with the way META keys are built as the first region has an empty start
+// key.  Let's assume we know about those 2 regions in our cache:
+//   .META.,,1
+//   tableA,,1273018455182
+// We're given an RPC to execute on "tableA", row "\x00" (1 byte row key
+// containing a 0).  If we use Compare() to sort the entries in the cache,
+// when we search for the entry right before "tableA,\000,:"
+// we'll erroneously find ".META.,,1" instead of the entry for first
+// region of "tableA".
+//
+// Since this scheme breaks natural ordering, we need this comparator to
+// implement a special version of comparison to handle this scenario.
+func Compare(a, b []byte) int {
+	var length int
+	if la, lb := len(a), len(b); la < lb {
+		length = la
+	} else {
+		length = lb
+	}
+	// Reminder: region names are of the form:
+	//   table_name,start_key,timestamp[.MD5.]
+	// First compare the table names.
+	var i int
+	for i = 0; i < length; i++ {
+		ai := a[i]    // Saves one pointer deference every iteration.
+		bi := b[i]    // Saves one pointer deference every iteration.
+		if ai != bi { // The name of the tables differ.
+			if ai == ',' {
+				return -1001 // `a' has a smaller table name.  a < b
+			} else if bi == ',' {
+				return 1001 // `b' has a smaller table name.  a > b
+			}
+			return int(ai - bi)
+		}
+		if ai == ',' { // Remember: at this point ai == bi.
+			break // We're done comparing the table names.  They're equal.
+		}
+	}
+
+	// Now find the last comma in both `a' and `b'.  We need to start the
+	// search from the end as the row key could have an arbitrary number of
+	// commas and we don't know its length.
+	aComma := findCommaFromEnd(a, i)
+	bComma := findCommaFromEnd(b, i)
+	// If either `a' or `b' is followed immediately by another comma, then
+	// they are the first region (it's the empty start key).
+	i++ // No need to check against `length', there MUST be more bytes.
+
+	// Compare keys.
+	var firstComma int
+	if aComma < bComma {
+		firstComma = aComma
+	} else {
+		firstComma = bComma
+	}
+	for ; i < firstComma; i++ {
+		ai := a[i]
+		bi := b[i]
+		if ai != bi { // The keys differ.
+			return int(ai - bi)
+		}
+	}
+	if aComma < bComma {
+		return -1002 // `a' has a shorter key.  a < b
+	} else if bComma < aComma {
+		return 1002 // `b' has a shorter key.  a > b
+	}
+
+	// Keys have the same length and have compared identical.  Compare the
+	// rest, which essentially means: use start code as a tie breaker.
+	for ; /*nothing*/ i < length; i++ {
+		ai := a[i]
+		bi := b[i]
+		if ai != bi { // The start codes differ.
+			return int(ai - bi)
+		}
+	}
+
+	return len(a) - len(b)
+}
+
+// Because there is no `LastIndexByte()' in the standard `bytes' package.
+func findCommaFromEnd(b []byte, offset int) int {
+	for i := len(b) - 1; i > offset; i-- {
+		if b[i] == ',' {
+			return i
+		}
+	}
+	panic(fmt.Errorf("No comma found in %q after offset %d", b, offset))
+}
