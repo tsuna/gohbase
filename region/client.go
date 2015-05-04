@@ -142,7 +142,10 @@ func (c *Client) SendRpc(rpc hrpc.Call) (proto.Message, error) {
 	}
 
 	resp := &pb.ResponseHeader{}
-	err = proto.UnmarshalMerge(buf[1:1+buf[0]], resp)
+	respLen, nb := proto.DecodeVarint(buf)
+	buf = buf[nb:]
+	err = proto.UnmarshalMerge(buf[:respLen], resp)
+	buf = buf[respLen:]
 	if err != nil {
 		return nil, fmt.Errorf("Failed to deserialize the response header: %s", err)
 	}
@@ -151,8 +154,17 @@ func (c *Client) SendRpc(rpc hrpc.Call) (proto.Message, error) {
 	} else if *resp.CallId != c.id {
 		return nil, fmt.Errorf("Not the callId we expected: %d", *resp.CallId)
 	}
-	rpcResp := rpc.NewResponse()
-	err = proto.UnmarshalMerge(buf[2+buf[0]:], rpcResp)
 
-	return rpcResp, nil
+	if resp.Exception != nil {
+		return nil, fmt.Errorf("remote exception %s:\n%s",
+			*resp.Exception.ExceptionClassName, *resp.Exception.StackTrace)
+	}
+
+	respLen, nb = proto.DecodeVarint(buf)
+	buf = buf[nb:]
+	rpcResp := rpc.NewResponse()
+	err = proto.UnmarshalMerge(buf, rpcResp)
+	buf = buf[respLen:]
+
+	return rpcResp, err
 }

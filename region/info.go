@@ -6,7 +6,11 @@
 package region
 
 import (
+	"encoding/binary"
 	"fmt"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/tsuna/gohbase/pb"
 )
 
 // Info describes a region.
@@ -19,6 +23,31 @@ type Info struct {
 
 	// StopKey.
 	StopKey []byte
+}
+
+func InfoFromCell(cell *pb.Cell) (*Info, error) {
+	value := cell.Value
+	if len(value) == 0 {
+		return nil, fmt.Errorf("empty value in %q", cell)
+	} else if value[0] != 'P' {
+		return nil, fmt.Errorf("unsupported region info version %d in %q",
+			value[0], cell)
+	}
+	const pbufMagic = 1346524486 // 4 bytes: "PBUF"
+	magic := binary.BigEndian.Uint32(value)
+	if magic != pbufMagic {
+		return nil, fmt.Errorf("invalid magic number in %q", cell)
+	}
+	regInfo := &pb.RegionInfo{}
+	err := proto.UnmarshalMerge(value[4:len(value)-4], regInfo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode %q: %s", cell, err)
+	}
+	return &Info{
+		Table:      regInfo.TableName.Qualifier,
+		RegionName: cell.Row,
+		StopKey:    regInfo.EndKey,
+	}, nil
 }
 
 func (i *Info) String() string {

@@ -7,7 +7,10 @@ package gohbase
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"log"
+	"strconv"
 	"sync"
 
 	"github.com/cznic/b"
@@ -28,6 +31,8 @@ var (
 		RegionName: []byte("hbase:meta,,1"),
 		StopKey:    []byte{},
 	}
+
+	infoFamily = []byte("info")
 )
 
 // region -> client cache.
@@ -42,6 +47,12 @@ func (rcc *regionClientCache) get(r *region.Info) *region.Client {
 	c := rcc.clients[r]
 	rcc.m.Unlock()
 	return c
+}
+
+func (rcc *regionClientCache) put(r *region.Info, c *region.Client) {
+	rcc.m.Lock()
+	rcc.clients[r] = c
+	rcc.m.Unlock()
 }
 
 // key -> region cache.
@@ -68,6 +79,13 @@ func (krc *keyRegionCache) get(key []byte) ([]byte, *region.Info) {
 	return k.([]byte), v.(*region.Info)
 }
 
+func (krc *keyRegionCache) put(key []byte, reg *region.Info) {
+	krc.m.Lock()
+	// TODO: return any value that was there previously etc.
+	krc.regions.Set(key, reg)
+	krc.m.Unlock()
+}
+
 // A Client provides access to an HBase cluster.
 type Client struct {
 	regions keyRegionCache
@@ -86,13 +104,17 @@ type Client struct {
 func NewClient(zkquorum string) *Client {
 	return &Client{
 		regions:  keyRegionCache{regions: b.TreeNew(region.CompareGeneric)},
+		clients:  regionClientCache{clients: make(map[*region.Info]*region.Client)},
 		zkquorum: zkquorum,
 	}
 }
 
 // CheckTable returns an error if the given table name doesn't exist.
 func (c *Client) CheckTable(table string) (*pb.GetResponse, error) {
-	resp, err := c.sendRpcToRegion(hrpc.NewGetStr(table, ""))
+	resp, err := c.sendRpcToRegion(hrpc.NewGetStr(table, "theKey"))
+	if err != nil {
+		return nil, err
+	}
 	return resp.(*pb.GetResponse), err
 }
 
@@ -182,9 +204,78 @@ func (c *Client) locateRegion(table, key []byte) (*region.Client, *region.Info, 
 			return nil, nil, err
 		}
 	}
-	// TODO
-	return c.metaClient, &region.Info{[]byte("aeris"),
-		[]byte("aeris,,1430812876256.d810a8bde541afa5ffd03c95923a9854."), []byte{}}, nil
+	metaKey := createRegionSearchKey(table, key)
+	rpc := hrpc.NewGetBefore(metaTableName, metaKey, infoFamily)
+	rpc.SetRegion(metaRegionInfo.RegionName)
+	resp, err := c.metaClient.SendRpc(rpc)
+	if err != nil {
+		return nil, nil, err
+	}
+	return c.discoverRegion(resp.(*pb.GetResponse))
+}
+
+// Adds a new region to our regions cache.
+func (c *Client) discoverRegion(metaRow *pb.GetResponse) (*region.Client, *region.Info, error) {
+	if metaRow.Result == nil {
+		return nil, nil, errors.New("table not found")
+	}
+	var host string
+	var port uint16
+	var reg *region.Info
+	for _, cell := range metaRow.Result.Cell {
+		switch string(cell.Qualifier) {
+		case "regioninfo":
+			var err error
+			reg, err = region.InfoFromCell(cell)
+			if err != nil {
+				return nil, nil, err
+			}
+		case "server":
+			value := cell.Value
+			if len(value) == 0 {
+				continue // Empty during NSRE.
+			}
+			colon := bytes.IndexByte(value, ':')
+			if colon < 1 { // Colon can't be at the beginning.
+				return nil, nil,
+					fmt.Errorf("broken meta: no colon found in info:server %q", cell)
+			}
+			host = string(value[:colon])
+			portU64, err := strconv.ParseUint(string(value[colon+1:]), 10, 16)
+			if err != nil {
+				return nil, nil, err
+			}
+			port = uint16(portU64)
+		default:
+			// Other kinds of qualifiers: ignore them.
+			// TODO: If this is the parent of a split region, there are two other
+			// KVs that could be useful: `info:splitA' and `info:splitB'.
+			// Need to investigate whether we can use those as a hint to update our
+			// regions_cache with the daughter regions of the split.
+		}
+	}
+
+	client, err := region.NewClient(host, port)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// 1. Record the region -> client mapping.
+	// This won't be "discoverable" until another map points to it, because
+	// at this stage no one knows about this region yet, so another thread
+	// may be looking up that region again while we're in the process of
+	// publishing our findings.
+	c.clients.put(reg, client)
+
+	// 2. Store the region in the sorted map.
+	// This will effectively "publish" the result of our work to other
+	// threads.  The window between when the previous `put' becomes visible
+	// to all other threads and when we're done updating the sorted map is
+	// when we may unnecessarily re-lookup the same region again.  It's an
+	// acceptable trade-off.  We avoid extra synchronization complexity in
+	// exchange of occasional duplicate work (which should be rare anyway).
+	c.regions.put(reg.RegionName, reg)
+	return client, reg, nil
 }
 
 // Looks up the meta region in ZooKeeper.

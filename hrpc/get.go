@@ -13,7 +13,9 @@ import (
 type Get struct {
 	base
 
-	// TODO: More...
+	family []byte
+
+	closestBefore bool
 }
 
 func NewGetStr(table, key string) *Get {
@@ -26,6 +28,17 @@ func NewGetStr(table, key string) *Get {
 	}
 }
 
+func NewGetBefore(table, key, family []byte) *Get {
+	return &Get{
+		base: base{
+			table: table,
+			key:   key,
+		},
+		family:        family,
+		closestBefore: true,
+	}
+}
+
 func (g *Get) Name() string {
 	return "Get"
 }
@@ -34,14 +47,19 @@ func (g *Get) Serialize() ([]byte, error) {
 	get := &pb.GetRequest{
 		Region: g.regionSpecifier(),
 		Get: &pb.Get{
-			Row: []byte("theKey"),
-			Column: []*pb.Column{
-				&pb.Column{
-					Family:    []byte("e"),
-					Qualifier: [][]byte{[]byte("theCol")},
-				},
-			},
+			Row: g.key,
 		},
+	}
+	if g.family != nil {
+		get.Get.Column = []*pb.Column{
+			&pb.Column{
+				Family: g.family,
+				//Qualifier: [][]byte{[]byte("theCol")},
+			},
+		}
+	}
+	if g.closestBefore {
+		get.Get.ClosestRowBefore = proto.Bool(true)
 	}
 	return proto.Marshal(get)
 }
