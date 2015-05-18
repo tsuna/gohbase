@@ -19,6 +19,12 @@ func TestCompare(t *testing.T) {
 		// Different table names.
 		[]byte("table,,1234567890"), []byte(".META.,,1234567890"),
 	}, {
+		// Different table names but same prefix.
+		[]byte("tabl2,,1234567890"), []byte("tabl1,,1234567890"),
+	}, {
+		// Different table names (different lengths).
+		[]byte("table,,1234567890"), []byte("tabl,,1234567890"),
+	}, {
 		// Any key is greater than the start key.
 		[]byte("table,foo,1234567890"), []byte("table,,1234567890"),
 	}, {
@@ -55,4 +61,24 @@ func TestCompare(t *testing.T) {
 			t.Errorf("%q was found to be greater than %q (%d)", tcase.b, tcase.a, i)
 		}
 	}
+
+	meta := []byte("hbase:meta,,1")
+	if i := Compare(meta, meta); i != 0 {
+		t.Errorf("%q was found to not be equal to itself (%d)", meta, i)
+	}
+}
+
+func TestCompareBogusName(t *testing.T) {
+	defer func() {
+		expected := `No comma found in "bogus" after offset 5`
+		v := recover()
+		if v == nil {
+			t.Errorf("Should have panic'ed")
+		} else if e, ok := v.(error); !ok {
+			t.Errorf("panic'ed with a %T instead of an error (%#v)", v, v)
+		} else if e.Error() != expected {
+			t.Errorf("Expected panic(%q) but got %q", expected, e)
+		}
+	}()
+	Compare([]byte("bogus"), []byte("bogus"))
 }
