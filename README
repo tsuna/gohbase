@@ -1,5 +1,0 @@
-  ,---------------------.
-  | Golang HBase client |
-  `---------------------'
-
-This is a pure-Go client for HBase.
