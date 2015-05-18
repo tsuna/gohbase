@@ -94,7 +94,7 @@ func Compare(a, b []byte) int {
 			} else if bi == ',' {
 				return 1001 // `b' has a smaller table name.  a > b
 			}
-			return int(ai - bi)
+			return int(ai) - int(bi)
 		}
 		if ai == ',' { // Remember: at this point ai == bi.
 			break // We're done comparing the table names.  They're equal.
@@ -121,7 +121,7 @@ func Compare(a, b []byte) int {
 		ai := a[i]
 		bi := b[i]
 		if ai != bi { // The keys differ.
-			return int(ai - bi)
+			return int(ai) - int(bi)
 		}
 	}
 	if aComma < bComma {
@@ -136,7 +136,7 @@ func Compare(a, b []byte) int {
 		ai := a[i]
 		bi := b[i]
 		if ai != bi { // The start codes differ.
-			return int(ai - bi)
+			return int(ai) - int(bi)
 		}
 	}
 
