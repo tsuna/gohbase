@@ -6,10 +6,71 @@
 package region_test
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
+	"github.com/tsuna/gohbase/pb"
 	. "github.com/tsuna/gohbase/region"
 )
+
+// Test parsing the contents of a cell found in meta.
+func TestInfoFromMeta(t *testing.T) {
+	put := pb.CellType_PUT
+	regionName := []byte("table,foo,1431921690563.53e41f94d5c3087af0d13259b8c4186d.")
+	buf := []byte("PBUF\010\303\217\274\251\326)\022\020\n\007default" +
+		"\022\005table\032\000\"\000(\0000\0008\000")
+	cell := &pb.Cell{
+		Row:       regionName,
+		Family:    []byte("info"),
+		Qualifier: []byte("regioninfo"),
+		Timestamp: proto.Uint64(1431921690626),
+		CellType:  &put,
+	}
+	info, err := InfoFromCell(cell)
+	if err == nil || !strings.HasPrefix(err.Error(), "empty value") {
+		t.Errorf("Unexpected error on empty value: %s", err)
+	}
+	cell.Value = buf
+	info, err = InfoFromCell(cell)
+	if err != nil {
+		t.Fatalf("Failed to parse cell: %s", err)
+	}
+	if !bytes.Equal(info.RegionName, regionName) {
+		t.Errorf("Unexpected regionName name: %q", info.RegionName)
+	}
+	if len(info.StopKey) != 0 {
+		t.Errorf("Expected empty StopKey but got %q", info.StopKey)
+	}
+
+	expected := `*region.Info{Table: "table", RegionName: "table,foo,` +
+		`1431921690563.53e41f94d5c3087af0d13259b8c4186d.", StopKey: ""}`
+	if s := info.String(); s != expected {
+		t.Errorf("Unexpected string representation.\nExpected: %q\n  Actual: %q", expected, s)
+	}
+
+	// Corrupt the protobuf.
+	buf[4] = 0xFF
+	_, err = InfoFromCell(cell)
+	if err == nil || !strings.HasPrefix(err.Error(), "failed to decode") {
+		t.Errorf("Unexpected error on corrupt protobuf: %s", err)
+	}
+
+	// Corrupt the magic number.
+	buf[1] = 0xFF
+	_, err = InfoFromCell(cell)
+	if err == nil || !strings.HasPrefix(err.Error(), "invalid magic number") {
+		t.Errorf("Unexpected error on invalid magic number %s", err)
+	}
+
+	// Corrupt the magic number (first byte).
+	buf[0] = 0xFF
+	_, err = InfoFromCell(cell)
+	if err == nil || !strings.HasPrefix(err.Error(), "unsupported region info version") {
+		t.Errorf("Unexpected error on invalid magic number %s", err)
+	}
+}
 
 func TestCompare(t *testing.T) {
 	// Test cases from AsyncHBase
@@ -63,7 +124,7 @@ func TestCompare(t *testing.T) {
 	}
 
 	meta := []byte("hbase:meta,,1")
-	if i := Compare(meta, meta); i != 0 {
+	if i := CompareGeneric(meta, meta); i != 0 {
 		t.Errorf("%q was found to not be equal to itself (%d)", meta, i)
 	}
 }
