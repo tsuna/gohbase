@@ -1,7 +1,12 @@
 language: go
 go:
   - 1.4
+before_install:
+  - go get golang.org/x/tools/cmd/cover
 install:
   - go get ./...
+after_success:
+  - make coverdata
+  - bash <(curl -s https://codecov.io/bash)
 script:
   - make -j4 check GOTEST_FLAGS=-v
