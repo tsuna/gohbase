@@ -3,6 +3,7 @@
 // Use of this source code is governed by the Apache License 2.0
 // that can be found in the COPYING file.
 
+// Package zk encapsulates our interactions with ZooKeeper.
 package zk
 
 import (
@@ -23,6 +24,7 @@ const (
 	znode = "/hbase"
 )
 
+// LocateMeta returns the location of the meta table.
 func LocateMeta(zkquorum string) (string, uint16, error) {
 	zks := strings.Split(zkquorum, ",")
 	zkconn, _, err := zk.Connect(zks, time.Duration(sessionTimeout)*time.Second)

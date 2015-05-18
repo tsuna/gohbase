@@ -193,7 +193,7 @@ func (c *Client) sendRpcToRegion(rpc hrpc.Call) (proto.Message, error) {
 		}
 	}
 	rpc.SetRegion(reg.RegionName)
-	return client.SendRpc(rpc)
+	return client.SendRPC(rpc)
 }
 
 // Locates the region in which the given row key for the given table is.
@@ -207,7 +207,7 @@ func (c *Client) locateRegion(table, key []byte) (*region.Client, *region.Info, 
 	metaKey := createRegionSearchKey(table, key)
 	rpc := hrpc.NewGetBefore(metaTableName, metaKey, infoFamily)
 	rpc.SetRegion(metaRegionInfo.RegionName)
-	resp, err := c.metaClient.SendRpc(rpc)
+	resp, err := c.metaClient.SendRPC(rpc)
 	if err != nil {
 		return nil, nil, err
 	}

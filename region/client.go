@@ -28,6 +28,7 @@ type Client struct {
 	port uint16
 }
 
+// NewClient creates a new RegionClient.
 func NewClient(host string, port uint16) (*Client, error) {
 	addr := fmt.Sprintf("%s:%d", host, port)
 	conn, err := net.Dial("tcp", addr)
@@ -95,9 +96,9 @@ func (c *Client) sendHello() error {
 	return c.write(buf)
 }
 
-// Sends an RPC out to the wire.
+// SendRPC sends an RPC out to the wire.
 // Returns the response (for now, as the call is synchronous).
-func (c *Client) SendRpc(rpc hrpc.Call) (proto.Message, error) {
+func (c *Client) SendRPC(rpc hrpc.Call) (proto.Message, error) {
 	// Header.
 	c.id++
 	reqheader := &pb.RequestHeader{

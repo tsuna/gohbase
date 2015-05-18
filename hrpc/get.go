@@ -10,6 +10,7 @@ import (
 	"github.com/tsuna/gohbase/pb"
 )
 
+// Get represents a Get HBase call.
 type Get struct {
 	base
 
@@ -18,6 +19,7 @@ type Get struct {
 	closestBefore bool
 }
 
+// NewGetStr creates a new Get request for the given table/key.
 func NewGetStr(table, key string) *Get {
 	return &Get{
 		base: base{
@@ -28,6 +30,8 @@ func NewGetStr(table, key string) *Get {
 	}
 }
 
+// NewGetBefore creates a new Get request for the row right before the given
+// key in the given table and family.
 func NewGetBefore(table, key, family []byte) *Get {
 	return &Get{
 		base: base{
@@ -39,10 +43,12 @@ func NewGetBefore(table, key, family []byte) *Get {
 	}
 }
 
+// Name returns the name of this RPC call.
 func (g *Get) Name() string {
 	return "Get"
 }
 
+// Serialize serializes this RPC into a buffer.
 func (g *Get) Serialize() ([]byte, error) {
 	get := &pb.GetRequest{
 		Region: g.regionSpecifier(),
@@ -64,6 +70,8 @@ func (g *Get) Serialize() ([]byte, error) {
 	return proto.Marshal(get)
 }
 
+// NewResponse creates an empty protobuf message to read the response of this
+// RPC.
 func (g *Get) NewResponse() proto.Message {
 	return &pb.GetResponse{}
 }

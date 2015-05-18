@@ -10,6 +10,7 @@ import (
 	"github.com/tsuna/gohbase/pb"
 )
 
+// Call represents an HBase RPC call.
 type Call interface {
 	Table() []byte
 

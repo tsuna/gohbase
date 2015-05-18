@@ -25,6 +25,8 @@ type Info struct {
 	StopKey []byte
 }
 
+// InfoFromCell parses a KeyValue from the meta table and creates the
+// corresponding Info object.
 func InfoFromCell(cell *pb.Cell) (*Info, error) {
 	value := cell.Value
 	if len(value) == 0 {
