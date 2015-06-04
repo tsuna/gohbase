@@ -32,7 +32,9 @@ var (
 		StopKey:    []byte{},
 	}
 
-	infoFamily = []byte("info")
+	infoFamily = map[string][]string{
+		"info": nil,
+	}
 )
 
 // region -> client cache.
@@ -111,7 +113,16 @@ func NewClient(zkquorum string) *Client {
 
 // CheckTable returns an error if the given table name doesn't exist.
 func (c *Client) CheckTable(table string) (*pb.GetResponse, error) {
-	resp, err := c.sendRpcToRegion(hrpc.NewGetStr(table, "theKey"))
+	resp, err := c.sendRpcToRegion(hrpc.NewGetStr(table, "theKey", nil))
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*pb.GetResponse), err
+}
+
+// GetRow returns a single row fetched from HBase.
+func (c *Client) GetRow(table string, rowkey string, families map[string][]string) (*pb.GetResponse, error) {
+	resp, err := c.sendRpcToRegion(hrpc.NewGetStr(table, rowkey, families))
 	if err != nil {
 		return nil, err
 	}

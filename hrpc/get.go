@@ -14,31 +14,31 @@ import (
 type Get struct {
 	base
 
-	family []byte
+	families map[string][]string //Maps a column family to a list of qualifiers
 
 	closestBefore bool
 }
 
 // NewGetStr creates a new Get request for the given table/key.
-func NewGetStr(table, key string) *Get {
+func NewGetStr(table, key string, families map[string][]string) *Get {
 	return &Get{
 		base: base{
 			table: []byte(table),
 			key:   []byte(key),
 		},
-		// TODO
+		families: families,
 	}
 }
 
 // NewGetBefore creates a new Get request for the row right before the given
 // key in the given table and family.
-func NewGetBefore(table, key, family []byte) *Get {
+func NewGetBefore(table, key []byte, families map[string][]string) *Get {
 	return &Get{
 		base: base{
 			table: table,
 			key:   key,
 		},
-		family:        family,
+		families:      families,
 		closestBefore: true,
 	}
 }
@@ -56,13 +56,16 @@ func (g *Get) Serialize() ([]byte, error) {
 			Row: g.key,
 		},
 	}
-	if g.family != nil {
-		get.Get.Column = []*pb.Column{
-			&pb.Column{
-				Family: g.family,
-				//Qualifier: [][]byte{[]byte("theCol")},
-			},
+	for family, qualifiers := range g.families {
+		bytequals := make([][]byte, len(qualifiers))
+		for i, qual := range qualifiers {
+			bytequals[i] = []byte(qual)
 		}
+		get.Get.Column = append(get.Get.Column,
+			&pb.Column{
+				Family:    []byte(family),
+				Qualifier: bytequals,
+			})
 	}
 	if g.closestBefore {
 		get.Get.ClosestRowBefore = proto.Bool(true)
