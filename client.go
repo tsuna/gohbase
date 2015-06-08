@@ -129,6 +129,15 @@ func (c *Client) Get(table string, rowkey string, families map[string][]string) 
 	return resp.(*pb.GetResponse), err
 }
 
+// Scan retrieves the values specified in families from the given range.
+func (c *Client) Scan(table string, families map[string][]string, startRow, stopRow []byte) (*pb.ScanResponse, error) {
+	resp, err := c.sendRpcToRegion(hrpc.NewScanStr(table, families, startRow, stopRow))
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*pb.ScanResponse), err
+}
+
 // Put inserts or updates the values into the given row of the table.
 func (c *Client) Put(table string, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
 	resp, err := c.sendRpcToRegion(hrpc.NewPutStr(table, rowkey, values))
