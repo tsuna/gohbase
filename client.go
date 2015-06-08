@@ -32,7 +32,9 @@ var (
 		StopKey:    []byte{},
 	}
 
-	infoFamily = []byte("info")
+	infoFamily = map[string][]string{
+		"info": nil,
+	}
 )
 
 // region -> client cache.
@@ -111,11 +113,68 @@ func NewClient(zkquorum string) *Client {
 
 // CheckTable returns an error if the given table name doesn't exist.
 func (c *Client) CheckTable(table string) (*pb.GetResponse, error) {
-	resp, err := c.sendRpcToRegion(hrpc.NewGetStr(table, "theKey"))
+	resp, err := c.sendRpcToRegion(hrpc.NewGetStr(table, "theKey", nil))
 	if err != nil {
 		return nil, err
 	}
 	return resp.(*pb.GetResponse), err
+}
+
+// Get fetches a single row from hbase
+func (c *Client) Get(table string, rowkey string, families map[string][]string) (*pb.GetResponse, error) {
+	resp, err := c.sendRpcToRegion(hrpc.NewGetStr(table, rowkey, families))
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*pb.GetResponse), err
+}
+
+// Scan will retrieve the values specified in families from multiple rows in
+// the given hbase table.
+func (c *Client) Scan(table string, families map[string][]string, startRow, stopRow []byte) (*pb.ScanResponse, error) {
+	resp, err := c.sendRpcToRegion(hrpc.NewScanStr(table, families, startRow, stopRow))
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*pb.ScanResponse), err
+}
+
+// Put will insert or update the values into the given row the table and rowkey
+// correspond to
+func (c *Client) Put(table string, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
+	resp, err := c.sendRpcToRegion(hrpc.NewPutStr(table, rowkey, values))
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*pb.MutateResponse), err
+}
+
+// Delete removes values from thw given row the table and rowkey correspond to
+func (c *Client) Delete(table, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
+	resp, err := c.sendRpcToRegion(hrpc.NewDelStr(table, rowkey, values))
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*pb.MutateResponse), err
+}
+
+// Append will append all given values to their current values in the given row
+// corresponding to the given table and rowkey
+func (c *Client) Append(table, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
+	resp, err := c.sendRpcToRegion(hrpc.NewAppStr(table, rowkey, values))
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*pb.MutateResponse), err
+}
+
+// Increment will add the given values to their corresponding values in hbase
+func (c *Client) Increment(table, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
+	resp, err := c.sendRpcToRegion(hrpc.NewIncStr(table, rowkey, values))
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*pb.MutateResponse), err
 }
 
 // Creates the META key to search for in order to locate the given key.

@@ -15,6 +15,10 @@ import (
 	"github.com/tsuna/gohbase/pb"
 )
 
+var (
+	ShortWriteErr = fmt.Errorf("short write occurred while writing to socket")
+)
+
 // Client manages a connection to a RegionServer.
 type Client struct {
 	id uint32
@@ -26,6 +30,11 @@ type Client struct {
 
 	// Port of the RegionServer.
 	port uint16
+
+	// Channels to send messages to the writer thread
+	sendBuf chan []byte
+	done    chan int
+	sendErr error
 }
 
 // NewClient creates a new RegionClient.
@@ -37,10 +46,13 @@ func NewClient(host string, port uint16) (*Client, error) {
 			fmt.Errorf("failed to connect to the RegionServer at %s: %s", addr, err)
 	}
 	c := &Client{
-		conn: conn,
-		host: host,
-		port: port,
+		conn:    conn,
+		host:    host,
+		port:    port,
+		sendBuf: make(chan []byte),
+		done:    make(chan int),
 	}
+	go c.write()
 	err = c.sendHello()
 	if err != nil {
 		return nil, err
@@ -48,16 +60,37 @@ func NewClient(host string, port uint16) (*Client, error) {
 	return c, nil
 }
 
-// Sends the given buffer to the RegionServer.
-func (c *Client) write(buf []byte) error {
-	// TODO: Handle short writes.
-	n, err := c.conn.Write(buf)
-	if err != nil {
-		return fmt.Errorf("Failed to write to the RS: %s", err)
-	} else if n != len(buf) {
-		return fmt.Errorf("Failed to write everything to the RS: %s", err)
+// Reads buffers from c.sendBuf, and writes then to the RegionServer. If an
+// error is encountered, closes c.done to let writers to c.sendBuf to know
+// that they should give up.
+func (c *Client) write() {
+	for {
+		buf := <-c.sendBuf
+		n, err := c.conn.Write(buf)
+		if err != nil {
+			// There was an error while writing
+			c.sendErr = err
+			close(c.done)
+			return
+		}
+		if n != len(buf) {
+			// We failed to write the entire buffer
+			// TODO: Perhaps handle this in another way than closing down
+			c.sendErr = ShortWriteErr
+			close(c.done)
+			return
+		}
 	}
-	return nil
+}
+
+// Sends a message to the write thread, returns an error if one occurred.
+func (c *Client) sendWrite(buf []byte) error {
+	select {
+	case c.sendBuf <- buf:
+		return nil
+	case <-c.done:
+		return c.sendErr
+	}
 }
 
 // Tries to read enough data to fully fill up the given buffer.
@@ -93,7 +126,7 @@ func (c *Client) sendHello() error {
 	binary.BigEndian.PutUint32(buf[6:], uint32(len(data)))
 	buf = append(buf, data...)
 
-	return c.write(buf)
+	return c.sendWrite(buf)
 }
 
 // SendRPC sends an RPC out to the wire.
@@ -125,7 +158,7 @@ func (c *Client) SendRPC(rpc hrpc.Call) (proto.Message, error) {
 	buf = append(buf, payloadLen...)
 	buf = append(buf, payload...)
 
-	err = c.write(buf)
+	err = c.sendWrite(buf)
 	if err != nil {
 		return nil, err
 	}
