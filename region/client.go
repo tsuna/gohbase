@@ -15,6 +15,10 @@ import (
 	"github.com/tsuna/gohbase/pb"
 )
 
+var (
+	ShortWriteErr = fmt.Errorf("short write occurred while writing to socket")
+)
+
 // Client manages a connection to a RegionServer.
 type Client struct {
 	id uint32
@@ -28,9 +32,9 @@ type Client struct {
 	port uint16
 
 	// Channels to send messages to the writer thread
-	sendBuf  chan []byte
-	sendDone chan int
-	sendErr  error
+	sendBuf chan []byte
+	done    chan int
+	sendErr error
 }
 
 // NewClient creates a new RegionClient.
@@ -42,11 +46,11 @@ func NewClient(host string, port uint16) (*Client, error) {
 			fmt.Errorf("failed to connect to the RegionServer at %s: %s", addr, err)
 	}
 	c := &Client{
-		conn:     conn,
-		host:     host,
-		port:     port,
-		sendBuf:  make(chan []byte),
-		sendDone: make(chan int),
+		conn:    conn,
+		host:    host,
+		port:    port,
+		sendBuf: make(chan []byte),
+		done:    make(chan int),
 	}
 	go c.write()
 	err = c.sendHello()
@@ -57,7 +61,7 @@ func NewClient(host string, port uint16) (*Client, error) {
 }
 
 // Reads buffers from c.sendBuf, and writes then to the RegionServer. If an
-// error is encountered, closes c.sendDone to let writers to c.sendBuf to know
+// error is encountered, closes c.done to let writers to c.sendBuf to know
 // that they should give up.
 func (c *Client) write() {
 	for {
@@ -65,14 +69,15 @@ func (c *Client) write() {
 		n, err := c.conn.Write(buf)
 		if err != nil {
 			// There was an error while writing
-			c.sendErr = fmt.Errorf("error while writing to socket: %v", err)
-			close(c.sendDone)
+			c.sendErr = err
+			close(c.done)
 			return
-		} else if n != len(buf) {
+		}
+		if n != len(buf) {
 			// We failed to write the entire buffer
 			// TODO: Perhaps handle this in another way than closing down
-			c.sendErr = fmt.Errorf("short write occurred while writing to socket")
-			close(c.sendDone)
+			c.sendErr = ShortWriteErr
+			close(c.done)
 			return
 		}
 	}
@@ -83,7 +88,7 @@ func (c *Client) sendWrite(buf []byte) error {
 	select {
 	case c.sendBuf <- buf:
 		return nil
-	case <-c.sendDone:
+	case <-c.done:
 		return c.sendErr
 	}
 }
