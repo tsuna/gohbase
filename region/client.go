@@ -9,10 +9,17 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"sync"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
+)
+
+var (
+	// ErrShortWrite is used when the writer thread only succeeds in writing
+	// part of its buffer to the socket, and not all of the buffer was sent
+	ErrShortWrite = fmt.Errorf("short write occurred while writing to socket")
 )
 
 // Client manages a connection to a RegionServer.
@@ -26,6 +33,13 @@ type Client struct {
 
 	// Port of the RegionServer.
 	port uint16
+
+	// writeMutex is used to prevent multiple threads from writing to the
+	// socket at the same time.
+	writeMutex *sync.Mutex
+
+	// sendErr is set once a write fails.
+	sendErr error
 }
 
 // NewClient creates a new RegionClient.
@@ -37,9 +51,10 @@ func NewClient(host string, port uint16) (*Client, error) {
 			fmt.Errorf("failed to connect to the RegionServer at %s: %s", addr, err)
 	}
 	c := &Client{
-		conn: conn,
-		host: host,
-		port: port,
+		conn:       conn,
+		host:       host,
+		port:       port,
+		writeMutex: &sync.Mutex{},
 	}
 	err = c.sendHello()
 	if err != nil {
@@ -50,14 +65,29 @@ func NewClient(host string, port uint16) (*Client, error) {
 
 // Sends the given buffer to the RegionServer.
 func (c *Client) write(buf []byte) error {
-	// TODO: Handle short writes.
-	n, err := c.conn.Write(buf)
-	if err != nil {
-		return fmt.Errorf("Failed to write to the RS: %s", err)
-	} else if n != len(buf) {
-		return fmt.Errorf("Failed to write everything to the RS: %s", err)
+	c.writeMutex.Lock()
+
+	if c.sendErr != nil {
+		c.writeMutex.Unlock()
+		return c.sendErr
 	}
-	return nil
+
+	n, err := c.conn.Write(buf)
+
+	if err != nil {
+		// There was an error while writing
+		c.sendErr = err
+		c.conn.Close()
+	}
+	if n != len(buf) {
+		// We failed to write the entire buffer
+		// TODO: Perhaps handle this in another way than closing down
+		c.sendErr = ErrShortWrite
+		c.conn.Close()
+	}
+
+	c.writeMutex.Unlock()
+	return c.sendErr
 }
 
 // Tries to read enough data to fully fill up the given buffer.

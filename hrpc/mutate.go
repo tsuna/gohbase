@@ -75,7 +75,7 @@ func (m *Mutate) Serialize() ([]byte, error) {
 	// We need to convert everything in the values field
 	// to a protobuf ColumnValue
 	bytevalues := make([]*pb.MutationProto_ColumnValue, len(m.values))
-	counter := 0
+	i := 0
 	for k, v := range m.values {
 		qualvals := make([]*pb.MutationProto_ColumnValue_QualifierValue, len(v))
 		j := 0
@@ -92,11 +92,11 @@ func (m *Mutate) Serialize() ([]byte, error) {
 			}
 			j++
 		}
-		bytevalues[counter] = &pb.MutationProto_ColumnValue{
+		bytevalues[i] = &pb.MutationProto_ColumnValue{
 			Family:         []byte(k),
 			QualifierValue: qualvals,
 		}
-		counter++
+		i++
 	}
 	mutate := &pb.MutateRequest{
 		Region: m.regionSpecifier(),
