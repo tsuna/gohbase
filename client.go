@@ -129,15 +129,15 @@ func (c *Client) Get(table string, rowkey string, families map[string][]string) 
 	return resp.(*pb.GetResponse), err
 }
 
-/*
-func (c *Client) NewScan(table string, families map[string][]string, startRow, stopRow *[]byte) ([]*pb.ScanResponse, error) {
+// Scan will retrieve the values specified in families from multiple rows in
+// the given hbase table.
+func (c *Client) Scan(table string, families map[string][]string, startRow, stopRow []byte) (*pb.ScanResponse, error) {
 	resp, err := c.sendRpcToRegion(hrpc.NewScanStr(table, families, startRow, stopRow))
 	if err != nil {
 		return nil, err
 	}
 	return resp.(*pb.ScanResponse), err
 }
-*/
 
 // Put will insert or update the values into the given row the table and rowkey
 // correspond to

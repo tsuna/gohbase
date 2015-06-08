@@ -5,7 +5,6 @@
 
 package hrpc
 
-/*
 import (
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
@@ -30,22 +29,23 @@ type Scan struct {
 // column families and qualifiers will be returned. When run, a scanner Id will
 // also be returned, that can be used to fetch addition results via successive
 // Scan requests.
-func NewScanStr(table string, families map[string][]string, startRow, stoprow *[]byte) *Scan {
-	return &Scan{
+func NewScanStr(table string, families map[string][]string, startRow, stopRow []byte) *Scan {
+	scan := &Scan{
 		base: base{
 			table: []byte(table),
-			//key:
+			key:   startRow,
 		},
 		families:     families,
 		startRow:     startRow,
 		stopRow:      stopRow,
 		closeScanner: false,
 	}
+	return scan
 }
 
 // NewScanFromId creates a new Scan request that will return additional results
 // from a given scanner Id
-func NewScanFromId(table string, scannerId uint64) {
+func NewScanFromId(table string, scannerId uint64) *Scan {
 	return &Scan{
 		base: base{
 			table: []byte(table),
@@ -58,7 +58,7 @@ func NewScanFromId(table string, scannerId uint64) {
 
 // NewScanCloseId creates a new Scan request that will close the scan for a
 // given scanner Id
-func NewScanCloseId(table string, scannerId uint64) {
+func NewScanCloseId(table string, scannerId uint64) *Scan {
 	return &Scan{
 		base: base{
 			table: []byte(table),
@@ -74,20 +74,18 @@ func (s *Scan) Name() string {
 	return "Scan"
 }
 
+// Serialize will convert this Scan into a serialized protobuf message ready
+// to be sent to an hbase node
 func (s *Scan) Serialize() ([]byte, error) {
 	scan := &pb.ScanRequest{
 		Region:       s.regionSpecifier(),
-		CloseScanner: s.closeScanner,
+		CloseScanner: &s.closeScanner,
 	}
-	if scannerId == nil {
+	if s.scannerId == nil {
 		scan.Scan = &pb.Scan{
-			Column: familiesToColumn(s.families),
-		}
-		if s.startRow != nil {
-			scan.Scan.StartRow = *s.startRow
-		}
-		if s.stopRow != nil {
-			scan.Scan.StopRow = *s.StopRow
+			Column:   familiesToColumn(s.families),
+			StartRow: s.startRow,
+			StopRow:  s.stopRow,
 		}
 	} else {
 		scan.ScannerId = s.scannerId
@@ -100,4 +98,3 @@ func (s *Scan) Serialize() ([]byte, error) {
 func (s *Scan) NewResponse() proto.Message {
 	return &pb.ScanResponse{}
 }
-*/
