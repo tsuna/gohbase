@@ -53,19 +53,9 @@ func (g *Get) Serialize() ([]byte, error) {
 	get := &pb.GetRequest{
 		Region: g.regionSpecifier(),
 		Get: &pb.Get{
-			Row: g.key,
+			Row:    g.key,
+			Column: familiesToColumn(g.families),
 		},
-	}
-	for family, qualifiers := range g.families {
-		bytequals := make([][]byte, len(qualifiers))
-		for i, qual := range qualifiers {
-			bytequals[i] = []byte(qual)
-		}
-		get.Get.Column = append(get.Get.Column,
-			&pb.Column{
-				Family:    []byte(family),
-				Qualifier: bytequals,
-			})
 	}
 	if g.closestBefore {
 		get.Get.ClosestRowBefore = proto.Bool(true)
@@ -77,4 +67,23 @@ func (g *Get) Serialize() ([]byte, error) {
 // RPC.
 func (g *Get) NewResponse() proto.Message {
 	return &pb.GetResponse{}
+}
+
+// familiesToColumn takes a map from strings to lists of strings, and converts
+// them into protobuf Columns
+func familiesToColumn(families map[string][]string) []*pb.Column {
+	cols := make([]*pb.Column, len(families))
+	counter := 0
+	for family, qualifiers := range families {
+		bytequals := make([][]byte, len(qualifiers))
+		for i, qual := range qualifiers {
+			bytequals[i] = []byte(qual)
+		}
+		cols[counter] = &pb.Column{
+			Family:    []byte(family),
+			Qualifier: bytequals,
+		}
+		counter++
+	}
+	return cols
 }

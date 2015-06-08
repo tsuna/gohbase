@@ -120,13 +120,49 @@ func (c *Client) CheckTable(table string) (*pb.GetResponse, error) {
 	return resp.(*pb.GetResponse), err
 }
 
-// GetRow returns a single row fetched from HBase.
-func (c *Client) GetRow(table string, rowkey string, families map[string][]string) (*pb.GetResponse, error) {
+// Get returns a single row fetched from HBase.
+func (c *Client) Get(table string, rowkey string, families map[string][]string) (*pb.GetResponse, error) {
 	resp, err := c.sendRpcToRegion(hrpc.NewGetStr(table, rowkey, families))
 	if err != nil {
 		return nil, err
 	}
 	return resp.(*pb.GetResponse), err
+}
+
+// Put inserts or updates the values into the given row of the table.
+func (c *Client) Put(table string, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
+	resp, err := c.sendRpcToRegion(hrpc.NewPutStr(table, rowkey, values))
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*pb.MutateResponse), err
+}
+
+// Delete removes values from the given row of the table.
+func (c *Client) Delete(table, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
+	resp, err := c.sendRpcToRegion(hrpc.NewDelStr(table, rowkey, values))
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*pb.MutateResponse), err
+}
+
+// Append atomically appends all the given values to their current values in HBase.
+func (c *Client) Append(table, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
+	resp, err := c.sendRpcToRegion(hrpc.NewAppStr(table, rowkey, values))
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*pb.MutateResponse), err
+}
+
+// Increment atomically increments the given values in HBase.
+func (c *Client) Increment(table, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
+	resp, err := c.sendRpcToRegion(hrpc.NewIncStr(table, rowkey, values))
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*pb.MutateResponse), err
 }
 
 // Creates the META key to search for in order to locate the given key.
