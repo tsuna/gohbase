@@ -57,7 +57,7 @@ func (g *Get) Serialize() ([]byte, error) {
 		},
 	}
 	for family, qualifiers := range g.families {
-		bytequals := make([][]byte, len(qualifiers), len(qualifiers))
+		bytequals := make([][]byte, len(qualifiers))
 		for i, qual := range qualifiers {
 			bytequals[i] = []byte(qual)
 		}
