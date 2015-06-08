@@ -78,6 +78,16 @@ func (c *Client) write() {
 	}
 }
 
+// Sends a message to the write thread, returns an error if one occurred.
+func (c *Client) sendWrite(buf []byte) error {
+	select {
+	case c.sendBuf <- buf:
+		return nil
+	case <-c.sendDone:
+		return c.sendErr
+	}
+}
+
 // Tries to read enough data to fully fill up the given buffer.
 func (c *Client) readFully(buf []byte) error {
 	// TODO: Handle short reads.
@@ -111,12 +121,7 @@ func (c *Client) sendHello() error {
 	binary.BigEndian.PutUint32(buf[6:], uint32(len(data)))
 	buf = append(buf, data...)
 
-	select {
-	case c.sendBuf <- buf:
-		return nil
-	case <-c.sendDone:
-		return c.sendErr
-	}
+	return c.sendWrite(buf)
 }
 
 // SendRPC sends an RPC out to the wire.
@@ -148,10 +153,9 @@ func (c *Client) SendRPC(rpc hrpc.Call) (proto.Message, error) {
 	buf = append(buf, payloadLen...)
 	buf = append(buf, payload...)
 
-	select {
-	case <-c.sendDone:
-		return nil, c.sendErr
-	case c.sendBuf <- buf:
+	err = c.sendWrite(buf)
+	if err != nil {
+		return nil, err
 	}
 
 	var sz [4]byte
