@@ -16,7 +16,9 @@ import (
 )
 
 var (
-	ShortWriteErr = fmt.Errorf("short write occurred while writing to socket")
+	// This error is used when the writer thread only succeeds in writing part
+	// of its buffer to the socket, and there is data that was not sent
+	ErrShortWrite = fmt.Errorf("short write occurred while writing to socket")
 )
 
 // Client manages a connection to a RegionServer.
@@ -76,7 +78,7 @@ func (c *Client) write() {
 		if n != len(buf) {
 			// We failed to write the entire buffer
 			// TODO: Perhaps handle this in another way than closing down
-			c.sendErr = ShortWriteErr
+			c.sendErr = ErrShortWrite
 			close(c.done)
 			return
 		}
