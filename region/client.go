@@ -16,8 +16,8 @@ import (
 )
 
 var (
-	// This error is used when the writer thread only succeeds in writing part
-	// of its buffer to the socket, and there is data that was not sent
+	// ErrShortWrite is used when the writer thread only succeeds in writing
+	// part of its buffer to the socket, and not all of the buffer was sent
 	ErrShortWrite = fmt.Errorf("short write occurred while writing to socket")
 )
 
