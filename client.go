@@ -129,7 +129,7 @@ func (c *Client) Get(table string, rowkey string, families map[string][]string) 
 	return resp.(*pb.GetResponse), err
 }
 
-// Scan will retrieve the values specified in families from multiple rows in
+// Scan retrieves the values specified in families from multiple rows in
 // the given hbase table.
 func (c *Client) Scan(table string, families map[string][]string, startRow, stopRow []byte) (*pb.ScanResponse, error) {
 	resp, err := c.sendRpcToRegion(hrpc.NewScanStr(table, families, startRow, stopRow))
@@ -139,7 +139,7 @@ func (c *Client) Scan(table string, families map[string][]string, startRow, stop
 	return resp.(*pb.ScanResponse), err
 }
 
-// Put will insert or update the values into the given row the table and rowkey
+// Put inserts or updates the values into the given row the table and rowkey
 // correspond to
 func (c *Client) Put(table string, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
 	resp, err := c.sendRpcToRegion(hrpc.NewPutStr(table, rowkey, values))
@@ -158,7 +158,7 @@ func (c *Client) Delete(table, rowkey string, values map[string]map[string][]byt
 	return resp.(*pb.MutateResponse), err
 }
 
-// Append will append all given values to their current values in the given row
+// Append appends all given values to their current values in the given row
 // corresponding to the given table and rowkey
 func (c *Client) Append(table, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
 	resp, err := c.sendRpcToRegion(hrpc.NewAppStr(table, rowkey, values))
@@ -168,7 +168,7 @@ func (c *Client) Append(table, rowkey string, values map[string]map[string][]byt
 	return resp.(*pb.MutateResponse), err
 }
 
-// Increment will add the given values to their corresponding values in hbase
+// Increment adds the given values to their corresponding values in hbase
 func (c *Client) Increment(table, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
 	resp, err := c.sendRpcToRegion(hrpc.NewIncStr(table, rowkey, values))
 	if err != nil {
