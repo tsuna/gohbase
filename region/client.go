@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"sync"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
@@ -33,9 +34,11 @@ type Client struct {
 	// Port of the RegionServer.
 	port uint16
 
-	// Channels to send messages to the writer thread
-	sendBuf chan []byte
-	done    chan int
+	// writeMutex is used to prevent multiple threads from writing to the
+	// socket at the same time.
+	writeMutex *sync.Mutex
+
+	// sendErr is set once a write fails.
 	sendErr error
 }
 
@@ -48,13 +51,11 @@ func NewClient(host string, port uint16) (*Client, error) {
 			fmt.Errorf("failed to connect to the RegionServer at %s: %s", addr, err)
 	}
 	c := &Client{
-		conn:    conn,
-		host:    host,
-		port:    port,
-		sendBuf: make(chan []byte),
-		done:    make(chan int),
+		conn:       conn,
+		host:       host,
+		port:       port,
+		writeMutex: &sync.Mutex{},
 	}
-	go c.write()
 	err = c.sendHello()
 	if err != nil {
 		return nil, err
@@ -63,36 +64,32 @@ func NewClient(host string, port uint16) (*Client, error) {
 }
 
 // Reads buffers from c.sendBuf, and writes then to the RegionServer. If an
-// error is encountered, closes c.done to let writers to c.sendBuf to know
+// error is encountered, closes c.failed to let writers to c.sendBuf to know
 // that they should give up.
-func (c *Client) write() {
-	for {
-		buf := <-c.sendBuf
-		n, err := c.conn.Write(buf)
-		if err != nil {
-			// There was an error while writing
-			c.sendErr = err
-			close(c.done)
-			return
-		}
-		if n != len(buf) {
-			// We failed to write the entire buffer
-			// TODO: Perhaps handle this in another way than closing down
-			c.sendErr = ErrShortWrite
-			close(c.done)
-			return
-		}
-	}
-}
+func (c *Client) write(buf []byte) error {
+	c.writeMutex.Lock()
 
-// Sends a message to the write thread, returns an error if one occurred.
-func (c *Client) sendWrite(buf []byte) error {
-	select {
-	case c.sendBuf <- buf:
-		return nil
-	case <-c.done:
+	if c.sendErr != nil {
+		c.writeMutex.Unlock()
 		return c.sendErr
 	}
+
+	n, err := c.conn.Write(buf)
+
+	if err != nil {
+		// There was an error while writing
+		c.sendErr = err
+		c.conn.Close()
+	}
+	if n != len(buf) {
+		// We failed to write the entire buffer
+		// TODO: Perhaps handle this in another way than closing down
+		c.sendErr = ErrShortWrite
+		c.conn.Close()
+	}
+
+	c.writeMutex.Unlock()
+	return c.sendErr
 }
 
 // Tries to read enough data to fully fill up the given buffer.
@@ -128,7 +125,7 @@ func (c *Client) sendHello() error {
 	binary.BigEndian.PutUint32(buf[6:], uint32(len(data)))
 	buf = append(buf, data...)
 
-	return c.sendWrite(buf)
+	return c.write(buf)
 }
 
 // SendRPC sends an RPC out to the wire.
@@ -160,7 +157,7 @@ func (c *Client) SendRPC(rpc hrpc.Call) (proto.Message, error) {
 	buf = append(buf, payloadLen...)
 	buf = append(buf, payload...)
 
-	err = c.sendWrite(buf)
+	err = c.write(buf)
 	if err != nil {
 		return nil, err
 	}
