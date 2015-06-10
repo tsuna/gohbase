@@ -5,4 +5,6 @@ This is a pure-[Go](http://golang.org/) client for [HBase](http://hbase.org).
 Current status: prototype.  Working on META lookups and other basic things
 like that.  Any help would be appreciated.  Please sign the
 [Contributor License Agreement](https://docs.google.com/spreadsheet/viewform?formkey=dFNiOFROLXJBbFBmMkQtb1hNMWhUUnc6MQ)
-when you send your first pull request.
+when you send your first change for review.  Please use
+[GerritHub](https://review.gerrithub.io/#/admin/projects/tsuna/gohbase) to
+send changes for review, instead of GitHub pull requests.
