@@ -180,6 +180,8 @@ func (c *Client) sendHello() error {
 	return c.write(buf)
 }
 
+// QueueRPC will add an rpc call to the queue for processing by the writer
+// goroutine
 func (c *Client) QueueRPC(rpc hrpc.Call) {
 	c.writeMutex.Lock()
 	c.rpcs = append(c.rpcs, rpc)
