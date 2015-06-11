@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
@@ -40,6 +41,8 @@ type Client struct {
 
 	// sendErr is set once a write fails.
 	sendErr error
+
+	rpcs []hrpc.Call
 }
 
 // NewClient creates a new RegionClient.
@@ -60,34 +63,81 @@ func NewClient(host string, port uint16) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	go c.processRpcs()
 	return c, nil
+}
+
+func (c *Client) processRpcs() {
+	for {
+		time.Sleep(time.Millisecond * 1000)
+
+		c.writeMutex.Lock()
+
+		// If c.sendErr is set, this writer has encountered an unrecoverable
+		// error. It will repeat the error it encountered to any outstanding
+		// rpcs, and not attempt to send them.
+		if c.sendErr != nil {
+			for _, rpc := range c.rpcs {
+				resch, errch := rpc.GetResultChans()
+				resch <- nil
+				errch <- c.sendErr
+			}
+			c.rpcs = nil
+			c.writeMutex.Unlock()
+			break
+		}
+
+		// Making a new array (that's probably too big) up front instead of
+		// appending every time should be faster
+		newrpcs := make([]hrpc.Call, len(c.rpcs))
+		i := 0
+
+		for _, rpc := range c.rpcs {
+			// If the deadline has been exceeded, don't bother sending the
+			// request
+			if rpc.GetDeadline() != nil && time.Now().After(*rpc.GetDeadline()) {
+				continue
+			}
+			resch, errch := rpc.GetResultChans()
+			msg, err := c.SendRPC(rpc)
+			if isRecoverable(err) {
+				newrpcs[i] = rpc
+				i++
+			} else {
+				if err != nil {
+					c.sendErr = err
+				}
+				resch <- msg
+				errch <- err
+			}
+		}
+		c.rpcs = newrpcs[:i]
+		c.writeMutex.Unlock()
+	}
+}
+
+func isRecoverable(err error) bool {
+	// TODO: identify which errors we can treat as recoverable
+	if err == ErrShortWrite {
+		return true
+	}
+	return false
 }
 
 // Sends the given buffer to the RegionServer.
 func (c *Client) write(buf []byte) error {
-	c.writeMutex.Lock()
-
-	if c.sendErr != nil {
-		c.writeMutex.Unlock()
-		return c.sendErr
-	}
-
 	n, err := c.conn.Write(buf)
 
 	if err != nil {
 		// There was an error while writing
-		c.sendErr = err
-		c.conn.Close()
+		return err
 	}
 	if n != len(buf) {
 		// We failed to write the entire buffer
 		// TODO: Perhaps handle this in another way than closing down
-		c.sendErr = ErrShortWrite
-		c.conn.Close()
+		return ErrShortWrite
 	}
-
-	c.writeMutex.Unlock()
-	return c.sendErr
+	return nil
 }
 
 // Tries to read enough data to fully fill up the given buffer.
@@ -124,6 +174,14 @@ func (c *Client) sendHello() error {
 	buf = append(buf, data...)
 
 	return c.write(buf)
+}
+
+// QueueRPC will add an rpc call to the queue for processing by the writer
+// goroutine
+func (c *Client) QueueRPC(rpc hrpc.Call) {
+	c.writeMutex.Lock()
+	c.rpcs = append(c.rpcs, rpc)
+	c.writeMutex.Unlock()
 }
 
 // SendRPC sends an RPC out to the wire.
