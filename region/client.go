@@ -70,7 +70,6 @@ func NewClient(host string, port uint16) (*Client, error) {
 func (c *Client) processRpcs() {
 	for {
 		time.Sleep(time.Millisecond * 1000)
-		fmt.Printf("Checking for rpcs...\n")
 
 		c.writeMutex.Lock()
 
@@ -102,15 +101,12 @@ func (c *Client) processRpcs() {
 			resch, errch := rpc.GetResultChans()
 			msg, err := c.SendRPC(rpc)
 			if isRecoverable(err) {
-				fmt.Printf("Recoverable error encountered\n")
 				newrpcs[i] = rpc
 				i++
 			} else {
 				if err != nil {
-					fmt.Printf("Unrecoverable error encountered\n")
 					c.sendErr = err
 				}
-				fmt.Printf("Writing back results to channels\n")
 				resch <- msg
 				errch <- err
 			}

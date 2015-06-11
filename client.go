@@ -303,7 +303,6 @@ func (c *Client) queueRPC(rpc hrpc.Call) error {
 	}
 	rpc.SetRegion(reg.RegionName)
 	client.QueueRPC(rpc)
-	fmt.Printf("Just queued an RPC: %s\n", rpc.Name())
 	return nil
 }
 
@@ -315,7 +314,6 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 	}
 
 	if rpc.GetDeadline() != nil {
-		fmt.Printf("Has a deadline\n")
 		select {
 		case m := <-resch:
 			err := <-errch
@@ -324,7 +322,6 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 			return nil, ErrDeadline
 		}
 	} else {
-		fmt.Printf("Doesn't have a deadline\n")
 		m := <-resch
 		err := <-errch
 		return m, err
