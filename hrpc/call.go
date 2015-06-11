@@ -22,6 +22,16 @@ type Call interface {
 	// Returns a newly created (default-state) protobuf in which to store the
 	// response of this call.
 	NewResponse() proto.Message
+
+	GetResultChans() chan RPCResult
+	NewResultChans() chan RPCResult
+}
+
+// RPCResult is struct that will contain both the resulting message from an RPC
+// call, and any erorrs that may have occurred related to makeing the RPC call.
+type RPCResult struct {
+	Msg   proto.Message
+	Error error
 }
 
 type base struct {
@@ -30,6 +40,8 @@ type base struct {
 	key []byte
 
 	region []byte
+
+	resultch chan RPCResult
 }
 
 func (b *base) SetRegion(region []byte) {
@@ -50,4 +62,16 @@ func (b *base) Table() []byte {
 
 func (b *base) Key() []byte {
 	return b.key
+}
+
+func (b *base) NewResultChans() chan RPCResult {
+	// Buffered channels, so that if a writer thread sends a message (or reports
+	// an error) after the deadline it doesn't block due to the requesting
+	// thread having moved on.
+	b.resultch = make(chan RPCResult, 1)
+	return b.resultch
+}
+
+func (b *base) GetResultChans() chan RPCResult {
+	return b.resultch
 }
