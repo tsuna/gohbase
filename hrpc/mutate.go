@@ -8,6 +8,7 @@ package hrpc
 import (
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
+	"golang.org/x/net/context"
 )
 
 // Mutate represents a mutation on HBase.
@@ -22,11 +23,12 @@ type Mutate struct {
 }
 
 // baseMutate will return a Mutate struct without the mutationType filled in.
-func baseMutate(table, key string, values map[string]map[string][]byte) *Mutate {
+func baseMutate(ctx context.Context, table, key string, values map[string]map[string][]byte) *Mutate {
 	return &Mutate{
 		base: base{
 			table: []byte(table),
 			key:   []byte(key),
+			ctx:   ctx,
 		},
 		values: values,
 	}
@@ -34,32 +36,32 @@ func baseMutate(table, key string, values map[string]map[string][]byte) *Mutate 
 
 // NewPutStr creates a new Mutation request that will put the given values into
 // HBase under the given table and key.
-func NewPutStr(table, key string, values map[string]map[string][]byte) *Mutate {
-	m := baseMutate(table, key, values)
+func NewPutStr(ctx context.Context, table, key string, values map[string]map[string][]byte) *Mutate {
+	m := baseMutate(ctx, table, key, values)
 	m.mutationType = pb.MutationProto_PUT
 	return m
 }
 
 // NewDelStr creates a new Mutation request that will delete the given values
 // from HBase under the given table and key.
-func NewDelStr(table, key string, values map[string]map[string][]byte) *Mutate {
-	m := baseMutate(table, key, values)
+func NewDelStr(ctx context.Context, table, key string, values map[string]map[string][]byte) *Mutate {
+	m := baseMutate(ctx, table, key, values)
 	m.mutationType = pb.MutationProto_DELETE
 	return m
 }
 
 // NewAppStr creates a new Mutation request that will append the given values
 // to their existing values in HBase under the given table and key.
-func NewAppStr(table, key string, values map[string]map[string][]byte) *Mutate {
-	m := baseMutate(table, key, values)
+func NewAppStr(ctx context.Context, table, key string, values map[string]map[string][]byte) *Mutate {
+	m := baseMutate(ctx, table, key, values)
 	m.mutationType = pb.MutationProto_APPEND
 	return m
 }
 
 // NewIncStr creates a new Mutation request that will increment the given values
 // in HBase under the given table and key.
-func NewIncStr(table, key string, values map[string]map[string][]byte) *Mutate {
-	m := baseMutate(table, key, values)
+func NewIncStr(ctx context.Context, table, key string, values map[string]map[string][]byte) *Mutate {
+	m := baseMutate(ctx, table, key, values)
 	m.mutationType = pb.MutationProto_INCREMENT
 	return m
 }
