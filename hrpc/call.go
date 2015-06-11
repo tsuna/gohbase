@@ -6,6 +6,8 @@
 package hrpc
 
 import (
+	"time"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
 )
@@ -22,6 +24,10 @@ type Call interface {
 	// Returns a newly created (default-state) protobuf in which to store the
 	// response of this call.
 	NewResponse() proto.Message
+
+	GetDeadline() *time.Time
+	GetResultChans() (chan proto.Message, chan error)
+	NewResultChans() (chan proto.Message, chan error)
 }
 
 type base struct {
@@ -30,6 +36,10 @@ type base struct {
 	key []byte
 
 	region []byte
+
+	deadline *time.Time
+	resultch chan proto.Message
+	errch    chan error
 }
 
 func (b *base) SetRegion(region []byte) {
@@ -50,4 +60,25 @@ func (b *base) Table() []byte {
 
 func (b *base) Key() []byte {
 	return b.key
+}
+
+func (b *base) SetDeadline(dl *time.Time) {
+	b.deadline = dl
+}
+
+func (b *base) GetDeadline() *time.Time {
+	return b.deadline
+}
+
+func (b *base) NewResultChans() (chan proto.Message, chan error) {
+	// Buffered channels, so that if a writer thread sends a message (or reports
+	// an error) after the deadline it doesn't block due to the requesting
+	// thread having moved on.
+	b.resultch = make(chan proto.Message, 1)
+	b.errch = make(chan error, 1)
+	return b.resultch, b.errch
+}
+
+func (b *base) GetResultChans() (chan proto.Message, chan error) {
+	return b.resultch, b.errch
 }
