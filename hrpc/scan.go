@@ -8,6 +8,7 @@ package hrpc
 import (
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
+	"golang.org/x/net/context"
 )
 
 // Scan represents a scanner on an HBase table.
@@ -30,11 +31,12 @@ type Scan struct {
 // column families and qualifiers will be returned. When run, a scanner ID will
 // also be returned, that can be used to fetch addition results via successive
 // Scan requests.
-func NewScanStr(table string, families map[string][]string, startRow, stopRow []byte) *Scan {
+func NewScanStr(ctx context.Context, table string, families map[string][]string, startRow, stopRow []byte) *Scan {
 	scan := &Scan{
 		base: base{
 			table: []byte(table),
 			key:   startRow,
+			ctx:   ctx,
 		},
 		families:     families,
 		startRow:     startRow,
@@ -46,11 +48,12 @@ func NewScanStr(table string, families map[string][]string, startRow, stopRow []
 
 // NewScanFromID creates a new Scan request that will return additional results
 // from a given scanner ID.
-func NewScanFromID(table string, scannerID uint64) *Scan {
+func NewScanFromID(ctx context.Context, table string, scannerID uint64) *Scan {
 	return &Scan{
 		base: base{
 			table: []byte(table),
 			//key:
+			ctx: ctx,
 		},
 		scannerID:    &scannerID,
 		closeScanner: false,
@@ -59,11 +62,12 @@ func NewScanFromID(table string, scannerID uint64) *Scan {
 
 // NewCloseFromID creates a new Scan request that will close the scan for a
 // given scanner ID.
-func NewCloseFromID(table string, scannerID uint64) *Scan {
+func NewCloseFromID(ctx context.Context, table string, scannerID uint64) *Scan {
 	return &Scan{
 		base: base{
 			table: []byte(table),
 			//key:
+			ctx: ctx,
 		},
 		scannerID:    &scannerID,
 		closeScanner: true,

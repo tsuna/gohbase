@@ -20,6 +20,7 @@ import (
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
 	"github.com/tsuna/gohbase/zk"
+	"golang.org/x/net/context"
 )
 
 // Constants
@@ -36,6 +37,9 @@ var (
 	infoFamily = map[string][]string{
 		"info": nil,
 	}
+
+	// ErrDeadline is returned when the deadline of a request has been exceeded
+	ErrDeadline = errors.New("deadline exceeded")
 )
 
 // region -> client cache.
@@ -124,7 +128,7 @@ func NewClient(zkquorum string) *Client {
 
 // CheckTable returns an error if the given table name doesn't exist.
 func (c *Client) CheckTable(table string) (*pb.GetResponse, error) {
-	resp, err := c.sendRpcToRegion(hrpc.NewGetStr(table, "theKey", nil))
+	resp, err := c.sendRPC(hrpc.NewGetStr(context.Background(), table, "theKey", nil))
 	if err != nil {
 		return nil, err
 	}
@@ -132,8 +136,8 @@ func (c *Client) CheckTable(table string) (*pb.GetResponse, error) {
 }
 
 // Get returns a single row fetched from HBase.
-func (c *Client) Get(table string, rowkey string, families map[string][]string) (*pb.GetResponse, error) {
-	resp, err := c.sendRpcToRegion(hrpc.NewGetStr(table, rowkey, families))
+func (c *Client) Get(ctx context.Context, table, rowkey string, families map[string][]string) (*pb.GetResponse, error) {
+	resp, err := c.sendRPC(hrpc.NewGetStr(ctx, table, rowkey, families))
 	if err != nil {
 		return nil, err
 	}
@@ -141,8 +145,8 @@ func (c *Client) Get(table string, rowkey string, families map[string][]string) 
 }
 
 // Scan retrieves the values specified in families from the given range.
-func (c *Client) Scan(table string, families map[string][]string, startRow, stopRow []byte) (*pb.ScanResponse, error) {
-	resp, err := c.sendRpcToRegion(hrpc.NewScanStr(table, families, startRow, stopRow))
+func (c *Client) Scan(ctx context.Context, table string, families map[string][]string, startRow, stopRow []byte) (*pb.ScanResponse, error) {
+	resp, err := c.sendRPC(hrpc.NewScanStr(ctx, table, families, startRow, stopRow))
 	if err != nil {
 		return nil, err
 	}
@@ -150,8 +154,8 @@ func (c *Client) Scan(table string, families map[string][]string, startRow, stop
 }
 
 // Put inserts or updates the values into the given row of the table.
-func (c *Client) Put(table string, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
-	resp, err := c.sendRpcToRegion(hrpc.NewPutStr(table, rowkey, values))
+func (c *Client) Put(ctx context.Context, table string, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
+	resp, err := c.sendRPC(hrpc.NewPutStr(ctx, table, rowkey, values))
 	if err != nil {
 		return nil, err
 	}
@@ -159,8 +163,8 @@ func (c *Client) Put(table string, rowkey string, values map[string]map[string][
 }
 
 // Delete removes values from the given row of the table.
-func (c *Client) Delete(table, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
-	resp, err := c.sendRpcToRegion(hrpc.NewDelStr(table, rowkey, values))
+func (c *Client) Delete(ctx context.Context, table, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
+	resp, err := c.sendRPC(hrpc.NewDelStr(ctx, table, rowkey, values))
 	if err != nil {
 		return nil, err
 	}
@@ -168,8 +172,8 @@ func (c *Client) Delete(table, rowkey string, values map[string]map[string][]byt
 }
 
 // Append atomically appends all the given values to their current values in HBase.
-func (c *Client) Append(table, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
-	resp, err := c.sendRpcToRegion(hrpc.NewAppStr(table, rowkey, values))
+func (c *Client) Append(ctx context.Context, table, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
+	resp, err := c.sendRPC(hrpc.NewAppStr(ctx, table, rowkey, values))
 	if err != nil {
 		return nil, err
 	}
@@ -177,8 +181,8 @@ func (c *Client) Append(table, rowkey string, values map[string]map[string][]byt
 }
 
 // Increment atomically increments the given values in HBase.
-func (c *Client) Increment(table, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
-	resp, err := c.sendRpcToRegion(hrpc.NewIncStr(table, rowkey, values))
+func (c *Client) Increment(ctx context.Context, table, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
+	resp, err := c.sendRPC(hrpc.NewIncStr(ctx, table, rowkey, values))
 	if err != nil {
 		return nil, err
 	}
@@ -242,9 +246,10 @@ func (c *Client) clientFor(region *region.Info) *region.Client {
 	return c.clients.get(region)
 }
 
-// Sends an RPC targeted at a particular region to the right RegionServer.
-// Returns the response (for now, as the call is synchronous).
-func (c *Client) sendRpcToRegion(rpc hrpc.Call) (proto.Message, error) {
+// Queues an RPC targeted at a particular region for handling by the appropriate
+// region client. Results will be written to the rpc's result and error
+// channels.
+func (c *Client) queueRPC(rpc hrpc.Call) error {
 	table := rpc.Table()
 	key := rpc.Key()
 	reg := c.getRegion(table, key)
@@ -256,11 +261,27 @@ func (c *Client) sendRpcToRegion(rpc hrpc.Call) (proto.Message, error) {
 		var err error
 		client, reg, err = c.locateRegion(table, key)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 	rpc.SetRegion(reg.RegionName)
-	return client.SendRPC(rpc)
+	client.QueueRPC(rpc)
+	return nil
+}
+
+func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
+	resch := rpc.GetResultChan()
+	err := c.queueRPC(rpc)
+	if err != nil {
+		return nil, err
+	}
+
+	select {
+	case res := <-resch:
+		return res.Msg, res.Error
+	case <-rpc.GetContext().Done():
+		return nil, ErrDeadline
+	}
 }
 
 // Locates the region in which the given row key for the given table is.
@@ -272,7 +293,7 @@ func (c *Client) locateRegion(table, key []byte) (*region.Client, *region.Info, 
 		}
 	}
 	metaKey := createRegionSearchKey(table, key)
-	rpc := hrpc.NewGetBefore(metaTableName, metaKey, infoFamily)
+	rpc := hrpc.NewGetBefore(context.Background(), metaTableName, metaKey, infoFamily)
 	rpc.SetRegion(metaRegionInfo.RegionName)
 	resp, err := c.metaClient.SendRPC(rpc)
 	if err != nil {

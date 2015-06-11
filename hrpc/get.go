@@ -8,6 +8,7 @@ package hrpc
 import (
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
+	"golang.org/x/net/context"
 )
 
 // Get represents a Get HBase call.
@@ -20,11 +21,12 @@ type Get struct {
 }
 
 // NewGetStr creates a new Get request for the given table/key.
-func NewGetStr(table, key string, families map[string][]string) *Get {
+func NewGetStr(ctx context.Context, table, key string, families map[string][]string) *Get {
 	return &Get{
 		base: base{
 			table: []byte(table),
 			key:   []byte(key),
+			ctx:   ctx,
 		},
 		families: families,
 	}
@@ -32,11 +34,12 @@ func NewGetStr(table, key string, families map[string][]string) *Get {
 
 // NewGetBefore creates a new Get request for the row right before the given
 // key in the given table and family.
-func NewGetBefore(table, key []byte, families map[string][]string) *Get {
+func NewGetBefore(ctx context.Context, table, key []byte, families map[string][]string) *Get {
 	return &Get{
 		base: base{
 			table: table,
 			key:   key,
+			ctx:   ctx,
 		},
 		families:      families,
 		closestBefore: true,
