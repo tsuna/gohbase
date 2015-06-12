@@ -59,6 +59,24 @@
     },
     {
       "key": {
+        "uuid": "facab960_2de24f03",
+        "filename": "client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 306,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-12T09:42:13Z",
+      "side": 1,
+      "message": "Ah just saw this is being removed 2 commits later.  Please amend your commits in this case.",
+      "parentUuid": "facab960_8d6d1b9b",
+      "revId": "5219770ca34377ba7b3e83c0f64e5092c7baf7d1",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "facab960_ad681f88",
         "filename": "client.go",
         "patchSetId": 1
