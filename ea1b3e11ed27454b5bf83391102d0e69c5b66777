@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "facab960_3ecfd780",
+        "filename": "client.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 139,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-12T20:58:28Z",
+      "side": 1,
+      "message": "There is no point in doing WithCancel() and not keeping the 2nd return value, which is the func() to use to cancel this context.\n\nIf you just want a context, just use context.Background(), that\u0027s it.\n\nThe correct idiom, however, is that you should have only one Get method, and it accepts a ctx context.Context as the first argument.  If, as a user, you want a deadline, you set the deadline on your context prior to handing it to our Get method.",
+      "revId": "ea1b3e11ed27454b5bf83391102d0e69c5b66777",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
