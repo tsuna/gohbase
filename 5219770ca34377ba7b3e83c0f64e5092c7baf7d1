@@ -1,0 +1,158 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "facab960_4d731380",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 1
+      },
+      "lineNbr": 7,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-12T09:39:46Z",
+      "side": 1,
+      "message": "Please read:\n- https://github.com/erlang/otp/wiki/Writing-good-commit-messages\n- http://chris.beams.io/posts/git-commit/",
+      "revId": "5219770ca34377ba7b3e83c0f64e5092c7baf7d1",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_6d6e1798",
+        "filename": "client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 41,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-12T09:39:46Z",
+      "side": 1,
+      "message": "errors.New",
+      "range": {
+        "startLine": 41,
+        "startChar": 15,
+        "endLine": 41,
+        "endChar": 25
+      },
+      "revId": "5219770ca34377ba7b3e83c0f64e5092c7baf7d1",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_8d6d1b9b",
+        "filename": "client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 306,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-12T09:39:46Z",
+      "side": 1,
+      "message": "Remove leftover from debugging.",
+      "revId": "5219770ca34377ba7b3e83c0f64e5092c7baf7d1",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_ad681f88",
+        "filename": "client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 317,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-12T09:39:46Z",
+      "side": 1,
+      "message": "If always read from both channels then it should be just a single channel.",
+      "range": {
+        "startLine": 316,
+        "startChar": 0,
+        "endLine": 317,
+        "endChar": 16
+      },
+      "revId": "5219770ca34377ba7b3e83c0f64e5092c7baf7d1",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_0d282b33",
+        "filename": "region/client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 72,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-12T09:39:46Z",
+      "side": 1,
+      "message": "Add a TODO to make this configurable.",
+      "revId": "5219770ca34377ba7b3e83c0f64e5092c7baf7d1",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_0d110b05",
+        "filename": "region/client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 73,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-12T09:39:46Z",
+      "side": 1,
+      "message": "Either this is leftover from dev/debugging, in which case please remove it, or let\u0027s add some sort of a logging library so we can have debug log messages :)",
+      "revId": "5219770ca34377ba7b3e83c0f64e5092c7baf7d1",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_ed3067a0",
+        "filename": "region/client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 93,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-12T09:39:46Z",
+      "side": 1,
+      "message": "In a steady state you don\u0027t expect any errors.  All the RPCs will just go through.  So here it would actually be better to leave newrpcs as nil, and append to it when needed, since that\u0027s gonna be rare.\n\nLess work for the GC, less memory bandwidth consumed by array initialization in the fast path of every flush.",
+      "range": {
+        "startLine": 91,
+        "startChar": 0,
+        "endLine": 93,
+        "endChar": 43
+      },
+      "revId": "5219770ca34377ba7b3e83c0f64e5092c7baf7d1",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_8d043bc1",
+        "filename": "region/client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 100,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-12T09:39:46Z",
+      "side": 1,
+      "message": "But then in this case we silently drop the RPC on the floor?  We don\u0027t send an error back to tell it its deadline was exceeded.",
+      "revId": "5219770ca34377ba7b3e83c0f64e5092c7baf7d1",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
