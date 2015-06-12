@@ -7,6 +7,7 @@ package region
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -15,12 +16,13 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
+	"golang.org/x/net/context"
 )
 
 var (
 	// ErrShortWrite is used when the writer thread only succeeds in writing
 	// part of its buffer to the socket, and not all of the buffer was sent
-	ErrShortWrite = fmt.Errorf("short write occurred while writing to socket")
+	ErrShortWrite = errors.New("short write occurred while writing to socket")
 )
 
 // Client manages a connection to a RegionServer.
@@ -42,7 +44,13 @@ type Client struct {
 	// sendErr is set once a write fails.
 	sendErr error
 
-	rpcs []hrpc.Call
+	rpcs []rpcAndCtx
+}
+
+// A container struct to hold both an RPC call and its context
+type rpcAndCtx struct {
+	ctx context.Context
+	rpc hrpc.Call
 }
 
 // NewClient creates a new RegionClient.
@@ -69,6 +77,7 @@ func NewClient(host string, port uint16) (*Client, error) {
 
 func (c *Client) processRpcs() {
 	for {
+		//TODO: make this value configurable
 		time.Sleep(time.Millisecond * 1000)
 
 		c.writeMutex.Lock()
@@ -78,40 +87,40 @@ func (c *Client) processRpcs() {
 		// rpcs, and not attempt to send them.
 		if c.sendErr != nil {
 			for _, rpc := range c.rpcs {
-				resch, errch := rpc.GetResultChans()
-				resch <- nil
-				errch <- c.sendErr
+				resch := rpc.rpc.GetResultChans()
+				resch <- hrpc.RPCResult{nil, c.sendErr}
 			}
 			c.rpcs = nil
 			c.writeMutex.Unlock()
 			break
 		}
 
-		// Making a new array (that's probably too big) up front instead of
-		// appending every time should be faster
-		newrpcs := make([]hrpc.Call, len(c.rpcs))
-		i := 0
+		newrpcs := []rpcAndCtx{}
 
 		for _, rpc := range c.rpcs {
 			// If the deadline has been exceeded, don't bother sending the
-			// request
-			if rpc.GetDeadline() != nil && time.Now().After(*rpc.GetDeadline()) {
-				continue
+			// request. The function that placed the RPC in our queue should
+			// stop waiting for a result and return an error.
+			select {
+			case _, ok := <-rpc.ctx.Done():
+				if !ok {
+					continue
+				}
+			default:
 			}
-			resch, errch := rpc.GetResultChans()
-			msg, err := c.SendRPC(rpc)
+
+			resch := rpc.rpc.GetResultChans()
+			msg, err := c.SendRPC(rpc.rpc)
 			if isRecoverable(err) {
-				newrpcs[i] = rpc
-				i++
+				newrpcs = append(newrpcs, rpc)
 			} else {
 				if err != nil {
 					c.sendErr = err
 				}
-				resch <- msg
-				errch <- err
+				resch <- hrpc.RPCResult{msg, err}
 			}
 		}
-		c.rpcs = newrpcs[:i]
+		c.rpcs = newrpcs
 		c.writeMutex.Unlock()
 	}
 }
@@ -178,9 +187,9 @@ func (c *Client) sendHello() error {
 
 // QueueRPC will add an rpc call to the queue for processing by the writer
 // goroutine
-func (c *Client) QueueRPC(rpc hrpc.Call) {
+func (c *Client) QueueRPC(ctx context.Context, rpc hrpc.Call) {
 	c.writeMutex.Lock()
-	c.rpcs = append(c.rpcs, rpc)
+	c.rpcs = append(c.rpcs, rpcAndCtx{ctx, rpc})
 	c.writeMutex.Unlock()
 }
 

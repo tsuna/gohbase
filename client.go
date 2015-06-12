@@ -20,6 +20,7 @@ import (
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
 	"github.com/tsuna/gohbase/zk"
+	"golang.org/x/net/context"
 )
 
 // Constants
@@ -38,7 +39,7 @@ var (
 	}
 
 	// ErrDeadline is returned when the deadline of a request has been exceeded
-	ErrDeadline = fmt.Errorf("deadline exceeded")
+	ErrDeadline = errors.New("deadline exceeded")
 )
 
 // region -> client cache.
@@ -117,7 +118,8 @@ func NewClient(zkquorum string) *Client {
 
 // CheckTable returns an error if the given table name doesn't exist.
 func (c *Client) CheckTable(table string) (*pb.GetResponse, error) {
-	resp, err := c.sendRPC(hrpc.NewGetStr(table, "theKey", nil))
+	ctx, _ := context.WithCancel(context.Background())
+	resp, err := c.sendRPC(ctx, hrpc.NewGetStr(table, "theKey", nil))
 	if err != nil {
 		return nil, err
 	}
@@ -131,10 +133,15 @@ func (c *Client) Get(table, rowkey string, families map[string][]string) (*pb.Ge
 
 // GetWithDeadline functions the same as Get, but will return with an error
 // if the deadline is reached before a response is received.
-func (c *Client) GetWithDeadline(table string, rowkey string, families map[string][]string, deadline *time.Time) (*pb.GetResponse, error) {
+func (c *Client) GetWithDeadline(table string, rowkey string, families map[string][]string, deadline *time.Duration) (*pb.GetResponse, error) {
+	var ctx context.Context
+	if deadline == nil {
+		ctx, _ = context.WithCancel(context.Background())
+	} else {
+		ctx, _ = context.WithTimeout(context.Background(), *deadline)
+	}
 	rpc := hrpc.NewGetStr(table, rowkey, families)
-	rpc.SetDeadline(deadline)
-	resp, err := c.sendRPC(rpc)
+	resp, err := c.sendRPC(ctx, rpc)
 	if err != nil {
 		return nil, err
 	}
@@ -148,10 +155,15 @@ func (c *Client) Scan(table string, families map[string][]string, startRow, stop
 
 // ScanWithDeadline functions the same as Scan, but will return with an error
 // if the deadline is reached before a response is received.
-func (c *Client) ScanWithDeadline(table string, families map[string][]string, startRow, stopRow []byte, deadline *time.Time) (*pb.ScanResponse, error) {
+func (c *Client) ScanWithDeadline(table string, families map[string][]string, startRow, stopRow []byte, deadline *time.Duration) (*pb.ScanResponse, error) {
+	var ctx context.Context
+	if deadline == nil {
+		ctx, _ = context.WithCancel(context.Background())
+	} else {
+		ctx, _ = context.WithTimeout(context.Background(), *deadline)
+	}
 	rpc := hrpc.NewScanStr(table, families, startRow, stopRow)
-	rpc.SetDeadline(deadline)
-	resp, err := c.sendRPC(rpc)
+	resp, err := c.sendRPC(ctx, rpc)
 	if err != nil {
 		return nil, err
 	}
@@ -165,10 +177,15 @@ func (c *Client) Put(table string, rowkey string, values map[string]map[string][
 
 // PutWithDeadline functions the same as Put, but will return with an error
 // if the deadline is reached before a response is received.
-func (c *Client) PutWithDeadline(table string, rowkey string, values map[string]map[string][]byte, deadline *time.Time) (*pb.MutateResponse, error) {
+func (c *Client) PutWithDeadline(table string, rowkey string, values map[string]map[string][]byte, deadline *time.Duration) (*pb.MutateResponse, error) {
+	var ctx context.Context
+	if deadline == nil {
+		ctx, _ = context.WithCancel(context.Background())
+	} else {
+		ctx, _ = context.WithTimeout(context.Background(), *deadline)
+	}
 	rpc := hrpc.NewPutStr(table, rowkey, values)
-	rpc.SetDeadline(deadline)
-	resp, err := c.sendRPC(rpc)
+	resp, err := c.sendRPC(ctx, rpc)
 	if err != nil {
 		return nil, err
 	}
@@ -182,10 +199,15 @@ func (c *Client) Delete(table, rowkey string, values map[string]map[string][]byt
 
 // DeleteWithDeadline functions the same as Delete, but will return with an
 // error if the deadline is reached before a response is received.
-func (c *Client) DeleteWithDeadline(table, rowkey string, values map[string]map[string][]byte, deadline *time.Time) (*pb.MutateResponse, error) {
+func (c *Client) DeleteWithDeadline(table, rowkey string, values map[string]map[string][]byte, deadline *time.Duration) (*pb.MutateResponse, error) {
+	var ctx context.Context
+	if deadline == nil {
+		ctx, _ = context.WithCancel(context.Background())
+	} else {
+		ctx, _ = context.WithTimeout(context.Background(), *deadline)
+	}
 	rpc := hrpc.NewDelStr(table, rowkey, values)
-	rpc.SetDeadline(deadline)
-	resp, err := c.sendRPC(rpc)
+	resp, err := c.sendRPC(ctx, rpc)
 	if err != nil {
 		return nil, err
 	}
@@ -199,10 +221,15 @@ func (c *Client) Append(table, rowkey string, values map[string]map[string][]byt
 
 // AppendWithDeadline functions the same as Append, but will return with an
 // error if the deadline is reached before a response is received.
-func (c *Client) AppendWithDeadline(table, rowkey string, values map[string]map[string][]byte, deadline *time.Time) (*pb.MutateResponse, error) {
+func (c *Client) AppendWithDeadline(table, rowkey string, values map[string]map[string][]byte, deadline *time.Duration) (*pb.MutateResponse, error) {
+	var ctx context.Context
+	if deadline == nil {
+		ctx, _ = context.WithCancel(context.Background())
+	} else {
+		ctx, _ = context.WithTimeout(context.Background(), *deadline)
+	}
 	rpc := hrpc.NewAppStr(table, rowkey, values)
-	rpc.SetDeadline(deadline)
-	resp, err := c.sendRPC(rpc)
+	resp, err := c.sendRPC(ctx, rpc)
 	if err != nil {
 		return nil, err
 	}
@@ -216,10 +243,15 @@ func (c *Client) Increment(table, rowkey string, values map[string]map[string][]
 
 // IncrementWithDeadline functions the same as Increment, but will return with
 // an error if the deadline is reached before a response is received.
-func (c *Client) IncrementWithDeadline(table, rowkey string, values map[string]map[string][]byte, deadline *time.Time) (*pb.MutateResponse, error) {
+func (c *Client) IncrementWithDeadline(table, rowkey string, values map[string]map[string][]byte, deadline *time.Duration) (*pb.MutateResponse, error) {
+	var ctx context.Context
+	if deadline == nil {
+		ctx, _ = context.WithCancel(context.Background())
+	} else {
+		ctx, _ = context.WithTimeout(context.Background(), *deadline)
+	}
 	rpc := hrpc.NewIncStr(table, rowkey, values)
-	rpc.SetDeadline(deadline)
-	resp, err := c.sendRPC(rpc)
+	resp, err := c.sendRPC(ctx, rpc)
 	if err != nil {
 		return nil, err
 	}
@@ -286,7 +318,7 @@ func (c *Client) clientFor(region *region.Info) *region.Client {
 // Queues an RPC targeted at a particular region for handling by the appropriate
 // region client. Results will be written to the rpc's result and error
 // channels.
-func (c *Client) queueRPC(rpc hrpc.Call) error {
+func (c *Client) queueRPC(ctx context.Context, rpc hrpc.Call) error {
 	table := rpc.Table()
 	key := rpc.Key()
 	reg := c.getRegion(table, key)
@@ -302,29 +334,22 @@ func (c *Client) queueRPC(rpc hrpc.Call) error {
 		}
 	}
 	rpc.SetRegion(reg.RegionName)
-	client.QueueRPC(rpc)
+	client.QueueRPC(ctx, rpc)
 	return nil
 }
 
-func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
-	resch, errch := rpc.NewResultChans()
-	err := c.queueRPC(rpc)
+func (c *Client) sendRPC(ctx context.Context, rpc hrpc.Call) (proto.Message, error) {
+	resch := rpc.NewResultChans()
+	err := c.queueRPC(ctx, rpc)
 	if err != nil {
 		return nil, err
 	}
 
-	if rpc.GetDeadline() != nil {
-		select {
-		case m := <-resch:
-			err := <-errch
-			return m, err
-		case <-time.After(rpc.GetDeadline().Sub(time.Now())):
-			return nil, ErrDeadline
-		}
-	} else {
-		m := <-resch
-		err := <-errch
-		return m, err
+	select {
+	case res := <-resch:
+		return res.Msg, res.Error
+	case <-ctx.Done():
+		return nil, ErrDeadline
 	}
 }
 
