@@ -78,7 +78,7 @@ func NewClient(host string, port uint16) (*Client, error) {
 func (c *Client) processRpcs() {
 	for {
 		//TODO: make this value configurable
-		time.Sleep(time.Millisecond * 1000)
+		time.Sleep(time.Millisecond * 100)
 
 		c.writeMutex.Lock()
 
