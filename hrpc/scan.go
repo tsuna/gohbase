@@ -24,6 +24,8 @@ type Scan struct {
 	stopRow  []byte
 
 	scannerID *uint64
+
+	regionStop []byte
 }
 
 // NewScanStr creates a new Scan request that will start a scan for rows between
@@ -48,12 +50,12 @@ func NewScanStr(ctx context.Context, table string, families map[string][]string,
 
 // NewScanFromID creates a new Scan request that will return additional results
 // from a given scanner ID.
-func NewScanFromID(ctx context.Context, table string, scannerID uint64) *Scan {
+func NewScanFromID(ctx context.Context, table string, scannerID uint64, startRow []byte) *Scan {
 	return &Scan{
 		base: base{
 			table: []byte(table),
-			//key:
-			ctx: ctx,
+			key:   []byte(startRow),
+			ctx:   ctx,
 		},
 		scannerID:    &scannerID,
 		closeScanner: false,
@@ -62,12 +64,12 @@ func NewScanFromID(ctx context.Context, table string, scannerID uint64) *Scan {
 
 // NewCloseFromID creates a new Scan request that will close the scan for a
 // given scanner ID.
-func NewCloseFromID(ctx context.Context, table string, scannerID uint64) *Scan {
+func NewCloseFromID(ctx context.Context, table string, scannerID uint64, startRow []byte) *Scan {
 	return &Scan{
 		base: base{
 			table: []byte(table),
-			//key:
-			ctx: ctx,
+			key:   []byte(startRow),
+			ctx:   ctx,
 		},
 		scannerID:    &scannerID,
 		closeScanner: true,
@@ -79,12 +81,24 @@ func (s *Scan) Name() string {
 	return "Scan"
 }
 
+// SetRegion will set the region and regionStop values on the given scan
+func (s *Scan) SetRegion(region []byte, regionStop []byte) {
+	s.region = region
+	s.regionStop = regionStop
+}
+
+// GetRegionStop will return return the regionStop value from the given scan
+func (s *Scan) GetRegionStop() []byte {
+	return s.regionStop
+}
+
 // Serialize will convert this Scan into a serialized protobuf message ready
 // to be sent to an HBase node.
 func (s *Scan) Serialize() ([]byte, error) {
 	scan := &pb.ScanRequest{
 		Region:       s.regionSpecifier(),
 		CloseScanner: &s.closeScanner,
+		NumberOfRows: proto.Uint32(20), //TODO: make this configurable
 	}
 	if s.scannerID == nil {
 		scan.Scan = &pb.Scan{
