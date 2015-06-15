@@ -17,7 +17,7 @@ type Call interface {
 
 	Key() []byte
 
-	SetRegion(region []byte)
+	SetRegion(region []byte, regionStop []byte)
 	Name() string
 	Serialize() ([]byte, error)
 	// Returns a newly created (default-state) protobuf in which to store the
@@ -52,7 +52,7 @@ func (b *base) GetContext() context.Context {
 	return b.ctx
 }
 
-func (b *base) SetRegion(region []byte) {
+func (b *base) SetRegion(region []byte, regionStop []byte) {
 	b.region = region
 }
 

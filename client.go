@@ -134,12 +134,59 @@ func (c *Client) Get(ctx context.Context, table, rowkey string, families map[str
 }
 
 // Scan retrieves the values specified in families from the given range.
-func (c *Client) Scan(ctx context.Context, table string, families map[string][]string, startRow, stopRow []byte) (*pb.ScanResponse, error) {
-	resp, err := c.sendRPC(hrpc.NewScanStr(ctx, table, families, startRow, stopRow))
-	if err != nil {
-		return nil, err
+func (c *Client) Scan(ctx context.Context, table string, families map[string][]string, startRow, stopRow []byte) ([]*pb.Result, error) {
+	var results []*pb.Result
+	var scanres *pb.ScanResponse
+	var rpc *hrpc.Scan
+
+	for {
+		// Make a new Scan RPC for this region
+		if rpc == nil {
+			// If it's the first region, just begin at the given startRow
+			rpc = hrpc.NewScanStr(ctx, table, families, startRow, stopRow)
+		} else {
+			// If it's not the first region, we want to start at whatever the
+			// last region's StopKey was
+			rpc = hrpc.NewScanStr(ctx, table, families, rpc.GetRegionStop(), stopRow)
+		}
+
+		res, err := c.sendRPC(rpc)
+		if err != nil {
+			return nil, err
+		}
+		scanres = res.(*pb.ScanResponse)
+		results = append(results, scanres.Results...)
+
+		// TODO: The more_results field of the ScanResponse object was always
+		// true, so we should figure out if there's a better way to know when
+		// to move on to the next region than making an extra request and
+		// seeing if there were no results
+		for len(scanres.Results) != 0 {
+			rpc = hrpc.NewScanFromID(ctx, table, *scanres.ScannerId, rpc.Key())
+
+			res, err = c.sendRPC(rpc)
+			if err != nil {
+				return nil, err
+			}
+			scanres = res.(*pb.ScanResponse)
+			results = append(results, scanres.Results...)
+		}
+
+		rpc = hrpc.NewCloseFromID(ctx, table, *scanres.ScannerId, rpc.Key())
+		if err != nil {
+			return nil, err
+		}
+		res, err = c.sendRPC(rpc)
+
+		// Check to see if this region is the last we should scan (either
+		// because (1) it's the last region or (3) because its stop_key is
+		// greater than or equal to the stop_key of this scanner provided
+		// that (2) we're not trying to scan until the end of the table).
+		// (1)                               (2)                  (3)
+		if len(rpc.GetRegionStop()) == 0 || (len(stopRow) != 0 && bytes.Compare(stopRow, rpc.GetRegionStop()) <= 0) {
+			return results, nil
+		}
 	}
-	return resp.(*pb.ScanResponse), err
 }
 
 // Put inserts or updates the values into the given row of the table.
@@ -253,7 +300,7 @@ func (c *Client) queueRPC(rpc hrpc.Call) error {
 			return err
 		}
 	}
-	rpc.SetRegion(reg.RegionName)
+	rpc.SetRegion(reg.RegionName, reg.StopKey)
 	client.QueueRPC(rpc)
 	return nil
 }
@@ -283,7 +330,7 @@ func (c *Client) locateRegion(table, key []byte) (*region.Client, *region.Info, 
 	}
 	metaKey := createRegionSearchKey(table, key)
 	rpc := hrpc.NewGetBefore(context.Background(), metaTableName, metaKey, infoFamily)
-	rpc.SetRegion(metaRegionInfo.RegionName)
+	rpc.SetRegion(metaRegionInfo.RegionName, metaRegionInfo.StopKey)
 	resp, err := c.metaClient.SendRPC(rpc)
 	if err != nil {
 		return nil, nil, err
