@@ -134,12 +134,55 @@ func (c *Client) Get(ctx context.Context, table, rowkey string, families map[str
 }
 
 // Scan retrieves the values specified in families from the given range.
-func (c *Client) Scan(ctx context.Context, table string, families map[string][]string, startRow, stopRow []byte) (*pb.ScanResponse, error) {
-	resp, err := c.sendRPC(hrpc.NewScanStr(ctx, table, families, startRow, stopRow))
-	if err != nil {
-		return nil, err
+func (c *Client) Scan(ctx context.Context, table string, families map[string][]string, startRow, stopRow []byte) ([]*pb.Result, error) {
+	var results []*pb.Result
+	var scanres *pb.ScanResponse
+	var rpc *hrpc.Scan
+
+	for {
+		// Make a new Scan RPC for this region
+		if rpc == nil {
+			// If it's the first region, just begin at the given startRow
+			rpc = hrpc.NewScanStr(ctx, table, families, startRow, stopRow)
+		} else {
+			// If it's not the first region, we want to start at whatever the
+			// last region's StopKey was
+			_, reg, err := c.locateRegion([]byte(table), rpc.Key())
+			if err != nil {
+				return nil, err
+			}
+			rpc = hrpc.NewScanStr(ctx, table, families, reg.StopKey, stopRow)
+		}
+
+		res, err := c.sendRPC(rpc)
+		scanres = res.(*pb.ScanResponse)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, scanres.Results...)
+
+		// TODO: The more_results field of the ScanResponse object was always
+		// true, so we should figure out if there's a better way to know when
+		// to move on to the next region than making an extra request and
+		// seeing if there were no results
+		for len(scanres.Results) != 0 {
+			rpc = hrpc.NewScanFromID(ctx, table, *scanres.ScannerId, rpc.Key())
+
+			res, err := c.sendRPC(rpc)
+			scanres = res.(*pb.ScanResponse)
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, scanres.Results...)
+		}
+
+		// If the StopKey of the region we're in is equal to our stopRow, this
+		// was the last region we needed to talk to
+		_, reg, err := c.locateRegion([]byte(table), rpc.Key())
+		if bytes.Equal(reg.StopKey, stopRow) {
+			return results, nil
+		}
 	}
-	return resp.(*pb.ScanResponse), err
 }
 
 // Put inserts or updates the values into the given row of the table.

@@ -48,12 +48,12 @@ func NewScanStr(ctx context.Context, table string, families map[string][]string,
 
 // NewScanFromID creates a new Scan request that will return additional results
 // from a given scanner ID.
-func NewScanFromID(ctx context.Context, table string, scannerID uint64) *Scan {
+func NewScanFromID(ctx context.Context, table string, scannerID uint64, startRow []byte) *Scan {
 	return &Scan{
 		base: base{
 			table: []byte(table),
-			//key:
-			ctx: ctx,
+			key:   []byte(startRow),
+			ctx:   ctx,
 		},
 		scannerID:    &scannerID,
 		closeScanner: false,
@@ -62,12 +62,12 @@ func NewScanFromID(ctx context.Context, table string, scannerID uint64) *Scan {
 
 // NewCloseFromID creates a new Scan request that will close the scan for a
 // given scanner ID.
-func NewCloseFromID(ctx context.Context, table string, scannerID uint64) *Scan {
+func NewCloseFromID(ctx context.Context, table string, scannerID uint64, startRow []byte) *Scan {
 	return &Scan{
 		base: base{
 			table: []byte(table),
-			//key:
-			ctx: ctx,
+			key:   []byte(startRow),
+			ctx:   ctx,
 		},
 		scannerID:    &scannerID,
 		closeScanner: true,
@@ -82,9 +82,11 @@ func (s *Scan) Name() string {
 // Serialize will convert this Scan into a serialized protobuf message ready
 // to be sent to an HBase node.
 func (s *Scan) Serialize() ([]byte, error) {
+	x := uint32(20)
 	scan := &pb.ScanRequest{
 		Region:       s.regionSpecifier(),
 		CloseScanner: &s.closeScanner,
+		NumberOfRows: &x, //TODO: make this configurable
 	}
 	if s.scannerID == nil {
 		scan.Scan = &pb.Scan{
