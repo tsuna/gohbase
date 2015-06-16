@@ -1,0 +1,106 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "facab960_d0ffaf65",
+        "filename": "client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 151,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-16T07:51:16Z",
+      "side": 1,
+      "message": "This should call getRegion() first in order to see if we can get that from our cache.  But the fact that you have to decide here between looking in the cache or making a meta lookup is an indication that something isn\u0027t structured quite right: we probably want \"startRow\" to \"move forward\" as our scanner advances.",
+      "revId": "30209330a44e61e227a7ffcd792b2d978fedf13f",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_f002f36d",
+        "filename": "client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 160,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-16T07:51:16Z",
+      "side": 1,
+      "message": "This should be before the previous line.  Always check the error first.  You shouldn\u0027t make any assumption on the other return values when an error is returned.  The returned value might be an untyped-nil, for instance, in which case this line would panic().",
+      "revId": "30209330a44e61e227a7ffcd792b2d978fedf13f",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_d036cf51",
+        "filename": "client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 182,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-16T07:51:16Z",
+      "side": 1,
+      "message": "Again, we don\u0027t wanna use locateRegion() here as it does a meta lookup, instead we want to peruse our cache by calling getRegion().\n\nInstead you want to leverage the fact that c.sendRPC() called c.QueueRPC(), which then did:\n\n  rpc.SetRegion(reg.RegionName)\n\nAlthough this call maybe should be just rpc.SetRegion(reg) so that you can more conveniently access the end key here.",
+      "revId": "30209330a44e61e227a7ffcd792b2d978fedf13f",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_303b7b39",
+        "filename": "client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 183,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-16T07:51:16Z",
+      "side": 1,
+      "message": "This doesn\u0027t correctly handle the case of reg.StopKey being the empty array – see the comment in scanFinished() in Scanner.java, case 1).",
+      "revId": "30209330a44e61e227a7ffcd792b2d978fedf13f",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_704503b2",
+        "filename": "client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 184,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-16T07:51:16Z",
+      "side": 1,
+      "message": "We return without closing our scanner.  If you want to handle proper disposal of the scanners in a subsequent commit that\u0027s fine, just a TODO here.",
+      "revId": "30209330a44e61e227a7ffcd792b2d978fedf13f",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_f01033aa",
+        "filename": "hrpc/scan.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 85,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-16T07:51:16Z",
+      "side": 1,
+      "message": "To avoid creating a local variable you can do proto.Int32(20)",
+      "revId": "30209330a44e61e227a7ffcd792b2d978fedf13f",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
