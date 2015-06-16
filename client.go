@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"strconv"
 	"sync"
@@ -66,14 +67,23 @@ type keyRegionCache struct {
 }
 
 func (krc *keyRegionCache) get(key []byte) ([]byte, *region.Info) {
+	// When seeking - "The Enumerator's position is possibly after the last item in the tree"
+	// http://godoc.org/github.com/cznic/b#Tree.Set
+	// TODO: Confirm that we don't always return the last region (HBase is refusing to generate
+	// more than one region locally).
 	krc.m.Lock()
 	enum, ok := krc.regions.Seek(key)
-	if !ok {
-		enum.Prev()
+	k, v, err := enum.Prev()
+	if err == io.EOF && krc.regions.Len() > 0 {
+		// We're past the end of the tree. Return the last element instead.
+		// (Without this code we always get a cache miss and create a new client for each req.)
+		k, v = krc.regions.Last()
+		err = nil
+	} else if !ok {
+		k, v, err = enum.Prev()
 	}
 	// TODO: It would be nice if we could do just enum.Get() to avoid the
 	// unnecessary cost of seeking to the next entry.
-	k, v, err := enum.Prev()
 	krc.m.Unlock()
 	if err != nil {
 		return nil, nil
@@ -81,11 +91,14 @@ func (krc *keyRegionCache) get(key []byte) ([]byte, *region.Info) {
 	return k.([]byte), v.(*region.Info)
 }
 
-func (krc *keyRegionCache) put(key []byte, reg *region.Info) {
+func (krc *keyRegionCache) put(key []byte, reg *region.Info) *region.Info {
 	krc.m.Lock()
-	// TODO: return any value that was there previously etc.
-	krc.regions.Set(key, reg)
+	oldV, _ := krc.regions.Put(key, func(interface{}, bool) (interface{}, bool) { return reg, true })
 	krc.m.Unlock()
+	if oldV == nil {
+		return nil
+	}
+	return oldV.(*region.Info)
 }
 
 // A Client provides access to an HBase cluster.
