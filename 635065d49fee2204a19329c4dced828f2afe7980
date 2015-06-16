@@ -1,0 +1,152 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "facab960_10e837e1",
+        "filename": "client.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 120,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-16T07:21:11Z",
+      "side": 1,
+      "message": "You don\u0027t need the context.WithCancel() here since you ignore the second return value, i.e. the function that you\u0027d use to cancel the context.",
+      "revId": "635065d49fee2204a19329c4dced828f2afe7980",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_d0b5efee",
+        "filename": "hrpc/call.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 27,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-16T07:21:11Z",
+      "side": 1,
+      "message": "I guess these should be singular now that we only have one channel.",
+      "revId": "635065d49fee2204a19329c4dced828f2afe7980",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_70ed03ef",
+        "filename": "hrpc/call.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 31,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-16T07:21:11Z",
+      "side": 1,
+      "message": "making",
+      "range": {
+        "startLine": 31,
+        "startChar": 58,
+        "endLine": 31,
+        "endChar": 65
+      },
+      "revId": "635065d49fee2204a19329c4dced828f2afe7980",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_50f2bfd2",
+        "filename": "hrpc/call.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 31,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-16T07:21:11Z",
+      "side": 1,
+      "message": "errors",
+      "range": {
+        "startLine": 31,
+        "startChar": 17,
+        "endLine": 31,
+        "endChar": 23
+      },
+      "revId": "635065d49fee2204a19329c4dced828f2afe7980",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_b0beabd2",
+        "filename": "hrpc/call.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 71,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-16T07:21:11Z",
+      "side": 1,
+      "message": "Maybe it would be nicer if GetResultChans was doing:\n\n  if b.resultch \u003d\u003d nil {\n      b.resultch \u003d make(chan RPCResult, 1)\n  }\n\nThis way we only have one method to access the result channel.",
+      "revId": "635065d49fee2204a19329c4dced828f2afe7980",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_50c9df76",
+        "filename": "region/client.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 50,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-16T07:21:11Z",
+      "side": 1,
+      "message": "This is probably a sign that the hrpc.Call interface should have a method to access the context and that hrpc.base should contain a context.Context object.\n\nThis would make sense since *all* RPCs should have a context associated with them.",
+      "revId": "635065d49fee2204a19329c4dced828f2afe7980",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_d0832f02",
+        "filename": "region/client.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 98,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-16T07:21:11Z",
+      "side": 1,
+      "message": "It\u0027s better to make this an uninitialized (nil) slice by declaring it like so:\n\n  var newrpcs []rpcAndCtx\n\nThis way there is no memory allocation unless it\u0027s appended to.  The syntax with foo :\u003d []type{} actually creates an empty slice.",
+      "revId": "635065d49fee2204a19329c4dced828f2afe7980",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_7072634a",
+        "filename": "region/client.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 124,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-16T07:21:11Z",
+      "side": 1,
+      "message": "From a performance perspective this is not great because we\u0027re going grab the writeMutex for an extended period of time (it may take a while for us to send and process all the outstanding RPCs), which will block all other goroutines trying to dispatch an RPC to this client.\n\nAn alternative would be to grab the lock, copy c.rpcs into a local variable, empty c.rpcs (by reslicing it), release the lock, then process the batch of RPCs from our local variable, and at the end if we have anything in newrpcs, grab the lock, append newrpcs into c.rpcs, release the lock.",
+      "revId": "635065d49fee2204a19329c4dced828f2afe7980",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
