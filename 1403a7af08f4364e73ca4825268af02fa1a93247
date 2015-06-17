@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "facab960_3927e0cb",
+        "filename": "test/test.go",
+        "patchSetId": 2
+      },
+      "lineNbr": 48,
+      "author": {
+        "id": 1005347
+      },
+      "writtenOn": "2015-06-17T21:46:19Z",
+      "side": 1,
+      "message": "You may want to inline a disable+drop table in case the table already exists. \n\n\"disable table; drop table; create table\"",
+      "range": {
+        "startLine": 48,
+        "startChar": 1,
+        "endLine": 48,
+        "endChar": 42
+      },
+      "revId": "1403a7af08f4364e73ca4825268af02fa1a93247",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
