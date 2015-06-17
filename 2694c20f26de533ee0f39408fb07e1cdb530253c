@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "facab960_fca3a6fd",
+        "filename": "region/client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 48,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-17T22:11:37Z",
+      "side": 1,
+      "message": "Please add comment on most things.  What is this chan?  How is it used?  Who writes to it?  Who reads from it?  Might be obvious now, but won\u0027t be obvious even to you in a few months.\n\nSomething like:\n\n  // When `rpcs\u0027 grows beyond a certain size, we write to this channel\n  // to kick the goroutine executing `processRpcs()\u0027.\n  process chan struct{}",
+      "revId": "2694c20f26de533ee0f39408fb07e1cdb530253c",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
