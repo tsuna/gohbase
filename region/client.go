@@ -44,6 +44,11 @@ type Client struct {
 	sendErr error
 
 	rpcs []hrpc.Call
+
+	// Once the rpcs list has grown to a large enough size, this channel is
+	// written to to notify the writer thread that it should stop sleeping and
+	// process the list
+	process chan struct{}
 }
 
 // NewClient creates a new RegionClient.
@@ -59,6 +64,7 @@ func NewClient(host string, port uint16) (*Client, error) {
 		host:       host,
 		port:       port,
 		writeMutex: &sync.Mutex{},
+		process:    make(chan struct{}),
 	}
 	err = c.sendHello()
 	if err != nil {
@@ -70,10 +76,15 @@ func NewClient(host string, port uint16) (*Client, error) {
 
 func (c *Client) processRpcs() {
 	for {
-		//TODO: make this value configurable
-		time.Sleep(time.Millisecond * 100)
-
-		c.writeMutex.Lock()
+		// TODO: make this value configurable
+		select {
+		case <-time.After(time.Millisecond * 100):
+			c.writeMutex.Lock()
+		case <-c.process:
+			// We don't acquire the lock here, because the thread that sent
+			// something on the process channel will have locked the mutex,
+			// and will not release it so as to transfer ownership
+		}
 
 		// If c.sendErr is set, this writer has encountered an unrecoverable
 		// error. It will repeat the error it encountered to any outstanding
@@ -191,7 +202,13 @@ func (c *Client) sendHello() error {
 func (c *Client) QueueRPC(rpc hrpc.Call) {
 	c.writeMutex.Lock()
 	c.rpcs = append(c.rpcs, rpc)
-	c.writeMutex.Unlock()
+	if len(c.rpcs) > 100 { //TODO: make configurable or pick a good number
+		c.process <- struct{}{}
+		// We don't release the lock here, because we want to transfer ownership
+		// of the lock to the goroutine that processes the RPCs
+	} else {
+		c.writeMutex.Unlock()
+	}
 }
 
 // SendRPC sends an RPC out to the wire.
