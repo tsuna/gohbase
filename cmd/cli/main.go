@@ -10,6 +10,7 @@ import (
 	"log"
 
 	"github.com/tsuna/gohbase"
+	"golang.org/x/net/context"
 )
 
 var zkquorum = flag.String("zkquorum", "localhost",
@@ -17,7 +18,7 @@ var zkquorum = flag.String("zkquorum", "localhost",
 
 func main() {
 	client := gohbase.NewClient(*zkquorum)
-	resp, err := client.CheckTable("aeris")
+	resp, err := client.CheckTable(context.Background(), "aeris")
 	if err != nil {
 		log.Fatalf("Fail: %s", err)
 	}
