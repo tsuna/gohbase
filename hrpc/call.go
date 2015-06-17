@@ -26,11 +26,11 @@ type Call interface {
 
 	GetResultChan() chan RPCResult
 
-	GetContext() context.Context
+	Context() context.Context
 }
 
 // RPCResult is struct that will contain both the resulting message from an RPC
-// call, and any erorrs that may have occurred related to makeing the RPC call.
+// call, and any errors that may have occurred related to making the RPC call.
 type RPCResult struct {
 	Msg   proto.Message
 	Error error
@@ -48,7 +48,7 @@ type base struct {
 	ctx context.Context
 }
 
-func (b *base) GetContext() context.Context {
+func (b *base) Context() context.Context {
 	return b.ctx
 }
 

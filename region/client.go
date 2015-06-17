@@ -101,7 +101,7 @@ func (c *Client) processRpcs() {
 			// request. The function that placed the RPC in our queue should
 			// stop waiting for a result and return an error.
 			select {
-			case _, ok := <-rpc.GetContext().Done():
+			case _, ok := <-rpc.Context().Done():
 				if !ok {
 					continue
 				}

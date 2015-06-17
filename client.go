@@ -326,7 +326,7 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 	select {
 	case res := <-resch:
 		return res.Msg, res.Error
-	case <-rpc.GetContext().Done():
+	case <-rpc.Context().Done():
 		return nil, ErrDeadline
 	}
 }
