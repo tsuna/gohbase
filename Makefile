@@ -43,4 +43,12 @@ lint:
 test:
 	$(GO) test $(GOTEST_FLAGS) ./...
 
-.PHONY: all check coverage coverdata fmtcheck install lint test
+goproto:
+	go get -u github.com/golang/protobuf/{proto,protoc-gen-go}
+	cd pb && protoc --go_out=. *.proto
+
+gogoproto:
+	go get github.com/gogo/protobuf/protoc-gen-gofast
+	cd pb && protoc --gofast_out=. *.proto
+
+.PHONY: all check coverage coverdata fmtcheck install lint test goproto gogoproto
