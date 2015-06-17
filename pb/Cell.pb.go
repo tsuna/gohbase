@@ -8,11 +8,16 @@ Package pb is a generated protocol buffer package.
 It is generated from these files:
 	Cell.proto
 	Client.proto
+	ClusterId.proto
+	ClusterStatus.proto
 	Comparator.proto
 	ErrorHandling.proto
 	Filter.proto
+	FS.proto
 	HBase.proto
+	Master.proto
 	MultiRowMutation.proto
+	Quota.proto
 	RPC.proto
 	Tracing.proto
 	ZooKeeper.proto

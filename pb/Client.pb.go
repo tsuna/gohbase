@@ -11,6 +11,41 @@ import math "math"
 var _ = proto.Marshal
 var _ = math.Inf
 
+// *
+// Consistency defines the expected consistency level for an operation.
+type Consistency int32
+
+const (
+	Consistency_STRONG   Consistency = 0
+	Consistency_TIMELINE Consistency = 1
+)
+
+var Consistency_name = map[int32]string{
+	0: "STRONG",
+	1: "TIMELINE",
+}
+var Consistency_value = map[string]int32{
+	"STRONG":   0,
+	"TIMELINE": 1,
+}
+
+func (x Consistency) Enum() *Consistency {
+	p := new(Consistency)
+	*p = x
+	return p
+}
+func (x Consistency) String() string {
+	return proto.EnumName(Consistency_name, int32(x))
+}
+func (x *Consistency) UnmarshalJSON(data []byte) error {
+	value, err := proto.UnmarshalJSONEnum(Consistency_value, data, "Consistency")
+	if err != nil {
+		return err
+	}
+	*x = Consistency(value)
+	return nil
+}
+
 type MutationProto_Durability int32
 
 const (
@@ -213,8 +248,9 @@ type Get struct {
 	ExistenceOnly *bool `protobuf:"varint,10,opt,name=existence_only,def=0" json:"existence_only,omitempty"`
 	// If the row to get doesn't exist, return the
 	// closest row before.
-	ClosestRowBefore *bool  `protobuf:"varint,11,opt,name=closest_row_before,def=0" json:"closest_row_before,omitempty"`
-	XXX_unrecognized []byte `json:"-"`
+	ClosestRowBefore *bool        `protobuf:"varint,11,opt,name=closest_row_before,def=0" json:"closest_row_before,omitempty"`
+	Consistency      *Consistency `protobuf:"varint,12,opt,name=consistency,enum=pb.Consistency,def=0" json:"consistency,omitempty"`
+	XXX_unrecognized []byte       `json:"-"`
 }
 
 func (m *Get) Reset()         { *m = Get{} }
@@ -225,6 +261,7 @@ const Default_Get_MaxVersions uint32 = 1
 const Default_Get_CacheBlocks bool = true
 const Default_Get_ExistenceOnly bool = false
 const Default_Get_ClosestRowBefore bool = false
+const Default_Get_Consistency Consistency = Consistency_STRONG
 
 func (m *Get) GetRow() []byte {
 	if m != nil {
@@ -303,6 +340,13 @@ func (m *Get) GetClosestRowBefore() bool {
 	return Default_Get_ClosestRowBefore
 }
 
+func (m *Get) GetConsistency() Consistency {
+	if m != nil && m.Consistency != nil {
+		return *m.Consistency
+	}
+	return Default_Get_Consistency
+}
+
 type Result struct {
 	// Result includes the Cells or else it just has a count of Cells
 	// that are carried otherwise.
@@ -316,13 +360,23 @@ type Result struct {
 	AssociatedCellCount *int32 `protobuf:"varint,2,opt,name=associated_cell_count" json:"associated_cell_count,omitempty"`
 	// used for Get to check existence only. Not set if existence_only was not set to true
 	//  in the query.
-	Exists           *bool  `protobuf:"varint,3,opt,name=exists" json:"exists,omitempty"`
+	Exists *bool `protobuf:"varint,3,opt,name=exists" json:"exists,omitempty"`
+	// Whether or not the results are coming from possibly stale data
+	Stale *bool `protobuf:"varint,4,opt,name=stale,def=0" json:"stale,omitempty"`
+	// Whether or not the entire result could be returned. Results will be split when
+	// the RPC chunk size limit is reached. Partial results contain only a subset of the
+	// cells for a row and must be combined with a result containing the remaining cells
+	// to form a complete result
+	Partial          *bool  `protobuf:"varint,5,opt,name=partial,def=0" json:"partial,omitempty"`
 	XXX_unrecognized []byte `json:"-"`
 }
 
 func (m *Result) Reset()         { *m = Result{} }
 func (m *Result) String() string { return proto.CompactTextString(m) }
 func (*Result) ProtoMessage()    {}
+
+const Default_Result_Stale bool = false
+const Default_Result_Partial bool = false
 
 func (m *Result) GetCell() []*Cell {
 	if m != nil {
@@ -343,6 +397,20 @@ func (m *Result) GetExists() bool {
 		return *m.Exists
 	}
 	return false
+}
+
+func (m *Result) GetStale() bool {
+	if m != nil && m.Stale != nil {
+		return *m.Stale
+	}
+	return Default_Result_Stale
+}
+
+func (m *Result) GetPartial() bool {
+	if m != nil && m.Partial != nil {
+		return *m.Partial
+	}
+	return Default_Result_Partial
 }
 
 // *
@@ -707,6 +775,7 @@ type Scan struct {
 	LoadColumnFamiliesOnDemand *bool            `protobuf:"varint,13,opt,name=load_column_families_on_demand" json:"load_column_families_on_demand,omitempty"`
 	Small                      *bool            `protobuf:"varint,14,opt,name=small" json:"small,omitempty"`
 	Reversed                   *bool            `protobuf:"varint,15,opt,name=reversed,def=0" json:"reversed,omitempty"`
+	Consistency                *Consistency     `protobuf:"varint,16,opt,name=consistency,enum=pb.Consistency,def=0" json:"consistency,omitempty"`
 	Caching                    *uint32          `protobuf:"varint,17,opt,name=caching" json:"caching,omitempty"`
 	XXX_unrecognized           []byte           `json:"-"`
 }
@@ -718,6 +787,7 @@ func (*Scan) ProtoMessage()    {}
 const Default_Scan_MaxVersions uint32 = 1
 const Default_Scan_CacheBlocks bool = true
 const Default_Scan_Reversed bool = false
+const Default_Scan_Consistency Consistency = Consistency_STRONG
 
 func (m *Scan) GetColumn() []*Column {
 	if m != nil {
@@ -824,6 +894,13 @@ func (m *Scan) GetReversed() bool {
 	return Default_Scan_Reversed
 }
 
+func (m *Scan) GetConsistency() Consistency {
+	if m != nil && m.Consistency != nil {
+		return *m.Consistency
+	}
+	return Default_Scan_Consistency
+}
+
 func (m *Scan) GetCaching() uint32 {
 	if m != nil && m.Caching != nil {
 		return *m.Caching
@@ -842,13 +919,15 @@ func (m *Scan) GetCaching() uint32 {
 // You can fetch the results and ask the scanner to be closed to save
 // a trip if you are not interested in remaining results.
 type ScanRequest struct {
-	Region           *RegionSpecifier `protobuf:"bytes,1,opt,name=region" json:"region,omitempty"`
-	Scan             *Scan            `protobuf:"bytes,2,opt,name=scan" json:"scan,omitempty"`
-	ScannerId        *uint64          `protobuf:"varint,3,opt,name=scanner_id" json:"scanner_id,omitempty"`
-	NumberOfRows     *uint32          `protobuf:"varint,4,opt,name=number_of_rows" json:"number_of_rows,omitempty"`
-	CloseScanner     *bool            `protobuf:"varint,5,opt,name=close_scanner" json:"close_scanner,omitempty"`
-	NextCallSeq      *uint64          `protobuf:"varint,6,opt,name=next_call_seq" json:"next_call_seq,omitempty"`
-	XXX_unrecognized []byte           `json:"-"`
+	Region                  *RegionSpecifier `protobuf:"bytes,1,opt,name=region" json:"region,omitempty"`
+	Scan                    *Scan            `protobuf:"bytes,2,opt,name=scan" json:"scan,omitempty"`
+	ScannerId               *uint64          `protobuf:"varint,3,opt,name=scanner_id" json:"scanner_id,omitempty"`
+	NumberOfRows            *uint32          `protobuf:"varint,4,opt,name=number_of_rows" json:"number_of_rows,omitempty"`
+	CloseScanner            *bool            `protobuf:"varint,5,opt,name=close_scanner" json:"close_scanner,omitempty"`
+	NextCallSeq             *uint64          `protobuf:"varint,6,opt,name=next_call_seq" json:"next_call_seq,omitempty"`
+	ClientHandlesPartials   *bool            `protobuf:"varint,7,opt,name=client_handles_partials" json:"client_handles_partials,omitempty"`
+	ClientHandlesHeartbeats *bool            `protobuf:"varint,8,opt,name=client_handles_heartbeats" json:"client_handles_heartbeats,omitempty"`
+	XXX_unrecognized        []byte           `json:"-"`
 }
 
 func (m *ScanRequest) Reset()         { *m = ScanRequest{} }
@@ -897,6 +976,20 @@ func (m *ScanRequest) GetNextCallSeq() uint64 {
 	return 0
 }
 
+func (m *ScanRequest) GetClientHandlesPartials() bool {
+	if m != nil && m.ClientHandlesPartials != nil {
+		return *m.ClientHandlesPartials
+	}
+	return false
+}
+
+func (m *ScanRequest) GetClientHandlesHeartbeats() bool {
+	if m != nil && m.ClientHandlesHeartbeats != nil {
+		return *m.ClientHandlesHeartbeats
+	}
+	return false
+}
+
 // *
 // The scan response. If there are no more results, more_results will
 // be false.  If it is not specified, it means there are more.
@@ -915,8 +1008,26 @@ type ScanResponse struct {
 	// If cells are not carried in an accompanying cellblock, then they are pb'd here.
 	// This field is mutually exclusive with cells_per_result (since the Cells will
 	// be inside the pb'd Result)
-	Results          []*Result `protobuf:"bytes,5,rep,name=results" json:"results,omitempty"`
-	XXX_unrecognized []byte    `json:"-"`
+	Results []*Result `protobuf:"bytes,5,rep,name=results" json:"results,omitempty"`
+	Stale   *bool     `protobuf:"varint,6,opt,name=stale" json:"stale,omitempty"`
+	// This field is filled in if we are doing cellblocks. In the event that a row
+	// could not fit all of its cells into a single RPC chunk, the results will be
+	// returned as partials, and reconstructed into a complete result on the client
+	// side. This field is a list of flags indicating whether or not the result
+	// that the cells belong to is a partial result. For example, if this field
+	// has false, false, true in it, then we know that on the client side, we need to
+	// make another RPC request since the last result was only a partial.
+	PartialFlagPerResult []bool `protobuf:"varint,7,rep,name=partial_flag_per_result" json:"partial_flag_per_result,omitempty"`
+	// A server may choose to limit the number of results returned to the client for
+	// reasons such as the size in bytes or quantity of results accumulated. This field
+	// will true when more results exist in the current region.
+	MoreResultsInRegion *bool `protobuf:"varint,8,opt,name=more_results_in_region" json:"more_results_in_region,omitempty"`
+	// This field is filled in if the server is sending back a heartbeat message.
+	// Heartbeat messages are sent back to the client to prevent the scanner from
+	// timing out. Seeing a heartbeat message communicates to the Client that the
+	// server would have continued to scan had the time limit not been reached.
+	HeartbeatMessage *bool  `protobuf:"varint,9,opt,name=heartbeat_message" json:"heartbeat_message,omitempty"`
+	XXX_unrecognized []byte `json:"-"`
 }
 
 func (m *ScanResponse) Reset()         { *m = ScanResponse{} }
@@ -956,6 +1067,34 @@ func (m *ScanResponse) GetResults() []*Result {
 		return m.Results
 	}
 	return nil
+}
+
+func (m *ScanResponse) GetStale() bool {
+	if m != nil && m.Stale != nil {
+		return *m.Stale
+	}
+	return false
+}
+
+func (m *ScanResponse) GetPartialFlagPerResult() []bool {
+	if m != nil {
+		return m.PartialFlagPerResult
+	}
+	return nil
+}
+
+func (m *ScanResponse) GetMoreResultsInRegion() bool {
+	if m != nil && m.MoreResultsInRegion != nil {
+		return *m.MoreResultsInRegion
+	}
+	return false
+}
+
+func (m *ScanResponse) GetHeartbeatMessage() bool {
+	if m != nil && m.HeartbeatMessage != nil {
+		return *m.HeartbeatMessage
+	}
+	return false
 }
 
 // *
@@ -1215,6 +1354,38 @@ func (m *RegionAction) GetAction() []*Action {
 	return nil
 }
 
+//
+// Statistics about the current load on the region
+type RegionLoadStats struct {
+	// Percent load on the memstore. Guaranteed to be positive, between 0 and 100.
+	MemstoreLoad *int32 `protobuf:"varint,1,opt,name=memstoreLoad,def=0" json:"memstoreLoad,omitempty"`
+	// Percent JVM heap occupancy. Guaranteed to be positive, between 0 and 100.
+	// We can move this to "ServerLoadStats" should we develop them.
+	HeapOccupancy    *int32 `protobuf:"varint,2,opt,name=heapOccupancy,def=0" json:"heapOccupancy,omitempty"`
+	XXX_unrecognized []byte `json:"-"`
+}
+
+func (m *RegionLoadStats) Reset()         { *m = RegionLoadStats{} }
+func (m *RegionLoadStats) String() string { return proto.CompactTextString(m) }
+func (*RegionLoadStats) ProtoMessage()    {}
+
+const Default_RegionLoadStats_MemstoreLoad int32 = 0
+const Default_RegionLoadStats_HeapOccupancy int32 = 0
+
+func (m *RegionLoadStats) GetMemstoreLoad() int32 {
+	if m != nil && m.MemstoreLoad != nil {
+		return *m.MemstoreLoad
+	}
+	return Default_RegionLoadStats_MemstoreLoad
+}
+
+func (m *RegionLoadStats) GetHeapOccupancy() int32 {
+	if m != nil && m.HeapOccupancy != nil {
+		return *m.HeapOccupancy
+	}
+	return Default_RegionLoadStats_HeapOccupancy
+}
+
 // *
 // Either a Result or an Exception NameBytesPair (keyed by
 // exception name whose value is the exception stringified)
@@ -1226,8 +1397,10 @@ type ResultOrException struct {
 	Result    *Result        `protobuf:"bytes,2,opt,name=result" json:"result,omitempty"`
 	Exception *NameBytesPair `protobuf:"bytes,3,opt,name=exception" json:"exception,omitempty"`
 	// result if this was a coprocessor service call
-	ServiceResult    *CoprocessorServiceResult `protobuf:"bytes,4,opt,name=service_result" json:"service_result,omitempty"`
-	XXX_unrecognized []byte                    `json:"-"`
+	ServiceResult *CoprocessorServiceResult `protobuf:"bytes,4,opt,name=service_result" json:"service_result,omitempty"`
+	// current load on the region
+	LoadStats        *RegionLoadStats `protobuf:"bytes,5,opt,name=loadStats" json:"loadStats,omitempty"`
+	XXX_unrecognized []byte           `json:"-"`
 }
 
 func (m *ResultOrException) Reset()         { *m = ResultOrException{} }
@@ -1258,6 +1431,13 @@ func (m *ResultOrException) GetException() *NameBytesPair {
 func (m *ResultOrException) GetServiceResult() *CoprocessorServiceResult {
 	if m != nil {
 		return m.ServiceResult
+	}
+	return nil
+}
+
+func (m *ResultOrException) GetLoadStats() *RegionLoadStats {
+	if m != nil {
+		return m.LoadStats
 	}
 	return nil
 }
@@ -1353,6 +1533,7 @@ func (m *MultiResponse) GetProcessed() bool {
 }
 
 func init() {
+	proto.RegisterEnum("pb.Consistency", Consistency_name, Consistency_value)
 	proto.RegisterEnum("pb.MutationProto_Durability", MutationProto_Durability_name, MutationProto_Durability_value)
 	proto.RegisterEnum("pb.MutationProto_MutationType", MutationProto_MutationType_name, MutationProto_MutationType_value)
 	proto.RegisterEnum("pb.MutationProto_DeleteType", MutationProto_DeleteType_name, MutationProto_DeleteType_value)

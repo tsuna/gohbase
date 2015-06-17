@@ -36,6 +36,63 @@ func (m *UserInformation) GetRealUser() string {
 	return ""
 }
 
+// Rpc client version info proto. Included in ConnectionHeader on connection setup
+type VersionInfo struct {
+	Version          *string `protobuf:"bytes,1,req,name=version" json:"version,omitempty"`
+	Url              *string `protobuf:"bytes,2,req,name=url" json:"url,omitempty"`
+	Revision         *string `protobuf:"bytes,3,req,name=revision" json:"revision,omitempty"`
+	User             *string `protobuf:"bytes,4,req,name=user" json:"user,omitempty"`
+	Date             *string `protobuf:"bytes,5,req,name=date" json:"date,omitempty"`
+	SrcChecksum      *string `protobuf:"bytes,6,req,name=src_checksum" json:"src_checksum,omitempty"`
+	XXX_unrecognized []byte  `json:"-"`
+}
+
+func (m *VersionInfo) Reset()         { *m = VersionInfo{} }
+func (m *VersionInfo) String() string { return proto.CompactTextString(m) }
+func (*VersionInfo) ProtoMessage()    {}
+
+func (m *VersionInfo) GetVersion() string {
+	if m != nil && m.Version != nil {
+		return *m.Version
+	}
+	return ""
+}
+
+func (m *VersionInfo) GetUrl() string {
+	if m != nil && m.Url != nil {
+		return *m.Url
+	}
+	return ""
+}
+
+func (m *VersionInfo) GetRevision() string {
+	if m != nil && m.Revision != nil {
+		return *m.Revision
+	}
+	return ""
+}
+
+func (m *VersionInfo) GetUser() string {
+	if m != nil && m.User != nil {
+		return *m.User
+	}
+	return ""
+}
+
+func (m *VersionInfo) GetDate() string {
+	if m != nil && m.Date != nil {
+		return *m.Date
+	}
+	return ""
+}
+
+func (m *VersionInfo) GetSrcChecksum() string {
+	if m != nil && m.SrcChecksum != nil {
+		return *m.SrcChecksum
+	}
+	return ""
+}
+
 // This is sent on connection setup after the connection preamble is sent.
 type ConnectionHeader struct {
 	UserInfo    *UserInformation `protobuf:"bytes,1,opt,name=user_info" json:"user_info,omitempty"`
@@ -45,8 +102,9 @@ type ConnectionHeader struct {
 	CellBlockCodecClass *string `protobuf:"bytes,3,opt,name=cell_block_codec_class" json:"cell_block_codec_class,omitempty"`
 	// Compressor we will use if cell block is compressed.  Server will throw exception if not supported.
 	// Class must implement hadoop's CompressionCodec Interface.  Can't compress if no codec.
-	CellBlockCompressorClass *string `protobuf:"bytes,4,opt,name=cell_block_compressor_class" json:"cell_block_compressor_class,omitempty"`
-	XXX_unrecognized         []byte  `json:"-"`
+	CellBlockCompressorClass *string      `protobuf:"bytes,4,opt,name=cell_block_compressor_class" json:"cell_block_compressor_class,omitempty"`
+	VersionInfo              *VersionInfo `protobuf:"bytes,5,opt,name=version_info" json:"version_info,omitempty"`
+	XXX_unrecognized         []byte       `json:"-"`
 }
 
 func (m *ConnectionHeader) Reset()         { *m = ConnectionHeader{} }
@@ -79,6 +137,13 @@ func (m *ConnectionHeader) GetCellBlockCompressorClass() string {
 		return *m.CellBlockCompressorClass
 	}
 	return ""
+}
+
+func (m *ConnectionHeader) GetVersionInfo() *VersionInfo {
+	if m != nil {
+		return m.VersionInfo
+	}
+	return nil
 }
 
 // Optional Cell block Message.  Included in client RequestHeader
@@ -164,7 +229,7 @@ type RequestHeader struct {
 	RequestParam *bool `protobuf:"varint,4,opt,name=request_param" json:"request_param,omitempty"`
 	// If present, then an encoded data block follows.
 	CellBlockMeta *CellBlockMeta `protobuf:"bytes,5,opt,name=cell_block_meta" json:"cell_block_meta,omitempty"`
-	// 0 is NORMAL priority.  100 is HIGH.  If no priority, treat it as NORMAL.
+	// 0 is NORMAL priority.  200 is HIGH.  If no priority, treat it as NORMAL.
 	// See HConstants.
 	Priority         *uint32 `protobuf:"varint,6,opt,name=priority" json:"priority,omitempty"`
 	XXX_unrecognized []byte  `json:"-"`

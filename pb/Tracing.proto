@@ -15,8 +15,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package pb;
-option optimize_for = LITE_RUNTIME;
+option java_package = "org.apache.hadoop.hbase.protobuf.generated";
+option java_outer_classname = "TracingProtos";
+option java_generate_equals_and_hash = true;
+option optimize_for = SPEED;
 
 //Used to pass through the information necessary to continue
 //a trace after an RPC is made. All we need is the traceid

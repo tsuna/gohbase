@@ -103,6 +103,22 @@ func (m *BinaryComparator) GetComparable() *ByteArrayComparable {
 	return nil
 }
 
+type LongComparator struct {
+	Comparable       *ByteArrayComparable `protobuf:"bytes,1,req,name=comparable" json:"comparable,omitempty"`
+	XXX_unrecognized []byte               `json:"-"`
+}
+
+func (m *LongComparator) Reset()         { *m = LongComparator{} }
+func (m *LongComparator) String() string { return proto.CompactTextString(m) }
+func (*LongComparator) ProtoMessage()    {}
+
+func (m *LongComparator) GetComparable() *ByteArrayComparable {
+	if m != nil {
+		return m.Comparable
+	}
+	return nil
+}
+
 type BinaryPrefixComparator struct {
 	Comparable       *ByteArrayComparable `protobuf:"bytes,1,req,name=comparable" json:"comparable,omitempty"`
 	XXX_unrecognized []byte               `json:"-"`
@@ -155,6 +171,7 @@ type RegexStringComparator struct {
 	Pattern          *string `protobuf:"bytes,1,req,name=pattern" json:"pattern,omitempty"`
 	PatternFlags     *int32  `protobuf:"varint,2,req,name=pattern_flags" json:"pattern_flags,omitempty"`
 	Charset          *string `protobuf:"bytes,3,req,name=charset" json:"charset,omitempty"`
+	Engine           *string `protobuf:"bytes,4,opt,name=engine" json:"engine,omitempty"`
 	XXX_unrecognized []byte  `json:"-"`
 }
 
@@ -179,6 +196,13 @@ func (m *RegexStringComparator) GetPatternFlags() int32 {
 func (m *RegexStringComparator) GetCharset() string {
 	if m != nil && m.Charset != nil {
 		return *m.Charset
+	}
+	return ""
+}
+
+func (m *RegexStringComparator) GetEngine() string {
+	if m != nil && m.Engine != nil {
+		return *m.Engine
 	}
 	return ""
 }
