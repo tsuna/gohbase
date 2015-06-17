@@ -1,0 +1,44 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "facab960_39b1a047",
+        "filename": "client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 73,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-17T17:53:57Z",
+      "side": 1,
+      "message": "I showed you how to split the region.  Remove this comment.",
+      "range": {
+        "startLine": 72,
+        "startChar": 0,
+        "endLine": 73,
+        "endChar": 34
+      },
+      "revId": "9cc61698039812ce813b0606c11fb3b1b5f39ec0",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_19a93cdf",
+        "filename": "client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 96,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-17T17:53:57Z",
+      "side": 1,
+      "message": "Kind of unfortunate we have to create a closure just get access to the return value.  Maybe we should consider sending a pull request to cznic/b in order to have a proper CAS API.",
+      "revId": "9cc61698039812ce813b0606c11fb3b1b5f39ec0",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
