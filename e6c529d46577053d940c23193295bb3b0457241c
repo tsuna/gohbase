@@ -16,6 +16,24 @@
       "revId": "e6c529d46577053d940c23193295bb3b0457241c",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_d96a74ed",
+        "filename": "client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 306,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-17T20:55:41Z",
+      "side": 1,
+      "message": "Yeah I\u0027d say let\u0027s add it as a field later on if we need it as a field.",
+      "parentUuid": "facab960_f9b49883",
+      "revId": "e6c529d46577053d940c23193295bb3b0457241c",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
     }
   ]
 }
