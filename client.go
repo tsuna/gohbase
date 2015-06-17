@@ -116,8 +116,8 @@ func NewClient(zkquorum string) *Client {
 }
 
 // CheckTable returns an error if the given table name doesn't exist.
-func (c *Client) CheckTable(table string) (*pb.GetResponse, error) {
-	resp, err := c.sendRPC(hrpc.NewGetStr(context.Background(), table, "theKey", nil))
+func (c *Client) CheckTable(ctx context.Context, table string) (*pb.GetResponse, error) {
+	resp, err := c.sendRPC(hrpc.NewGetStr(ctx, table, "theKey", nil))
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +295,7 @@ func (c *Client) queueRPC(rpc hrpc.Call) error {
 		client = c.clientFor(reg)
 	} else {
 		var err error
-		client, reg, err = c.locateRegion(table, key)
+		client, reg, err = c.locateRegion(rpc.GetContext(), table, key)
 		if err != nil {
 			return err
 		}
@@ -321,7 +321,7 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 }
 
 // Locates the region in which the given row key for the given table is.
-func (c *Client) locateRegion(table, key []byte) (*region.Client, *region.Info, error) {
+func (c *Client) locateRegion(ctx context.Context, table, key []byte) (*region.Client, *region.Info, error) {
 	if c.metaClient == nil {
 		err := c.locateMeta()
 		if err != nil {
@@ -329,9 +329,9 @@ func (c *Client) locateRegion(table, key []byte) (*region.Client, *region.Info, 
 		}
 	}
 	metaKey := createRegionSearchKey(table, key)
-	rpc := hrpc.NewGetBefore(context.Background(), metaTableName, metaKey, infoFamily)
+	rpc := hrpc.NewGetBefore(ctx, metaTableName, metaKey, infoFamily)
 	rpc.SetRegion(metaRegionInfo.RegionName, metaRegionInfo.StopKey)
-	resp, err := c.metaClient.SendRPC(rpc)
+	resp, err := c.sendRPC(rpc)
 	if err != nil {
 		return nil, nil, err
 	}
