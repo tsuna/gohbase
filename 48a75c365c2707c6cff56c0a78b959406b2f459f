@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "facab960_f933b85f",
+        "filename": "hrpc/scan.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 84,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-17T19:52:31Z",
+      "side": 1,
+      "message": "hrpc/scan.go:84:1: exported method Scan.SetRegion should have comment or be unexported",
+      "revId": "48a75c365c2707c6cff56c0a78b959406b2f459f",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_19393c41",
+        "filename": "hrpc/scan.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 89,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-17T19:52:31Z",
+      "side": 1,
+      "message": "hrpc/scan.go:89:1: exported method Scan.GetRegionStop should have comment or be unexported",
+      "revId": "48a75c365c2707c6cff56c0a78b959406b2f459f",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
