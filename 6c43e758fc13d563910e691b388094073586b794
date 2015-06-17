@@ -1,0 +1,67 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "facab960_f910185b",
+        "filename": "integration_test.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 1005347
+      },
+      "writtenOn": "2015-06-17T21:46:19Z",
+      "side": 1,
+      "message": "Performance wise I\u0027m worried that you\u0027re creating/dropping a table after every test. \n\nMay want to do a single setup(), teardown() function that runs once per suite and try to reduce key collisions between the individual tests.",
+      "revId": "6c43e758fc13d563910e691b388094073586b794",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_79040818",
+        "filename": "integration_test.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 44,
+      "author": {
+        "id": 1005347
+      },
+      "writtenOn": "2015-06-17T21:46:19Z",
+      "side": 1,
+      "message": "You should verify correctness of the returned value.",
+      "range": {
+        "startLine": 41,
+        "startChar": 1,
+        "endLine": 44,
+        "endChar": 2
+      },
+      "revId": "6c43e758fc13d563910e691b388094073586b794",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_5924a4c4",
+        "filename": "test/test.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 48,
+      "author": {
+        "id": 1005347
+      },
+      "writtenOn": "2015-06-17T21:46:19Z",
+      "side": 1,
+      "message": "You may want to inline a disable+drop table in case the table already exists. \ndisable table; drop table; create table",
+      "range": {
+        "startLine": 48,
+        "startChar": 1,
+        "endLine": 48,
+        "endChar": 42
+      },
+      "revId": "6c43e758fc13d563910e691b388094073586b794",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
