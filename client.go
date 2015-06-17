@@ -349,6 +349,11 @@ func (c *Client) locateRegion(table, key []byte) (*region.Client, *region.Info, 
 	return c.discoverRegion(resp.(*pb.GetResponse))
 }
 
+// For dependency injection in tests.
+var newRegion = func(host string, port uint16) (*region.Client, error) {
+	return region.NewClient(host, port)
+}
+
 // Adds a new region to our regions cache.
 func (c *Client) discoverRegion(metaRow *pb.GetResponse) (*region.Client, *region.Info, error) {
 	if metaRow.Result == nil {
@@ -390,7 +395,7 @@ func (c *Client) discoverRegion(metaRow *pb.GetResponse) (*region.Client, *regio
 		}
 	}
 
-	client, err := region.NewClient(host, port)
+	client, err := newRegion(host, port)
 	if err != nil {
 		return nil, nil, err
 	}
