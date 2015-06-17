@@ -219,8 +219,8 @@ func (c *Client) getRegion(table, key []byte) *region.Info {
 		return metaRegionInfo
 	}
 	regionName := createRegionSearchKey(table, key)
-	key, region := c.regions.get(regionName)
-	if region == nil || !isCacheKeyForTable(table, key) {
+	region_key, region := c.regions.get(regionName)
+	if region == nil || !isCacheKeyForTable(table, region_key) {
 		return nil
 	}
 
