@@ -19,6 +19,41 @@
     },
     {
       "key": {
+        "uuid": "facab960_5c12d257",
+        "filename": "integration_test.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-17T21:49:23Z",
+      "side": 1,
+      "message": "Yeah I agree a single setup/teardown would be nice.  See http://golang.org/pkg/testing/#hdr-Main",
+      "parentUuid": "facab960_f910185b",
+      "revId": "6c43e758fc13d563910e691b388094073586b794",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_7c1b1673",
+        "filename": "integration_test.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 33,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-17T21:49:23Z",
+      "side": 1,
+      "message": "If you call Fatalf instead of Errorf, you don\u0027t need the return here, as Fatal() / Fatalf() will stop the test case at this point.",
+      "revId": "6c43e758fc13d563910e691b388094073586b794",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "facab960_79040818",
         "filename": "integration_test.go",
         "patchSetId": 3
@@ -35,6 +70,86 @@
         "startChar": 1,
         "endLine": 44,
         "endChar": 2
+      },
+      "revId": "6c43e758fc13d563910e691b388094073586b794",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_9c18da76",
+        "filename": "integration_test.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 46,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-17T21:49:23Z",
+      "side": 1,
+      "message": "You can just pass 0.",
+      "range": {
+        "startLine": 46,
+        "startChar": 53,
+        "endLine": 46,
+        "endChar": 66
+      },
+      "revId": "6c43e758fc13d563910e691b388094073586b794",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_992aac8e",
+        "filename": "test/test.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 20,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-17T21:49:23Z",
+      "side": 1,
+      "message": "Maybe add a one-line comment saying this returns a new shell subprocess as well as its standard input.",
+      "revId": "6c43e758fc13d563910e691b388094073586b794",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_b91a107b",
+        "filename": "test/test.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 34,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-17T21:49:23Z",
+      "side": 1,
+      "message": "Would we be leaking a pipe here?  I feel like you\u0027d need to call stdin.Close() before returning.",
+      "revId": "6c43e758fc13d563910e691b388094073586b794",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_d91fd46a",
+        "filename": "test/test.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 39,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-17T21:49:23Z",
+      "side": 1,
+      "message": "Nit: Can we write the comments with the same style as in the Go standard library, that is instead of \"Function will do foo\" they write \"Function does foo\".",
+      "range": {
+        "startLine": 39,
+        "startChar": 15,
+        "endLine": 39,
+        "endChar": 24
       },
       "revId": "6c43e758fc13d563910e691b388094073586b794",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
@@ -59,6 +174,63 @@
         "endLine": 48,
         "endChar": 42
       },
+      "revId": "6c43e758fc13d563910e691b388094073586b794",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_590bc429",
+        "filename": "test/test.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 57,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-17T21:49:23Z",
+      "side": 1,
+      "message": "You don\u0027t need to write (*stdin).Foo(), right?  Just stdin.Foo()",
+      "revId": "6c43e758fc13d563910e691b388094073586b794",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_19169c55",
+        "filename": "test/test.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 61,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-17T21:49:23Z",
+      "side": 1,
+      "message": "return cmd.Wait()",
+      "range": {
+        "startLine": 60,
+        "startChar": 0,
+        "endLine": 61,
+        "endChar": 11
+      },
+      "revId": "6c43e758fc13d563910e691b388094073586b794",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_dc06e21c",
+        "filename": "test/test.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 83,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-17T21:49:23Z",
+      "side": 1,
+      "message": "Same comments as above.",
       "revId": "6c43e758fc13d563910e691b388094073586b794",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
