@@ -165,13 +165,16 @@ func (x *ReplicationState_State) UnmarshalJSON(data []byte) error {
 // *
 // Content of the meta-region-server znode.
 type MetaRegionServer struct {
-	// The ServerName hosting the meta region currently.
+	// The ServerName hosting the meta region currently, or destination server,
+	// if meta region is in transition.
 	Server *ServerName `protobuf:"bytes,1,req,name=server" json:"server,omitempty"`
 	// The major version of the rpc the server speaks.  This is used so that
 	// clients connecting to the cluster can have prior knowledge of what version
 	// to send to a RegionServer.  AsyncHBase will use this to detect versions.
-	RpcVersion       *uint32 `protobuf:"varint,2,opt,name=rpc_version" json:"rpc_version,omitempty"`
-	XXX_unrecognized []byte  `json:"-"`
+	RpcVersion *uint32 `protobuf:"varint,2,opt,name=rpc_version" json:"rpc_version,omitempty"`
+	// State of the region transition. OPEN means fully operational 'hbase:meta'
+	State            *RegionState_State `protobuf:"varint,3,opt,name=state,enum=pb.RegionState_State" json:"state,omitempty"`
+	XXX_unrecognized []byte             `json:"-"`
 }
 
 func (m *MetaRegionServer) Reset()         { *m = MetaRegionServer{} }
@@ -192,6 +195,13 @@ func (m *MetaRegionServer) GetRpcVersion() uint32 {
 	return 0
 }
 
+func (m *MetaRegionServer) GetState() RegionState_State {
+	if m != nil && m.State != nil {
+		return *m.State
+	}
+	return RegionState_OFFLINE
+}
+
 // *
 // Content of the master znode.
 type Master struct {
@@ -199,6 +209,7 @@ type Master struct {
 	Master *ServerName `protobuf:"bytes,1,req,name=master" json:"master,omitempty"`
 	// Major RPC version so that clients can know what version the master can accept.
 	RpcVersion       *uint32 `protobuf:"varint,2,opt,name=rpc_version" json:"rpc_version,omitempty"`
+	InfoPort         *uint32 `protobuf:"varint,3,opt,name=info_port" json:"info_port,omitempty"`
 	XXX_unrecognized []byte  `json:"-"`
 }
 
@@ -216,6 +227,13 @@ func (m *Master) GetMaster() *ServerName {
 func (m *Master) GetRpcVersion() uint32 {
 	if m != nil && m.RpcVersion != nil {
 		return *m.RpcVersion
+	}
+	return 0
+}
+
+func (m *Master) GetInfoPort() uint32 {
+	if m != nil && m.InfoPort != nil {
+		return *m.InfoPort
 	}
 	return 0
 }
@@ -359,8 +377,11 @@ func (m *Table) GetState() Table_State {
 type ReplicationPeer struct {
 	// clusterkey is the concatenation of the slave cluster's
 	// hbase.zookeeper.quorum:hbase.zookeeper.property.clientPort:zookeeper.znode.parent
-	Clusterkey       *string `protobuf:"bytes,1,req,name=clusterkey" json:"clusterkey,omitempty"`
-	XXX_unrecognized []byte  `json:"-"`
+	Clusterkey              *string           `protobuf:"bytes,1,req,name=clusterkey" json:"clusterkey,omitempty"`
+	ReplicationEndpointImpl *string           `protobuf:"bytes,2,opt,name=replicationEndpointImpl" json:"replicationEndpointImpl,omitempty"`
+	Data                    []*BytesBytesPair `protobuf:"bytes,3,rep,name=data" json:"data,omitempty"`
+	Configuration           []*NameStringPair `protobuf:"bytes,4,rep,name=configuration" json:"configuration,omitempty"`
+	XXX_unrecognized        []byte            `json:"-"`
 }
 
 func (m *ReplicationPeer) Reset()         { *m = ReplicationPeer{} }
@@ -372,6 +393,27 @@ func (m *ReplicationPeer) GetClusterkey() string {
 		return *m.Clusterkey
 	}
 	return ""
+}
+
+func (m *ReplicationPeer) GetReplicationEndpointImpl() string {
+	if m != nil && m.ReplicationEndpointImpl != nil {
+		return *m.ReplicationEndpointImpl
+	}
+	return ""
+}
+
+func (m *ReplicationPeer) GetData() []*BytesBytesPair {
+	if m != nil {
+		return m.Data
+	}
+	return nil
+}
+
+func (m *ReplicationPeer) GetConfiguration() []*NameStringPair {
+	if m != nil {
+		return m.Configuration
+	}
+	return nil
 }
 
 // *
@@ -393,7 +435,7 @@ func (m *ReplicationState) GetState() ReplicationState_State {
 }
 
 // *
-// Used by replication. Holds the current position in an HLog file.
+// Used by replication. Holds the current position in an WAL file.
 type ReplicationHLogPosition struct {
 	Position         *int64 `protobuf:"varint,1,req,name=position" json:"position,omitempty"`
 	XXX_unrecognized []byte `json:"-"`
@@ -484,59 +526,6 @@ func (m *TableLock) GetCreateTime() int64 {
 		return *m.CreateTime
 	}
 	return 0
-}
-
-// *
-// sequence Id of a store
-type StoreSequenceId struct {
-	FamilyName       []byte  `protobuf:"bytes,1,req,name=family_name" json:"family_name,omitempty"`
-	SequenceId       *uint64 `protobuf:"varint,2,req,name=sequence_id" json:"sequence_id,omitempty"`
-	XXX_unrecognized []byte  `json:"-"`
-}
-
-func (m *StoreSequenceId) Reset()         { *m = StoreSequenceId{} }
-func (m *StoreSequenceId) String() string { return proto.CompactTextString(m) }
-func (*StoreSequenceId) ProtoMessage()    {}
-
-func (m *StoreSequenceId) GetFamilyName() []byte {
-	if m != nil {
-		return m.FamilyName
-	}
-	return nil
-}
-
-func (m *StoreSequenceId) GetSequenceId() uint64 {
-	if m != nil && m.SequenceId != nil {
-		return *m.SequenceId
-	}
-	return 0
-}
-
-// *
-// contains a sequence id of a region which should be the minimum of its store sequence ids and
-// list sequence ids of the region's stores
-type RegionStoreSequenceIds struct {
-	LastFlushedSequenceId *uint64            `protobuf:"varint,1,req,name=last_flushed_sequence_id" json:"last_flushed_sequence_id,omitempty"`
-	StoreSequenceId       []*StoreSequenceId `protobuf:"bytes,2,rep,name=store_sequence_id" json:"store_sequence_id,omitempty"`
-	XXX_unrecognized      []byte             `json:"-"`
-}
-
-func (m *RegionStoreSequenceIds) Reset()         { *m = RegionStoreSequenceIds{} }
-func (m *RegionStoreSequenceIds) String() string { return proto.CompactTextString(m) }
-func (*RegionStoreSequenceIds) ProtoMessage()    {}
-
-func (m *RegionStoreSequenceIds) GetLastFlushedSequenceId() uint64 {
-	if m != nil && m.LastFlushedSequenceId != nil {
-		return *m.LastFlushedSequenceId
-	}
-	return 0
-}
-
-func (m *RegionStoreSequenceIds) GetStoreSequenceId() []*StoreSequenceId {
-	if m != nil {
-		return m.StoreSequenceId
-	}
-	return nil
 }
 
 func init() {

@@ -15,30 +15,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import "Client.proto";
+
+// This file contains protocol buffers that are shared throughout HBase
+
 package pb;
 option java_package = "org.apache.hadoop.hbase.protobuf.generated";
-option java_outer_classname = "MultiRowMutationProtos";
+option java_outer_classname = "ClusterIdProtos";
 option java_generate_equals_and_hash = true;
-option java_generic_services = true;
 option optimize_for = SPEED;
 
-message MultiRowMutationProcessorRequest{
-}
-
-message MultiRowMutationProcessorResponse{
-}
-
-message MutateRowsRequest {
-  repeated MutationProto mutation_request = 1;
-  optional uint64 nonce_group = 2;
-  optional uint64 nonce = 3;
-}
-
-message MutateRowsResponse {
-}
-
-service MultiRowMutationService {
-  rpc MutateRows(MutateRowsRequest)
-      returns(MutateRowsResponse);
+/**
+ * Content of the '/hbase/hbaseid', cluster id, znode.
+ * Also cluster of the ${HBASE_ROOTDIR}/hbase.id file.
+ */
+message ClusterId {
+  // This is the cluster id, a uuid as a String
+  required string cluster_id = 1;
 }

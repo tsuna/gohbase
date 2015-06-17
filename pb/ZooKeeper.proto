@@ -20,20 +20,29 @@
 // 'magic' 'PBUF' prefix.
 
 package pb;
-option optimize_for = LITE_RUNTIME;
+option java_package = "org.apache.hadoop.hbase.protobuf.generated";
+option java_outer_classname = "ZooKeeperProtos";
+option java_generic_services = true;
+option java_generate_equals_and_hash = true;
+option optimize_for = SPEED;
 
 import "HBase.proto";
+import "ClusterStatus.proto";
 
 /**
  * Content of the meta-region-server znode.
  */
 message MetaRegionServer {
-  // The ServerName hosting the meta region currently.
+  // The ServerName hosting the meta region currently, or destination server,
+  // if meta region is in transition.
   required ServerName server = 1;
   // The major version of the rpc the server speaks.  This is used so that
   // clients connecting to the cluster can have prior knowledge of what version
   // to send to a RegionServer.  AsyncHBase will use this to detect versions.
   optional uint32 rpc_version = 2;
+
+  // State of the region transition. OPEN means fully operational 'hbase:meta'
+  optional RegionState.State state = 3;
 }
 
 /**
@@ -44,6 +53,7 @@ message Master {
   required ServerName master = 1;
   // Major RPC version so that clients can know what version the master can accept.
   optional uint32 rpc_version = 2;
+  optional uint32 info_port = 3;
 }
 
 /**
@@ -116,6 +126,9 @@ message ReplicationPeer {
   // clusterkey is the concatenation of the slave cluster's
   // hbase.zookeeper.quorum:hbase.zookeeper.property.clientPort:zookeeper.znode.parent
   required string clusterkey = 1;
+  optional string replicationEndpointImpl = 2;
+  repeated BytesBytesPair data = 3;
+  repeated NameStringPair configuration = 4;
 }
 
 /**
@@ -130,7 +143,7 @@ message ReplicationState {
 }
 
 /**
- * Used by replication. Holds the current position in an HLog file.
+ * Used by replication. Holds the current position in an WAL file.
  */
 message ReplicationHLogPosition {
   required int64 position = 1;
@@ -153,21 +166,4 @@ message TableLock {
   optional bool is_shared = 4;
   optional string purpose = 5;
   optional int64 create_time = 6;
-}
-
-/**
- * sequence Id of a store
- */
-message StoreSequenceId {
-  required bytes family_name = 1;
-  required uint64 sequence_id = 2;
-}
-
-/**
- * contains a sequence id of a region which should be the minimum of its store sequence ids and 
- * list sequence ids of the region's stores
- */
-message RegionStoreSequenceIds {
-  required uint64 last_flushed_sequence_id = 1;
-  repeated StoreSequenceId store_sequence_id = 2;
 }

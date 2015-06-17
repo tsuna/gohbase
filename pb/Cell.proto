@@ -19,7 +19,10 @@
 // Cell and KeyValue protos
 
 package pb;
-option optimize_for = LITE_RUNTIME;
+option java_package = "org.apache.hadoop.hbase.protobuf.generated";
+option java_outer_classname = "CellProtos";
+option java_generate_equals_and_hash = true;
+option optimize_for = SPEED;
 
 /**
  * The type of the key in a Cell
