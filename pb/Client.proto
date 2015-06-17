@@ -19,7 +19,11 @@
 // This file contains protocol buffers that are used for Client service.
 
 package pb;
-option optimize_for = LITE_RUNTIME;
+option java_package = "org.apache.hadoop.hbase.protobuf.generated";
+option java_outer_classname = "ClientProtos";
+option java_generic_services = true;
+option java_generate_equals_and_hash = true;
+option optimize_for = SPEED;
 
 import "HBase.proto";
 import "Filter.proto";
@@ -49,6 +53,14 @@ message Column {
 }
 
 /**
+ * Consistency defines the expected consistency level for an operation.
+ */
+enum Consistency {
+  STRONG   = 0;
+  TIMELINE = 1;
+}
+
+/**
  * The protocol buffer version of Get.
  * Unless existence_only is specified, return all the requested data
  * for the row that matches exactly, or the one that immediately
@@ -72,6 +84,8 @@ message Get {
   // If the row to get doesn't exist, return the
   // closest row before.
   optional bool closest_row_before = 11 [default = false];
+
+  optional Consistency consistency = 12 [default = STRONG];
 }
 
 message Result {
@@ -89,6 +103,15 @@ message Result {
   // used for Get to check existence only. Not set if existence_only was not set to true
   //  in the query.
   optional bool exists = 3;
+
+  // Whether or not the results are coming from possibly stale data
+  optional bool stale = 4 [default = false];
+
+  // Whether or not the entire result could be returned. Results will be split when
+  // the RPC chunk size limit is reached. Partial results contain only a subset of the
+  // cells for a row and must be combined with a result containing the remaining cells
+  // to form a complete result
+  optional bool partial = 5 [default = false];
 }
 
 /**
@@ -230,6 +253,7 @@ message Scan {
   optional bool load_column_families_on_demand = 13; /* DO NOT add defaults to load_column_families_on_demand. */
   optional bool small = 14;
   optional bool reversed = 15 [default = false];
+  optional Consistency consistency = 16 [default = STRONG];
   optional uint32 caching = 17;
 }
 
@@ -251,6 +275,8 @@ message ScanRequest {
   optional uint32 number_of_rows = 4;
   optional bool close_scanner = 5;
   optional uint64 next_call_seq = 6;
+  optional bool client_handles_partials = 7;
+  optional bool client_handles_heartbeats = 8;
 }
 
 /**
@@ -266,6 +292,7 @@ message ScanResponse {
   // has 3, 3, 3 in it, then we know that on the client, we are to make
   // three Results each of three Cells each.
   repeated uint32 cells_per_result = 1;
+
   optional uint64 scanner_id = 2;
   optional bool more_results = 3;
   optional uint32 ttl = 4;
@@ -273,6 +300,27 @@ message ScanResponse {
   // This field is mutually exclusive with cells_per_result (since the Cells will
   // be inside the pb'd Result)
   repeated Result results = 5;
+  optional bool stale = 6;
+
+  // This field is filled in if we are doing cellblocks. In the event that a row
+  // could not fit all of its cells into a single RPC chunk, the results will be
+  // returned as partials, and reconstructed into a complete result on the client
+  // side. This field is a list of flags indicating whether or not the result
+  // that the cells belong to is a partial result. For example, if this field
+  // has false, false, true in it, then we know that on the client side, we need to
+  // make another RPC request since the last result was only a partial.
+  repeated bool partial_flag_per_result = 7;
+
+  // A server may choose to limit the number of results returned to the client for
+  // reasons such as the size in bytes or quantity of results accumulated. This field
+  // will true when more results exist in the current region.
+  optional bool more_results_in_region = 8;
+
+  // This field is filled in if the server is sending back a heartbeat message.
+  // Heartbeat messages are sent back to the client to prevent the scanner from
+  // timing out. Seeing a heartbeat message communicates to the Client that the
+  // server would have continued to scan had the time limit not been reached.
+  optional bool heartbeat_message = 9;
 }
 
 /**
@@ -335,6 +383,17 @@ message RegionAction {
   repeated Action action = 3;
 }
 
+/*
+* Statistics about the current load on the region
+*/
+message RegionLoadStats {
+  // Percent load on the memstore. Guaranteed to be positive, between 0 and 100.
+  optional int32 memstoreLoad = 1 [default = 0];
+  // Percent JVM heap occupancy. Guaranteed to be positive, between 0 and 100.
+  // We can move this to "ServerLoadStats" should we develop them.
+  optional int32 heapOccupancy = 2 [default = 0];
+}
+
 /**
  * Either a Result or an Exception NameBytesPair (keyed by
  * exception name whose value is the exception stringified)
@@ -348,6 +407,8 @@ message ResultOrException {
   optional NameBytesPair exception = 3;
   // result if this was a coprocessor service call
   optional CoprocessorServiceResult service_result = 4;
+  // current load on the region
+  optional RegionLoadStats loadStats = 5;
 }
 
 /**
@@ -393,6 +454,9 @@ service ClientService {
     returns(BulkLoadHFileResponse);
 
   rpc ExecService(CoprocessorServiceRequest)
+    returns(CoprocessorServiceResponse);
+
+  rpc ExecRegionServerService(CoprocessorServiceRequest)
     returns(CoprocessorServiceResponse);
 
   rpc Multi(MultiRequest)

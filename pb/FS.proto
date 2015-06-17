@@ -15,30 +15,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import "Client.proto";
+
+// This file contains protocol buffers that are written into the filesystem
+
 package pb;
 option java_package = "org.apache.hadoop.hbase.protobuf.generated";
-option java_outer_classname = "MultiRowMutationProtos";
+option java_outer_classname = "FSProtos";
 option java_generate_equals_and_hash = true;
-option java_generic_services = true;
 option optimize_for = SPEED;
 
-message MultiRowMutationProcessorRequest{
+/**
+ * The ${HBASE_ROOTDIR}/hbase.version file content
+ */
+message HBaseVersionFileContent {
+  required string version = 1;
 }
 
-message MultiRowMutationProcessorResponse{
+/**
+ * Reference file content used when we split an hfile under a region.
+ */
+message Reference {
+  required bytes splitkey = 1;
+  enum Range {
+    TOP = 0;
+    BOTTOM = 1;
+  }
+  required Range range = 2;
 }
 
-message MutateRowsRequest {
-  repeated MutationProto mutation_request = 1;
-  optional uint64 nonce_group = 2;
-  optional uint64 nonce = 3;
-}
-
-message MutateRowsResponse {
-}
-
-service MultiRowMutationService {
-  rpc MutateRows(MutateRowsRequest)
-      returns(MutateRowsResponse);
-}

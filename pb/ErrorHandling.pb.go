@@ -12,6 +12,7 @@ var _ = proto.Marshal
 var _ = math.Inf
 
 // *
+// Protobuf version of a java.lang.StackTraceElement
 // so we can serialize exceptions.
 type StackTraceElementMessage struct {
 	DeclaringClass   *string `protobuf:"bytes,1,opt,name=declaring_class" json:"declaring_class,omitempty"`

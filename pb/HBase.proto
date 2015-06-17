@@ -19,7 +19,10 @@
 // This file contains protocol buffers that are shared throughout HBase
 
 package pb;
-option optimize_for = LITE_RUNTIME;
+option java_package = "org.apache.hadoop.hbase.protobuf.generated";
+option java_outer_classname = "HBaseProtos";
+option java_generate_equals_and_hash = true;
+option optimize_for = SPEED;
 
 import "Cell.proto";
 
@@ -62,6 +65,7 @@ message RegionInfo {
   optional bytes end_key = 4;
   optional bool offline = 5;
   optional bool split = 6;
+  optional int32 replica_id = 7 [default = 0];
 }
 
 /**
@@ -161,6 +165,7 @@ message SnapshotDescription {
   }
   optional Type type = 4 [default = FLUSH];
   optional int32 version = 5;
+  optional string owner = 6;
 }
 
 /**
@@ -174,6 +179,16 @@ message ProcedureDescription {
 }
 
 message EmptyMsg {
+}
+
+enum TimeUnit {
+  NANOSECONDS = 1;
+  MICROSECONDS = 2;
+  MILLISECONDS = 3;
+  SECONDS = 4;
+  MINUTES = 5;
+  HOURS = 6;
+  DAYS = 7;
 }
 
 message LongMsg {
