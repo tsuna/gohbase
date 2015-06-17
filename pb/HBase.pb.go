@@ -60,6 +60,54 @@ func (x *CompareType) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+type TimeUnit int32
+
+const (
+	TimeUnit_NANOSECONDS  TimeUnit = 1
+	TimeUnit_MICROSECONDS TimeUnit = 2
+	TimeUnit_MILLISECONDS TimeUnit = 3
+	TimeUnit_SECONDS      TimeUnit = 4
+	TimeUnit_MINUTES      TimeUnit = 5
+	TimeUnit_HOURS        TimeUnit = 6
+	TimeUnit_DAYS         TimeUnit = 7
+)
+
+var TimeUnit_name = map[int32]string{
+	1: "NANOSECONDS",
+	2: "MICROSECONDS",
+	3: "MILLISECONDS",
+	4: "SECONDS",
+	5: "MINUTES",
+	6: "HOURS",
+	7: "DAYS",
+}
+var TimeUnit_value = map[string]int32{
+	"NANOSECONDS":  1,
+	"MICROSECONDS": 2,
+	"MILLISECONDS": 3,
+	"SECONDS":      4,
+	"MINUTES":      5,
+	"HOURS":        6,
+	"DAYS":         7,
+}
+
+func (x TimeUnit) Enum() *TimeUnit {
+	p := new(TimeUnit)
+	*p = x
+	return p
+}
+func (x TimeUnit) String() string {
+	return proto.EnumName(TimeUnit_name, int32(x))
+}
+func (x *TimeUnit) UnmarshalJSON(data []byte) error {
+	value, err := proto.UnmarshalJSONEnum(TimeUnit_value, data, "TimeUnit")
+	if err != nil {
+		return err
+	}
+	*x = TimeUnit(value)
+	return nil
+}
+
 type RegionSpecifier_RegionSpecifierType int32
 
 const (
@@ -244,12 +292,15 @@ type RegionInfo struct {
 	EndKey           []byte     `protobuf:"bytes,4,opt,name=end_key" json:"end_key,omitempty"`
 	Offline          *bool      `protobuf:"varint,5,opt,name=offline" json:"offline,omitempty"`
 	Split            *bool      `protobuf:"varint,6,opt,name=split" json:"split,omitempty"`
+	ReplicaId        *int32     `protobuf:"varint,7,opt,name=replica_id,def=0" json:"replica_id,omitempty"`
 	XXX_unrecognized []byte     `json:"-"`
 }
 
 func (m *RegionInfo) Reset()         { *m = RegionInfo{} }
 func (m *RegionInfo) String() string { return proto.CompactTextString(m) }
 func (*RegionInfo) ProtoMessage()    {}
+
+const Default_RegionInfo_ReplicaId int32 = 0
 
 func (m *RegionInfo) GetRegionId() uint64 {
 	if m != nil && m.RegionId != nil {
@@ -291,6 +342,13 @@ func (m *RegionInfo) GetSplit() bool {
 		return *m.Split
 	}
 	return false
+}
+
+func (m *RegionInfo) GetReplicaId() int32 {
+	if m != nil && m.ReplicaId != nil {
+		return *m.ReplicaId
+	}
+	return Default_RegionInfo_ReplicaId
 }
 
 // *
@@ -523,6 +581,7 @@ type SnapshotDescription struct {
 	CreationTime     *int64                    `protobuf:"varint,3,opt,name=creation_time,def=0" json:"creation_time,omitempty"`
 	Type             *SnapshotDescription_Type `protobuf:"varint,4,opt,name=type,enum=pb.SnapshotDescription_Type,def=1" json:"type,omitempty"`
 	Version          *int32                    `protobuf:"varint,5,opt,name=version" json:"version,omitempty"`
+	Owner            *string                   `protobuf:"bytes,6,opt,name=owner" json:"owner,omitempty"`
 	XXX_unrecognized []byte                    `json:"-"`
 }
 
@@ -566,6 +625,13 @@ func (m *SnapshotDescription) GetVersion() int32 {
 		return *m.Version
 	}
 	return 0
+}
+
+func (m *SnapshotDescription) GetOwner() string {
+	if m != nil && m.Owner != nil {
+		return *m.Owner
+	}
+	return ""
 }
 
 // *
@@ -736,6 +802,7 @@ func (m *RegionServerInfo) GetInfoPort() int32 {
 
 func init() {
 	proto.RegisterEnum("pb.CompareType", CompareType_name, CompareType_value)
+	proto.RegisterEnum("pb.TimeUnit", TimeUnit_name, TimeUnit_value)
 	proto.RegisterEnum("pb.RegionSpecifier_RegionSpecifierType", RegionSpecifier_RegionSpecifierType_name, RegionSpecifier_RegionSpecifierType_value)
 	proto.RegisterEnum("pb.SnapshotDescription_Type", SnapshotDescription_Type_name, SnapshotDescription_Type_value)
 }

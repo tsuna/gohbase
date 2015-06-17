@@ -1,4 +1,4 @@
-/**
+ /**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -15,60 +15,60 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-// This file contains protocol buffers that are used for filters
-
 package pb;
 option java_package = "org.apache.hadoop.hbase.protobuf.generated";
-option java_outer_classname = "ComparatorProtos";
+option java_outer_classname = "QuotaProtos";
 option java_generic_services = true;
 option java_generate_equals_and_hash = true;
 option optimize_for = SPEED;
 
-// This file contains protocol buffers that are used for comparators (e.g. in filters)
+import "HBase.proto";
 
-message Comparator {
-  required string name = 1;
-  optional bytes serialized_comparator = 2;
+enum QuotaScope {
+  CLUSTER = 1;
+  MACHINE = 2;
 }
 
-message ByteArrayComparable {
-  optional bytes value = 1;
+message TimedQuota {
+  required TimeUnit time_unit = 1;
+  optional uint64 soft_limit  = 2;
+  optional float share = 3;
+  optional QuotaScope scope  = 4 [default = MACHINE];
 }
 
-message BinaryComparator {
-  required ByteArrayComparable comparable = 1;
+enum ThrottleType {
+  REQUEST_NUMBER = 1;
+  REQUEST_SIZE   = 2;
+  WRITE_NUMBER   = 3;
+  WRITE_SIZE     = 4;
+  READ_NUMBER    = 5;
+  READ_SIZE      = 6;
 }
 
-message LongComparator {
-  required ByteArrayComparable comparable = 1;
+message Throttle {
+  optional TimedQuota req_num  = 1;
+  optional TimedQuota req_size = 2;
+
+  optional TimedQuota write_num  = 3;
+  optional TimedQuota write_size = 4;
+
+  optional TimedQuota read_num  = 5;
+  optional TimedQuota read_size = 6;
 }
 
-message BinaryPrefixComparator {
-  required ByteArrayComparable comparable = 1;
+message ThrottleRequest {
+  optional ThrottleType type = 1;
+  optional TimedQuota timed_quota = 2;
 }
 
-message BitComparator {
-  required ByteArrayComparable comparable = 1;
-  required BitwiseOp bitwise_op = 2;
-
-  enum BitwiseOp {
-    AND = 1;
-    OR = 2;
-    XOR = 3;
-  }
+enum QuotaType {
+  THROTTLE = 1;
 }
 
-message NullComparator {
+message Quotas {
+  optional bool bypass_globals = 1 [default = false];
+  optional Throttle throttle = 2;
 }
 
-message RegexStringComparator {
-  required string pattern = 1;
-  required int32 pattern_flags = 2;
-  required string charset = 3;
-  optional string engine = 4;
-}
-
-message SubstringComparator {
-  required string substr = 1;
+message QuotaUsage {
 }

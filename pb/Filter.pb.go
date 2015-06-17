@@ -604,6 +604,62 @@ func (m *FilterAllFilter) Reset()         { *m = FilterAllFilter{} }
 func (m *FilterAllFilter) String() string { return proto.CompactTextString(m) }
 func (*FilterAllFilter) ProtoMessage()    {}
 
+type RowRange struct {
+	StartRow          []byte `protobuf:"bytes,1,opt,name=start_row" json:"start_row,omitempty"`
+	StartRowInclusive *bool  `protobuf:"varint,2,opt,name=start_row_inclusive" json:"start_row_inclusive,omitempty"`
+	StopRow           []byte `protobuf:"bytes,3,opt,name=stop_row" json:"stop_row,omitempty"`
+	StopRowInclusive  *bool  `protobuf:"varint,4,opt,name=stop_row_inclusive" json:"stop_row_inclusive,omitempty"`
+	XXX_unrecognized  []byte `json:"-"`
+}
+
+func (m *RowRange) Reset()         { *m = RowRange{} }
+func (m *RowRange) String() string { return proto.CompactTextString(m) }
+func (*RowRange) ProtoMessage()    {}
+
+func (m *RowRange) GetStartRow() []byte {
+	if m != nil {
+		return m.StartRow
+	}
+	return nil
+}
+
+func (m *RowRange) GetStartRowInclusive() bool {
+	if m != nil && m.StartRowInclusive != nil {
+		return *m.StartRowInclusive
+	}
+	return false
+}
+
+func (m *RowRange) GetStopRow() []byte {
+	if m != nil {
+		return m.StopRow
+	}
+	return nil
+}
+
+func (m *RowRange) GetStopRowInclusive() bool {
+	if m != nil && m.StopRowInclusive != nil {
+		return *m.StopRowInclusive
+	}
+	return false
+}
+
+type MultiRowRangeFilter struct {
+	RowRangeList     []*RowRange `protobuf:"bytes,1,rep,name=row_range_list" json:"row_range_list,omitempty"`
+	XXX_unrecognized []byte      `json:"-"`
+}
+
+func (m *MultiRowRangeFilter) Reset()         { *m = MultiRowRangeFilter{} }
+func (m *MultiRowRangeFilter) String() string { return proto.CompactTextString(m) }
+func (*MultiRowRangeFilter) ProtoMessage()    {}
+
+func (m *MultiRowRangeFilter) GetRowRangeList() []*RowRange {
+	if m != nil {
+		return m.RowRangeList
+	}
+	return nil
+}
+
 func init() {
 	proto.RegisterEnum("pb.FilterList_Operator", FilterList_Operator_name, FilterList_Operator_value)
 }
