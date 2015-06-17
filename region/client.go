@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"sync"
 	"time"
@@ -49,6 +50,11 @@ type Client struct {
 	// written to to notify the writer thread that it should stop sleeping and
 	// process the list
 	process chan struct{}
+
+	// sentRPCs contains the mapping of sent call IDs to RPC calls, so that when
+	// a response is received it can be tied to the correct RPC
+	sentRPCs      map[uint32]hrpc.Call
+	sentRPCsMutex *sync.Mutex
 }
 
 // NewClient creates a new RegionClient.
@@ -60,24 +66,27 @@ func NewClient(host string, port uint16) (*Client, error) {
 			fmt.Errorf("failed to connect to the RegionServer at %s: %s", addr, err)
 	}
 	c := &Client{
-		conn:       conn,
-		host:       host,
-		port:       port,
-		writeMutex: &sync.Mutex{},
-		process:    make(chan struct{}),
+		conn:          conn,
+		host:          host,
+		port:          port,
+		writeMutex:    &sync.Mutex{},
+		process:       make(chan struct{}),
+		sentRPCsMutex: &sync.Mutex{},
+		sentRPCs:      make(map[uint32]hrpc.Call),
 	}
 	err = c.sendHello()
 	if err != nil {
 		return nil, err
 	}
-	go c.processRpcs()
+	go c.processRpcs() // Writer goroutine
+	go c.receiveRpcs() // Reader goroutine
 	return c, nil
 }
 
 func (c *Client) processRpcs() {
 	for {
-		// TODO: make this value configurable
 		select {
+		// TODO: make this value configurable
 		case <-time.After(time.Millisecond * 100):
 			c.writeMutex.Lock()
 		case <-c.process:
@@ -96,7 +105,7 @@ func (c *Client) processRpcs() {
 			}
 			c.rpcs = nil
 			c.writeMutex.Unlock()
-			break
+			continue
 		}
 		rpcs := make([]hrpc.Call, len(c.rpcs))
 		for i, rpc := range c.rpcs {
@@ -119,21 +128,80 @@ func (c *Client) processRpcs() {
 			default:
 			}
 
-			resch := rpc.GetResultChan()
-			msg, err := c.SendRPC(rpc)
+			err := c.sendRPC(rpc)
 			if isRecoverable(err) {
 				newrpcs = append(newrpcs, rpc)
-			} else {
-				if err != nil {
-					c.sendErr = err
-				}
-				resch <- hrpc.RPCResult{msg, err}
+			} else if err != nil {
+				c.sendErr = err
+				resch := rpc.GetResultChan()
+				resch <- hrpc.RPCResult{nil, err}
 			}
 		}
 
 		c.writeMutex.Lock()
 		c.rpcs = append(c.rpcs, newrpcs...)
 		c.writeMutex.Unlock()
+	}
+}
+
+func (c *Client) receiveRpcs() {
+	for {
+		var sz [4]byte
+		err := c.readFully(sz[:])
+		if err != nil {
+			log.Printf("Encountered an error while reading: %v\n", err)
+			continue
+		}
+
+		buf := make([]byte, binary.BigEndian.Uint32(sz[:]))
+		err = c.readFully(buf)
+		if err != nil {
+			log.Printf("Encountered an error while reading: %v\n", err)
+			continue
+		}
+
+		resp := &pb.ResponseHeader{}
+		respLen, nb := proto.DecodeVarint(buf)
+		buf = buf[nb:]
+		err = proto.UnmarshalMerge(buf[:respLen], resp)
+		buf = buf[respLen:]
+		if err != nil {
+			log.Printf("Failed to deserialize the response header: %s\n", err)
+			continue
+		}
+		if resp.CallId == nil {
+			log.Printf("Response doesn't have a call ID!\n")
+			continue
+		}
+
+		c.sentRPCsMutex.Lock()
+		rpc, ok := c.sentRPCs[*resp.CallId]
+		c.sentRPCsMutex.Unlock()
+
+		if !ok {
+			log.Printf("Received a response with an unexpected call ID!\n")
+			continue
+		}
+
+		if resp.Exception != nil {
+			// TODO: Properly handle this error
+			log.Printf("remote exception %s:\n%s",
+				*resp.Exception.ExceptionClassName, *resp.Exception.StackTrace)
+		}
+
+		respLen, nb = proto.DecodeVarint(buf)
+		buf = buf[nb:]
+		rpcResp := rpc.NewResponse()
+		err = proto.UnmarshalMerge(buf, rpcResp)
+		buf = buf[respLen:]
+
+		resch := rpc.GetResultChan()
+		resch <- hrpc.RPCResult{rpcResp, err}
+
+		c.sentRPCsMutex.Lock()
+		delete(c.sentRPCs, *resp.CallId)
+
+		c.sentRPCsMutex.Unlock()
 	}
 }
 
@@ -211,9 +279,9 @@ func (c *Client) QueueRPC(rpc hrpc.Call) {
 	}
 }
 
-// SendRPC sends an RPC out to the wire.
+// sendRPC sends an RPC out to the wire.
 // Returns the response (for now, as the call is synchronous).
-func (c *Client) SendRPC(rpc hrpc.Call) (proto.Message, error) {
+func (c *Client) sendRPC(rpc hrpc.Call) error {
 	// Header.
 	c.id++
 	reqheader := &pb.RequestHeader{
@@ -224,13 +292,13 @@ func (c *Client) SendRPC(rpc hrpc.Call) (proto.Message, error) {
 
 	payload, err := rpc.Serialize()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to serialize RPC: %s", err)
+		return fmt.Errorf("Failed to serialize RPC: %s", err)
 	}
 	payloadLen := proto.EncodeVarint(uint64(len(payload)))
 
 	headerData, err := proto.Marshal(reqheader)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to marshal Get request: %s", err)
+		return fmt.Errorf("Failed to marshal Get request: %s", err)
 	}
 
 	buf := make([]byte, 5, 4+1+len(headerData)+len(payloadLen)+len(payload))
@@ -242,45 +310,12 @@ func (c *Client) SendRPC(rpc hrpc.Call) (proto.Message, error) {
 
 	err = c.write(buf)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	var sz [4]byte
-	err = c.readFully(sz[:])
-	if err != nil {
-		return nil, err
-	}
+	c.sentRPCsMutex.Lock()
+	c.sentRPCs[c.id] = rpc
+	c.sentRPCsMutex.Unlock()
 
-	buf = make([]byte, binary.BigEndian.Uint32(sz[:]))
-	err = c.readFully(buf)
-	if err != nil {
-		return nil, err
-	}
-
-	resp := &pb.ResponseHeader{}
-	respLen, nb := proto.DecodeVarint(buf)
-	buf = buf[nb:]
-	err = proto.UnmarshalMerge(buf[:respLen], resp)
-	buf = buf[respLen:]
-	if err != nil {
-		return nil, fmt.Errorf("Failed to deserialize the response header: %s", err)
-	}
-	if resp.CallId == nil {
-		return nil, fmt.Errorf("Response doesn't have a call ID!")
-	} else if *resp.CallId != c.id {
-		return nil, fmt.Errorf("Not the callId we expected: %d", *resp.CallId)
-	}
-
-	if resp.Exception != nil {
-		return nil, fmt.Errorf("remote exception %s:\n%s",
-			*resp.Exception.ExceptionClassName, *resp.Exception.StackTrace)
-	}
-
-	respLen, nb = proto.DecodeVarint(buf)
-	buf = buf[nb:]
-	rpcResp := rpc.NewResponse()
-	err = proto.UnmarshalMerge(buf, rpcResp)
-	buf = buf[respLen:]
-
-	return rpcResp, err
+	return nil
 }
