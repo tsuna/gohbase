@@ -400,6 +400,13 @@ func (c *Client) discoverRegion(metaRow *pb.GetResponse) (*region.Client, *regio
 		return nil, nil, err
 	}
 
+	c.addRegionToCache(reg, client)
+
+	return client, reg, nil
+}
+
+// Adds a region to our meta cache.
+func (c *Client) addRegionToCache(reg *region.Info, client *region.Client) {
 	// 1. Record the region -> client mapping.
 	// This won't be "discoverable" until another map points to it, because
 	// at this stage no one knows about this region yet, so another thread
@@ -415,7 +422,6 @@ func (c *Client) discoverRegion(metaRow *pb.GetResponse) (*region.Client, *regio
 	// acceptable trade-off.  We avoid extra synchronization complexity in
 	// exchange of occasional duplicate work (which should be rare anyway).
 	c.regions.put(reg.RegionName, reg)
-	return client, reg, nil
 }
 
 // Looks up the meta region in ZooKeeper.
