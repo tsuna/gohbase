@@ -1,0 +1,89 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "facab960_9c1b7ac9",
+        "filename": "region/client.go",
+        "patchSetId": 4
+      },
+      "lineNbr": 169,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-18T01:56:10Z",
+      "side": 1,
+      "message": "Add a continue after this line?",
+      "revId": "672a5fc3adccc7cc12c5902e523000a06bdaf475",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_bc7bdef3",
+        "filename": "region/client.go",
+        "patchSetId": 4
+      },
+      "lineNbr": 172,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-18T01:56:10Z",
+      "side": 1,
+      "message": "Ditto.",
+      "revId": "672a5fc3adccc7cc12c5902e523000a06bdaf475",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_dc80a2c2",
+        "filename": "region/client.go",
+        "patchSetId": 4
+      },
+      "lineNbr": 180,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-18T01:56:10Z",
+      "side": 1,
+      "message": "This line can just move before the if.",
+      "revId": "672a5fc3adccc7cc12c5902e523000a06bdaf475",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_3c6fce2c",
+        "filename": "region/client.go",
+        "patchSetId": 4
+      },
+      "lineNbr": 188,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-18T01:56:10Z",
+      "side": 1,
+      "message": "Maybe add a TODO here as that\u0027s where we\u0027ll wanna kick off the error handling logic for things like NSRE and such.",
+      "revId": "672a5fc3adccc7cc12c5902e523000a06bdaf475",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_5c257207",
+        "filename": "region/client.go",
+        "patchSetId": 4
+      },
+      "lineNbr": 311,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-18T01:56:10Z",
+      "side": 1,
+      "message": "This should probably be after the call to c.write(buf) because write() can take an arbitrary amount of time and during that time that we\u0027re holding the lock we\u0027re preventing the readers from concurrently inserting new RPCs in this map.",
+      "revId": "672a5fc3adccc7cc12c5902e523000a06bdaf475",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
