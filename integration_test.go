@@ -93,8 +93,8 @@ func TestGetBadColumnFamily(t *testing.T) {
 	rsp, err := c.Get(context.Background(), table, key, families)
 	// As of 6/24/15 this returns: rsp.GetResult() == <nil>, err == <nil>
 	// and we do not handle the remote exception. Intended behavior?
-	if err != nil {
-		t.Errorf("Get returned an error: %v", err)
+	if err == nil {
+		t.Errorf("Get didn't return an error! (It should have)")
 	}
 	if rsp.GetResult() != nil {
 		t.Errorf("Get expected no result. Received: %v", rsp.GetResult())
