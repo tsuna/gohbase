@@ -85,3 +85,20 @@ func DeleteTable(table string) error {
 
 	return cmd.Wait()
 }
+
+// LaunchRegions uses the script local-regionservers.sh to create new
+// RegionServers. Fails silently if server already exists.
+// Ex. LaunchRegions([]string{"2", "3"}) launches two servers with id=2,3
+func LaunchRegions(servers []string) {
+	hh := os.Getenv("HBASE_HOME")
+	servers = append([]string{"start"}, servers...)
+	exec.Command(hh+"/bin/local-regionservers.sh", servers...).Output()
+}
+
+// StopRegions uses the script local-regionservers.sh to stop existing
+// RegionServers. Fails silently if server isn't running.
+func StopRegions(servers []string) {
+	hh := os.Getenv("HBASE_HOME")
+	servers = append([]string{"stop"}, servers...)
+	exec.Command(hh+"/bin/local-regionservers.sh", servers...).Output()
+}
