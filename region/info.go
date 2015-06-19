@@ -21,8 +21,17 @@ type Info struct {
 	// RegionName.
 	RegionName []byte
 
+	// StartKey
+	StartKey []byte
+
 	// StopKey.
 	StopKey []byte
+
+	// Once a region becomes unreachable, this channel is created, and any
+	// functions that wish to be notified when the region becomes available
+	// again can read from this channel, which will be closed when the region
+	// is available again
+	Available chan struct{}
 }
 
 // InfoFromCell parses a KeyValue from the meta table and creates the
@@ -48,6 +57,7 @@ func InfoFromCell(cell *pb.Cell) (*Info, error) {
 	return &Info{
 		Table:      regInfo.TableName.Qualifier,
 		RegionName: cell.Row,
+		StartKey:   regInfo.StartKey,
 		StopKey:    regInfo.EndKey,
 	}, nil
 }
