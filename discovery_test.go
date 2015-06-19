@@ -11,6 +11,7 @@ import (
 
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
+	"golang.org/x/net/context"
 )
 
 func TestRegionDiscovery(t *testing.T) {
@@ -23,8 +24,8 @@ func TestRegionDiscovery(t *testing.T) {
 	// Stub out how we create new regions.
 	savedNewRegion := newRegion
 	defer func() { newRegion = savedNewRegion }()
-	newRegion = func(host string, port uint16) (*region.Client, error) {
-		return nil, nil
+	newRegion = func(res chan newRegResult, host string, port uint16) {
+		res <- newRegResult{nil, nil}
 	}
 
 	// Inject a "test" table with a single region that covers the entire key
@@ -59,7 +60,7 @@ func TestRegionDiscovery(t *testing.T) {
 			},
 		}}}
 
-	_, _, err := client.discoverRegion(metaRow)
+	_, _, err := client.discoverRegion(context.Background(), metaRow)
 	if err != nil {
 		t.Fatalf("Failed to discover region: %s", err)
 	}
@@ -69,12 +70,15 @@ func TestRegionDiscovery(t *testing.T) {
 		t.Fatal("Region not found even though we injected it in the cache.")
 	}
 	expected := &region.Info{
-		Table:      []byte("test"),
-		RegionName: []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-		StopKey:    []byte(""),
+		Table:         []byte("test"),
+		RegionName:    []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		StartKey:      []byte(""),
+		StopKey:       []byte(""),
+		Available:     reg.Available,
+		AvailableLock: reg.AvailableLock,
 	}
 	if !reflect.DeepEqual(reg, expected) {
-		t.Errorf("Found region %#v but expected %#v", reg, expected)
+		t.Errorf("Found region %#v \nbut expected %#v", reg, expected)
 	}
 
 	reg = client.getRegion([]byte("notfound"), []byte("theKey"))
