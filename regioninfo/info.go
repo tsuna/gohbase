@@ -9,6 +9,7 @@ package regioninfo
 import (
 	"encoding/binary"
 	"fmt"
+	"sync"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
@@ -22,8 +23,18 @@ type Info struct {
 	// RegionName.
 	RegionName []byte
 
+	// StartKey
+	StartKey []byte
+
 	// StopKey.
 	StopKey []byte
+
+	// Once a region becomes unreachable, this channel is created, and any
+	// functions that wish to be notified when the region becomes available
+	// again can read from this channel, which will be closed when the region
+	// is available again
+	available     chan struct{}
+	availableLock sync.Mutex
 }
 
 // InfoFromCell parses a KeyValue from the meta table and creates the
@@ -47,10 +58,40 @@ func InfoFromCell(cell *pb.Cell) (*Info, error) {
 		return nil, fmt.Errorf("failed to decode %q: %s", cell, err)
 	}
 	return &Info{
-		Table:      regInfo.TableName.Qualifier,
-		RegionName: cell.Row,
-		StopKey:    regInfo.EndKey,
+		Table:         regInfo.TableName.Qualifier,
+		RegionName:    cell.Row,
+		StartKey:      regInfo.StartKey,
+		StopKey:       regInfo.EndKey,
+		availableLock: sync.Mutex{},
 	}, nil
+}
+
+// IsUnavailable returns true if this region has been marked as unavailable.
+func (i *Info) IsUnavailable() bool {
+	return i.available != nil
+}
+
+// GetAvailabilityChan returns a channel that can be used to wait on for
+// notification that a connection to this region has been reestablished. Second
+// parameter returned signifies if calling this function resulted in a new
+// channel being created. Calling this function marks this region as
+// unavailable.
+func (i *Info) GetAvailabilityChan() (<-chan struct{}, bool) {
+	created := false
+	i.availableLock.Lock()
+	if i.available == nil {
+		i.available = make(chan struct{})
+		created = true
+	}
+	i.availableLock.Unlock()
+	return i.available, created
+}
+
+// MarkAvailable will mark this region as available again, by closing the struct
+// returned by GetAvailabilityChan
+func (i *Info) MarkAvailable() {
+	close(i.available)
+	i.available = nil
 }
 
 func (i *Info) String() string {
