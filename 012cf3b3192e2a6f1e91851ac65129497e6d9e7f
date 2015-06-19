@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "facab960_7ad06bf6",
+        "filename": "client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 477,
+      "author": {
+        "id": 1005314
+      },
+      "writtenOn": "2015-06-19T20:23:36Z",
+      "side": 1,
+      "message": "At this point in time I should probably confirm that the new region covers the same range as the old region, and correctly remove things from the cache / start a new reestablishRegion if it doesn\u0027t",
+      "revId": "012cf3b3192e2a6f1e91851ac65129497e6d9e7f",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
