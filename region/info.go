@@ -8,6 +8,7 @@ package region
 import (
 	"encoding/binary"
 	"fmt"
+	"sync"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
@@ -21,8 +22,21 @@ type Info struct {
 	// RegionName.
 	RegionName []byte
 
+	// StartKey
+	StartKey []byte
+
 	// StopKey.
 	StopKey []byte
+
+	// Whether or not we can still reach the client for this region
+	Unreachable     bool
+	UnreachableLock sync.Mutex
+
+	// Once a region becomes unreachable, this struct is created, and any
+	// functions that wish to be notified when the region becomes available
+	// again can read from this channel, which will be closed when the region
+	// is available again
+	Available chan struct{}
 }
 
 // InfoFromCell parses a KeyValue from the meta table and creates the
@@ -46,9 +60,12 @@ func InfoFromCell(cell *pb.Cell) (*Info, error) {
 		return nil, fmt.Errorf("failed to decode %q: %s", cell, err)
 	}
 	return &Info{
-		Table:      regInfo.TableName.Qualifier,
-		RegionName: cell.Row,
-		StopKey:    regInfo.EndKey,
+		Table:           regInfo.TableName.Qualifier,
+		RegionName:      cell.Row,
+		StartKey:        regInfo.StartKey,
+		StopKey:         regInfo.EndKey,
+		Unreachable:     false,
+		UnreachableLock: sync.Mutex{},
 	}, nil
 }
 
