@@ -18,6 +18,7 @@ type Call interface {
 
 	Key() []byte
 
+	GetRegion() *regioninfo.Info
 	SetRegion(region *regioninfo.Info)
 	Name() string
 	Serialize() ([]byte, error)
@@ -33,8 +34,9 @@ type Call interface {
 // RPCResult is struct that will contain both the resulting message from an RPC
 // call, and any errors that may have occurred related to making the RPC call.
 type RPCResult struct {
-	Msg   proto.Message
-	Error error
+	Msg      proto.Message
+	RPCError error
+	NetError error
 }
 
 type base struct {
@@ -51,6 +53,10 @@ type base struct {
 
 func (b *base) Context() context.Context {
 	return b.ctx
+}
+
+func (b *base) GetRegion() *regioninfo.Info {
+	return b.region
 }
 
 func (b *base) SetRegion(region *regioninfo.Info) {
