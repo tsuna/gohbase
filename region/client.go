@@ -23,6 +23,10 @@ var (
 	// ErrShortWrite is used when the writer thread only succeeds in writing
 	// part of its buffer to the socket, and not all of the buffer was sent
 	ErrShortWrite = errors.New("short write occurred while writing to socket")
+
+	// ErrMissingCallID is used when HBase sends us a response message for a
+	// request that we didn't send
+	ErrMissingCallID = errors.New("HBase responded to a nonsensical call id")
 )
 
 // Client manages a connection to a RegionServer.
@@ -85,9 +89,13 @@ func NewClient(host string, port uint16) (*Client, error) {
 
 func (c *Client) processRpcs() {
 	for {
+		if c.sendErr != nil {
+			return
+		}
+
 		select {
 		// TODO: make this value configurable
-		case <-time.After(time.Millisecond * 100):
+		case <-time.After(time.Millisecond * 1):
 			c.writeMutex.Lock()
 		case <-c.process:
 			// We don't acquire the lock here, because the thread that sent
@@ -95,18 +103,6 @@ func (c *Client) processRpcs() {
 			// and will not release it so as to transfer ownership
 		}
 
-		// If c.sendErr is set, this writer has encountered an unrecoverable
-		// error. It will repeat the error it encountered to any outstanding
-		// rpcs, and not attempt to send them.
-		if c.sendErr != nil {
-			for _, rpc := range c.rpcs {
-				resch := rpc.GetResultChan()
-				resch <- hrpc.RPCResult{nil, c.sendErr}
-			}
-			c.rpcs = nil
-			c.writeMutex.Unlock()
-			continue
-		}
 		rpcs := make([]hrpc.Call, len(c.rpcs))
 		for i, rpc := range c.rpcs {
 			rpcs[i] = rpc
@@ -114,9 +110,7 @@ func (c *Client) processRpcs() {
 		c.rpcs = nil
 		c.writeMutex.Unlock()
 
-		var newrpcs []hrpc.Call
-
-		for _, rpc := range rpcs {
+		for i, rpc := range rpcs {
 			// If the deadline has been exceeded, don't bother sending the
 			// request. The function that placed the RPC in our queue should
 			// stop waiting for a result and return an error.
@@ -129,35 +123,36 @@ func (c *Client) processRpcs() {
 			}
 
 			err := c.sendRPC(rpc)
-			if isRecoverable(err) {
-				newrpcs = append(newrpcs, rpc)
-			} else if err != nil {
+			if err != nil {
 				c.sendErr = err
-				resch := rpc.GetResultChan()
-				resch <- hrpc.RPCResult{nil, err}
+
+				c.writeMutex.Lock()
+				c.rpcs = append(c.rpcs, rpcs[i:]...)
+				c.writeMutex.Unlock()
+
+				c.errorEncountered()
+				return
 			}
 		}
-
-		c.writeMutex.Lock()
-		c.rpcs = append(c.rpcs, newrpcs...)
-		c.writeMutex.Unlock()
 	}
 }
 
 func (c *Client) receiveRpcs() {
+	var sz [4]byte
 	for {
-		var sz [4]byte
 		err := c.readFully(sz[:])
 		if err != nil {
-			log.Printf("Encountered an error while reading: %v\n", err)
-			continue
+			c.sendErr = err
+			c.errorEncountered()
+			return
 		}
 
 		buf := make([]byte, binary.BigEndian.Uint32(sz[:]))
 		err = c.readFully(buf)
 		if err != nil {
-			log.Printf("Encountered an error while reading: %v\n", err)
-			continue
+			c.sendErr = err
+			c.errorEncountered()
+			return
 		}
 
 		resp := &pb.ResponseHeader{}
@@ -166,12 +161,17 @@ func (c *Client) receiveRpcs() {
 		err = proto.UnmarshalMerge(buf[:respLen], resp)
 		buf = buf[respLen:]
 		if err != nil {
-			log.Printf("Failed to deserialize the response header: %s\n", err)
-			continue
+			// Failed to deserialize the response header
+			c.sendErr = err
+			c.errorEncountered()
+			return
 		}
 		if resp.CallId == nil {
+			// Response doesn't have a call ID
 			log.Printf("Response doesn't have a call ID!\n")
-			continue
+			c.sendErr = ErrMissingCallID
+			c.errorEncountered()
+			return
 		}
 
 		c.sentRPCsMutex.Lock()
@@ -180,37 +180,49 @@ func (c *Client) receiveRpcs() {
 
 		if !ok {
 			log.Printf("Received a response with an unexpected call ID!\n")
-			continue
+			c.sendErr = fmt.Errorf("HBase sent a response with an unexpected call ID: %d", resp.CallId)
+			c.errorEncountered()
+			return
 		}
 
-		if resp.Exception != nil {
+		if resp.Exception == nil {
+			respLen, nb = proto.DecodeVarint(buf)
+			buf = buf[nb:]
+			rpcResp := rpc.NewResponse()
+			err = proto.UnmarshalMerge(buf, rpcResp)
+			buf = buf[respLen:]
+
+			rpc.GetResultChan() <- hrpc.RPCResult{rpcResp, err, nil}
+		} else {
 			// TODO: Properly handle this error
-			log.Printf("remote exception %s:\n%s",
+			err := fmt.Errorf("HBase java exception %s: \n%s",
 				*resp.Exception.ExceptionClassName, *resp.Exception.StackTrace)
+			rpc.GetResultChan() <- hrpc.RPCResult{nil, err, nil}
 		}
-
-		respLen, nb = proto.DecodeVarint(buf)
-		buf = buf[nb:]
-		rpcResp := rpc.NewResponse()
-		err = proto.UnmarshalMerge(buf, rpcResp)
-		buf = buf[respLen:]
-
-		resch := rpc.GetResultChan()
-		resch <- hrpc.RPCResult{rpcResp, err}
 
 		c.sentRPCsMutex.Lock()
 		delete(c.sentRPCs, *resp.CallId)
-
 		c.sentRPCsMutex.Unlock()
 	}
 }
 
-func isRecoverable(err error) bool {
-	// TODO: identify which errors we can treat as recoverable
-	if err == ErrShortWrite {
-		return true
+func (c *Client) errorEncountered() {
+	c.writeMutex.Lock()
+	res := hrpc.RPCResult{nil, nil, c.sendErr}
+	for _, rpc := range c.rpcs {
+		rpc.GetResultChan() <- res
 	}
-	return false
+	c.rpcs = nil
+	c.writeMutex.Unlock()
+
+	c.sentRPCsMutex.Lock()
+	for _, rpc := range c.sentRPCs {
+		rpc.GetResultChan() <- res
+	}
+	c.sentRPCs = nil
+	c.sentRPCsMutex.Unlock()
+
+	c.conn.Close()
 }
 
 // Sends the given buffer to the RegionServer.
@@ -267,7 +279,10 @@ func (c *Client) sendHello() error {
 
 // QueueRPC will add an rpc call to the queue for processing by the writer
 // goroutine
-func (c *Client) QueueRPC(rpc hrpc.Call) {
+func (c *Client) QueueRPC(rpc hrpc.Call) error {
+	if c.sendErr != nil {
+		return c.sendErr
+	}
 	c.writeMutex.Lock()
 	c.rpcs = append(c.rpcs, rpc)
 	if len(c.rpcs) > 100 { //TODO: make configurable or pick a good number
@@ -277,6 +292,7 @@ func (c *Client) QueueRPC(rpc hrpc.Call) {
 	} else {
 		c.writeMutex.Unlock()
 	}
+	return nil
 }
 
 // sendRPC sends an RPC out to the wire.
