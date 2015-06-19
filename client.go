@@ -13,6 +13,7 @@ import (
 	"log"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/cznic/b"
 	"github.com/golang/protobuf/proto"
@@ -303,6 +304,15 @@ func (c *Client) queueRPC(rpc hrpc.Call) error {
 
 	var client *region.Client
 	if reg != nil {
+		if reg.Available != nil {
+			select {
+			case <-reg.Available:
+				return c.queueRPC(rpc)
+			case <-rpc.Context().Done():
+				return ErrDeadline
+			}
+		}
+
 		client = c.clientFor(reg)
 	} else {
 		var err error
@@ -312,29 +322,60 @@ func (c *Client) queueRPC(rpc hrpc.Call) error {
 		}
 	}
 	rpc.SetRegion(reg.RegionName, reg.StopKey)
-	client.QueueRPC(rpc)
-	return nil
+	return client.QueueRPC(rpc)
 }
 
+// sendRPC takes an RPC call, and will send it to the correct region server. If
+// the correct region server is offline or otherwise unavailable, sendRPC will
+// continually retry until the deadline set on the RPC's context is exceeded.
 func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
-	resch := rpc.GetResultChan()
 	err := c.queueRPC(rpc)
-	if err != nil {
+	if err == ErrDeadline {
 		return nil, err
+	} else if err != nil {
+		// There was an error locating the region for the RPC, or the client
+		// for the region encountered an error and has shut down.
+		return c.sendRPC(rpc)
 	}
 
+	var res hrpc.RPCResult
+	resch := rpc.GetResultChan()
+
 	select {
-	case res := <-resch:
-		return res.Msg, res.Error
+	case res = <-resch:
 	case <-rpc.Context().Done():
 		return nil, ErrDeadline
 	}
+
+	if res.NetError == nil {
+		return res.Msg, res.RPCError
+	}
+
+	// There was an issue related to the network, so we're going to mark the
+	// region as unavailable, and generate the channel used for announcing
+	// when it's available again
+	regionName := createRegionSearchKey(rpc.Table(), rpc.Key())
+	_, region := c.regions.get(regionName)
+
+	region.Available = make(chan struct{})
+	go c.reestablishRegion(region)
+
+	return c.sendRPC(rpc)
 }
 
 // Locates the region in which the given row key for the given table is.
 func (c *Client) locateRegion(ctx context.Context, table, key []byte) (*region.Client, *region.Info, error) {
+	var err error
 	if c.metaClient == nil {
-		err := c.locateMeta()
+		ret := make(chan error)
+		go c.locateMeta(ret)
+
+		select {
+		case err = <-ret:
+		case <-ctx.Done():
+			return nil, nil, ErrDeadline
+		}
+
 		if err != nil {
 			return nil, nil, err
 		}
@@ -346,16 +387,21 @@ func (c *Client) locateRegion(ctx context.Context, table, key []byte) (*region.C
 	if err != nil {
 		return nil, nil, err
 	}
-	return c.discoverRegion(resp.(*pb.GetResponse))
+	return c.discoverRegion(ctx, resp.(*pb.GetResponse))
 }
 
-// For dependency injection in tests.
-var newRegion = func(host string, port uint16) (*region.Client, error) {
-	return region.NewClient(host, port)
+type newRegResult struct {
+	Client *region.Client
+	Err    error
+}
+
+var newRegion = func(ret chan newRegResult, host string, port uint16) {
+	c, e := region.NewClient(host, port)
+	ret <- newRegResult{c, e}
 }
 
 // Adds a new region to our regions cache.
-func (c *Client) discoverRegion(metaRow *pb.GetResponse) (*region.Client, *region.Info, error) {
+func (c *Client) discoverRegion(ctx context.Context, metaRow *pb.GetResponse) (*region.Client, *region.Info, error) {
 	if metaRow.Result == nil {
 		return nil, nil, errors.New("table not found")
 	}
@@ -395,14 +441,23 @@ func (c *Client) discoverRegion(metaRow *pb.GetResponse) (*region.Client, *regio
 		}
 	}
 
-	client, err := newRegion(host, port)
-	if err != nil {
-		return nil, nil, err
+	var res newRegResult
+	ret := make(chan newRegResult)
+	go newRegion(ret, host, port)
+
+	select {
+	case res = <-ret:
+	case <-ctx.Done():
+		return nil, nil, ErrDeadline
 	}
 
-	c.addRegionToCache(reg, client)
+	if res.Err != nil {
+		return nil, nil, res.Err
+	}
 
-	return client, reg, nil
+	c.addRegionToCache(reg, res.Client)
+
+	return res.Client, reg, nil
 }
 
 // Adds a region to our meta cache.
@@ -424,14 +479,33 @@ func (c *Client) addRegionToCache(reg *region.Info, client *region.Client) {
 	c.regions.put(reg.RegionName, reg)
 }
 
+// reestablishRegion will continually attempt to reestablish a connection to a
+// given region
+func (c *Client) reestablishRegion(reg *region.Info) {
+	for {
+		// A new context is created here because this is not specific to any
+		// request that the user of gohbase initiated, and is instead an
+		// internal goroutine that may be servicing any number of requests
+		// initiated by the user.
+		_, _, err := c.locateRegion(context.Background(), reg.Table, reg.StartKey)
+		if err == nil {
+			close(reg.Available)
+			return
+		}
+		// TODO: Make this configurable, or verify that it's a sane number
+		time.Sleep(time.Millisecond * 100)
+	}
+}
+
 // Looks up the meta region in ZooKeeper.
-func (c *Client) locateMeta() error {
+func (c *Client) locateMeta(ret chan error) {
 	host, port, err := zk.LocateMeta(c.zkquorum)
 	if err != nil {
 		log.Printf("Error while locating meta: %s", err)
-		return err
+		ret <- err
+		return
 	}
 	log.Printf("Meta @ %s:%d", host, port)
 	c.metaClient, err = region.NewClient(host, port)
-	return err
+	ret <- err
 }
