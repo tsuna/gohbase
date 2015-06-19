@@ -8,10 +8,10 @@
 package gohbase_test
 
 import (
+	"bytes"
 	"flag"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/tsuna/gohbase"
 	"github.com/tsuna/gohbase/test"
@@ -40,7 +40,8 @@ func TestMain(m *testing.M) {
 
 func TestGet(t *testing.T) {
 	key := "row1"
-	values := map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte("1")}}
+	val := []byte("1")
+	values := map[string]map[string][]byte{"cf": map[string][]byte{"a": val}}
 	headers := map[string][]string{"cf": nil}
 
 	if host == nil {
@@ -54,9 +55,12 @@ func TestGet(t *testing.T) {
 		t.Errorf("Put returned an error: %v", err)
 	}
 
-	_, err = c.Get(context.Background(), table, key, headers)
+	rsp, err := c.Get(context.Background(), table, key, headers)
 	if err != nil {
 		t.Errorf("Get returned an error: %v", err)
+	}
+	if !bytes.Equal(rsp.Result.Cell[0].GetValue(), val) {
+		t.Errorf("Get returned an incorrect result.")
 	}
 
 	ctx, _ := context.WithTimeout(context.Background(), 0)
@@ -81,7 +85,7 @@ func TestPut(t *testing.T) {
 		t.Errorf("Put returned an error: %v", err)
 	}
 
-	ctx, _ := context.WithTimeout(context.Background(), time.Second*0)
+	ctx, _ := context.WithTimeout(context.Background(), 0)
 	_, err = c.Put(ctx, table, key, values)
 	if err != gohbase.ErrDeadline {
 		t.Errorf("Put ignored the deadline")
