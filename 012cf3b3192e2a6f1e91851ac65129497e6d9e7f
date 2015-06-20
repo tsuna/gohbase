@@ -16,6 +16,161 @@
       "revId": "012cf3b3192e2a6f1e91851ac65129497e6d9e7f",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_1581f0fa",
+        "filename": "client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 477,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-20T08:49:09Z",
+      "side": 1,
+      "message": "No you want to use the the `*region.Info\u0027 returned by `locateRegion\u0027 instead.  Not sure whether this matters actually because `locateRegion()\u0027 will call `discoverRegion()\u0027, which changes the entry in our cache anyway.  Folks waiting on the availability channel to be closed will find the new region.Info in the cache.",
+      "parentUuid": "facab960_7ad06bf6",
+      "revId": "012cf3b3192e2a6f1e91851ac65129497e6d9e7f",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_557e181a",
+        "filename": "region/client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 126,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-20T08:49:09Z",
+      "side": 1,
+      "message": "not needed",
+      "range": {
+        "startLine": 126,
+        "startChar": 35,
+        "endLine": 126,
+        "endChar": 44
+      },
+      "revId": "012cf3b3192e2a6f1e91851ac65129497e6d9e7f",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_757b1c28",
+        "filename": "region/client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 129,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-20T08:49:09Z",
+      "side": 1,
+      "message": "Dude, you didn\u0027t even try to compile this code (or run the tests) before sending this for review.  I realize you said \"This patch is probably incomplete\" but hey let\u0027s make the minimum bar be \"this compiles and passes the tests\" :)\n\n  region/client.go:129: undefined: errorEncountered\n\nNeed \"c.\" before the call to make it a method call.  That\u0027s where it\u0027s frustrating that there is no Travis CI integration, as this would provide this kind of feedback faster and actively discourage folks from pushing broken changes :)",
+      "revId": "012cf3b3192e2a6f1e91851ac65129497e6d9e7f",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_b5712446",
+        "filename": "region/client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 168,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-20T08:49:09Z",
+      "side": 1,
+      "message": "err is probably nil here, so this doesn\u0027t do what you want.",
+      "revId": "012cf3b3192e2a6f1e91851ac65129497e6d9e7f",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_95742037",
+        "filename": "region/client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 206,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-20T08:49:09Z",
+      "side": 1,
+      "message": "This value is always the same and can be assigned to a local variable outside the loop, can\u0027t it?",
+      "range": {
+        "startLine": 206,
+        "startChar": 25,
+        "endLine": 206,
+        "endChar": 60
+      },
+      "revId": "012cf3b3192e2a6f1e91851ac65129497e6d9e7f",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_d5914848",
+        "filename": "region/client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 215,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-20T08:49:09Z",
+      "side": 1,
+      "message": "Make as well make this nil so that if we mistakenly attempt to re-use it, we\u0027ll crash, no?",
+      "revId": "012cf3b3192e2a6f1e91851ac65129497e6d9e7f",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_15981069",
+        "filename": "region/info.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 33,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-20T08:49:09Z",
+      "side": 1,
+      "message": "It\u0027s not obvious that this Mutex protects also the creation of the channel below.  Also you probably don\u0027t need a boolean, it seems like you could just check whether the Available chan is nil or not, right?",
+      "revId": "012cf3b3192e2a6f1e91851ac65129497e6d9e7f",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_f5964c3e",
+        "filename": "region/info.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 35,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-20T08:49:09Z",
+      "side": 1,
+      "message": "this chan?",
+      "range": {
+        "startLine": 35,
+        "startChar": 39,
+        "endLine": 35,
+        "endChar": 50
+      },
+      "revId": "012cf3b3192e2a6f1e91851ac65129497e6d9e7f",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
     }
   ]
 }
