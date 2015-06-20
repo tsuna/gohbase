@@ -1,0 +1,118 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "facab960_b5a84478",
+        "filename": "integration_test.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 74,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-20T09:04:46Z",
+      "side": 1,
+      "message": "Remove for now.  Add it back once you implement it.",
+      "revId": "db088f121ad737a521054a72d066c07e53f7dfd9",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_d5b868ca",
+        "filename": "integration_test.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 104,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-20T09:04:46Z",
+      "side": 1,
+      "message": "For such constants it\u0027s more idiomatic to write:\n\n  const num_ops \u003d 1000",
+      "revId": "db088f121ad737a521054a72d066c07e53f7dfd9",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_f5bd6cb8",
+        "filename": "integration_test.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 121,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-20T09:04:46Z",
+      "side": 1,
+      "message": "Might wanna assign these to a local variables to avoid repeating them.  Also we should enforce a certain line-length limit, something like 100 columns.",
+      "range": {
+        "startLine": 121,
+        "startChar": 71,
+        "endLine": 121,
+        "endChar": 130
+      },
+      "revId": "db088f121ad737a521054a72d066c07e53f7dfd9",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_15af307e",
+        "filename": "integration_test.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 166,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-20T09:04:46Z",
+      "side": 1,
+      "message": "Can you also call b.ReportAllocs() please?",
+      "revId": "db088f121ad737a521054a72d066c07e53f7dfd9",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_35b434d0",
+        "filename": "integration_test.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 190,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-20T09:04:46Z",
+      "side": 1,
+      "message": "Instead of duplicating all the code above, maybe BenchmarkPut should be refactored such that most of its code is in a separate function that we\u0027d call from here.",
+      "revId": "db088f121ad737a521054a72d066c07e53f7dfd9",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_95ab4074",
+        "filename": "test/test.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 92,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-20T09:04:46Z",
+      "side": 1,
+      "message": "This is a bit confusing, at first I thought it had something to do with regions (i.e. chunks of tables) but it\u0027s about RegionServers.  How about LaunchRegionServers() then?",
+      "range": {
+        "startLine": 92,
+        "startChar": 5,
+        "endLine": 92,
+        "endChar": 18
+      },
+      "revId": "db088f121ad737a521054a72d066c07e53f7dfd9",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
