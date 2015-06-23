@@ -1,0 +1,61 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "facab960_d11b15c8",
+        "filename": "integration_test.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 180,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-23T07:31:05Z",
+      "side": 1,
+      "message": "These 7 lines are identical in BenchmarkPut.  Can we not put them in a separate function that is called both from here and from line 160?",
+      "range": {
+        "startLine": 174,
+        "startChar": 0,
+        "endLine": 180,
+        "endChar": 2
+      },
+      "revId": "aefa83f5c08836242de9212385589cfb14cc00f7",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_5110e5a7",
+        "filename": "integration_test.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 191,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-23T07:31:05Z",
+      "side": 1,
+      "message": "Here is OK too, until we realize we need it from multiple tests in different packages.",
+      "revId": "aefa83f5c08836242de9212385589cfb14cc00f7",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_310b617e",
+        "filename": "integration_test.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 192,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-06-23T07:31:05Z",
+      "side": 1,
+      "message": "unexported functions should be named \"likeThis\", not \"_LikeThis\".",
+      "revId": "aefa83f5c08836242de9212385589cfb14cc00f7",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
