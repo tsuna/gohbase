@@ -92,7 +92,7 @@ func DeleteTable(table string) error {
 func LaunchRegionServers(servers []string) {
 	hh := os.Getenv("HBASE_HOME")
 	servers = append([]string{"start"}, servers...)
-	exec.Command(hh+"/bin/local-regionservers.sh", servers...).Output()
+	exec.Command(hh+"/bin/local-regionservers.sh", servers...).Run()
 }
 
 // StopRegions uses the script local-regionservers.sh to stop existing
@@ -100,5 +100,5 @@ func LaunchRegionServers(servers []string) {
 func StopRegionServers(servers []string) {
 	hh := os.Getenv("HBASE_HOME")
 	servers = append([]string{"stop"}, servers...)
-	exec.Command(hh+"/bin/local-regionservers.sh", servers...).Output()
+	exec.Command(hh+"/bin/local-regionservers.sh", servers...).Run()
 }
