@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "bad4c104_83aac0d2",
+        "filename": "region/client.go",
+        "patchSetId": 2
+      },
+      "lineNbr": 130,
+      "author": {
+        "id": 1005314
+      },
+      "writtenOn": "2015-06-25T22:16:39Z",
+      "side": 1,
+      "message": "I think this is needed, because when c.errorEncountered() is called a few lines down it will go through all of c.rpcs and return errors to them. The rpcs in the loop that we\u0027re in would otherwise never be informed that something horrible happened.",
+      "range": {
+        "startLine": 130,
+        "startChar": 35,
+        "endLine": 130,
+        "endChar": 44
+      },
+      "revId": "f7884feaeb681562709a6d68c9ced8fb54885513",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
