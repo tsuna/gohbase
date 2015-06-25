@@ -1,0 +1,50 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "bad4c104_e36b8c83",
+        "filename": "region/client.go",
+        "patchSetId": 4
+      },
+      "lineNbr": 130,
+      "author": {
+        "id": 1005347
+      },
+      "writtenOn": "2015-06-25T23:44:51Z",
+      "side": 1,
+      "message": "Equivalent to rpcs[i:]",
+      "range": {
+        "startLine": 130,
+        "startChar": 28,
+        "endLine": 130,
+        "endChar": 45
+      },
+      "revId": "dc3d0388d446dbfb9774ca391c3daacc2701aa12",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "bad4c104_230574c2",
+        "filename": "region/client.go",
+        "patchSetId": 4
+      },
+      "lineNbr": 130,
+      "author": {
+        "id": 1005347
+      },
+      "writtenOn": "2015-06-25T23:44:51Z",
+      "side": 1,
+      "message": "Should you do a prepend here to preserve original ordering?\n\nc.rps \u003d append(rpcs[i:], c.rpcs...)\n\nedit -- it probably doesn\u0027t matter as things will get jumbled again when the clients retry.",
+      "range": {
+        "startLine": 130,
+        "startChar": 4,
+        "endLine": 130,
+        "endChar": 49
+      },
+      "revId": "dc3d0388d446dbfb9774ca391c3daacc2701aa12",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
