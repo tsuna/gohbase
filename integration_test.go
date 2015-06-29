@@ -57,7 +57,7 @@ func TestGet(t *testing.T) {
 	}
 	rsp_value := rsp.Result.Cell[0].GetValue()
 	if !bytes.Equal(rsp_value, val) {
-		t.Errorf("Get returned an incorrect result. Expected: %v, Received: %v",
+		t.Errorf("Get returned an incorrect result. Expected: %v, Got: %v",
 			val, rsp_value)
 	}
 
@@ -191,9 +191,12 @@ func TestMultiplePutsGets(t *testing.T) {
 		if err != nil {
 			t.Errorf("Get returned an error: %v", err)
 		}
+		if len(rsp.Result.Cell) != 1 {
+			t.Errorf("Incorrect number of cells returned by Get: %d", len(rsp.Result.Cell))
+		}
 		rsp_value := rsp.Result.Cell[0].GetValue()
 		if !bytes.Equal(rsp_value, []byte(fmt.Sprintf("%d", i))) {
-			t.Errorf("Get returned an incorrect result. Expected: %v, Received: %v",
+			t.Errorf("Get returned an incorrect result. Expected: %v, Got: %v",
 				[]byte(fmt.Sprintf("%d", i)), rsp_value)
 		}
 	}
