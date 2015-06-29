@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9ad9bd40_61312da2",
+        "filename": "integration_test.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 99,
+      "author": {
+        "id": 1005347
+      },
+      "writtenOn": "2015-06-29T20:26:44Z",
+      "side": 1,
+      "message": "Could save an import and do fmt.Sprintf(\"%d\", i) instead. I don\u0027t know if there\u0027s any difference between the two but I used Sprintf elsewhere.",
+      "range": {
+        "startLine": 99,
+        "startChar": 2,
+        "endLine": 99,
+        "endChar": 36
+      },
+      "revId": "4b33c29e3cc7187b721d9c816e69abe4cb4e2951",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
