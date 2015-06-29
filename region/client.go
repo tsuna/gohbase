@@ -95,7 +95,7 @@ func (c *Client) processRpcs() {
 
 		select {
 		// TODO: make this value configurable
-		case <-time.After(time.Millisecond * 100):
+		case <-time.After(time.Millisecond * 1):
 			c.writeMutex.Lock()
 		case <-c.process:
 			// We don't acquire the lock here, because the thread that sent

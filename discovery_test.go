@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/tsuna/gohbase/pb"
-	"github.com/tsuna/gohbase/region"
 	"github.com/tsuna/gohbase/regioninfo"
 	"golang.org/x/net/context"
 )
