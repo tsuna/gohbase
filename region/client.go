@@ -179,7 +179,16 @@ func (c *Client) receiveRpcs() {
 		c.sentRPCsMutex.Unlock()
 
 		if !ok {
-			log.Printf("Received a response with an unexpected call ID!\n")
+			log.Printf("Received a response with an unexpected call ID of %d!\n", *resp.CallId)
+
+			log.Printf("Waiting for responses to the following calls: ")
+			c.sentRPCsMutex.Lock()
+			for k := range c.sentRPCs {
+				log.Printf("%d, ", k)
+			}
+			log.Printf("\n")
+			c.sentRPCsMutex.Unlock()
+
 			c.sendErr = fmt.Errorf("HBase sent a response with an unexpected call ID: %d", resp.CallId)
 			c.errorEncountered()
 			return
@@ -324,14 +333,14 @@ func (c *Client) sendRPC(rpc hrpc.Call) error {
 	buf = append(buf, payloadLen...)
 	buf = append(buf, payload...)
 
+	c.sentRPCsMutex.Lock()
+	c.sentRPCs[c.id] = rpc
+	c.sentRPCsMutex.Unlock()
+
 	err = c.write(buf)
 	if err != nil {
 		return err
 	}
-
-	c.sentRPCsMutex.Lock()
-	c.sentRPCs[c.id] = rpc
-	c.sentRPCsMutex.Unlock()
 
 	return nil
 }
