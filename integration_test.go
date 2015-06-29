@@ -12,6 +12,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"testing"
 
 	"github.com/tsuna/gohbase"
@@ -95,17 +96,20 @@ func TestMultiplePutsGets(t *testing.T) {
 	headers := map[string][]string{"cf": nil}
 	c := gohbase.NewClient(*host)
 	for i := 0; i < num_ops; i++ {
-		key := keyPrefix + string(i)
+		key := keyPrefix + strconv.Itoa(i)
 		err := insertKeyValue(c, key, []byte(fmt.Sprintf("%d", i)))
 		if err != nil {
 			t.Errorf("Put returned an error: %v", err)
 		}
 	}
 	for i := num_ops - 1; i >= 0; i-- {
-		key := keyPrefix + string(i)
+		key := keyPrefix + strconv.Itoa(i)
 		rsp, err := c.Get(context.Background(), table, key, headers)
 		if err != nil {
 			t.Errorf("Get returned an error: %v", err)
+		}
+		if len(rsp.Result.Cell) != 1 {
+			t.Errorf("Incorrect number of cells returned by Get: %d", len(rsp.Result.Cell))
 		}
 		rsp_value := rsp.Result.Cell[0].GetValue()
 		if !bytes.Equal(rsp_value, []byte(fmt.Sprintf("%d", i))) {
