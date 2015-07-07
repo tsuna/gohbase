@@ -18,10 +18,12 @@ type Get struct {
 	families map[string][]string //Maps a column family to a list of qualifiers
 
 	closestBefore bool
+
+	filters Filter
 }
 
 // NewGetStr creates a new Get request for the given table/key.
-func NewGetStr(ctx context.Context, table, key string, families map[string][]string) *Get {
+func NewGetStr(ctx context.Context, table, key string, families map[string][]string, filters Filter) *Get {
 	return &Get{
 		base: base{
 			table: []byte(table),
@@ -29,12 +31,13 @@ func NewGetStr(ctx context.Context, table, key string, families map[string][]str
 			ctx:   ctx,
 		},
 		families: families,
+		filters:  filters,
 	}
 }
 
 // NewGetBefore creates a new Get request for the row right before the given
 // key in the given table and family.
-func NewGetBefore(ctx context.Context, table, key []byte, families map[string][]string) *Get {
+func NewGetBefore(ctx context.Context, table, key []byte, families map[string][]string, filters Filter) *Get {
 	return &Get{
 		base: base{
 			table: table,
@@ -43,6 +46,7 @@ func NewGetBefore(ctx context.Context, table, key []byte, families map[string][]
 		},
 		families:      families,
 		closestBefore: true,
+		filters:       filters,
 	}
 }
 
@@ -53,12 +57,27 @@ func (g *Get) Name() string {
 
 // Serialize serializes this RPC into a buffer.
 func (g *Get) Serialize() ([]byte, error) {
-	get := &pb.GetRequest{
-		Region: g.regionSpecifier(),
-		Get: &pb.Get{
+	var pbGet *pb.Get
+	if g.filters == nil {
+		pbGet = &pb.Get{
 			Row:    g.key,
 			Column: familiesToColumn(g.families),
-		},
+		}
+	} else {
+		pbFilters, err := g.filters.ConstructPBFilter()
+		if err != nil {
+			return nil, err
+		}
+		pbGet = &pb.Get{
+			Row:    g.key,
+			Column: familiesToColumn(g.families),
+			Filter: pbFilters,
+		}
+	}
+
+	get := &pb.GetRequest{
+		Region: g.regionSpecifier(),
+		Get:    pbGet,
 	}
 	if g.closestBefore {
 		get.Get.ClosestRowBefore = proto.Bool(true)
