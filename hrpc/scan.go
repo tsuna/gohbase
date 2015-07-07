@@ -26,6 +26,8 @@ type Scan struct {
 	scannerID *uint64
 
 	regionStop []byte
+
+	filters Filter
 }
 
 // NewScanStr creates a new Scan request that will start a scan for rows between
@@ -33,7 +35,7 @@ type Scan struct {
 // column families and qualifiers will be returned. When run, a scanner ID will
 // also be returned, that can be used to fetch addition results via successive
 // Scan requests.
-func NewScanStr(ctx context.Context, table string, families map[string][]string, startRow, stopRow []byte) *Scan {
+func NewScanStr(ctx context.Context, table string, families map[string][]string, startRow, stopRow []byte, filters Filter) *Scan {
 	scan := &Scan{
 		base: base{
 			table: []byte(table),
@@ -44,13 +46,14 @@ func NewScanStr(ctx context.Context, table string, families map[string][]string,
 		startRow:     startRow,
 		stopRow:      stopRow,
 		closeScanner: false,
+		filters:      filters,
 	}
 	return scan
 }
 
 // NewScanFromID creates a new Scan request that will return additional results
 // from a given scanner ID.
-func NewScanFromID(ctx context.Context, table string, scannerID uint64, startRow []byte) *Scan {
+func NewScanFromID(ctx context.Context, table string, scannerID uint64, startRow []byte, filters Filter) *Scan {
 	return &Scan{
 		base: base{
 			table: []byte(table),
@@ -59,12 +62,13 @@ func NewScanFromID(ctx context.Context, table string, scannerID uint64, startRow
 		},
 		scannerID:    &scannerID,
 		closeScanner: false,
+		filters:      filters,
 	}
 }
 
 // NewCloseFromID creates a new Scan request that will close the scan for a
 // given scanner ID.
-func NewCloseFromID(ctx context.Context, table string, scannerID uint64, startRow []byte) *Scan {
+func NewCloseFromID(ctx context.Context, table string, scannerID uint64, startRow []byte, filters Filter) *Scan {
 	return &Scan{
 		base: base{
 			table: []byte(table),
@@ -73,6 +77,7 @@ func NewCloseFromID(ctx context.Context, table string, scannerID uint64, startRo
 		},
 		scannerID:    &scannerID,
 		closeScanner: true,
+		filters:      filters,
 	}
 }
 
@@ -101,11 +106,27 @@ func (s *Scan) Serialize() ([]byte, error) {
 		NumberOfRows: proto.Uint32(20), //TODO: make this configurable
 	}
 	if s.scannerID == nil {
-		scan.Scan = &pb.Scan{
-			Column:   familiesToColumn(s.families),
-			StartRow: s.startRow,
-			StopRow:  s.stopRow,
+		var pbScan *pb.Scan
+		if s.filters == nil {
+			pbScan = &pb.Scan{
+				Column:   familiesToColumn(s.families),
+				StartRow: s.startRow,
+				StopRow:  s.stopRow,
+			}
+		} else {
+			pbFilters, err := s.filters.ConstructPBFilter()
+			if err != nil {
+				return nil, err
+			}
+			pbScan = &pb.Scan{
+				Column:   familiesToColumn(s.families),
+				StartRow: s.startRow,
+				StopRow:  s.stopRow,
+				Filter:   pbFilters,
+			}
+
 		}
+		scan.Scan = pbScan
 	} else {
 		scan.ScannerId = s.scannerID
 	}

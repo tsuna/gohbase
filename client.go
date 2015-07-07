@@ -128,7 +128,7 @@ func NewClient(zkquorum string) *Client {
 
 // CheckTable returns an error if the given table name doesn't exist.
 func (c *Client) CheckTable(ctx context.Context, table string) (*pb.GetResponse, error) {
-	resp, err := c.sendRPC(hrpc.NewGetStr(ctx, table, "theKey", nil))
+	resp, err := c.sendRPC(hrpc.NewGetStr(ctx, table, "theKey", nil, nil))
 	if err != nil {
 		return nil, err
 	}
@@ -136,8 +136,8 @@ func (c *Client) CheckTable(ctx context.Context, table string) (*pb.GetResponse,
 }
 
 // Get returns a single row fetched from HBase.
-func (c *Client) Get(ctx context.Context, table, rowkey string, families map[string][]string) (*pb.GetResponse, error) {
-	resp, err := c.sendRPC(hrpc.NewGetStr(ctx, table, rowkey, families))
+func (c *Client) Get(ctx context.Context, table, rowkey string, families map[string][]string, filters hrpc.Filter) (*pb.GetResponse, error) {
+	resp, err := c.sendRPC(hrpc.NewGetStr(ctx, table, rowkey, families, filters))
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +145,7 @@ func (c *Client) Get(ctx context.Context, table, rowkey string, families map[str
 }
 
 // Scan retrieves the values specified in families from the given range.
-func (c *Client) Scan(ctx context.Context, table string, families map[string][]string, startRow, stopRow []byte) ([]*pb.Result, error) {
+func (c *Client) Scan(ctx context.Context, table string, families map[string][]string, startRow, stopRow []byte, filters hrpc.Filter) ([]*pb.Result, error) {
 	var results []*pb.Result
 	var scanres *pb.ScanResponse
 	var rpc *hrpc.Scan
@@ -154,11 +154,11 @@ func (c *Client) Scan(ctx context.Context, table string, families map[string][]s
 		// Make a new Scan RPC for this region
 		if rpc == nil {
 			// If it's the first region, just begin at the given startRow
-			rpc = hrpc.NewScanStr(ctx, table, families, startRow, stopRow)
+			rpc = hrpc.NewScanStr(ctx, table, families, startRow, stopRow, filters)
 		} else {
 			// If it's not the first region, we want to start at whatever the
 			// last region's StopKey was
-			rpc = hrpc.NewScanStr(ctx, table, families, rpc.GetRegionStop(), stopRow)
+			rpc = hrpc.NewScanStr(ctx, table, families, rpc.GetRegionStop(), stopRow, filters)
 		}
 
 		res, err := c.sendRPC(rpc)
@@ -173,7 +173,7 @@ func (c *Client) Scan(ctx context.Context, table string, families map[string][]s
 		// to move on to the next region than making an extra request and
 		// seeing if there were no results
 		for len(scanres.Results) != 0 {
-			rpc = hrpc.NewScanFromID(ctx, table, *scanres.ScannerId, rpc.Key())
+			rpc = hrpc.NewScanFromID(ctx, table, *scanres.ScannerId, rpc.Key(), filters)
 
 			res, err = c.sendRPC(rpc)
 			if err != nil {
@@ -183,7 +183,7 @@ func (c *Client) Scan(ctx context.Context, table string, families map[string][]s
 			results = append(results, scanres.Results...)
 		}
 
-		rpc = hrpc.NewCloseFromID(ctx, table, *scanres.ScannerId, rpc.Key())
+		rpc = hrpc.NewCloseFromID(ctx, table, *scanres.ScannerId, rpc.Key(), filters)
 		if err != nil {
 			return nil, err
 		}
@@ -340,7 +340,7 @@ func (c *Client) locateRegion(ctx context.Context, table, key []byte) (*region.C
 		}
 	}
 	metaKey := createRegionSearchKey(table, key)
-	rpc := hrpc.NewGetBefore(ctx, metaTableName, metaKey, infoFamily)
+	rpc := hrpc.NewGetBefore(ctx, metaTableName, metaKey, infoFamily, nil)
 	rpc.SetRegion(metaRegionInfo.RegionName, metaRegionInfo.StopKey)
 	resp, err := c.sendRPC(rpc)
 	if err != nil {
