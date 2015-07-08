@@ -12,6 +12,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/tsuna/gohbase"
@@ -176,7 +177,7 @@ func TestPutMultipleCells(t *testing.T) {
 
 }
 
-func TestMultiplePutsGets(t *testing.T) {
+func TestMultiplePutsGetsSequentially(t *testing.T) {
 	const num_ops = 1000
 	keyPrefix := "row3"
 	headers := map[string][]string{"cf": nil}
@@ -197,6 +198,45 @@ func TestMultiplePutsGets(t *testing.T) {
 				[]byte(fmt.Sprintf("%d", i)), rsp_value)
 		}
 	}
+}
+
+func TestMultiplePutsGetsParallel(t *testing.T) {
+	const num_ops = 1000
+	keyPrefix := "row3.5"
+	headers := map[string][]string{"cf": nil}
+	c := gohbase.NewClient(*host)
+	// TODO: Currently have to CheckTable before initiating the N requests
+	// 	 otherwise we face runaway client generation - one for each request.
+	c.CheckTable(context.Background(), table)
+	var wg sync.WaitGroup
+	for i := 0; i < num_ops; i++ {
+		wg.Add(1)
+		go func(client *gohbase.Client, key string) {
+			defer wg.Done()
+			err := insertKeyValue(client, key, "cf", []byte(key))
+			if err != nil {
+				t.Errorf("(Parallel) Put returned an error: %v", err)
+			}
+		}(c, keyPrefix+fmt.Sprintf("%d", i))
+	}
+	wg.Wait()
+	// All puts are complete. Now do the same for gets.
+	for i := num_ops - 1; i >= 0; i-- {
+		wg.Add(1)
+		go func(client *gohbase.Client, key string) {
+			defer wg.Done()
+			rsp, err := c.Get(context.Background(), table, key, headers)
+			if err != nil {
+				t.Errorf("(Parallel) Get returned an error: %v", err)
+			} else {
+				rsp_value := rsp.Result.Cell[0].GetValue()
+				if !bytes.Equal(rsp_value, []byte(key)) {
+					t.Errorf("Get returned an incorrect result.")
+				}
+			}
+		}(c, keyPrefix+fmt.Sprintf("%d", i))
+	}
+	wg.Wait()
 }
 
 func TestTimestampIncreasing(t *testing.T) {
