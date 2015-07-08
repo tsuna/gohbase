@@ -43,4 +43,7 @@ lint:
 test:
 	$(GO) test $(GOTEST_FLAGS) ./...
 
-.PHONY: all check coverage coverdata fmtcheck install lint test
+integration:
+	$(MAKE) test GOTEST_FLAGS="$(GOTEST_FLAGS) -v -tags integration"
+
+.PHONY: all check coverage coverdata fmtcheck install integration lint test
