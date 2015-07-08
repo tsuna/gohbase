@@ -6,13 +6,21 @@
 package hrpc
 
 import (
-	"errors"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
 )
 
 const comparatorPath = "org.apache.hadoop.hbase.filter."
+
+// BitComparatorBitwiseOp is TODO
+type BitComparatorBitwiseOp int32
+
+// Constants are TODO
+const (
+	BitComparatorAND BitComparatorBitwiseOp = 1
+	BitComparatorOR  BitComparatorBitwiseOp = 2
+	BitComparatorXOR BitComparatorBitwiseOp = 3
+)
 
 // Ensure our types implement Comparator correctly.
 var _ Comparator = (*BinaryComparator)(nil)
@@ -144,11 +152,11 @@ func (c *BinaryPrefixComparator) ConstructPBComparator() (*pb.Comparator, error)
 type BitComparator struct {
 	Name       string
 	Comparable *ByteArrayComparable
-	BitwiseOp  string
+	BitwiseOp  BitComparatorBitwiseOp
 }
 
 // NewBitComparator is TODO
-func NewBitComparator(bitwiseOp string, comparable *ByteArrayComparable) *BitComparator {
+func NewBitComparator(bitwiseOp BitComparatorBitwiseOp, comparable *ByteArrayComparable) *BitComparator {
 	return &BitComparator{
 		Name:       comparatorPath + "BitComparator",
 		Comparable: comparable,
@@ -158,12 +166,7 @@ func NewBitComparator(bitwiseOp string, comparable *ByteArrayComparable) *BitCom
 
 // ConstructPBComparator is TODO
 func (c *BitComparator) ConstructPBComparator() (*pb.Comparator, error) {
-	b := pb.BitComparator_BitwiseOp(1)
-	if val, ok := pb.BitComparator_BitwiseOp_value[c.BitwiseOp]; ok {
-		b = pb.BitComparator_BitwiseOp(val)
-	} else {
-		return nil, errors.New("Invalid bitwise operation specified.")
-	}
+	b := pb.BitComparator_BitwiseOp(c.BitwiseOp)
 	internalComparator := &pb.BitComparator{
 		Comparable: c.Comparable.ConstructPB(),
 		BitwiseOp:  &b,

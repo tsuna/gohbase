@@ -6,13 +6,34 @@
 package hrpc
 
 import (
-	"errors"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
 )
 
 const filterPath = "org.apache.hadoop.hbase.filter."
+
+// FilterListOperator is TODO
+type FilterListOperator int32
+
+// Constants is TODO
+const (
+	MustPassAll FilterListOperator = 1
+	MustPassOne FilterListOperator = 2
+)
+
+// CompareType is TODO
+type CompareType int32
+
+// Constants is TODO
+const (
+	Less           CompareType = 0
+	LessOrEqual    CompareType = 1
+	Equal          CompareType = 2
+	NotEqual       CompareType = 3
+	GreaterOrEqual CompareType = 4
+	Greater        CompareType = 5
+	NoOp           CompareType = 6
+)
 
 // Ensure our types implement Filter correctly.
 var _ Filter = (*FilterList)(nil)
@@ -92,12 +113,12 @@ func NewBytesBytesPair(first []byte, second []byte) *BytesBytesPair {
 // FilterList is TODO
 type FilterList struct {
 	Name     string
-	Operator string
+	Operator FilterListOperator
 	Filters  []Filter
 }
 
 // NewFilterList is TODO
-func NewFilterList(operator string, filters ...Filter) *FilterList {
+func NewFilterList(operator FilterListOperator, filters ...Filter) *FilterList {
 	return &FilterList{
 		Name:     filterPath + "FilterList",
 		Operator: operator,
@@ -112,13 +133,7 @@ func (f *FilterList) AddFilters(filters ...Filter) {
 
 // ConstructPBFilter is TODO
 func (f *FilterList) ConstructPBFilter() (*pb.Filter, error) {
-	p := pb.FilterList_Operator(0)
-	if val, ok := pb.FilterList_Operator_value[f.Operator]; ok {
-		p = pb.FilterList_Operator(val)
-	} else {
-		return nil, errors.New("Invalid operator specified.")
-	}
-
+	p := pb.FilterList_Operator(f.Operator)
 	filterArray := []*pb.Filter{}
 	for i := 0; i < len(f.Filters); i++ {
 		pbFilter, err := f.Filters[i].ConstructPBFilter()
@@ -282,12 +297,12 @@ func (f *ColumnRangeFilter) ConstructPBFilter() (*pb.Filter, error) {
 // CompareFilter is TODO
 type CompareFilter struct {
 	Name          string
-	CompareOp     string
+	CompareOp     CompareType
 	ComparatorObj Comparator
 }
 
 // NewCompareFilter is TODO
-func NewCompareFilter(compareOp string, comparatorObj Comparator) *CompareFilter {
+func NewCompareFilter(compareOp CompareType, comparatorObj Comparator) *CompareFilter {
 	return &CompareFilter{
 		Name:          filterPath + "CompareFilter",
 		CompareOp:     compareOp,
@@ -297,12 +312,7 @@ func NewCompareFilter(compareOp string, comparatorObj Comparator) *CompareFilter
 
 // ConstructPB is TODO
 func (f *CompareFilter) ConstructPB() (*pb.CompareFilter, error) {
-	p := pb.CompareType(0)
-	if val, ok := pb.CompareType_value[f.CompareOp]; ok {
-		p = pb.CompareType(val)
-	} else {
-		return nil, errors.New("Invalid compare operation specified.")
-	}
+	p := pb.CompareType(f.CompareOp)
 	pbComparatorObj, err := f.ComparatorObj.ConstructPBComparator()
 	if err != nil {
 		return nil, err
@@ -792,14 +802,14 @@ type SingleColumnValueFilter struct {
 	Name              string
 	ColumnFamily      []byte
 	ColumnQualifier   []byte
-	CompareOp         string
+	CompareOp         CompareType
 	ComparatorObj     Comparator
 	FilterIfMissing   bool
 	LatestVersionOnly bool
 }
 
 // NewSingleColumnValueFilter is TODO
-func NewSingleColumnValueFilter(columnFamily, columnQualifier []byte, compareOp string,
+func NewSingleColumnValueFilter(columnFamily, columnQualifier []byte, compareOp CompareType,
 	comparatorObj Comparator, filterIfMissing, latestVersionOnly bool) *SingleColumnValueFilter {
 	return &SingleColumnValueFilter{
 		Name:              filterPath + "SingleColumnValueFilter",
@@ -814,12 +824,7 @@ func NewSingleColumnValueFilter(columnFamily, columnQualifier []byte, compareOp 
 
 // ConstructPB is TODO
 func (f *SingleColumnValueFilter) ConstructPB() (*pb.SingleColumnValueFilter, error) {
-	p := pb.CompareType(0)
-	if val, ok := pb.CompareType_value[f.CompareOp]; ok {
-		p = pb.CompareType(val)
-	} else {
-		return nil, errors.New("Invalid compare operation specified.")
-	}
+	p := pb.CompareType(f.CompareOp)
 	pbComparatorObj, err := f.ComparatorObj.ConstructPBComparator()
 	if err != nil {
 		return nil, err
