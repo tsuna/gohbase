@@ -128,7 +128,7 @@ func NewClient(zkquorum string) *Client {
 
 // CheckTable returns an error if the given table name doesn't exist.
 func (c *Client) CheckTable(ctx context.Context, table string) (*pb.GetResponse, error) {
-	resp, err := c.sendRPC(hrpc.NewGetStr(ctx, table, "theKey", nil))
+	resp, err := c.sendRPC(hrpc.NewGetStr(ctx, table, "theKey"))
 	if err != nil {
 		return nil, err
 	}
@@ -136,8 +136,8 @@ func (c *Client) CheckTable(ctx context.Context, table string) (*pb.GetResponse,
 }
 
 // Get returns a single row fetched from HBase.
-func (c *Client) Get(ctx context.Context, table, rowkey string, families map[string][]string) (*pb.GetResponse, error) {
-	resp, err := c.sendRPC(hrpc.NewGetStr(ctx, table, rowkey, families))
+func (c *Client) Get(get *hrpc.Get) (*pb.GetResponse, error) {
+	resp, err := c.sendRPC(get)
 	if err != nil {
 		return nil, err
 	}

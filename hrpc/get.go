@@ -18,17 +18,18 @@ type Get struct {
 	families map[string][]string //Maps a column family to a list of qualifiers
 
 	closestBefore bool
+
+	filters Filter
 }
 
 // NewGetStr creates a new Get request for the given table/key.
-func NewGetStr(ctx context.Context, table, key string, families map[string][]string) *Get {
+func NewGetStr(ctx context.Context, table, key string) *Get {
 	return &Get{
 		base: base{
 			table: []byte(table),
 			key:   []byte(key),
 			ctx:   ctx,
 		},
-		families: families,
 	}
 }
 
@@ -49,6 +50,28 @@ func NewGetBefore(ctx context.Context, table, key []byte, families map[string][]
 // Name returns the name of this RPC call.
 func (g *Get) Name() string {
 	return "Get"
+}
+
+// Filter returns current set filter
+func (g *Get) Filter() Filter {
+	return g.filters
+}
+
+// Families returns current set family
+func (g *Get) Families() map[string][]string {
+	return g.families
+}
+
+// SetFilter sets filter to use and returns the object
+func (g *Get) SetFilter(f Filter) *Get {
+	g.filters = f
+	return g
+}
+
+// SetFamilies sets families to use and returns the object
+func (g *Get) SetFamilies(f map[string][]string) *Get {
+	g.families = f
+	return g
 }
 
 // Serialize serializes this RPC into a buffer.
