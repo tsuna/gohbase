@@ -7,6 +7,7 @@ package hrpc
 
 import (
 	"errors"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
 )
@@ -17,7 +18,7 @@ const comparatorPath = "org.apache.hadoop.hbase.filter."
 type BitComparatorBitwiseOp int32
 
 func (o BitComparatorBitwiseOp) isValid() bool {
-	return (o >= 1 && o <= 3)
+	return o >= 1 && o <= 3
 }
 
 // Constants are TODO
@@ -38,15 +39,13 @@ var _ Comparator = (*SubstringComparator)(nil)
 
 // Comparator is TODO
 type Comparator interface {
-	// ConstructPBComparator creates and returns the comparator encoded in a pb.Comparator type
+	// ConstructPBComparator creates and returns the comparator encoded in a
+	// pb.Comparator type
 	ConstructPBComparator() (*pb.Comparator, error)
 }
 
-// ByteArrayComparable is used across many Comparators. Implementing here to
-// avoid users having to interface with protobuf generated files.
-type ByteArrayComparable struct {
-	Value []byte
-}
+// ByteArrayComparable is used across many Comparators.
+type ByteArrayComparable pb.ByteArrayComparable
 
 // NewByteArrayComparable is TODO
 func NewByteArrayComparable(value []byte) *ByteArrayComparable {
@@ -55,232 +54,173 @@ func NewByteArrayComparable(value []byte) *ByteArrayComparable {
 	}
 }
 
-// ConstructPB is TODO
-func (b *ByteArrayComparable) ConstructPB() *pb.ByteArrayComparable {
-	pbVersion := &pb.ByteArrayComparable{
-		Value: b.Value,
-	}
-	return pbVersion
+func (b *ByteArrayComparable) toPB() *pb.ByteArrayComparable {
+	return (*pb.ByteArrayComparable)(b)
 }
 
 // BinaryComparator is TODO
-type BinaryComparator struct {
-	Name       string
-	Comparable *ByteArrayComparable
-}
+type BinaryComparator pb.BinaryComparator
 
 // NewBinaryComparator is TODO
 func NewBinaryComparator(comparable *ByteArrayComparable) *BinaryComparator {
 	return &BinaryComparator{
-		Name:       comparatorPath + "BinaryComparator",
-		Comparable: comparable,
+		Comparable: comparable.toPB(),
 	}
 }
 
 // ConstructPBComparator is TODO
 func (c *BinaryComparator) ConstructPBComparator() (*pb.Comparator, error) {
-	internalComparator := &pb.BinaryComparator{
-		Comparable: c.Comparable.ConstructPB(),
-	}
-	serializedComparator, err := proto.Marshal(internalComparator)
+	serializedComparator, err := proto.Marshal((*pb.BinaryComparator)(c))
 	if err != nil {
 		return nil, err
 	}
 	comparator := &pb.Comparator{
-		Name:                 &c.Name,
+		Name:                 proto.String(comparatorPath + "BinaryComparator"),
 		SerializedComparator: serializedComparator,
 	}
 	return comparator, nil
 }
 
 // LongComparator is TODO
-type LongComparator struct {
-	Name       string
-	Comparable *ByteArrayComparable
-}
+type LongComparator pb.LongComparator
 
 // NewLongComparator is TODO
 func NewLongComparator(comparable *ByteArrayComparable) *LongComparator {
 	return &LongComparator{
-		Name:       comparatorPath + "LongComparator",
-		Comparable: comparable,
+		Comparable: comparable.toPB(),
 	}
 }
 
 // ConstructPBComparator is TODO
 func (c *LongComparator) ConstructPBComparator() (*pb.Comparator, error) {
-	internalComparator := &pb.LongComparator{
-		Comparable: c.Comparable.ConstructPB(),
-	}
-	serializedComparator, err := proto.Marshal(internalComparator)
+	serializedComparator, err := proto.Marshal((*pb.LongComparator)(c))
 	if err != nil {
 		return nil, err
 	}
 	comparator := &pb.Comparator{
-		Name:                 &c.Name,
+		Name:                 proto.String(comparatorPath + "LongComparator"),
 		SerializedComparator: serializedComparator,
 	}
 	return comparator, nil
 }
 
 // BinaryPrefixComparator is TODO
-type BinaryPrefixComparator struct {
-	Name       string
-	Comparable *ByteArrayComparable
-}
+type BinaryPrefixComparator pb.BinaryPrefixComparator
 
 // NewBinaryPrefixComparator is TODO
 func NewBinaryPrefixComparator(comparable *ByteArrayComparable) *BinaryPrefixComparator {
 	return &BinaryPrefixComparator{
-		Name:       comparatorPath + "BinaryPrefixComparator",
-		Comparable: comparable,
+		Comparable: comparable.toPB(),
 	}
 }
 
 // ConstructPBComparator is TODO
 func (c *BinaryPrefixComparator) ConstructPBComparator() (*pb.Comparator, error) {
-	internalComparator := &pb.BinaryPrefixComparator{
-		Comparable: c.Comparable.ConstructPB(),
-	}
-	serializedComparator, err := proto.Marshal(internalComparator)
+	serializedComparator, err := proto.Marshal((*pb.BinaryPrefixComparator)(c))
 	if err != nil {
 		return nil, err
 	}
 	comparator := &pb.Comparator{
-		Name:                 &c.Name,
+		Name:                 proto.String(comparatorPath + "BinaryPrefixComparator"),
 		SerializedComparator: serializedComparator,
 	}
 	return comparator, nil
 }
 
 // BitComparator is TODO
-type BitComparator struct {
-	Name       string
-	Comparable *ByteArrayComparable
-	BitwiseOp  BitComparatorBitwiseOp
-}
+type BitComparator pb.BitComparator
 
 // NewBitComparator is TODO
 func NewBitComparator(bitwiseOp BitComparatorBitwiseOp, comparable *ByteArrayComparable) *BitComparator {
+	op := pb.BitComparator_BitwiseOp(bitwiseOp)
 	return &BitComparator{
-		Name:       comparatorPath + "BitComparator",
-		Comparable: comparable,
-		BitwiseOp:  bitwiseOp,
+		Comparable: comparable.toPB(),
+		BitwiseOp:  &op,
 	}
 }
 
 // ConstructPBComparator is TODO
 func (c *BitComparator) ConstructPBComparator() (*pb.Comparator, error) {
-	if !c.BitwiseOp.isValid() {
+	if !BitComparatorBitwiseOp(*c.BitwiseOp).isValid() {
 		return nil, errors.New("Invalid bitwise operator specified")
 	}
-	b := pb.BitComparator_BitwiseOp(c.BitwiseOp)
-	internalComparator := &pb.BitComparator{
-		Comparable: c.Comparable.ConstructPB(),
-		BitwiseOp:  &b,
-	}
-	serializedComparator, err := proto.Marshal(internalComparator)
+	serializedComparator, err := proto.Marshal((*pb.BitComparator)(c))
 	if err != nil {
 		return nil, err
 	}
 	comparator := &pb.Comparator{
-		Name:                 &c.Name,
+		Name:                 proto.String(comparatorPath + "BitComparator"),
 		SerializedComparator: serializedComparator,
 	}
 	return comparator, nil
 }
 
 // NullComparator is TODO
-type NullComparator struct {
-	Name string
-}
+type NullComparator struct{}
 
 // NewNullComparator is TODO
-func NewNullComparator() *NullComparator {
-	return &NullComparator{
-		Name: comparatorPath + "NullComparator",
-	}
+func NewNullComparator() NullComparator {
+	return NullComparator{}
 }
 
 // ConstructPBComparator is TODO
-func (c *NullComparator) ConstructPBComparator() (*pb.Comparator, error) {
-	internalComparator := &pb.NullComparator{}
-	serializedComparator, err := proto.Marshal(internalComparator)
+func (c NullComparator) ConstructPBComparator() (*pb.Comparator, error) {
+	serializedComparator, err := proto.Marshal(&pb.NullComparator{})
 	if err != nil {
 		return nil, err
 	}
 	comparator := &pb.Comparator{
-		Name:                 &c.Name,
+		Name:                 proto.String(comparatorPath + "NullComparator"),
 		SerializedComparator: serializedComparator,
 	}
 	return comparator, nil
 }
 
 // RegexStringComparator is TODO
-type RegexStringComparator struct {
-	Name         string
-	Pattern      string
-	PatternFlags int32
-	Charset      string
-	Engine       string
-}
+type RegexStringComparator pb.RegexStringComparator
 
 // NewRegexStringComparator is TODO
 func NewRegexStringComparator(pattern string, patternFlags int32,
 	charset, engine string) *RegexStringComparator {
 	return &RegexStringComparator{
-		Name:         comparatorPath + "RegexStringComparator",
-		Pattern:      pattern,
-		PatternFlags: patternFlags,
-		Charset:      charset,
-		Engine:       engine,
+		Pattern:      proto.String(pattern),
+		PatternFlags: proto.Int32(patternFlags),
+		Charset:      proto.String(charset),
+		Engine:       proto.String(engine),
 	}
 }
 
 // ConstructPBComparator is TODO
 func (c *RegexStringComparator) ConstructPBComparator() (*pb.Comparator, error) {
-	internalComparator := &pb.RegexStringComparator{
-		Pattern:      &c.Pattern,
-		PatternFlags: &c.PatternFlags,
-		Charset:      &c.Charset,
-		Engine:       &c.Engine,
-	}
-	serializedComparator, err := proto.Marshal(internalComparator)
+	serializedComparator, err := proto.Marshal((*pb.RegexStringComparator)(c))
 	if err != nil {
 		return nil, err
 	}
 	comparator := &pb.Comparator{
-		Name:                 &c.Name,
+		Name:                 proto.String(comparatorPath + "RegexStringComparator"),
 		SerializedComparator: serializedComparator,
 	}
 	return comparator, nil
 }
 
 // SubstringComparator is TODO
-type SubstringComparator struct {
-	Name   string
-	Substr string
-}
+type SubstringComparator pb.SubstringComparator
 
 // NewSubstringComparator is TODO
 func NewSubstringComparator(substr string) *SubstringComparator {
 	return &SubstringComparator{
-		Name:   comparatorPath + "SubstringComparator",
-		Substr: substr,
+		Substr: proto.String(substr),
 	}
 }
 
 // ConstructPBComparator is TODO
 func (c *SubstringComparator) ConstructPBComparator() (*pb.Comparator, error) {
-	internalComparator := &pb.SubstringComparator{
-		Substr: &c.Substr,
-	}
-	serializedComparator, err := proto.Marshal(internalComparator)
+	serializedComparator, err := proto.Marshal((*pb.SubstringComparator)(c))
 	if err != nil {
 		return nil, err
 	}
 	comparator := &pb.Comparator{
-		Name:                 &c.Name,
+		Name:                 proto.String(comparatorPath + "SubstringComparator"),
 		SerializedComparator: serializedComparator,
 	}
 	return comparator, nil
