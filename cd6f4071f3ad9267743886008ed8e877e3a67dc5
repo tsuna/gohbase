@@ -1,0 +1,141 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9ad9bd40_5a4bf986",
+        "filename": "client.go",
+        "patchSetId": 8
+      },
+      "lineNbr": 358,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-08T20:56:34Z",
+      "side": 1,
+      "message": "You can get the region name from the RPC directly, can\u0027t you?  On line 324 we store it in the RPC so let\u0027s just retrieve it back here.",
+      "range": {
+        "startLine": 357,
+        "startChar": 0,
+        "endLine": 358,
+        "endChar": 39
+      },
+      "revId": "cd6f4071f3ad9267743886008ed8e877e3a67dc5",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_fa204db2",
+        "filename": "client.go",
+        "patchSetId": 8
+      },
+      "lineNbr": 358,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-08T20:56:34Z",
+      "side": 1,
+      "message": "This might not succeed, maybe `region\u0027 will be nil.",
+      "range": {
+        "startLine": 358,
+        "startChar": 1,
+        "endLine": 358,
+        "endChar": 39
+      },
+      "revId": "cd6f4071f3ad9267743886008ed8e877e3a67dc5",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_da0c6945",
+        "filename": "client.go",
+        "patchSetId": 8
+      },
+      "lineNbr": 500,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-08T20:56:34Z",
+      "side": 1,
+      "message": "We\u0027ll probably want some backoff here, to not continuously hammer on the cluster.",
+      "revId": "cd6f4071f3ad9267743886008ed8e877e3a67dc5",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_5d005301",
+        "filename": "integration_test.go",
+        "patchSetId": 8
+      },
+      "lineNbr": 95,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-08T20:56:34Z",
+      "side": 1,
+      "message": "Remove this comment as it\u0027s now stale.",
+      "revId": "cd6f4071f3ad9267743886008ed8e877e3a67dc5",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_7d03570d",
+        "filename": "region/client.go",
+        "patchSetId": 8
+      },
+      "lineNbr": 29,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-08T20:56:34Z",
+      "side": 1,
+      "message": "Instead of making this a constant, we should call fmt.Errorf() and include the offending call ID in the error message, as well as any other relevant information.",
+      "revId": "cd6f4071f3ad9267743886008ed8e877e3a67dc5",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_bd0ddf39",
+        "filename": "region/client.go",
+        "patchSetId": 8
+      },
+      "lineNbr": 130,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-08T20:56:34Z",
+      "side": 1,
+      "message": "Not needed.  Just use `rpcs[i:]\u0027.",
+      "range": {
+        "startLine": 130,
+        "startChar": 35,
+        "endLine": 130,
+        "endChar": 44
+      },
+      "revId": "cd6f4071f3ad9267743886008ed8e877e3a67dc5",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_fa720de2",
+        "filename": "region/info.go",
+        "patchSetId": 8
+      },
+      "lineNbr": 36,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-08T20:56:34Z",
+      "side": 1,
+      "message": "This doesn\u0027t need to be a pointer.  The documentation should also say what does this lock protect against.\n\nThis lock seems to only be used in line 360 of client.go, to atomically create the Available channel.  This isn\u0027t good from an encapsulation point of view, what I\u0027d suggest instead is to make the Available channel and its accompanying AvailableLock private, and add a method to retrieve the channel.  This method will be responsible for grabbing the lock, checking if the channel needs to be created, creating it if needed, releasing the lock, and returning the channel.\n\nThis way the atomicity is encapsulated in a function and users of this region.Info such as in client.go can\u0027t \"get it wrong\".",
+      "revId": "cd6f4071f3ad9267743886008ed8e877e3a67dc5",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
