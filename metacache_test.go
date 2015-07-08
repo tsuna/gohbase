@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/tsuna/gohbase/region"
+	"github.com/tsuna/gohbase/regioninfo"
 )
 
 func TestMetaCache(t *testing.T) {
@@ -20,7 +21,7 @@ func TestMetaCache(t *testing.T) {
 	}
 
 	// Inject an entry in the cache.  This entry covers the entire key range.
-	wholeTable := &region.Info{
+	wholeTable := &regioninfo.Info{
 		Table:      []byte("test"),
 		RegionName: []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		StopKey:    []byte(""),
@@ -41,21 +42,21 @@ func TestMetaCache(t *testing.T) {
 	client = NewClient("~invalid.quorum~")
 
 	// Inject 3 entries in the cache.
-	region1 := &region.Info{
+	region1 := &regioninfo.Info{
 		Table:      []byte("test"),
 		RegionName: []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		StopKey:    []byte("foo"),
 	}
 	client.addRegionToCache(region1, regClient)
 
-	region2 := &region.Info{
+	region2 := &regioninfo.Info{
 		Table:      []byte("test"),
 		RegionName: []byte("test,foo,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		StopKey:    []byte("gohbase"),
 	}
 	client.addRegionToCache(region2, regClient)
 
-	region3 := &region.Info{
+	region3 := &regioninfo.Info{
 		Table:      []byte("test"),
 		RegionName: []byte("test,gohbase,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		StopKey:    []byte(""),
@@ -64,7 +65,7 @@ func TestMetaCache(t *testing.T) {
 
 	testcases := []struct {
 		key string
-		reg *region.Info
+		reg *regioninfo.Info
 	}{
 		{key: "theKey", reg: region3},
 		{key: "", reg: region1},
@@ -82,7 +83,7 @@ func TestMetaCache(t *testing.T) {
 	}
 
 	// Change the last region (maybe it got split).
-	region3 = &region.Info{
+	region3 = &regioninfo.Info{
 		Table:      []byte("test"),
 		RegionName: []byte("test,gohbase,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		StopKey:    []byte("zab"),

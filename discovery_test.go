@@ -11,6 +11,7 @@ import (
 
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
+	"github.com/tsuna/gohbase/regioninfo"
 )
 
 func TestRegionDiscovery(t *testing.T) {
@@ -68,7 +69,7 @@ func TestRegionDiscovery(t *testing.T) {
 	if reg == nil {
 		t.Fatal("Region not found even though we injected it in the cache.")
 	}
-	expected := &region.Info{
+	expected := &regioninfo.Info{
 		Table:      []byte("test"),
 		RegionName: []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		StopKey:    []byte(""),

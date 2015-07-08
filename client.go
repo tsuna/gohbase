@@ -19,6 +19,7 @@ import (
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
+	"github.com/tsuna/gohbase/regioninfo"
 	"github.com/tsuna/gohbase/zk"
 	"golang.org/x/net/context"
 )
@@ -28,7 +29,7 @@ var (
 	// Name of the meta region.
 	metaTableName = []byte("hbase:meta")
 
-	metaRegionInfo = &region.Info{
+	metaRegionInfo = &regioninfo.Info{
 		Table:      []byte("hbase:meta"),
 		RegionName: []byte("hbase:meta,,1"),
 		StopKey:    []byte{},
@@ -46,17 +47,17 @@ var (
 type regionClientCache struct {
 	m sync.Mutex
 
-	clients map[*region.Info]*region.Client
+	clients map[*regioninfo.Info]*region.Client
 }
 
-func (rcc *regionClientCache) get(r *region.Info) *region.Client {
+func (rcc *regionClientCache) get(r *regioninfo.Info) *region.Client {
 	rcc.m.Lock()
 	c := rcc.clients[r]
 	rcc.m.Unlock()
 	return c
 }
 
-func (rcc *regionClientCache) put(r *region.Info, c *region.Client) {
+func (rcc *regionClientCache) put(r *regioninfo.Info, c *region.Client) {
 	rcc.m.Lock()
 	rcc.clients[r] = c
 	rcc.m.Unlock()
@@ -66,11 +67,11 @@ func (rcc *regionClientCache) put(r *region.Info, c *region.Client) {
 type keyRegionCache struct {
 	m sync.Mutex
 
-	// Maps a []byte of a region start key to a *region.Info
+	// Maps a []byte of a region start key to a *regioninfo.Info
 	regions *b.Tree
 }
 
-func (krc *keyRegionCache) get(key []byte) ([]byte, *region.Info) {
+func (krc *keyRegionCache) get(key []byte) ([]byte, *regioninfo.Info) {
 	// When seeking - "The Enumerator's position is possibly after the last item in the tree"
 	// http://godoc.org/github.com/cznic/b#Tree.Set
 	krc.m.Lock()
@@ -90,24 +91,24 @@ func (krc *keyRegionCache) get(key []byte) ([]byte, *region.Info) {
 	if err != nil {
 		return nil, nil
 	}
-	return k.([]byte), v.(*region.Info)
+	return k.([]byte), v.(*regioninfo.Info)
 }
 
-func (krc *keyRegionCache) put(key []byte, reg *region.Info) *region.Info {
+func (krc *keyRegionCache) put(key []byte, reg *regioninfo.Info) *regioninfo.Info {
 	krc.m.Lock()
 	oldV, _ := krc.regions.Put(key, func(interface{}, bool) (interface{}, bool) { return reg, true })
 	krc.m.Unlock()
 	if oldV == nil {
 		return nil
 	}
-	return oldV.(*region.Info)
+	return oldV.(*regioninfo.Info)
 }
 
 // A Client provides access to an HBase cluster.
 type Client struct {
 	regions keyRegionCache
 
-	// Maps a *region.Info to the *region.Client that we think currently
+	// Maps a *regioninfo.Info to the *region.Client that we think currently
 	// serves it.
 	clients regionClientCache
 
@@ -120,8 +121,8 @@ type Client struct {
 // NewClient creates a new HBase client.
 func NewClient(zkquorum string) *Client {
 	return &Client{
-		regions:  keyRegionCache{regions: b.TreeNew(region.CompareGeneric)},
-		clients:  regionClientCache{clients: make(map[*region.Info]*region.Client)},
+		regions:  keyRegionCache{regions: b.TreeNew(regioninfo.CompareGeneric)},
+		clients:  regionClientCache{clients: make(map[*regioninfo.Info]*region.Client)},
 		zkquorum: zkquorum,
 	}
 }
@@ -265,7 +266,7 @@ func isCacheKeyForTable(table, cacheKey []byte) bool {
 }
 
 // Searches in the regions cache for the region hosting the given row.
-func (c *Client) getRegion(table, key []byte) *region.Info {
+func (c *Client) getRegion(table, key []byte) *regioninfo.Info {
 	if bytes.Equal(table, metaTableName) {
 		return metaRegionInfo
 	}
@@ -286,7 +287,7 @@ func (c *Client) getRegion(table, key []byte) *region.Info {
 }
 
 // Returns the client currently known to hose the given region, or NULL.
-func (c *Client) clientFor(region *region.Info) *region.Client {
+func (c *Client) clientFor(region *regioninfo.Info) *region.Client {
 	if region == metaRegionInfo {
 		return c.metaClient
 	}
@@ -332,7 +333,7 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 }
 
 // Locates the region in which the given row key for the given table is.
-func (c *Client) locateRegion(ctx context.Context, table, key []byte) (*region.Client, *region.Info, error) {
+func (c *Client) locateRegion(ctx context.Context, table, key []byte) (*region.Client, *regioninfo.Info, error) {
 	if c.metaClient == nil {
 		err := c.locateMeta()
 		if err != nil {
@@ -355,18 +356,18 @@ var newRegion = func(host string, port uint16) (*region.Client, error) {
 }
 
 // Adds a new region to our regions cache.
-func (c *Client) discoverRegion(metaRow *pb.GetResponse) (*region.Client, *region.Info, error) {
+func (c *Client) discoverRegion(metaRow *pb.GetResponse) (*region.Client, *regioninfo.Info, error) {
 	if metaRow.Result == nil {
 		return nil, nil, errors.New("table not found")
 	}
 	var host string
 	var port uint16
-	var reg *region.Info
+	var reg *regioninfo.Info
 	for _, cell := range metaRow.Result.Cell {
 		switch string(cell.Qualifier) {
 		case "regioninfo":
 			var err error
-			reg, err = region.InfoFromCell(cell)
+			reg, err = regioninfo.InfoFromCell(cell)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -406,7 +407,7 @@ func (c *Client) discoverRegion(metaRow *pb.GetResponse) (*region.Client, *regio
 }
 
 // Adds a region to our meta cache.
-func (c *Client) addRegionToCache(reg *region.Info, client *region.Client) {
+func (c *Client) addRegionToCache(reg *regioninfo.Info, client *region.Client) {
 	// 1. Record the region -> client mapping.
 	// This won't be "discoverable" until another map points to it, because
 	// at this stage no one knows about this region yet, so another thread

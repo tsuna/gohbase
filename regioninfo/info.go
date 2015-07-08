@@ -3,7 +3,8 @@
 // Use of this source code is governed by the Apache License 2.0
 // that can be found in the COPYING file.
 
-package region
+// Package regioninfo contains data structures to represent HBase regions.
+package regioninfo
 
 import (
 	"encoding/binary"
@@ -53,7 +54,7 @@ func InfoFromCell(cell *pb.Cell) (*Info, error) {
 }
 
 func (i *Info) String() string {
-	return fmt.Sprintf("*region.Info{Table: %q, RegionName: %q, StopKey: %q}",
+	return fmt.Sprintf("*regioninfo.Info{Table: %q, RegionName: %q, StopKey: %q}",
 		i.Table, i.RegionName, i.StopKey)
 }
 
