@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/tsuna/gohbase"
+	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/test"
 	"golang.org/x/net/context"
 )
@@ -53,7 +54,8 @@ func TestGet(t *testing.T) {
 		t.Errorf("Put returned an error: %v", err)
 	}
 
-	rsp, err := c.Get(context.Background(), table, key, headers)
+	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
+	rsp, err := c.Get(get)
 	if err != nil {
 		t.Errorf("Get returned an error: %v", err)
 	}
@@ -64,7 +66,8 @@ func TestGet(t *testing.T) {
 	}
 
 	ctx, _ := context.WithTimeout(context.Background(), 0)
-	_, err = c.Get(ctx, table, key, headers)
+	get.SetContext(ctx)
+	_, err = c.Get(get)
 	if err != gohbase.ErrDeadline {
 		t.Errorf("Get ignored the deadline")
 	}
@@ -74,7 +77,8 @@ func TestGetDoesntExist(t *testing.T) {
 	key := "row1.5"
 	c := gohbase.NewClient(*host)
 	headers := map[string][]string{"cf": nil}
-	rsp, err := c.Get(context.Background(), table, key, headers)
+	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
+	rsp, err := c.Get(get)
 	num_results := len(rsp.GetResult().Cell)
 	if num_results != 0 {
 		t.Errorf("Get expected 0 cells. Received: %d", num_results)
@@ -92,7 +96,8 @@ func TestGetBadColumnFamily(t *testing.T) {
 		t.Errorf("Put returned an error: %v", err)
 	}
 	families := map[string][]string{"badcf": nil}
-	rsp, err := c.Get(context.Background(), table, key, families)
+	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(families))
+	rsp, err := c.Get(get)
 	if err == nil {
 		t.Errorf("Get didn't return an error! (It should have)")
 	}
@@ -114,7 +119,8 @@ func TestGetMultipleCells(t *testing.T) {
 	}
 
 	families := map[string][]string{"cf": nil, "cf2": nil}
-	rsp, err := c.Get(context.Background(), table, key, families)
+	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(families))
+	rsp, err := c.Get(get)
 	cells := rsp.GetResult().Cell
 	num_results := len(cells)
 	if num_results != 2 {
@@ -159,7 +165,8 @@ func TestPutMultipleCells(t *testing.T) {
 		t.Errorf("Put returned an error: %v", err)
 	}
 	families := map[string][]string{"cf": nil, "cf2": nil}
-	rsp, err := c.Get(context.Background(), table, key, families)
+	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(families))
+	rsp, err := c.Get(get)
 	if err != nil {
 		t.Errorf("Get returned an error: %v", err)
 	}
@@ -187,7 +194,8 @@ func TestMultiplePutsGetsSequentially(t *testing.T) {
 	}
 	for i := num_ops - 1; i >= 0; i-- {
 		key := keyPrefix + fmt.Sprintf("%d", i)
-		rsp, err := c.Get(context.Background(), table, key, headers)
+		get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
+		rsp, err := c.Get(get)
 		if err != nil {
 			t.Errorf("Get returned an error: %v", err)
 		}
@@ -227,7 +235,8 @@ func TestMultiplePutsGetsParallel(t *testing.T) {
 		wg.Add(1)
 		go func(client *gohbase.Client, key string) {
 			defer wg.Done()
-			rsp, err := c.Get(context.Background(), table, key, headers)
+			get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
+			rsp, err := c.Get(get)
 			if err != nil {
 				t.Errorf("(Parallel) Get returned an error: %v", err)
 			} else {
@@ -248,7 +257,8 @@ func TestTimestampIncreasing(t *testing.T) {
 	headers := map[string][]string{"cf": nil}
 	for i := 0; i < 10; i++ {
 		insertKeyValue(c, key, "cf", []byte("1"))
-		rsp, err := c.Get(context.Background(), table, key, headers)
+		get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
+		rsp, err := c.Get(get)
 		if err != nil {
 			t.Errorf("Get returned an error: %v", err)
 			break
@@ -290,7 +300,8 @@ func TestAppend(t *testing.T) {
 
 	// Make sure the change was actually committed.
 	headers := map[string][]string{"cf": nil}
-	rsp, err := c.Get(context.Background(), table, key, headers)
+	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
+	rsp, err := c.Get(get)
 	cells := rsp.GetResult().Cell
 	if len(cells) != 1 {
 		t.Errorf("Get expected 1 cells. Received: %d", len(cells))
@@ -324,7 +335,8 @@ func TestChangingRegionServers(t *testing.T) {
 	// Now (gracefully) stop servers 1,2.
 	// All regions should now be on server 3.
 	test.StopRegionServers([]string{"1", "2"})
-	rsp, err := c.Get(context.Background(), table, key, headers)
+	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
+	rsp, err := c.Get(get)
 	if err != nil {
 		t.Errorf("Get returned an error: %v", err)
 	}
@@ -360,7 +372,8 @@ func BenchmarkGet(b *testing.B) {
 	headers := map[string][]string{"cf": nil}
 	for i := 0; i < b.N; i++ {
 		key := keyPrefix + fmt.Sprintf("%d", i)
-		c.Get(context.Background(), table, key, headers)
+		get, _ := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
+		c.Get(get)
 	}
 }
 
