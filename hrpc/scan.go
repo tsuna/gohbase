@@ -24,8 +24,6 @@ type Scan struct {
 	stopRow  []byte
 
 	scannerID *uint64
-
-	regionStop []byte
 }
 
 // NewScanStr creates a new Scan request that will start a scan for rows between
@@ -81,15 +79,9 @@ func (s *Scan) Name() string {
 	return "Scan"
 }
 
-// SetRegion will set the region and regionStop values on the given scan
-func (s *Scan) SetRegion(region []byte, regionStop []byte) {
-	s.region = region
-	s.regionStop = regionStop
-}
-
-// GetRegionStop will return return the regionStop value from the given scan
+// GetRegionStop returns the stop key of the region currently being scanned.
 func (s *Scan) GetRegionStop() []byte {
-	return s.regionStop
+	return s.region.StopKey
 }
 
 // Serialize will convert this Scan into a serialized protobuf message ready

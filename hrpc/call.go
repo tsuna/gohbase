@@ -8,6 +8,7 @@ package hrpc
 import (
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
+	"github.com/tsuna/gohbase/regioninfo"
 	"golang.org/x/net/context"
 )
 
@@ -17,7 +18,7 @@ type Call interface {
 
 	Key() []byte
 
-	SetRegion(region []byte, regionStop []byte)
+	SetRegion(region *regioninfo.Info)
 	Name() string
 	Serialize() ([]byte, error)
 	// Returns a newly created (default-state) protobuf in which to store the
@@ -41,7 +42,7 @@ type base struct {
 
 	key []byte
 
-	region []byte
+	region *regioninfo.Info
 
 	resultch chan RPCResult
 
@@ -52,7 +53,7 @@ func (b *base) Context() context.Context {
 	return b.ctx
 }
 
-func (b *base) SetRegion(region []byte, regionStop []byte) {
+func (b *base) SetRegion(region *regioninfo.Info) {
 	b.region = region
 }
 
@@ -60,7 +61,7 @@ func (b *base) regionSpecifier() *pb.RegionSpecifier {
 	regionType := pb.RegionSpecifier_REGION_NAME
 	return &pb.RegionSpecifier{
 		Type:  &regionType,
-		Value: []byte(b.region),
+		Value: []byte(b.region.RegionName),
 	}
 }
 

@@ -312,7 +312,7 @@ func (c *Client) queueRPC(rpc hrpc.Call) error {
 			return err
 		}
 	}
-	rpc.SetRegion(reg.RegionName, reg.StopKey)
+	rpc.SetRegion(reg)
 	client.QueueRPC(rpc)
 	return nil
 }
@@ -342,7 +342,7 @@ func (c *Client) locateRegion(ctx context.Context, table, key []byte) (*region.C
 	}
 	metaKey := createRegionSearchKey(table, key)
 	rpc := hrpc.NewGetBefore(ctx, metaTableName, metaKey, infoFamily)
-	rpc.SetRegion(metaRegionInfo.RegionName, metaRegionInfo.StopKey)
+	rpc.SetRegion(metaRegionInfo)
 	resp, err := c.sendRPC(rpc)
 	if err != nil {
 		return nil, nil, err
