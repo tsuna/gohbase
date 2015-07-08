@@ -1,0 +1,55 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9ad9bd40_bd5ebf74",
+        "filename": "region/client.go",
+        "patchSetId": 10
+      },
+      "lineNbr": 98,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-08T22:59:52Z",
+      "side": 1,
+      "message": "Probably don\u0027t wanna submit this ;)",
+      "revId": "42ba8b22ce6c047b5db2dcbdd8a63f8fc108f17c",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_1d4fabbe",
+        "filename": "region/client.go",
+        "patchSetId": 10
+      },
+      "lineNbr": 185,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-08T22:59:52Z",
+      "side": 1,
+      "message": "Ah, good catch :)",
+      "revId": "42ba8b22ce6c047b5db2dcbdd8a63f8fc108f17c",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_dd6d4334",
+        "filename": "regioninfo/info.go",
+        "patchSetId": 10
+      },
+      "lineNbr": 79,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-08T22:59:52Z",
+      "side": 1,
+      "message": "Change the return type to `\u003c-chan struct{}\u0027 to ensure that people accessing this channel can\u0027t write into it.\n\nThis means you\u0027ll probably have to add another API, MarkAvailable(), that closes the channel, as you won\u0027t be able to close the channel anymore from client.go (since you can\u0027t close read-only channels).  This is good because it\u0027ll give us an opportunity to make sure that when we close the channel we also make it nil, which will prevent double-close() bugs.",
+      "revId": "42ba8b22ce6c047b5db2dcbdd8a63f8fc108f17c",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
