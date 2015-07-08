@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9ad9bd40_3d162ff2",
+        "filename": "integration_test.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 243,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-08T22:01:07Z",
+      "side": 1,
+      "message": "Move this to line 233 and use a WaitGroup instead for the Get (http://golang.org/pkg/sync/#WaitGroup).  The WaitGroup will start at num_ops, then after line 236, before returning from the anonymous function, you just call Done() on the WaitGroup, and here you can replace this entire for loop into a call to Wait() on the WaitGroup.",
+      "range": {
+        "startLine": 241,
+        "startChar": 0,
+        "endLine": 243,
+        "endChar": 3
+      },
+      "revId": "b9e55c1b6383bf794feccc0b42bfbb4c4aca82fb",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
