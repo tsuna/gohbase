@@ -46,7 +46,7 @@ func CreateTable(table string, cFamilies []string) error {
 
 	cmd, stdin, err := getShellCmd()
 	if err != nil {
-		return nil
+		return err
 	}
 
 	var buf bytes.Buffer
@@ -70,7 +70,7 @@ func CreateTable(table string, cFamilies []string) error {
 func DeleteTable(table string) error {
 	cmd, stdin, err := getShellCmd()
 	if err != nil {
-		return nil
+		return err
 	}
 
 	var buf1 bytes.Buffer
