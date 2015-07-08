@@ -170,7 +170,8 @@ func FlushInterval(interval time.Duration) Option {
 
 // CheckTable returns an error if the given table name doesn't exist.
 func (c *Client) CheckTable(ctx context.Context, table string) (*pb.GetResponse, error) {
-	resp, err := c.sendRPC(hrpc.NewGetStr(ctx, table, "theKey", nil))
+	getStr, _ := hrpc.NewGetStr(ctx, table, "theKey")
+	resp, err := c.sendRPC(getStr)
 	if err != nil {
 		return nil, err
 	}
@@ -178,8 +179,8 @@ func (c *Client) CheckTable(ctx context.Context, table string) (*pb.GetResponse,
 }
 
 // Get returns a single row fetched from HBase.
-func (c *Client) Get(ctx context.Context, table, rowkey string, families map[string][]string) (*pb.GetResponse, error) {
-	resp, err := c.sendRPC(hrpc.NewGetStr(ctx, table, rowkey, families))
+func (c *Client) Get(get *hrpc.Get) (*pb.GetResponse, error) {
+	resp, err := c.sendRPC(get)
 	if err != nil {
 		return nil, err
 	}
@@ -187,19 +188,24 @@ func (c *Client) Get(ctx context.Context, table, rowkey string, families map[str
 }
 
 // Scan retrieves the values specified in families from the given range.
-func (c *Client) Scan(ctx context.Context, table string, families map[string][]string, startRow, stopRow []byte) ([]*pb.Result, error) {
+func (c *Client) Scan(s *hrpc.Scan) ([]*pb.Result, error) {
 	var results []*pb.Result
 	var scanres *pb.ScanResponse
 	var rpc *hrpc.Scan
+	ctx := s.GetContext()
+	table := s.Table()
+	families := s.GetFamilies()
+	startRow := s.GetStartRow()
+	stopRow := s.GetStopRow()
 	for {
 		// Make a new Scan RPC for this region
 		if rpc == nil {
 			// If it's the first region, just begin at the given startRow
-			rpc = hrpc.NewScanStr(ctx, table, families, startRow, stopRow)
+			rpc, _ = hrpc.NewScanRange(ctx, table, startRow, stopRow, hrpc.Families(families))
 		} else {
 			// If it's not the first region, we want to start at whatever the
 			// last region's StopKey was
-			rpc = hrpc.NewScanStr(ctx, table, families, rpc.GetRegionStop(), stopRow)
+			rpc, _ = hrpc.NewScanRange(ctx, table, rpc.GetRegionStop(), stopRow, hrpc.Families(families))
 		}
 
 		res, err := c.sendRPC(rpc)
@@ -360,7 +366,7 @@ func (c *Client) queueRPC(rpc hrpc.Call) error {
 			select {
 			case <-ch:
 				return c.queueRPC(rpc)
-			case <-rpc.Context().Done():
+			case <-rpc.GetContext().Done():
 				return ErrDeadline
 			}
 		}
@@ -368,7 +374,7 @@ func (c *Client) queueRPC(rpc hrpc.Call) error {
 		client = c.clientFor(reg)
 	} else {
 		var err error
-		client, reg, err = c.locateRegion(rpc.Context(), table, key)
+		client, reg, err = c.locateRegion(rpc.GetContext(), table, key)
 		if err != nil {
 			return err
 		}
@@ -382,10 +388,10 @@ func (c *Client) queueRPC(rpc hrpc.Call) error {
 // continually retry until the deadline set on the RPC's context is exceeded.
 func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 	log.WithFields(log.Fields{
-		"Type":  rpc.Name(),
-		"Table": rpc.Table(),
-		"Key":   rpc.Key(),
-	}).Debug("New Request")
+		"Type":  rpc.GetName(),
+		"Table": string(rpc.Table()),
+		"Key":   string(rpc.Key()),
+	}).Debug("Sending RPC")
 	err := c.queueRPC(rpc)
 	if err == ErrDeadline {
 		return nil, err
@@ -396,7 +402,7 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 
 		select {
 		case res = <-resch:
-		case <-rpc.Context().Done():
+		case <-rpc.GetContext().Done():
 			return nil, ErrDeadline
 		}
 
@@ -429,7 +435,7 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 // Locates the region in which the given row key for the given table is.
 func (c *Client) locateRegion(ctx context.Context, table, key []byte) (*region.Client, *regioninfo.Info, error) {
 	metaKey := createRegionSearchKey(table, key)
-	rpc := hrpc.NewGetBefore(ctx, metaTableName, metaKey, infoFamily)
+	rpc, _ := hrpc.NewGetBefore(ctx, metaTableName, metaKey, hrpc.Families(infoFamily))
 	rpc.SetRegion(c.metaRegionInfo)
 	resp, err := c.sendRPC(rpc)
 
@@ -439,7 +445,7 @@ func (c *Client) locateRegion(ctx context.Context, table, key []byte) (*region.C
 			select {
 			case <-ch:
 				return c.locateRegion(ctx, table, key)
-			case <-rpc.Context().Done():
+			case <-rpc.GetContext().Done():
 				return nil, nil, ErrDeadline
 			}
 		} else {
