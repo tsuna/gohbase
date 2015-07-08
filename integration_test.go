@@ -9,6 +9,7 @@ package gohbase_test
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -176,7 +177,7 @@ func TestPutMultipleCells(t *testing.T) {
 
 }
 
-func TestMultiplePutsGets(t *testing.T) {
+func TestMultiplePutsGetsSequentially(t *testing.T) {
 	const num_ops = 1000
 	keyPrefix := "row3"
 	headers := map[string][]string{"cf": nil}
@@ -195,6 +196,50 @@ func TestMultiplePutsGets(t *testing.T) {
 		if !bytes.Equal(rsp_value, []byte(fmt.Sprintf("%d", i))) {
 			t.Errorf("Get returned an incorrect result. Expected: %v, Received: %v",
 				[]byte(fmt.Sprintf("%d", i)), rsp_value)
+		}
+	}
+}
+
+func TestMultiplePutsGetsParallel(t *testing.T) {
+	const num_ops = 1000
+	keyPrefix := "row3.5"
+	headers := map[string][]string{"cf": nil}
+	c := gohbase.NewClient(*host)
+	// TODO: Currently have to CheckTable before initiating the N requests
+	// 	 otherwise we face runaway client generation - one for each request.
+	c.CheckTable(context.Background(), table)
+	errorChan := make(chan error)
+	for i := 0; i < num_ops; i++ {
+		go func(client *gohbase.Client, key string) {
+			err := insertKeyValue(client, key, "cf", []byte(key))
+			errorChan <- err
+		}(c, keyPrefix+fmt.Sprintf("%d", i))
+	}
+	for i := 0; i < num_ops; i++ {
+		err := <-errorChan
+		if err != nil {
+			t.Errorf("Put returned an error: %v", err)
+		}
+	}
+	// All puts are complete. Now do the same for gets.
+	for i := num_ops - 1; i >= 0; i-- {
+		go func(client *gohbase.Client, key string) {
+			rsp, err := c.Get(context.Background(), table, key, headers)
+			if err != nil {
+				errorChan <- err
+			} else {
+				rsp_value := rsp.Result.Cell[0].GetValue()
+				if !bytes.Equal(rsp_value, []byte(key)) {
+					errorChan <- errors.New("Get returned an incorrect result.")
+				}
+				errorChan <- nil
+			}
+		}(c, keyPrefix+fmt.Sprintf("%d", i))
+	}
+	for i := 0; i < num_ops; i++ {
+		err := <-errorChan
+		if err != nil {
+			t.Errorf("Get returned an error: %v", err)
 		}
 	}
 }
