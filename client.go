@@ -10,11 +10,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"strconv"
 	"sync"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/cznic/b"
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
@@ -129,6 +129,9 @@ type Client struct {
 
 // NewClient creates a new HBase client.
 func NewClient(zkquorum string, options ...Option) *Client {
+	log.WithFields(log.Fields{
+		"Host": zkquorum,
+	}).Debug("Creating new client.")
 	c := &Client{
 		regions:       keyRegionCache{regions: b.TreeNew(regioninfo.CompareGeneric)},
 		clients:       regionClientCache{clients: make(map[*regioninfo.Info]*region.Client)},
@@ -181,7 +184,6 @@ func (c *Client) Scan(ctx context.Context, table string, families map[string][]s
 	var results []*pb.Result
 	var scanres *pb.ScanResponse
 	var rpc *hrpc.Scan
-
 	for {
 		// Make a new Scan RPC for this region
 		if rpc == nil {
@@ -361,6 +363,11 @@ func (c *Client) queueRPC(rpc hrpc.Call) error {
 // the correct region server is offline or otherwise unavailable, sendRPC will
 // continually retry until the deadline set on the RPC's context is exceeded.
 func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
+	log.WithFields(log.Fields{
+		"Type":  rpc.Name(),
+		"Table": rpc.Table(),
+		"Key":   rpc.Key(),
+	}).Debug("New Request")
 	err := c.queueRPC(rpc)
 	if err == ErrDeadline {
 		return nil, err
@@ -497,6 +504,10 @@ func (c *Client) discoverRegion(ctx context.Context, metaRow *pb.GetResponse) (*
 
 // Adds a region to our meta cache.
 func (c *Client) addRegionToCache(reg *regioninfo.Info, client *region.Client) {
+	log.WithFields(log.Fields{
+		"Region": reg,
+		"Client": host + string(port),
+	}).Debug("Adding new region to meta cache.")
 	// 1. Record the region -> client mapping.
 	// This won't be "discoverable" until another map points to it, because
 	// at this stage no one knows about this region yet, so another thread
@@ -518,6 +529,12 @@ func (c *Client) addRegionToCache(reg *regioninfo.Info, client *region.Client) {
 // given region
 func (c *Client) reestablishRegion(reg *regioninfo.Info) {
 	for {
+		log.WithFields(log.Fields{
+			"Table":      reg.Table,
+			"RegionName": reg.RegionName,
+			"StartKey":   reg.StartKey,
+			"StopKey":    reg.StopKey,
+		}).Warn("Attempting to re-establish region.")
 		// A new context is created here because this is not specific to any
 		// request that the user of gohbase initiated, and is instead an
 		// internal goroutine that may be servicing any number of requests
@@ -540,7 +557,10 @@ func (c *Client) locateMeta(ret chan error) {
 		ret <- err
 		return
 	}
-	log.Printf("Meta @ %s:%d", host, port)
+	log.WithFields(log.Fields{
+		"Host": host,
+		"Port": port,
+	}).Debug("Located META from ZooKeeper")
 	c.metaClient, err = region.NewClient(host, port, c.rpcQueueSize, c.flushInterval)
 	ret <- err
 }

@@ -9,7 +9,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
+	log "github.com/Sirupsen/logrus"
 	"net"
 	"sync"
 	"time"
@@ -172,7 +172,7 @@ func (c *Client) receiveRpcs() {
 		}
 		if resp.CallId == nil {
 			// Response doesn't have a call ID
-			log.Printf("Response doesn't have a call ID!\n")
+			log.Error("Response doesn't have a call ID!")
 			c.sendErr = ErrMissingCallID
 			c.errorEncountered()
 			return
@@ -183,14 +183,15 @@ func (c *Client) receiveRpcs() {
 		c.sentRPCsMutex.Unlock()
 
 		if !ok {
-			log.Printf("Received a response with an unexpected call ID of %d!\n", *resp.CallId)
+			log.WithFields(log.Fields{
+				"CallId": *resp.CallId,
+			}).Error("Received a response with an unexpected call ID")
 
-			log.Printf("Waiting for responses to the following calls: ")
+			log.Warn("Waiting for responses to the following calls: ")
 			c.sentRPCsMutex.Lock()
 			for k := range c.sentRPCs {
-				log.Printf("%d, ", k)
+				log.Error("\t\t%d, ", k)
 			}
-			log.Printf("\n")
 			c.sentRPCsMutex.Unlock()
 
 			c.sendErr = fmt.Errorf("HBase sent a response with an unexpected call ID: %d", resp.CallId)
