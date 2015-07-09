@@ -1,0 +1,55 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9ad9bd40_23d9ad83",
+        "filename": "client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 127,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-09T20:04:04Z",
+      "side": 1,
+      "message": "Can we call this flushInterval instead?\n\nPS: In case you don\u0027t know about this tool yet: https://godoc.org/golang.org/x/tools/cmd/gorename – you probably wanna use it to rename this field (and any accompanying methods), to save you a bunch of work :)",
+      "revId": "a164ecdc57b4e80c2661364326a7ed2a3eb5adbd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_23928d9f",
+        "filename": "client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 132,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-09T20:04:04Z",
+      "side": 1,
+      "message": "Make Client a pointer by leaving the `\u0026\u0027 on this line, and keep passing/returning the pointer on lines 140/142.",
+      "revId": "a164ecdc57b4e80c2661364326a7ed2a3eb5adbd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_83d19959",
+        "filename": "integration_test.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 262,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-09T20:04:04Z",
+      "side": 1,
+      "message": "Why do we need this now?",
+      "revId": "a164ecdc57b4e80c2661364326a7ed2a3eb5adbd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
