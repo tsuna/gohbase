@@ -3,7 +3,7 @@
 // Use of this source code is governed by the Apache License 2.0
 // that can be found in the COPYING file.
 
-package hrpc
+package filter
 
 import (
 	"errors"
@@ -14,22 +14,22 @@ import (
 
 const filterPath = "org.apache.hadoop.hbase.filter."
 
-// FilterListOperator is TODO
-type FilterListOperator int32
+// ListOperator is TODO
+type ListOperator int32
 
-func (o FilterListOperator) isValid() bool {
+func (o ListOperator) isValid() bool {
 	return o >= 1 && o <= 2
 }
 
-func (o FilterListOperator) toPB() *pb.FilterList_Operator {
+func (o ListOperator) toPB() *pb.FilterList_Operator {
 	op := pb.FilterList_Operator(o)
 	return &op
 }
 
 // Constants is TODO
 const (
-	MustPassAll FilterListOperator = 1
-	MustPassOne FilterListOperator = 2
+	MustPassAll ListOperator = 1
+	MustPassOne ListOperator = 2
 )
 
 // CompareType is TODO
@@ -51,7 +51,7 @@ const (
 )
 
 // Ensure our types implement Filter correctly.
-var _ Filter = (*FilterList)(nil)
+var _ Filter = (*List)(nil)
 var _ Filter = (*ColumnCountGetFilter)(nil)
 var _ Filter = (*ColumnPaginationFilter)(nil)
 var _ Filter = (*ColumnPrefixFilter)(nil)
@@ -59,7 +59,7 @@ var _ Filter = (*ColumnRangeFilter)(nil)
 var _ Filter = (*CompareFilter)(nil)
 var _ Filter = (*DependentColumnFilter)(nil)
 var _ Filter = (*FamilyFilter)(nil)
-var _ Filter = (*FilterWrapper)(nil)
+var _ Filter = (*Wrapper)(nil)
 var _ Filter = (*FirstKeyOnlyFilter)(nil)
 var _ Filter = (*FirstKeyValueMatchingQualifiersFilter)(nil)
 var _ Filter = (*FuzzyRowFilter)(nil)
@@ -77,7 +77,7 @@ var _ Filter = (*SkipFilter)(nil)
 var _ Filter = (*TimestampsFilter)(nil)
 var _ Filter = (*ValueFilter)(nil)
 var _ Filter = (*WhileMatchFilter)(nil)
-var _ Filter = (*FilterAllFilter)(nil)
+var _ Filter = (*AllFilter)(nil)
 var _ Filter = (*RowRange)(nil)
 var _ Filter = (*MultiRowRangeFilter)(nil)
 
@@ -122,12 +122,12 @@ func NewBytesBytesPair(first []byte, second []byte) *BytesBytesPair {
 	it loses the ability to call those additional functions.
 */
 
-// FilterList is TODO
-type FilterList pb.FilterList
+// List is TODO
+type List pb.FilterList
 
-// NewFilterList is TODO
-func NewFilterList(operator FilterListOperator, filters ...Filter) *FilterList {
-	f := &FilterList{
+// NewList is TODO
+func NewList(operator ListOperator, filters ...Filter) *List {
+	f := &List{
 		Operator: operator.toPB(),
 	}
 	f.AddFilters(filters...)
@@ -135,7 +135,7 @@ func NewFilterList(operator FilterListOperator, filters ...Filter) *FilterList {
 }
 
 // AddFilters is TODO
-func (f *FilterList) AddFilters(filters ...Filter) {
+func (f *List) AddFilters(filters ...Filter) {
 	for _, filter := range filters {
 		fpb, err := filter.ConstructPBFilter()
 		if err != nil {
@@ -146,8 +146,8 @@ func (f *FilterList) AddFilters(filters ...Filter) {
 }
 
 // ConstructPBFilter is TODO
-func (f *FilterList) ConstructPBFilter() (*pb.Filter, error) {
-	if !FilterListOperator(*f.Operator).isValid() {
+func (f *List) ConstructPBFilter() (*pb.Filter, error) {
+	if !ListOperator(*f.Operator).isValid() {
 		return nil, errors.New("Invalid operator specified.")
 	}
 
@@ -339,22 +339,22 @@ func (f *FamilyFilter) ConstructPBFilter() (*pb.Filter, error) {
 	return filter, nil
 }
 
-// FilterWrapper is TODO
-type FilterWrapper pb.FilterWrapper
+// Wrapper is TODO
+type Wrapper pb.FilterWrapper
 
-// NewFilterWrapper is TODO
-func NewFilterWrapper(wrappedFilter Filter) *FilterWrapper {
+// NewWrapper is TODO
+func NewWrapper(wrappedFilter Filter) *Wrapper {
 	f, err := wrappedFilter.ConstructPBFilter()
 	if err != nil {
 		panic(err)
 	}
-	return &FilterWrapper{
+	return &Wrapper{
 		Filter: f,
 	}
 }
 
 // ConstructPBFilter is TODO
-func (f *FilterWrapper) ConstructPBFilter() (*pb.Filter, error) {
+func (f *Wrapper) ConstructPBFilter() (*pb.Filter, error) {
 	serializedFilter, err := proto.Marshal((*pb.FilterWrapper)(f))
 	if err != nil {
 		return nil, err
@@ -781,16 +781,16 @@ func (f *WhileMatchFilter) ConstructPBFilter() (*pb.Filter, error) {
 	return filter, nil
 }
 
-// FilterAllFilter is TODO
-type FilterAllFilter struct{}
+// AllFilter is TODO
+type AllFilter struct{}
 
-// NewFilterAllFilter is TODO
-func NewFilterAllFilter() FilterAllFilter {
-	return FilterAllFilter{}
+// NewAllFilter is TODO
+func NewAllFilter() AllFilter {
+	return AllFilter{}
 }
 
 // ConstructPBFilter is TODO
-func (f *FilterAllFilter) ConstructPBFilter() (*pb.Filter, error) {
+func (f *AllFilter) ConstructPBFilter() (*pb.Filter, error) {
 	return &pb.Filter{
 		Name:             proto.String(filterPath + "FilterAllFilter"),
 		SerializedFilter: pb.MustMarshal(&pb.FilterAllFilter{}),
