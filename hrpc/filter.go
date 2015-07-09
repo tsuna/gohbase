@@ -376,15 +376,10 @@ func NewFirstKeyOnlyFilter() FirstKeyOnlyFilter {
 
 // ConstructPBFilter is TODO
 func (f FirstKeyOnlyFilter) ConstructPBFilter() (*pb.Filter, error) {
-	serializedFilter, err := proto.Marshal(&pb.FirstKeyOnlyFilter{})
-	if err != nil {
-		return nil, err
-	}
-	filter := &pb.Filter{
+	return &pb.Filter{
 		Name:             proto.String(filterPath + "FirstKeyOnlyFilter"),
-		SerializedFilter: serializedFilter,
-	}
-	return filter, nil
+		SerializedFilter: pb.MustMarshal(&pb.FirstKeyOnlyFilter{}),
+	}, nil
 }
 
 // FirstKeyValueMatchingQualifiersFilter is TODO
@@ -796,15 +791,10 @@ func NewFilterAllFilter() FilterAllFilter {
 
 // ConstructPBFilter is TODO
 func (f *FilterAllFilter) ConstructPBFilter() (*pb.Filter, error) {
-	serializedFilter, err := proto.Marshal(&pb.FilterAllFilter{})
-	if err != nil {
-		return nil, err
-	}
-	filter := &pb.Filter{
+	return &pb.Filter{
 		Name:             proto.String(filterPath + "FilterAllFilter"),
-		SerializedFilter: serializedFilter,
-	}
-	return filter, nil
+		SerializedFilter: pb.MustMarshal(&pb.FilterAllFilter{}),
+	}, nil
 }
 
 // RowRange is TODO
