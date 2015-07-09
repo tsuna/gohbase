@@ -7,6 +7,7 @@ package hrpc
 
 import (
 	"errors"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
 )
@@ -17,7 +18,12 @@ const filterPath = "org.apache.hadoop.hbase.filter."
 type FilterListOperator int32
 
 func (o FilterListOperator) isValid() bool {
-	return (o >= 1 && o <= 2)
+	return o >= 1 && o <= 2
+}
+
+func (o FilterListOperator) toPB() *pb.FilterList_Operator {
+	op := pb.FilterList_Operator(o)
+	return &op
 }
 
 // Constants is TODO
@@ -30,7 +36,7 @@ const (
 type CompareType int32
 
 func (c CompareType) isValid() bool {
-	return (c >= 0 && c <= 6)
+	return c >= 0 && c <= 6
 }
 
 // Constants is TODO
@@ -90,10 +96,7 @@ type Filter interface {
 
 // BytesBytesPair is a type used in FuzzyRowFilter. Want to avoid users having
 // to interact directly with the protobuf generated file so exposing here.
-type BytesBytesPair struct {
-	First  []byte
-	Second []byte
-}
+type BytesBytesPair pb.BytesBytesPair
 
 // NewBytesBytesPair is TODO
 func NewBytesBytesPair(first []byte, second []byte) *BytesBytesPair {
@@ -120,1028 +123,738 @@ func NewBytesBytesPair(first []byte, second []byte) *BytesBytesPair {
 */
 
 // FilterList is TODO
-type FilterList struct {
-	Name     string
-	Operator FilterListOperator
-	Filters  []Filter
-}
+type FilterList pb.FilterList
 
 // NewFilterList is TODO
 func NewFilterList(operator FilterListOperator, filters ...Filter) *FilterList {
-	return &FilterList{
-		Name:     filterPath + "FilterList",
-		Operator: operator,
-		Filters:  filters,
+	f := &FilterList{
+		Operator: operator.toPB(),
 	}
+	f.AddFilters(filters...)
+	return f
 }
 
 // AddFilters is TODO
 func (f *FilterList) AddFilters(filters ...Filter) {
-	f.Filters = append(f.Filters, filters...)
+	for _, filter := range filters {
+		fpb, err := filter.ConstructPBFilter()
+		if err != nil {
+			panic(err)
+		}
+		f.Filters = append(f.Filters, fpb)
+	}
 }
 
 // ConstructPBFilter is TODO
 func (f *FilterList) ConstructPBFilter() (*pb.Filter, error) {
-	if !f.Operator.isValid() {
+	if !FilterListOperator(*f.Operator).isValid() {
 		return nil, errors.New("Invalid operator specified.")
 	}
-	p := pb.FilterList_Operator(f.Operator)
-	filterArray := []*pb.Filter{}
-	for i := 0; i < len(f.Filters); i++ {
-		pbFilter, err := f.Filters[i].ConstructPBFilter()
-		if err != nil {
-			return nil, err
-		}
-		filterArray = append(filterArray, pbFilter)
-	}
-	filterList := &pb.FilterList{
-		Operator: &p,
-		Filters:  filterArray,
-	}
 
-	serializedFilter, err := proto.Marshal(filterList)
+	serializedFilter, err := proto.Marshal((*pb.FilterList)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "FilterList"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // ColumnCountGetFilter is TODO
-type ColumnCountGetFilter struct {
-	Name  string
-	Limit int32
-}
+type ColumnCountGetFilter pb.ColumnCountGetFilter
 
 // NewColumnCountGetFilter is TODO
 func NewColumnCountGetFilter(limit int32) *ColumnCountGetFilter {
 	return &ColumnCountGetFilter{
-		Name:  filterPath + "ColumnCountGetFilter",
-		Limit: limit,
+		Limit: proto.Int32(limit),
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *ColumnCountGetFilter) ConstructPBFilter() (*pb.Filter, error) {
-	internalFilter := &pb.ColumnCountGetFilter{
-		Limit: &f.Limit,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.ColumnCountGetFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "ColumnCountGetFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // ColumnPaginationFilter is TODO
-type ColumnPaginationFilter struct {
-	Name         string
-	Limit        int32
-	Offset       int32
-	ColumnOffset []byte
-}
+type ColumnPaginationFilter pb.ColumnPaginationFilter
 
 // NewColumnPaginationFilter is TODO
 func NewColumnPaginationFilter(limit, offset int32, columnOffset []byte) *ColumnPaginationFilter {
 	return &ColumnPaginationFilter{
-		Name:         filterPath + "ColumnPaginationFilter",
-		Limit:        limit,
-		Offset:       offset,
+		Limit:        proto.Int32(limit),
+		Offset:       proto.Int32(offset),
 		ColumnOffset: columnOffset,
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *ColumnPaginationFilter) ConstructPBFilter() (*pb.Filter, error) {
-	internalFilter := &pb.ColumnPaginationFilter{
-		Limit:        &f.Limit,
-		Offset:       &f.Offset,
-		ColumnOffset: f.ColumnOffset,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.ColumnPaginationFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "ColumnPaginationFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // ColumnPrefixFilter is TODO
-type ColumnPrefixFilter struct {
-	Name   string
-	Prefix []byte
-}
+type ColumnPrefixFilter pb.ColumnPrefixFilter
 
 // NewColumnPrefixFilter is TODO
 func NewColumnPrefixFilter(prefix []byte) *ColumnPrefixFilter {
 	return &ColumnPrefixFilter{
-		Name:   filterPath + "ColumnPrefixFilter",
 		Prefix: prefix,
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *ColumnPrefixFilter) ConstructPBFilter() (*pb.Filter, error) {
-	internalFilter := &pb.ColumnPrefixFilter{
-		Prefix: f.Prefix,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.ColumnPrefixFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "ColumnPrefixFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // ColumnRangeFilter is TODO
-type ColumnRangeFilter struct {
-	Name               string
-	MinColumn          []byte
-	MinColumnInclusive bool
-	MaxColumn          []byte
-	MaxColumnInclusive bool
-}
+type ColumnRangeFilter pb.ColumnRangeFilter
 
 // NewColumnRangeFilter is TODO
 func NewColumnRangeFilter(minColumn, maxColumn []byte,
 	minColumnInclusive, maxColumnInclusive bool) *ColumnRangeFilter {
 	return &ColumnRangeFilter{
-		Name:               filterPath + "ColumnRangeFilter",
 		MinColumn:          minColumn,
 		MaxColumn:          maxColumn,
-		MinColumnInclusive: minColumnInclusive,
-		MaxColumnInclusive: maxColumnInclusive,
+		MinColumnInclusive: proto.Bool(minColumnInclusive),
+		MaxColumnInclusive: proto.Bool(maxColumnInclusive),
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *ColumnRangeFilter) ConstructPBFilter() (*pb.Filter, error) {
-	internalFilter := &pb.ColumnRangeFilter{
-		MinColumn:          f.MinColumn,
-		MinColumnInclusive: &f.MinColumnInclusive,
-		MaxColumn:          f.MaxColumn,
-		MaxColumnInclusive: &f.MaxColumnInclusive,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.ColumnRangeFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "ColumnRangeFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // CompareFilter is TODO
-type CompareFilter struct {
-	Name          string
-	CompareOp     CompareType
-	ComparatorObj Comparator
-}
+type CompareFilter pb.CompareFilter
 
 // NewCompareFilter is TODO
 func NewCompareFilter(compareOp CompareType, comparatorObj Comparator) *CompareFilter {
-	return &CompareFilter{
-		Name:          filterPath + "CompareFilter",
-		CompareOp:     compareOp,
-		ComparatorObj: comparatorObj,
-	}
-}
-
-// ConstructPB is TODO
-func (f *CompareFilter) ConstructPB() (*pb.CompareFilter, error) {
-	if !f.CompareOp.isValid() {
-		return nil, errors.New("Invalid compare operation specified.")
-	}
-	p := pb.CompareType(f.CompareOp)
-	pbComparatorObj, err := f.ComparatorObj.ConstructPBComparator()
+	op := pb.CompareType(compareOp)
+	obj, err := comparatorObj.ConstructPBComparator()
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
-
-	internalFilter := &pb.CompareFilter{
-		CompareOp:  &p,
-		Comparator: pbComparatorObj,
+	return &CompareFilter{
+		CompareOp:  &op,
+		Comparator: obj,
 	}
-	return internalFilter, nil
 }
 
 // ConstructPBFilter is TODO
 func (f *CompareFilter) ConstructPBFilter() (*pb.Filter, error) {
-	internalFilter, err := f.ConstructPB()
-	if err != nil {
-		return nil, err
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.CompareFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "CompareFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // DependentColumnFilter is TODO
-type DependentColumnFilter struct {
-	Name                string
-	CompareFilterObj    CompareFilter
-	ColumnFamily        []byte
-	ColumnQualifier     []byte
-	DropDependentColumn bool
-}
+type DependentColumnFilter pb.DependentColumnFilter
 
 // NewDependentColumnFilter is TODO
-func NewDependentColumnFilter(compareFilter CompareFilter, columnFamily, columnQualifier []byte,
+func NewDependentColumnFilter(compareFilter *CompareFilter, columnFamily, columnQualifier []byte,
 	dropDependentColumn bool) *DependentColumnFilter {
 	return &DependentColumnFilter{
-		Name:                filterPath + "DependentColumnFilter",
-		CompareFilterObj:    compareFilter,
+		CompareFilter:       (*pb.CompareFilter)(compareFilter),
 		ColumnFamily:        columnFamily,
 		ColumnQualifier:     columnQualifier,
-		DropDependentColumn: dropDependentColumn,
+		DropDependentColumn: proto.Bool(dropDependentColumn),
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *DependentColumnFilter) ConstructPBFilter() (*pb.Filter, error) {
-	pbCompareFilterObj, err := f.CompareFilterObj.ConstructPB()
-	if err != nil {
-		return nil, err
-	}
-	internalFilter := &pb.DependentColumnFilter{
-		CompareFilter:       pbCompareFilterObj,
-		ColumnFamily:        f.ColumnFamily,
-		ColumnQualifier:     f.ColumnQualifier,
-		DropDependentColumn: &f.DropDependentColumn,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.DependentColumnFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "DependentColumnFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // FamilyFilter is TODO
-type FamilyFilter struct {
-	Name             string
-	CompareFilterObj CompareFilter
-}
+type FamilyFilter pb.FamilyFilter
 
 // NewFamilyFilter is TODO
-func NewFamilyFilter(compareFilter CompareFilter) *FamilyFilter {
+func NewFamilyFilter(compareFilter *CompareFilter) *FamilyFilter {
 	return &FamilyFilter{
-		Name:             filterPath + "FamilyFilter",
-		CompareFilterObj: compareFilter,
+		CompareFilter: (*pb.CompareFilter)(compareFilter),
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *FamilyFilter) ConstructPBFilter() (*pb.Filter, error) {
-	pbCompareFilterObj, err := f.CompareFilterObj.ConstructPB()
-	if err != nil {
-		return nil, err
-	}
-	internalFilter := &pb.FamilyFilter{
-		CompareFilter: pbCompareFilterObj,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.FamilyFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "FamilyFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // FilterWrapper is TODO
-type FilterWrapper struct {
-	Name          string
-	WrappedFilter Filter
-}
+type FilterWrapper pb.FilterWrapper
 
 // NewFilterWrapper is TODO
 func NewFilterWrapper(wrappedFilter Filter) *FilterWrapper {
+	f, err := wrappedFilter.ConstructPBFilter()
+	if err != nil {
+		panic(err)
+	}
 	return &FilterWrapper{
-		Name:          filterPath + "FilterWrapper",
-		WrappedFilter: wrappedFilter,
+		Filter: f,
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *FilterWrapper) ConstructPBFilter() (*pb.Filter, error) {
-	wrappedFilter, err := f.WrappedFilter.ConstructPBFilter()
-	if err != nil {
-		return nil, err
-	}
-	internalFilter := &pb.FilterWrapper{
-		Filter: wrappedFilter,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.FilterWrapper)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "FilterWrapper"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // FirstKeyOnlyFilter is TODO
-type FirstKeyOnlyFilter struct {
-	Name string
-}
+type FirstKeyOnlyFilter struct{}
 
 // NewFirstKeyOnlyFilter is TODO
-func NewFirstKeyOnlyFilter() *FirstKeyOnlyFilter {
-	return &FirstKeyOnlyFilter{
-		Name: filterPath + "FirstKeyOnlyFilter",
-	}
+func NewFirstKeyOnlyFilter() FirstKeyOnlyFilter {
+	return FirstKeyOnlyFilter{}
 }
 
 // ConstructPBFilter is TODO
-func (f *FirstKeyOnlyFilter) ConstructPBFilter() (*pb.Filter, error) {
-	internalFilter := &pb.FirstKeyOnlyFilter{}
-	serializedFilter, err := proto.Marshal(internalFilter)
+func (f FirstKeyOnlyFilter) ConstructPBFilter() (*pb.Filter, error) {
+	serializedFilter, err := proto.Marshal(&pb.FirstKeyOnlyFilter{})
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "FirstKeyOnlyFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // FirstKeyValueMatchingQualifiersFilter is TODO
-type FirstKeyValueMatchingQualifiersFilter struct {
-	Name       string
-	Qualifiers [][]byte
-}
+type FirstKeyValueMatchingQualifiersFilter pb.FirstKeyValueMatchingQualifiersFilter
 
 // NewFirstKeyValueMatchingQualifiersFilter is TODO
 func NewFirstKeyValueMatchingQualifiersFilter(qualifiers [][]byte) *FirstKeyValueMatchingQualifiersFilter {
 	return &FirstKeyValueMatchingQualifiersFilter{
-		Name:       filterPath + "FirstKeyValueMatchingQualifiersFilter",
 		Qualifiers: qualifiers,
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *FirstKeyValueMatchingQualifiersFilter) ConstructPBFilter() (*pb.Filter, error) {
-	internalFilter := &pb.FirstKeyValueMatchingQualifiersFilter{
-		Qualifiers: f.Qualifiers,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.FirstKeyValueMatchingQualifiersFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "FirstKeyValueMatchingQualifiersFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // FuzzyRowFilter is TODO
-type FuzzyRowFilter struct {
-	Name          string
-	FuzzyKeysData []*BytesBytesPair
-}
+type FuzzyRowFilter pb.FuzzyRowFilter
 
 // NewFuzzyRowFilter is TODO
 func NewFuzzyRowFilter(pairs []*BytesBytesPair) *FuzzyRowFilter {
+	p := make([]*pb.BytesBytesPair, len(pairs))
+	for i, pair := range pairs {
+		p[i] = (*pb.BytesBytesPair)(pair)
+	}
 	return &FuzzyRowFilter{
-		Name:          filterPath + "FuzzyRowFilter",
-		FuzzyKeysData: pairs,
+		FuzzyKeysData: p,
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *FuzzyRowFilter) ConstructPBFilter() (*pb.Filter, error) {
-	var pbFuzzyKeysData []*pb.BytesBytesPair
-	for i := 0; i < len(f.FuzzyKeysData); i++ {
-		pbPair := &pb.BytesBytesPair{
-			First:  f.FuzzyKeysData[i].First,
-			Second: f.FuzzyKeysData[i].Second,
-		}
-		pbFuzzyKeysData = append(pbFuzzyKeysData, pbPair)
-	}
-
-	internalFilter := &pb.FuzzyRowFilter{
-		FuzzyKeysData: pbFuzzyKeysData,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.FuzzyRowFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "FuzzyRowFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // InclusiveStopFilter is TODO
-type InclusiveStopFilter struct {
-	Name       string
-	StopRowKey []byte
-}
+type InclusiveStopFilter pb.InclusiveStopFilter
 
 // NewInclusiveStopFilter is TODO
 func NewInclusiveStopFilter(stopRowKey []byte) *InclusiveStopFilter {
 	return &InclusiveStopFilter{
-		Name:       filterPath + "InclusiveStopFilter",
 		StopRowKey: stopRowKey,
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *InclusiveStopFilter) ConstructPBFilter() (*pb.Filter, error) {
-	internalFilter := &pb.InclusiveStopFilter{
-		StopRowKey: f.StopRowKey,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.InclusiveStopFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "InclusiveStopFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // KeyOnlyFilter is TODO
-type KeyOnlyFilter struct {
-	Name     string
-	LenAsVal bool
-}
+type KeyOnlyFilter pb.KeyOnlyFilter
 
 // NewKeyOnlyFilter is TODO
 func NewKeyOnlyFilter(lenAsVal bool) *KeyOnlyFilter {
 	return &KeyOnlyFilter{
-		Name:     filterPath + "KeyOnlyFilter",
-		LenAsVal: lenAsVal,
+		LenAsVal: proto.Bool(lenAsVal),
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *KeyOnlyFilter) ConstructPBFilter() (*pb.Filter, error) {
-	internalFilter := &pb.KeyOnlyFilter{
-		LenAsVal: &f.LenAsVal,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.KeyOnlyFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "KeyOnlyFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // MultipleColumnPrefixFilter is TODO
-type MultipleColumnPrefixFilter struct {
-	Name           string
-	SortedPrefixes [][]byte
-}
+type MultipleColumnPrefixFilter pb.MultipleColumnPrefixFilter
 
 // NewMultipleColumnPrefixFilter is TODO
 func NewMultipleColumnPrefixFilter(sortedPrefixes [][]byte) *MultipleColumnPrefixFilter {
 	return &MultipleColumnPrefixFilter{
-		Name:           filterPath + "MultipleColumnPrefixFilter",
 		SortedPrefixes: sortedPrefixes,
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *MultipleColumnPrefixFilter) ConstructPBFilter() (*pb.Filter, error) {
-	internalFilter := &pb.MultipleColumnPrefixFilter{
-		SortedPrefixes: f.SortedPrefixes,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.MultipleColumnPrefixFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "MultipleColumnPrefixFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // PageFilter is TODO
-type PageFilter struct {
-	Name     string
-	PageSize int64
-}
+type PageFilter pb.PageFilter
 
 // NewPageFilter is TODO
 func NewPageFilter(pageSize int64) *PageFilter {
 	return &PageFilter{
-		Name:     filterPath + "PageFilter",
-		PageSize: pageSize,
+		PageSize: proto.Int64(pageSize),
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *PageFilter) ConstructPBFilter() (*pb.Filter, error) {
-	internalFilter := &pb.PageFilter{
-		PageSize: &f.PageSize,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.PageFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "PageFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // PrefixFilter is TODO
-type PrefixFilter struct {
-	Name   string
-	Prefix []byte
-}
+type PrefixFilter pb.PrefixFilter
 
 // NewPrefixFilter is TODO
 func NewPrefixFilter(prefix []byte) *PrefixFilter {
 	return &PrefixFilter{
-		Name:   filterPath + "PrefixFilter",
 		Prefix: prefix,
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *PrefixFilter) ConstructPBFilter() (*pb.Filter, error) {
-	internalFilter := &pb.PrefixFilter{
-		Prefix: f.Prefix,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.PrefixFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "PrefixFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // QualifierFilter is TODO
-type QualifierFilter struct {
-	Name             string
-	CompareFilterObj CompareFilter
-}
+type QualifierFilter pb.QualifierFilter
 
 // NewQualifierFilter is TODO
-func NewQualifierFilter(compareFilter CompareFilter) *QualifierFilter {
+func NewQualifierFilter(compareFilter *CompareFilter) *QualifierFilter {
 	return &QualifierFilter{
-		Name:             filterPath + "QualifierFilter",
-		CompareFilterObj: compareFilter,
+		CompareFilter: (*pb.CompareFilter)(compareFilter),
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *QualifierFilter) ConstructPBFilter() (*pb.Filter, error) {
-	pbCompareFilterObj, err := f.CompareFilterObj.ConstructPB()
-	if err != nil {
-		return nil, err
-	}
-	internalFilter := &pb.QualifierFilter{
-		CompareFilter: pbCompareFilterObj,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.QualifierFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "QualifierFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // RandomRowFilter is TODO
-type RandomRowFilter struct {
-	Name   string
-	Chance float32
-}
+type RandomRowFilter pb.RandomRowFilter
 
 // NewRandomRowFilter is TODO
 func NewRandomRowFilter(chance float32) *RandomRowFilter {
 	return &RandomRowFilter{
-		Name:   filterPath + "RandomRowFilter",
-		Chance: chance,
+		Chance: proto.Float32(chance),
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *RandomRowFilter) ConstructPBFilter() (*pb.Filter, error) {
-	internalFilter := &pb.RandomRowFilter{
-		Chance: &f.Chance,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.RandomRowFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "RandomRowFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // RowFilter is TODO
-type RowFilter struct {
-	Name             string
-	CompareFilterObj CompareFilter
-}
+type RowFilter pb.RowFilter
 
 // NewRowFilter is TODO
-func NewRowFilter(compareFilter CompareFilter) *RowFilter {
+func NewRowFilter(compareFilter *CompareFilter) *RowFilter {
 	return &RowFilter{
-		Name:             filterPath + "RowFilter",
-		CompareFilterObj: compareFilter,
+		CompareFilter: (*pb.CompareFilter)(compareFilter),
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *RowFilter) ConstructPBFilter() (*pb.Filter, error) {
-	pbCompareFilterObj, err := f.CompareFilterObj.ConstructPB()
-	if err != nil {
-		return nil, err
-	}
-	internalFilter := &pb.RowFilter{
-		CompareFilter: pbCompareFilterObj,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.RowFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "RowFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // SingleColumnValueFilter is TODO
-type SingleColumnValueFilter struct {
-	Name              string
-	ColumnFamily      []byte
-	ColumnQualifier   []byte
-	CompareOp         CompareType
-	ComparatorObj     Comparator
-	FilterIfMissing   bool
-	LatestVersionOnly bool
-}
+type SingleColumnValueFilter pb.SingleColumnValueFilter
 
 // NewSingleColumnValueFilter is TODO
 func NewSingleColumnValueFilter(columnFamily, columnQualifier []byte, compareOp CompareType,
 	comparatorObj Comparator, filterIfMissing, latestVersionOnly bool) *SingleColumnValueFilter {
+	obj, err := comparatorObj.ConstructPBComparator()
+	if err != nil {
+		panic(err)
+	}
 	return &SingleColumnValueFilter{
-		Name:              filterPath + "SingleColumnValueFilter",
 		ColumnFamily:      columnFamily,
 		ColumnQualifier:   columnQualifier,
-		CompareOp:         compareOp,
-		ComparatorObj:     comparatorObj,
-		FilterIfMissing:   filterIfMissing,
-		LatestVersionOnly: latestVersionOnly,
+		CompareOp:         (*pb.CompareType)(&compareOp),
+		Comparator:        obj,
+		FilterIfMissing:   proto.Bool(filterIfMissing),
+		LatestVersionOnly: proto.Bool(latestVersionOnly),
 	}
 }
 
 // ConstructPB is TODO
 func (f *SingleColumnValueFilter) ConstructPB() (*pb.SingleColumnValueFilter, error) {
-	if !f.CompareOp.isValid() {
+	if !CompareType(*f.CompareOp).isValid() {
 		return nil, errors.New("Invalid compare operation specified.")
 	}
-	p := pb.CompareType(f.CompareOp)
-	pbComparatorObj, err := f.ComparatorObj.ConstructPBComparator()
-	if err != nil {
-		return nil, err
-	}
 
-	internalFilter := &pb.SingleColumnValueFilter{
-		ColumnFamily:      f.ColumnFamily,
-		ColumnQualifier:   f.ColumnQualifier,
-		CompareOp:         &p,
-		Comparator:        pbComparatorObj,
-		FilterIfMissing:   &f.FilterIfMissing,
-		LatestVersionOnly: &f.LatestVersionOnly,
-	}
-	return internalFilter, nil
+	return (*pb.SingleColumnValueFilter)(f), nil
 }
 
 // ConstructPBFilter is TODO
 func (f *SingleColumnValueFilter) ConstructPBFilter() (*pb.Filter, error) {
-	internalFilter, err := f.ConstructPB()
-	if err != nil {
-		return nil, err
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.SingleColumnValueFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "SingleColumnValueFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // SingleColumnValueExcludeFilter is TODO
-type SingleColumnValueExcludeFilter struct {
-	Name                       string
-	SingleColumnValueFilterObj SingleColumnValueFilter
-}
+type SingleColumnValueExcludeFilter pb.SingleColumnValueExcludeFilter
 
 // NewSingleColumnValueExcludeFilter is TODO
-func NewSingleColumnValueExcludeFilter(filter SingleColumnValueFilter) *SingleColumnValueExcludeFilter {
+func NewSingleColumnValueExcludeFilter(filter *SingleColumnValueFilter) *SingleColumnValueExcludeFilter {
 	return &SingleColumnValueExcludeFilter{
-		Name: filterPath + "SingleColumnValueExcludeFilter",
-		SingleColumnValueFilterObj: filter,
+		SingleColumnValueFilter: (*pb.SingleColumnValueFilter)(filter),
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *SingleColumnValueExcludeFilter) ConstructPBFilter() (*pb.Filter, error) {
-	pbFilter, err := f.SingleColumnValueFilterObj.ConstructPB()
-	if err != nil {
-		return nil, err
-	}
-	internalFilter := &pb.SingleColumnValueExcludeFilter{
-		SingleColumnValueFilter: pbFilter,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.SingleColumnValueExcludeFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "SingleColumnValueExcludeFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // SkipFilter is TODO
-type SkipFilter struct {
-	Name           string
-	SkippingFilter Filter
-}
+type SkipFilter pb.SkipFilter
 
 // NewSkipFilter is TODO
 func NewSkipFilter(skippingFilter Filter) *SkipFilter {
+	f, err := skippingFilter.ConstructPBFilter()
+	if err != nil {
+		panic(err)
+	}
 	return &SkipFilter{
-		Name:           filterPath + "SkipFilter",
-		SkippingFilter: skippingFilter,
+		Filter: f,
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *SkipFilter) ConstructPBFilter() (*pb.Filter, error) {
-	pbFilter, err := f.SkippingFilter.ConstructPBFilter()
-	if err != nil {
-		return nil, err
-	}
-	internalFilter := &pb.SkipFilter{
-		Filter: pbFilter,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.SkipFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "SkipFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // TimestampsFilter is TODO
-type TimestampsFilter struct {
-	Name       string
-	Timestamps []int64
-}
+type TimestampsFilter pb.TimestampsFilter
 
 // NewTimestampsFilter is TODO
 func NewTimestampsFilter(timestamps []int64) *TimestampsFilter {
 	return &TimestampsFilter{
-		Name:       filterPath + "TimestampsFilter",
 		Timestamps: timestamps,
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *TimestampsFilter) ConstructPBFilter() (*pb.Filter, error) {
-	internalFilter := &pb.TimestampsFilter{
-		Timestamps: f.Timestamps,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.TimestampsFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "TimestampsFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // ValueFilter is TODO
-type ValueFilter struct {
-	Name             string
-	CompareFilterObj CompareFilter
-}
+type ValueFilter pb.ValueFilter
 
 // NewValueFilter is TODO
-func NewValueFilter(compareFilter CompareFilter) *ValueFilter {
+func NewValueFilter(compareFilter *CompareFilter) *ValueFilter {
 	return &ValueFilter{
-		Name:             filterPath + "ValueFilter",
-		CompareFilterObj: compareFilter,
+		CompareFilter: (*pb.CompareFilter)(compareFilter),
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *ValueFilter) ConstructPBFilter() (*pb.Filter, error) {
-	pbCompareFilterObj, err := f.CompareFilterObj.ConstructPB()
-	if err != nil {
-		return nil, err
-	}
-	internalFilter := &pb.ValueFilter{
-		CompareFilter: pbCompareFilterObj,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.ValueFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "ValueFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // WhileMatchFilter is TODO
-type WhileMatchFilter struct {
-	Name           string
-	MatchingFilter Filter
-}
+type WhileMatchFilter pb.WhileMatchFilter
 
 // NewWhileMatchFilter is TODO
 func NewWhileMatchFilter(matchingFilter Filter) *WhileMatchFilter {
+	f, err := matchingFilter.ConstructPBFilter()
+	if err != nil {
+		panic(err)
+	}
 	return &WhileMatchFilter{
-		Name:           filterPath + "WhileMatchFilter",
-		MatchingFilter: matchingFilter,
+		Filter: f,
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *WhileMatchFilter) ConstructPBFilter() (*pb.Filter, error) {
-	pbFilter, err := f.MatchingFilter.ConstructPBFilter()
-	if err != nil {
-		return nil, err
-	}
-	internalFilter := &pb.WhileMatchFilter{
-		Filter: pbFilter,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.WhileMatchFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "WhileMatchFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // FilterAllFilter is TODO
-type FilterAllFilter struct {
-	Name string
-}
+type FilterAllFilter struct{}
 
 // NewFilterAllFilter is TODO
-func NewFilterAllFilter() *FilterAllFilter {
-	return &FilterAllFilter{
-		Name: filterPath + "FilterAllFilter",
-	}
+func NewFilterAllFilter() FilterAllFilter {
+	return FilterAllFilter{}
 }
 
 // ConstructPBFilter is TODO
 func (f *FilterAllFilter) ConstructPBFilter() (*pb.Filter, error) {
-	internalFilter := &pb.FilterAllFilter{}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal(&pb.FilterAllFilter{})
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "FilterAllFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // RowRange is TODO
-type RowRange struct {
-	Name              string
-	StartRow          []byte
-	StartRowInclusive bool
-	StopRow           []byte
-	StopRowInclusive  bool
-}
+type RowRange pb.RowRange
 
 // NewRowRange is TODO
 func NewRowRange(startRow, stopRow []byte, startRowInclusive, stopRowInclusive bool) *RowRange {
 	return &RowRange{
-		Name:              filterPath + "RowRange",
 		StartRow:          startRow,
-		StartRowInclusive: startRowInclusive,
+		StartRowInclusive: proto.Bool(startRowInclusive),
 		StopRow:           stopRow,
-		StopRowInclusive:  stopRowInclusive,
+		StopRowInclusive:  proto.Bool(stopRowInclusive),
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *RowRange) ConstructPBFilter() (*pb.Filter, error) {
-	internalFilter := &pb.RowRange{
-		StartRow:          f.StartRow,
-		StartRowInclusive: &f.StartRowInclusive,
-		StopRow:           f.StopRow,
-		StopRowInclusive:  &f.StopRowInclusive,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.RowRange)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "RowRange"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
 }
 
 // MultiRowRangeFilter is TODO
-type MultiRowRangeFilter struct {
-	Name         string
-	RowRangeList []*RowRange
-}
+type MultiRowRangeFilter pb.MultiRowRangeFilter
 
 // NewMultiRowRangeFilter is TODO
 func NewMultiRowRangeFilter(rowRangeList []*RowRange) *MultiRowRangeFilter {
+	rangeList := make([]*pb.RowRange, len(rowRangeList))
+	for i, rr := range rowRangeList {
+		rangeList[i] = (*pb.RowRange)(rr)
+	}
 	return &MultiRowRangeFilter{
-		Name:         filterPath + "MultiRowRange",
-		RowRangeList: rowRangeList,
+		RowRangeList: rangeList,
 	}
 }
 
 // ConstructPBFilter is TODO
 func (f *MultiRowRangeFilter) ConstructPBFilter() (*pb.Filter, error) {
-	var pbRowRangeList []*pb.RowRange
-	for i := 0; i < len(f.RowRangeList); i++ {
-		pbRowRange := &pb.RowRange{
-			StartRow:          f.RowRangeList[i].StartRow,
-			StartRowInclusive: &f.RowRangeList[i].StartRowInclusive,
-			StopRow:           f.RowRangeList[i].StopRow,
-			StopRowInclusive:  &f.RowRangeList[i].StopRowInclusive,
-		}
-		pbRowRangeList = append(pbRowRangeList, pbRowRange)
-	}
-	internalFilter := &pb.MultiRowRangeFilter{
-		RowRangeList: pbRowRangeList,
-	}
-	serializedFilter, err := proto.Marshal(internalFilter)
+	serializedFilter, err := proto.Marshal((*pb.MultiRowRangeFilter)(f))
 	if err != nil {
 		return nil, err
 	}
 	filter := &pb.Filter{
-		Name:             &f.Name,
+		Name:             proto.String(filterPath + "MultiRowRangeFilter"),
 		SerializedFilter: serializedFilter,
 	}
 	return filter, nil
