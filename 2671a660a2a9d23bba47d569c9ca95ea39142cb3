@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9ad9bd40_16e30506",
+        "filename": "hrpc/get.go",
+        "patchSetId": 2
+      },
+      "lineNbr": 45,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-09T23:05:19Z",
+      "side": 1,
+      "message": "The context should be mandatory, so we should accept it as a the first argument instead of making it optional.",
+      "revId": "2671a660a2a9d23bba47d569c9ca95ea39142cb3",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
