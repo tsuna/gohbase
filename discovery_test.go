@@ -8,6 +8,7 @@ package gohbase
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/regioninfo"
@@ -24,7 +25,7 @@ func TestRegionDiscovery(t *testing.T) {
 	// Stub out how we create new regions.
 	savedNewRegion := newRegion
 	defer func() { newRegion = savedNewRegion }()
-	newRegion = func(res chan newRegResult, host string, port uint16) {
+	newRegion = func(res chan newRegResult, host string, port uint16, queueSize int, queueTimeout time.Duration) {
 		res <- newRegResult{nil, nil}
 	}
 
