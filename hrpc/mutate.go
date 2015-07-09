@@ -6,7 +6,9 @@
 package hrpc
 
 import (
+	"errors"
 	"github.com/golang/protobuf/proto"
+	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
 	"golang.org/x/net/context"
 )
@@ -66,8 +68,8 @@ func NewIncStr(ctx context.Context, table, key string, values map[string]map[str
 	return m
 }
 
-// Name returns the name of this RPC call.
-func (m *Mutate) Name() string {
+// GetName returns the name of this RPC call.
+func (m *Mutate) GetName() string {
 	return "Mutate"
 }
 
@@ -115,4 +117,18 @@ func (m *Mutate) Serialize() ([]byte, error) {
 // RPC.
 func (m *Mutate) NewResponse() proto.Message {
 	return &pb.MutateResponse{}
+}
+
+// SetFilter always returns an error when used on Mutate objects. Do not use.
+// Exists solely so Mutate can implement the Call interface.
+func (m *Mutate) SetFilter(ft filter.Filter) error {
+	// Not allowed. Throw an error
+	return errors.New("Cannot set filter on mutate operation.")
+}
+
+// SetFamilies always returns an error when used on Mutate objects. Do not use.
+// Exists solely so Mutate can implement the Call interface.
+func (m *Mutate) SetFamilies(fam map[string][]string) error {
+	// Not allowed. Throw an error
+	return errors.New("Cannot set families on mutate operation.")
 }

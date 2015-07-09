@@ -7,6 +7,7 @@ package hrpc
 
 import (
 	"github.com/golang/protobuf/proto"
+	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/regioninfo"
 	"golang.org/x/net/context"
@@ -20,7 +21,7 @@ type Call interface {
 
 	GetRegion() *regioninfo.Info
 	SetRegion(region *regioninfo.Info)
-	Name() string
+	GetName() string
 	Serialize() ([]byte, error)
 	// Returns a newly created (default-state) protobuf in which to store the
 	// response of this call.
@@ -28,7 +29,11 @@ type Call interface {
 
 	GetResultChan() chan RPCResult
 
-	Context() context.Context
+	GetContext() context.Context
+	SetContext(ctx context.Context) error
+
+	SetFamilies(fam map[string][]string) error
+	SetFilter(ft filter.Filter) error
 }
 
 // RPCResult is struct that will contain both the resulting message from an RPC
@@ -51,8 +56,13 @@ type base struct {
 	ctx context.Context
 }
 
-func (b *base) Context() context.Context {
+func (b *base) GetContext() context.Context {
 	return b.ctx
+}
+
+func (b *base) SetContext(ctx context.Context) error {
+	b.ctx = ctx
+	return nil
 }
 
 func (b *base) GetRegion() *regioninfo.Info {
@@ -87,4 +97,18 @@ func (b *base) GetResultChan() chan RPCResult {
 		b.resultch = make(chan RPCResult, 1)
 	}
 	return b.resultch
+}
+
+// Families is used as a parameter for request creation. Adds families constraint to a request.
+func Families(fam map[string][]string) func(Call) error {
+	return func(g Call) error {
+		return g.SetFamilies(fam)
+	}
+}
+
+// Filters is used as a parameter for request creation. Adds filters constraint to a request.
+func Filters(fl filter.Filter) func(Call) error {
+	return func(g Call) error {
+		return g.SetFilter(fl)
+	}
 }
