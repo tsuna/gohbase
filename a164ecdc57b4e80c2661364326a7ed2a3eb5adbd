@@ -50,6 +50,24 @@
       "revId": "a164ecdc57b4e80c2661364326a7ed2a3eb5adbd",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_037d891c",
+        "filename": "integration_test.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 262,
+      "author": {
+        "id": 1005314
+      },
+      "writtenOn": "2015-07-09T20:45:53Z",
+      "side": 1,
+      "message": "This test was failing sometimes on my laptop, due to the tests running so fast that the timestamp between two requests was equal.",
+      "parentUuid": "9ad9bd40_83d19959",
+      "revId": "a164ecdc57b4e80c2661364326a7ed2a3eb5adbd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
     }
   ]
 }
