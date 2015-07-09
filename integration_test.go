@@ -14,6 +14,7 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/tsuna/gohbase"
 	"github.com/tsuna/gohbase/test"
@@ -102,7 +103,7 @@ func TestGetBadColumnFamily(t *testing.T) {
 
 func TestGetMultipleCells(t *testing.T) {
 	key := "row1.75"
-	c := gohbase.NewClient(*host)
+	c := gohbase.NewClient(*host, gohbase.RpcQueueTimeout(time.Millisecond*2))
 	err := insertKeyValue(c, key, "cf", []byte("cf"))
 	if err != nil {
 		t.Errorf("Put returned an error: %v", err)
@@ -258,6 +259,7 @@ func TestTimestampIncreasing(t *testing.T) {
 				oldTime, newTime)
 		}
 		oldTime = newTime
+		time.Sleep(time.Millisecond)
 	}
 }
 

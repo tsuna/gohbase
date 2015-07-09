@@ -59,10 +59,13 @@ type Client struct {
 	// a response is received it can be tied to the correct RPC
 	sentRPCs      map[uint32]hrpc.Call
 	sentRPCsMutex *sync.Mutex
+
+	rpcQueueSize    int
+	rpcQueueTimeout time.Duration
 }
 
 // NewClient creates a new RegionClient.
-func NewClient(host string, port uint16) (*Client, error) {
+func NewClient(host string, port uint16, queueSize int, queueTimeout time.Duration) (*Client, error) {
 	addr := fmt.Sprintf("%s:%d", host, port)
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
@@ -70,13 +73,15 @@ func NewClient(host string, port uint16) (*Client, error) {
 			fmt.Errorf("failed to connect to the RegionServer at %s: %s", addr, err)
 	}
 	c := &Client{
-		conn:          conn,
-		host:          host,
-		port:          port,
-		writeMutex:    &sync.Mutex{},
-		process:       make(chan struct{}),
-		sentRPCsMutex: &sync.Mutex{},
-		sentRPCs:      make(map[uint32]hrpc.Call),
+		conn:            conn,
+		host:            host,
+		port:            port,
+		writeMutex:      &sync.Mutex{},
+		process:         make(chan struct{}),
+		sentRPCsMutex:   &sync.Mutex{},
+		sentRPCs:        make(map[uint32]hrpc.Call),
+		rpcQueueSize:    queueSize,
+		rpcQueueTimeout: queueTimeout,
 	}
 	err = c.sendHello()
 	if err != nil {
@@ -94,8 +99,7 @@ func (c *Client) processRpcs() {
 		}
 
 		select {
-		// TODO: make this value configurable
-		case <-time.After(time.Millisecond * 100):
+		case <-time.After(c.rpcQueueTimeout):
 			c.writeMutex.Lock()
 		case <-c.process:
 			// We don't acquire the lock here, because the thread that sent
@@ -294,7 +298,7 @@ func (c *Client) QueueRPC(rpc hrpc.Call) error {
 	}
 	c.writeMutex.Lock()
 	c.rpcs = append(c.rpcs, rpc)
-	if len(c.rpcs) > 100 { //TODO: make configurable or pick a good number
+	if len(c.rpcs) > c.rpcQueueSize {
 		c.process <- struct{}{}
 		// We don't release the lock here, because we want to transfer ownership
 		// of the lock to the goroutine that processes the RPCs

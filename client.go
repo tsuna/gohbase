@@ -44,6 +44,8 @@ var (
 	ErrDeadline = errors.New("deadline exceeded")
 )
 
+type Option func(*Client)
+
 // region -> client cache.
 type regionClientCache struct {
 	m sync.Mutex
@@ -117,14 +119,42 @@ type Client struct {
 	metaClient *region.Client
 
 	zkquorum string
+
+	// The maximum size of the RPC queue in the region client
+	rpcQueueSize int
+
+	// The timeout before flushing the RPC queue in the region client
+	rpcQueueTimeout time.Duration
 }
 
 // NewClient creates a new HBase client.
-func NewClient(zkquorum string) *Client {
-	return &Client{
-		regions:  keyRegionCache{regions: b.TreeNew(regioninfo.CompareGeneric)},
-		clients:  regionClientCache{clients: make(map[*regioninfo.Info]*region.Client)},
-		zkquorum: zkquorum,
+func NewClient(zkquorum string, options ...Option) *Client {
+	c := Client{
+		regions:         keyRegionCache{regions: b.TreeNew(regioninfo.CompareGeneric)},
+		clients:         regionClientCache{clients: make(map[*regioninfo.Info]*region.Client)},
+		zkquorum:        zkquorum,
+		rpcQueueSize:    100,
+		rpcQueueTimeout: 20,
+	}
+	for _, option := range options {
+		option(&c)
+	}
+	return &c
+}
+
+// RpcQueueSize will return an option that will set the size of the RPC queues
+// used in a given client
+func RpcQueueSize(size int) Option {
+	return func(c *Client) {
+		c.rpcQueueSize = size
+	}
+}
+
+// RpcQueueTimeout will return an option that will set the timeout for flushing
+// the RPC queues used in a given client
+func RpcQueueTimeout(timeout time.Duration) Option {
+	return func(c *Client) {
+		c.rpcQueueTimeout = timeout
 	}
 }
 
@@ -400,8 +430,8 @@ type newRegResult struct {
 	Err    error
 }
 
-var newRegion = func(ret chan newRegResult, host string, port uint16) {
-	c, e := region.NewClient(host, port)
+var newRegion = func(ret chan newRegResult, host string, port uint16, queueSize int, queueTimeout time.Duration) {
+	c, e := region.NewClient(host, port, queueSize, queueTimeout)
 	ret <- newRegResult{c, e}
 }
 
@@ -448,7 +478,7 @@ func (c *Client) discoverRegion(ctx context.Context, metaRow *pb.GetResponse) (*
 
 	var res newRegResult
 	ret := make(chan newRegResult)
-	go newRegion(ret, host, port)
+	go newRegion(ret, host, port, c.rpcQueueSize, c.rpcQueueTimeout)
 
 	select {
 	case res = <-ret:
@@ -511,6 +541,6 @@ func (c *Client) locateMeta(ret chan error) {
 		return
 	}
 	log.Printf("Meta @ %s:%d", host, port)
-	c.metaClient, err = region.NewClient(host, port)
+	c.metaClient, err = region.NewClient(host, port, c.rpcQueueSize, c.rpcQueueTimeout)
 	ret <- err
 }
