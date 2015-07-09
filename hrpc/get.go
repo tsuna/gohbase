@@ -7,6 +7,7 @@ package hrpc
 
 import (
 	"github.com/golang/protobuf/proto"
+	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
 	"golang.org/x/net/context"
 )
@@ -19,7 +20,38 @@ type Get struct {
 
 	closestBefore bool
 
-	filters Filter
+	filters filter.Filter
+}
+
+/*
+    See: http://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis
+    Allows usage like the following -
+
+	rsp, err := hrpc.NewGet(table, key)
+	rsp, err := hrpc.NewGet(table, key, hrpc.Context(context))
+	rsp, err := hrpc.NewGet(table, key, hrpc.Families(fam))
+	rsp, err := hrpc.NewGet(table, key, hrpc.Filters(filter))
+	rsp, err := hrpc.NewGet(table, key, hrpc.Context(context), hrpc.Families(fam), hrpc.Filters(filter))
+
+	Context is defined hrpc/call.go:100
+	Families is defined hrpc/call.go:
+
+*/
+func NewGet(table, key []byte, options ...func(Call) error) (*Get, error) {
+	g := &Get{
+		base: base{
+			table: table,
+			key:   key,
+			ctx:   context.Background(), // Is this a proper default context?
+		},
+	}
+	for _, option := range options {
+		err := option(g)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return g, nil
 }
 
 // NewGetStr creates a new Get request for the given table/key.
@@ -53,7 +85,7 @@ func (g *Get) Name() string {
 }
 
 // Filter returns current set filter
-func (g *Get) Filter() Filter {
+func (g *Get) GetFilter() filter.Filter {
 	return g.filters
 }
 
@@ -63,15 +95,15 @@ func (g *Get) Families() map[string][]string {
 }
 
 // SetFilter sets filter to use and returns the object
-func (g *Get) SetFilter(f Filter) *Get {
+func (g *Get) SetFilter(f filter.Filter) error {
 	g.filters = f
-	return g
+	return nil
 }
 
 // SetFamilies sets families to use and returns the object
-func (g *Get) SetFamilies(f map[string][]string) *Get {
+func (g *Get) SetFamilies(f map[string][]string) error {
 	g.families = f
-	return g
+	return nil
 }
 
 // Serialize serializes this RPC into a buffer.

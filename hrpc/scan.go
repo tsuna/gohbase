@@ -7,6 +7,7 @@ package hrpc
 
 import (
 	"github.com/golang/protobuf/proto"
+	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
 	"golang.org/x/net/context"
 )
@@ -108,4 +109,14 @@ func (s *Scan) Serialize() ([]byte, error) {
 // RPC.
 func (s *Scan) NewResponse() proto.Message {
 	return &pb.ScanResponse{}
+}
+
+func (s *Scan) SetFamilies(fam map[string][]string) error {
+	s.families = fam
+	return nil
+}
+
+func (s *Scan) SetFilter(ft filter.Filter) error {
+	// not implemented yet
+	return nil
 }

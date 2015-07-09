@@ -342,7 +342,7 @@ func (c *Client) queueRPC(rpc hrpc.Call) error {
 			select {
 			case <-ch:
 				return c.queueRPC(rpc)
-			case <-rpc.Context().Done():
+			case <-rpc.GetContext().Done():
 				return ErrDeadline
 			}
 		}
@@ -350,7 +350,7 @@ func (c *Client) queueRPC(rpc hrpc.Call) error {
 		client = c.clientFor(reg)
 	} else {
 		var err error
-		client, reg, err = c.locateRegion(rpc.Context(), table, key)
+		client, reg, err = c.locateRegion(rpc.GetContext(), table, key)
 		if err != nil {
 			return err
 		}
@@ -382,7 +382,7 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 
 	select {
 	case res = <-resch:
-	case <-rpc.Context().Done():
+	case <-rpc.GetContext().Done():
 		return nil, ErrDeadline
 	}
 
