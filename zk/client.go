@@ -9,7 +9,7 @@ package zk
 import (
 	"encoding/binary"
 	"fmt"
-	"log"
+	log "github.com/Sirupsen/logrus"
 	"strings"
 	"time"
 
