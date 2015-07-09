@@ -7,6 +7,7 @@ package hrpc
 
 import (
 	"github.com/golang/protobuf/proto"
+	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
 	"golang.org/x/net/context"
 )
@@ -19,59 +20,85 @@ type Get struct {
 
 	closestBefore bool
 
-	filters Filter
+	filters filter.Filter
 }
 
-// NewGetStr creates a new Get request for the given table/key.
-func NewGetStr(ctx context.Context, table, key string) *Get {
-	return &Get{
-		base: base{
-			table: []byte(table),
-			key:   []byte(key),
-			ctx:   ctx,
-		},
+func (g *Get) applyOptions(options ...func(Call) error) (*Get, error) {
+	for _, option := range options {
+		err := option(g)
+		if err != nil {
+			return nil, err
+		}
 	}
+	return g, nil
 }
 
-// NewGetBefore creates a new Get request for the row right before the given
-// key in the given table and family.
-func NewGetBefore(ctx context.Context, table, key []byte, families map[string][]string) *Get {
-	return &Get{
+/*
+    See: http://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis
+    Allows usage like the following -
+
+	rsp, err := hrpc.NewGet(ctx, table, key)
+	rsp, err := hrpc.NewGet(ctx, table, key, hrpc.Families(fam))
+	rsp, err := hrpc.NewGet(ctx, table, key, hrpc.Filters(filter))
+	rsp, err := hrpc.NewGet(ctx, table, key, hrpc.Families(fam), hrpc.Filters(filter))
+*/
+func NewGet(ctx context.Context, table, key []byte, options ...func(Call) error) (*Get, error) {
+	g := &Get{
 		base: base{
 			table: table,
 			key:   key,
 			ctx:   ctx,
 		},
-		families:      families,
-		closestBefore: true,
 	}
+	return g.applyOptions(options...)
 }
 
-// Name returns the name of this RPC call.
-func (g *Get) Name() string {
+// NewGetStr wraps NewGet to allow string table names and keys.
+func NewGetStr(ctx context.Context, table, key string, options ...func(Call) error) (*Get, error) {
+	return NewGet(ctx, []byte(table), []byte(key), options...)
+}
+
+// NewGetBefore creates a new Get request for the row right before the given
+// key in the given table and family.
+func NewGetBefore(ctx context.Context, table, key []byte, options ...func(Call) error) (*Get, error) {
+	g := &Get{
+		base: base{
+			table: table,
+			key:   key,
+			ctx:   ctx,
+		},
+		closestBefore: true,
+	}
+	return g.applyOptions(options...)
+}
+
+// GetName returns the name of this RPC call.
+func (g *Get) GetName() string {
 	return "Get"
 }
 
 // Filter returns current set filter
-func (g *Get) Filter() Filter {
+func (g *Get) GetFilter() filter.Filter {
 	return g.filters
 }
 
 // Families returns current set family
-func (g *Get) Families() map[string][]string {
+func (g *Get) GetFamilies() map[string][]string {
 	return g.families
 }
 
 // SetFilter sets filter to use and returns the object
-func (g *Get) SetFilter(f Filter) *Get {
+func (g *Get) SetFilter(f filter.Filter) error {
 	g.filters = f
-	return g
+	// TODO: Validation?
+	return nil
 }
 
 // SetFamilies sets families to use and returns the object
-func (g *Get) SetFamilies(f map[string][]string) *Get {
+func (g *Get) SetFamilies(f map[string][]string) error {
 	g.families = f
-	return g
+	// TODO: Validation?
+	return nil
 }
 
 // Serialize serializes this RPC into a buffer.

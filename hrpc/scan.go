@@ -7,6 +7,7 @@ package hrpc
 
 import (
 	"github.com/golang/protobuf/proto"
+	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
 	"golang.org/x/net/context"
 )
@@ -24,31 +25,58 @@ type Scan struct {
 	stopRow  []byte
 
 	scannerID *uint64
+
+	filters filter.Filter
 }
 
-// NewScanStr creates a new Scan request that will start a scan for rows between
-// startRow (inclusive) and stopRow (exclusive). The values in the specified
-// column families and qualifiers will be returned. When run, a scanner ID will
-// also be returned, that can be used to fetch addition results via successive
-// Scan requests.
-func NewScanStr(ctx context.Context, table string, families map[string][]string, startRow, stopRow []byte) *Scan {
+func (s *Scan) applyOptions(options ...func(Call) error) (*Scan, error) {
+	for _, option := range options {
+		err := option(s)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return s, nil
+}
+
+func NewScan(ctx context.Context, table []byte, options ...func(Call) error) (*Scan, error) {
 	scan := &Scan{
 		base: base{
-			table: []byte(table),
-			key:   startRow,
+			table: table,
 			ctx:   ctx,
 		},
-		families:     families,
-		startRow:     startRow,
-		stopRow:      stopRow,
 		closeScanner: false,
 	}
-	return scan
+	return scan.applyOptions(options)
+}
+
+func NewScanRange(ctx context.Context, table, startRow, stopRow []byte,
+	options ...func(Call) error) (*Scan, error) {
+	scan := &Scan{
+		base: base{
+			table: table,
+			key:   stopRow,
+			ctx:   ctx,
+		},
+		closeScanner: false,
+		startRow:     startRow,
+		stopRow:      stopRow,
+	}
+	return scan.applyOptions(options)
+}
+
+func NewScanStr(ctx context.Context, table string, options ...func(Call) error) (*Scan, error) {
+	return NewScan(ctx, []byte(table), options...)
+}
+
+func NewScanRangeStr(ctx context.Context, table, startRow, stopRow string,
+	options ...func(Call) error) (*Scan, error) {
+	return NewScanRange(ctx, []byte(table), []byte(startRow), []byte(stopRow), options...)
 }
 
 // NewScanFromID creates a new Scan request that will return additional results
 // from a given scanner ID.
-func NewScanFromID(ctx context.Context, table string, scannerID uint64, startRow []byte) *Scan {
+func NewScanFromID(ctx context.Context, table []byte, scannerID uint64, startRow []byte) *Scan {
 	return &Scan{
 		base: base{
 			table: []byte(table),
@@ -62,7 +90,7 @@ func NewScanFromID(ctx context.Context, table string, scannerID uint64, startRow
 
 // NewCloseFromID creates a new Scan request that will close the scan for a
 // given scanner ID.
-func NewCloseFromID(ctx context.Context, table string, scannerID uint64, startRow []byte) *Scan {
+func NewCloseFromID(ctx context.Context, table []byte, scannerID uint64, startRow []byte) *Scan {
 	return &Scan{
 		base: base{
 			table: []byte(table),
@@ -74,9 +102,21 @@ func NewCloseFromID(ctx context.Context, table string, scannerID uint64, startRo
 	}
 }
 
-// Name returns the name of this RPC call.
-func (s *Scan) Name() string {
+// GetName returns the name of this RPC call.
+func (s *Scan) GetName() string {
 	return "Scan"
+}
+
+func (s *Scan) GetStopRow() []byte {
+	return s.stopRow
+}
+
+func (s *Scan) GetStartRow() []byte {
+	return s.startRow
+}
+
+func (s *Scan) GetFamilies() map[string][]string {
+	return s.families
 }
 
 // GetRegionStop returns the stop key of the region currently being scanned.
@@ -108,4 +148,14 @@ func (s *Scan) Serialize() ([]byte, error) {
 // RPC.
 func (s *Scan) NewResponse() proto.Message {
 	return &pb.ScanResponse{}
+}
+
+func (s *Scan) SetFamilies(fam map[string][]string) error {
+	s.families = fam
+	return nil
+}
+
+func (s *Scan) SetFilter(ft filter.Filter) error {
+	s.filters = ft
+	return nil
 }
