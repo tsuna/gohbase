@@ -7,6 +7,7 @@ package hrpc
 
 import (
 	"github.com/golang/protobuf/proto"
+	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
 	"golang.org/x/net/context"
 )
@@ -115,4 +116,14 @@ func (m *Mutate) Serialize() ([]byte, error) {
 // RPC.
 func (m *Mutate) NewResponse() proto.Message {
 	return &pb.MutateResponse{}
+}
+
+func (m *Mutate) SetFilter(ft filter.Filter) error {
+	// Not allowed. Throw an error
+	return nil
+}
+
+func (m *Mutate) SetFamilies(fam map[string][]string) error {
+	// Not allowed. Throw an error
+	return nil
 }

@@ -7,10 +7,13 @@ package hrpc
 
 import (
 	"github.com/golang/protobuf/proto"
+	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/regioninfo"
 	"golang.org/x/net/context"
 )
+
+var _ Call = (*Get)(nil)
 
 // Call represents an HBase RPC call.
 type Call interface {
@@ -28,7 +31,11 @@ type Call interface {
 
 	GetResultChan() chan RPCResult
 
-	Context() context.Context
+	GetContext() context.Context
+	SetContext(ctx context.Context) error
+
+	SetFamilies(fam map[string][]string) error
+	SetFilter(ft filter.Filter) error
 }
 
 // RPCResult is struct that will contain both the resulting message from an RPC
@@ -51,8 +58,13 @@ type base struct {
 	ctx context.Context
 }
 
-func (b *base) Context() context.Context {
+func (b *base) GetContext() context.Context {
 	return b.ctx
+}
+
+func (b *base) SetContext(ctx context.Context) error {
+	b.ctx = ctx
+	return nil
 }
 
 func (b *base) GetRegion() *regioninfo.Info {
@@ -87,4 +99,22 @@ func (b *base) GetResultChan() chan RPCResult {
 		b.resultch = make(chan RPCResult, 1)
 	}
 	return b.resultch
+}
+
+func Context(ctx context.Context) func(Call) error {
+	return func(g Call) error {
+		return g.SetContext(ctx)
+	}
+}
+
+func Families(fam map[string][]string) func(Call) error {
+	return func(g Call) error {
+		return g.SetFamilies(fam)
+	}
+}
+
+func Filters(fl filter.Filter) func(Call) error {
+	return func(g Call) error {
+		return g.SetFilter(fl)
+	}
 }
