@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9ad9bd40_2a3dfabb",
+        "filename": "client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 507,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-10T21:11:50Z",
+      "side": 1,
+      "message": "Would be nice to also log what is the region and which client it\u0027s mapped to.",
+      "revId": "1d6ea2b8a2e3d9883ce24c70b5075fbf74a0b659",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_aa782a90",
+        "filename": "region/client.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 175,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-10T21:11:50Z",
+      "side": 1,
+      "message": "These (this one and the next ones below) are \"worse\" than warnings.  Can we up them to the error level?",
+      "revId": "1d6ea2b8a2e3d9883ce24c70b5075fbf74a0b659",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
