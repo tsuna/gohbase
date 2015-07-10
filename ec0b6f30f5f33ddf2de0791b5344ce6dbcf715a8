@@ -1,0 +1,78 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9ad9bd40_0fcf6880",
+        "filename": "client.go",
+        "patchSetId": 2
+      },
+      "lineNbr": 389,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-10T18:59:41Z",
+      "side": 1,
+      "message": "So if I tried to access the meta region, but there was an error, we bail out right away instead of retrying?  We should keep retrying just like how we retry other calls.",
+      "revId": "ec0b6f30f5f33ddf2de0791b5344ce6dbcf715a8",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_2fca6c6e",
+        "filename": "client.go",
+        "patchSetId": 2
+      },
+      "lineNbr": 418,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-10T18:59:41Z",
+      "side": 1,
+      "message": "I don\u0027t feel like that\u0027s the right place where to do this.  Maybe locateMeta() would be better, right before line 549.\n\nBut this creates another problem we haven\u0027t thought of.  metaRegionInfo is a global variable, it was supposed to be a constant, but it clearly it\u0027s constant anymore, because we\u0027re now changing it.  So you can\u0027t have more than one gohbase.Client now because otherwise they\u0027ll step on each other\u0027s toes when dealing with metaRegionInfo.  This implies that metaRegionInfo shouldn\u0027t be a global constant anymore, it should be an attribute of the gohbase.Client, this way it\u0027s not shared.",
+      "revId": "ec0b6f30f5f33ddf2de0791b5344ce6dbcf715a8",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_0f96884c",
+        "filename": "client.go",
+        "patchSetId": 2
+      },
+      "lineNbr": 425,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-10T18:59:41Z",
+      "side": 1,
+      "message": "We shouldn\u0027t do this here either: first of all, we need to know what the error was, because the error could be transient (e.g. timeout) vs lethal (e.g. socket error).  Now we do have a problem because we never invalidate broken/dead region.Clients from c.clients (we discussed this on Wednesday).\n\nWhen a region.Client dies (e.g. as a result of a socket error or bad RPC ID) we currently fail all outstanding and queued RPCs, but we don\u0027t invalidate all the regions that were known to be behind this region.Client, in the gohbase.Client.clients (type: regionClientCache).\n\nI just realized we have yet another shortcoming to fix: we create a new region.Client for each region we discover, instead of making all the regions hosted in the same RegionServer use the same region.Client",
+      "revId": "ec0b6f30f5f33ddf2de0791b5344ce6dbcf715a8",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_efb884e7",
+        "filename": "region/client.go",
+        "patchSetId": 2
+      },
+      "lineNbr": 37,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-10T18:59:41Z",
+      "side": 1,
+      "message": "We shouldn\u0027t kill this region.Client just because we get a RegionOpeningException.  In fact RegionOpeningException is no different than NotServingRegionException, it just means that a region is momentarily unavailable (it\u0027s even a subclass of it, see https://hbase.apache.org/apidocs/org/apache/hadoop/hbase/exceptions/RegionOpeningException.html).\n\nIt\u0027s not the RegionServer\u0027s fault, nor this region.Client\u0027s fault, and closing the connection and failing all the outstanding RPCs won\u0027t help anything.  We only have to do error handling for the RPCs that come back with a RegionOpeningException / NotServingRegionException and similar exceptions, by marking the region as unavailable and retrying to locate it, which doesn\u0027t invalidate this region.Client the way that a socket error or a bogus RPC ID does.",
+      "range": {
+        "startLine": 31,
+        "startChar": 0,
+        "endLine": 37,
+        "endChar": 74
+      },
+      "revId": "ec0b6f30f5f33ddf2de0791b5344ce6dbcf715a8",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
