@@ -90,7 +90,9 @@ func (i *Info) GetAvailabilityChan() (<-chan struct{}, bool) {
 // MarkAvailable will mark this region as available again, by closing the struct
 // returned by GetAvailabilityChan
 func (i *Info) MarkAvailable() {
-	close(i.available)
+	if i.available != nil {
+		close(i.available)
+	}
 	i.available = nil
 }
 

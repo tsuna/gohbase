@@ -27,6 +27,15 @@ var (
 	// ErrMissingCallID is used when HBase sends us a response message for a
 	// request that we didn't send
 	ErrMissingCallID = errors.New("HBase responded to a nonsensical call id")
+
+	// javaNetExceptions is a map where all Java exceptions that we can handle
+	// are listed (as keys). When an error listed here is encountered, this
+	// client will abort and close it's connection, and gohbase will attempt
+	// to create a new client for this region. If a Java error is encountered
+	// that is not in this list, it is passed up to the user of gohbase.
+	javaNetExceptions = map[string]struct{}{
+		"org.apache.hadoop.hbase.exceptions.RegionOpeningException": struct{}{},
+	}
 )
 
 // Client manages a connection to a RegionServer.
@@ -210,7 +219,16 @@ func (c *Client) receiveRpcs() {
 			// TODO: Properly handle this error
 			err := fmt.Errorf("HBase java exception %s: \n%s",
 				*resp.Exception.ExceptionClassName, *resp.Exception.StackTrace)
-			rpc.GetResultChan() <- hrpc.RPCResult{nil, err, nil}
+			_, ok := javaNetExceptions[*resp.Exception.ExceptionClassName]
+			if ok {
+				// This is an error that we shouldn't send to the user
+				c.sendErr = err
+				c.errorEncountered()
+				return
+			} else {
+				// This is an error that we should send to the user
+				rpc.GetResultChan() <- hrpc.RPCResult{nil, err, nil}
+			}
 		}
 
 		c.sentRPCsMutex.Lock()
