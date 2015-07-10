@@ -124,6 +124,8 @@ type Client struct {
 	rpcQueueSize int
 
 	// The timeout before flushing the RPC queue in the region client
+	// time.Duration is by default in nanoseconds. We later multiply it by
+	// Millisecond to get it in milliseconds.
 	flushInterval time.Duration
 }
 
@@ -137,7 +139,7 @@ func NewClient(zkquorum string, options ...Option) *Client {
 		clients:       regionClientCache{clients: make(map[*regioninfo.Info]*region.Client)},
 		zkquorum:      zkquorum,
 		rpcQueueSize:  100,
-		flushInterval: 20,
+		flushInterval: 20 * time.Millisecond,
 	}
 	for _, option := range options {
 		option(c)
@@ -378,6 +380,11 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 	if err == ErrDeadline {
 		return nil, err
 	} else if err != nil {
+		log.WithFields(log.Fields{
+			"Type":  rpc.GetName(),
+			"Table": string(rpc.Table()),
+			"Key":   string(rpc.Key()),
+		}).Debug("We hit an error queuing the RPC. Resending.")
 		// There was an error locating the region for the RPC, or the client
 		// for the region encountered an error and has shut down.
 		return c.sendRPC(rpc)
@@ -391,6 +398,13 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 	case <-rpc.GetContext().Done():
 		return nil, ErrDeadline
 	}
+	log.WithFields(log.Fields{
+		"Type":     rpc.GetName(),
+		"Table":    string(rpc.Table()),
+		"Key":      string(rpc.Key()),
+		"Result":   res.Msg,
+		"RPCError": res.RPCError,
+	}).Debug("Successfully sent RPC. Returning.")
 
 	if res.NetError == nil {
 		return res.Msg, res.RPCError
@@ -401,13 +415,23 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 	// when it's available again
 	region := rpc.GetRegion()
 
+	log.WithFields(log.Fields{
+		"Type":  rpc.GetName(),
+		"Table": string(rpc.Table()),
+		"Key":   string(rpc.Key()),
+	}).Debug("Encountered a network error. Region unavailable?")
+
 	if region != nil {
 		_, created := region.GetAvailabilityChan()
 		if created {
 			go c.reestablishRegion(region)
 		}
 	}
-
+	log.WithFields(log.Fields{
+		"Type":  rpc.GetName(),
+		"Table": string(rpc.Table()),
+		"Key":   string(rpc.Key()),
+	}).Debug("Retrying sendRPC")
 	return c.sendRPC(rpc)
 }
 
