@@ -73,6 +73,23 @@
       "revId": "ec0b6f30f5f33ddf2de0791b5344ce6dbcf715a8",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_4fa0909f",
+        "filename": "regioninfo/info.go",
+        "patchSetId": 2
+      },
+      "lineNbr": 93,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-10T19:00:06Z",
+      "side": 1,
+      "message": "What prompted you to add this now? :)",
+      "revId": "ec0b6f30f5f33ddf2de0791b5344ce6dbcf715a8",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
     }
   ]
 }
