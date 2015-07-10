@@ -124,6 +124,8 @@ type Client struct {
 	rpcQueueSize int
 
 	// The timeout before flushing the RPC queue in the region client
+	// time.Duration is by default in nanoseconds. We later multiply it by
+	// Millisecond to get it in milliseconds.
 	flushInterval time.Duration
 
 	metaRegionInfo *regioninfo.Info
@@ -139,7 +141,7 @@ func NewClient(zkquorum string, options ...Option) *Client {
 		clients:       regionClientCache{clients: make(map[*regioninfo.Info]*region.Client)},
 		zkquorum:      zkquorum,
 		rpcQueueSize:  100,
-		flushInterval: 20,
+		flushInterval: 20 * time.Millisecond,
 		metaRegionInfo: &regioninfo.Info{
 			Table:      []byte("hbase:meta"),
 			RegionName: []byte("hbase:meta,,1"),
@@ -385,6 +387,15 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 	err := c.queueRPC(rpc)
 	if err == ErrDeadline {
 		return nil, err
+	} else if err != nil {
+		log.WithFields(log.Fields{
+			"Type":  rpc.GetName(),
+			"Table": string(rpc.Table()),
+			"Key":   string(rpc.Key()),
+		}).Debug("We hit an error queuing the RPC. Resending.")
+		// There was an error locating the region for the RPC, or the client
+		// for the region encountered an error and has shut down.
+		return c.sendRPC(rpc)
 	}
 	if err == nil {
 		var res hrpc.RPCResult
@@ -397,6 +408,14 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 		}
 
 		err := res.Error
+		log.WithFields(log.Fields{
+			"Type":   rpc.GetName(),
+			"Table":  string(rpc.Table()),
+			"Key":    string(rpc.Key()),
+			"Result": res.Msg,
+			"Error":  err,
+		}).Debug("Successfully sent RPC. Returning.")
+
 		if _, ok := err.(region.RetryableError); ok {
 			return c.sendRPC(rpc)
 		} else if _, ok := err.(region.UnrecoverableError); ok {
@@ -412,13 +431,23 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 	// when it's available again
 	region := rpc.GetRegion()
 
+	log.WithFields(log.Fields{
+		"Type":  rpc.GetName(),
+		"Table": string(rpc.Table()),
+		"Key":   string(rpc.Key()),
+	}).Debug("Encountered a network error. Region unavailable?")
+
 	if region != nil {
 		succ := region.MarkUnavailable()
 		if succ {
 			go c.reestablishRegion(region)
 		}
 	}
-
+	log.WithFields(log.Fields{
+		"Type":  rpc.GetName(),
+		"Table": string(rpc.Table()),
+		"Key":   string(rpc.Key()),
+	}).Debug("Retrying sendRPC")
 	return c.sendRPC(rpc)
 }
 
