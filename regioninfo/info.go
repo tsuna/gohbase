@@ -72,11 +72,16 @@ func (i *Info) IsUnavailable() bool {
 }
 
 // GetAvailabilityChan returns a channel that can be used to wait on for
-// notification that a connection to this region has been reestablished. Second
-// parameter returned signifies if calling this function resulted in a new
-// channel being created. Calling this function marks this region as
-// unavailable.
-func (i *Info) GetAvailabilityChan() (<-chan struct{}, bool) {
+// notification that a connection to this region has been reestablished.
+// If this region is not marked as unavailable, nil will be returned.
+func (i *Info) GetAvailabilityChan() <-chan struct{} {
+	return i.available
+}
+
+// MarkUnavailable will mark this region as unavailable, by creating the struct
+// returned by GetAvailabilityChan. If this region was marked as available
+// before this, true will be returned.
+func (i *Info) MarkUnavailable() bool {
 	created := false
 	i.availableLock.Lock()
 	if i.available == nil {
@@ -84,7 +89,7 @@ func (i *Info) GetAvailabilityChan() (<-chan struct{}, bool) {
 		created = true
 	}
 	i.availableLock.Unlock()
-	return i.available, created
+	return created
 }
 
 // MarkAvailable will mark this region as available again, by closing the struct

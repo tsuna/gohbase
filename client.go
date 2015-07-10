@@ -30,12 +30,6 @@ var (
 	// Name of the meta region.
 	metaTableName = []byte("hbase:meta")
 
-	metaRegionInfo = &regioninfo.Info{
-		Table:      []byte("hbase:meta"),
-		RegionName: []byte("hbase:meta,,1"),
-		StopKey:    []byte{},
-	}
-
 	infoFamily = map[string][]string{
 		"info": nil,
 	}
@@ -63,6 +57,12 @@ func (rcc *regionClientCache) get(r *regioninfo.Info) *region.Client {
 func (rcc *regionClientCache) put(r *regioninfo.Info, c *region.Client) {
 	rcc.m.Lock()
 	rcc.clients[r] = c
+	rcc.m.Unlock()
+}
+
+func (rcc *regionClientCache) del(r *regioninfo.Info) {
+	rcc.m.Lock()
+	delete(rcc.clients, r)
 	rcc.m.Unlock()
 }
 
@@ -125,6 +125,8 @@ type Client struct {
 
 	// The timeout before flushing the RPC queue in the region client
 	flushInterval time.Duration
+
+	metaRegionInfo *regioninfo.Info
 }
 
 // NewClient creates a new HBase client.
@@ -135,7 +137,14 @@ func NewClient(zkquorum string, options ...Option) *Client {
 		zkquorum:      zkquorum,
 		rpcQueueSize:  100,
 		flushInterval: 20,
+		metaRegionInfo: &regioninfo.Info{
+			Table:      []byte("hbase:meta"),
+			RegionName: []byte("hbase:meta,,1"),
+			StopKey:    []byte{},
+		},
 	}
+	c.metaRegionInfo.MarkUnavailable()
+	go c.reestablishRegion(c.metaRegionInfo)
 	for _, option := range options {
 		option(c)
 	}
@@ -299,7 +308,7 @@ func isCacheKeyForTable(table, cacheKey []byte) bool {
 // Searches in the regions cache for the region hosting the given row.
 func (c *Client) getRegion(table, key []byte) *regioninfo.Info {
 	if bytes.Equal(table, metaTableName) {
-		return metaRegionInfo
+		return c.metaRegionInfo
 	}
 	regionName := createRegionSearchKey(table, key)
 	regionKey, region := c.regions.get(regionName)
@@ -319,7 +328,7 @@ func (c *Client) getRegion(table, key []byte) *regioninfo.Info {
 
 // Returns the client currently known to hose the given region, or NULL.
 func (c *Client) clientFor(region *regioninfo.Info) *region.Client {
-	if region == metaRegionInfo {
+	if region == c.metaRegionInfo {
 		return c.metaClient
 	}
 	return c.clients.get(region)
@@ -335,8 +344,8 @@ func (c *Client) queueRPC(rpc hrpc.Call) error {
 
 	var client *region.Client
 	if reg != nil {
-		if reg.IsUnavailable() {
-			ch, _ := reg.GetAvailabilityChan()
+		ch := reg.GetAvailabilityChan()
+		if ch != nil {
 			select {
 			case <-ch:
 				return c.queueRPC(rpc)
@@ -364,23 +373,20 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 	err := c.queueRPC(rpc)
 	if err == ErrDeadline {
 		return nil, err
-	} else if err != nil {
-		// There was an error locating the region for the RPC, or the client
-		// for the region encountered an error and has shut down.
-		return c.sendRPC(rpc)
 	}
+	if err == nil {
+		var res hrpc.RPCResult
+		resch := rpc.GetResultChan()
 
-	var res hrpc.RPCResult
-	resch := rpc.GetResultChan()
+		select {
+		case res = <-resch:
+		case <-rpc.Context().Done():
+			return nil, ErrDeadline
+		}
 
-	select {
-	case res = <-resch:
-	case <-rpc.Context().Done():
-		return nil, ErrDeadline
-	}
-
-	if res.NetError == nil {
-		return res.Msg, res.RPCError
+		if res.NetError == nil {
+			return res.Msg, res.RPCError
+		}
 	}
 
 	// There was an issue related to the network, so we're going to mark the
@@ -389,8 +395,8 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 	region := rpc.GetRegion()
 
 	if region != nil {
-		_, created := region.GetAvailabilityChan()
-		if created {
+		succ := region.MarkUnavailable()
+		if succ {
 			go c.reestablishRegion(region)
 		}
 	}
@@ -400,28 +406,25 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 
 // Locates the region in which the given row key for the given table is.
 func (c *Client) locateRegion(ctx context.Context, table, key []byte) (*region.Client, *regioninfo.Info, error) {
-	if c.metaClient == nil {
-		ret := make(chan error)
-		go c.locateMeta(ret)
+	metaKey := createRegionSearchKey(table, key)
+	rpc := hrpc.NewGetBefore(ctx, metaTableName, metaKey, infoFamily)
+	rpc.SetRegion(c.metaRegionInfo)
+	resp, err := c.sendRPC(rpc)
 
-		var err error
-		select {
-		case err = <-ret:
-		case <-ctx.Done():
-			return nil, nil, ErrDeadline
-		}
-
-		if err != nil {
+	if err != nil {
+		ch := c.metaRegionInfo.GetAvailabilityChan()
+		if ch != nil {
+			select {
+			case <-ch:
+				return c.locateRegion(ctx, table, key)
+			case <-rpc.Context().Done():
+				return nil, nil, ErrDeadline
+			}
+		} else {
 			return nil, nil, err
 		}
 	}
-	metaKey := createRegionSearchKey(table, key)
-	rpc := hrpc.NewGetBefore(ctx, metaTableName, metaKey, infoFamily)
-	rpc.SetRegion(metaRegionInfo)
-	resp, err := c.sendRPC(rpc)
-	if err != nil {
-		return nil, nil, err
-	}
+
 	return c.discoverRegion(ctx, resp.(*pb.GetResponse))
 }
 
@@ -517,15 +520,39 @@ func (c *Client) addRegionToCache(reg *regioninfo.Info, client *region.Client) {
 // reestablishRegion will continually attempt to reestablish a connection to a
 // given region
 func (c *Client) reestablishRegion(reg *regioninfo.Info) {
+	// The meta client is not kept in the region client cache.
+	if reg != c.metaRegionInfo {
+		// This region is inaccessible, and a new client will be created, so the
+		// client will be removed from the region client cache.
+		c.clients.del(reg)
+	}
 	for {
 		// A new context is created here because this is not specific to any
 		// request that the user of gohbase initiated, and is instead an
 		// internal goroutine that may be servicing any number of requests
 		// initiated by the user.
-		_, _, err := c.locateRegion(context.Background(), reg.Table, reg.StartKey)
-		if err == nil {
-			reg.MarkAvailable()
-			return
+		ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
+		if reg == c.metaRegionInfo {
+			ret := make(chan error)
+			go c.locateMeta(ret)
+
+			var err error
+			select {
+			case err = <-ret:
+			case <-ctx.Done():
+				continue
+			}
+
+			if err == nil {
+				c.metaRegionInfo.MarkAvailable()
+				return
+			}
+		} else {
+			_, _, err := c.locateRegion(ctx, reg.Table, reg.StartKey)
+			if err == nil {
+				reg.MarkAvailable()
+				return
+			}
 		}
 		// TODO: Make this configurable, or verify that it's a sane number
 		time.Sleep(time.Millisecond * 100)
