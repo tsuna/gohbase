@@ -364,29 +364,30 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 	err := c.queueRPC(rpc)
 	if err == ErrDeadline {
 		return nil, err
-	} else if err != nil {
-		// There was an error locating the region for the RPC, or the client
-		// for the region encountered an error and has shut down.
-		return c.sendRPC(rpc)
 	}
+	if err == nil {
+		var res hrpc.RPCResult
+		resch := rpc.GetResultChan()
 
-	var res hrpc.RPCResult
-	resch := rpc.GetResultChan()
+		select {
+		case res = <-resch:
+		case <-rpc.Context().Done():
+			return nil, ErrDeadline
+		}
 
-	select {
-	case res = <-resch:
-	case <-rpc.Context().Done():
-		return nil, ErrDeadline
-	}
-
-	if res.NetError == nil {
-		return res.Msg, res.RPCError
+		if res.NetError == nil {
+			return res.Msg, res.RPCError
+		}
 	}
 
 	// There was an issue related to the network, so we're going to mark the
 	// region as unavailable, and generate the channel used for announcing
 	// when it's available again
 	region := rpc.GetRegion()
+
+	if region == metaRegionInfo {
+		return nil, err
+	}
 
 	if region != nil {
 		_, created := region.GetAvailabilityChan()
@@ -414,12 +415,14 @@ func (c *Client) locateRegion(ctx context.Context, table, key []byte) (*region.C
 		if err != nil {
 			return nil, nil, err
 		}
+		metaRegionInfo.MarkAvailable()
 	}
 	metaKey := createRegionSearchKey(table, key)
 	rpc := hrpc.NewGetBefore(ctx, metaTableName, metaKey, infoFamily)
 	rpc.SetRegion(metaRegionInfo)
 	resp, err := c.sendRPC(rpc)
 	if err != nil {
+		c.metaClient = nil
 		return nil, nil, err
 	}
 	return c.discoverRegion(ctx, resp.(*pb.GetResponse))
@@ -522,7 +525,8 @@ func (c *Client) reestablishRegion(reg *regioninfo.Info) {
 		// request that the user of gohbase initiated, and is instead an
 		// internal goroutine that may be servicing any number of requests
 		// initiated by the user.
-		_, _, err := c.locateRegion(context.Background(), reg.Table, reg.StartKey)
+		ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
+		_, _, err := c.locateRegion(ctx, reg.Table, reg.StartKey)
 		if err == nil {
 			reg.MarkAvailable()
 			return
