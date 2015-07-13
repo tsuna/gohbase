@@ -38,34 +38,34 @@ func baseMutate(ctx context.Context, table, key string, values map[string]map[st
 
 // NewPutStr creates a new Mutation request that will put the given values into
 // HBase under the given table and key.
-func NewPutStr(ctx context.Context, table, key string, values map[string]map[string][]byte) *Mutate {
+func NewPutStr(ctx context.Context, table, key string, values map[string]map[string][]byte) (*Mutate, error) {
 	m := baseMutate(ctx, table, key, values)
 	m.mutationType = pb.MutationProto_PUT
-	return m
+	return m, nil
 }
 
 // NewDelStr creates a new Mutation request that will delete the given values
 // from HBase under the given table and key.
-func NewDelStr(ctx context.Context, table, key string, values map[string]map[string][]byte) *Mutate {
+func NewDelStr(ctx context.Context, table, key string, values map[string]map[string][]byte) (*Mutate, error) {
 	m := baseMutate(ctx, table, key, values)
 	m.mutationType = pb.MutationProto_DELETE
-	return m
+	return m, nil
 }
 
 // NewAppStr creates a new Mutation request that will append the given values
 // to their existing values in HBase under the given table and key.
-func NewAppStr(ctx context.Context, table, key string, values map[string]map[string][]byte) *Mutate {
+func NewAppStr(ctx context.Context, table, key string, values map[string]map[string][]byte) (*Mutate, error) {
 	m := baseMutate(ctx, table, key, values)
 	m.mutationType = pb.MutationProto_APPEND
-	return m
+	return m, nil
 }
 
 // NewIncStr creates a new Mutation request that will increment the given values
 // in HBase under the given table and key.
-func NewIncStr(ctx context.Context, table, key string, values map[string]map[string][]byte) *Mutate {
+func NewIncStr(ctx context.Context, table, key string, values map[string]map[string][]byte) (*Mutate, error) {
 	m := baseMutate(ctx, table, key, values)
 	m.mutationType = pb.MutationProto_INCREMENT
-	return m
+	return m, nil
 }
 
 // GetName returns the name of this RPC call.
