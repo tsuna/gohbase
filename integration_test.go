@@ -141,13 +141,15 @@ func TestPut(t *testing.T) {
 		t.Fatal("Host is not set!")
 	}
 	c := gohbase.NewClient(*host)
-	_, err := c.Put(context.Background(), table, key, values)
+	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values)
+	_, err = c.Put(putRequest)
 	if err != nil {
 		t.Errorf("Put returned an error: %v", err)
 	}
 
 	ctx, _ := context.WithTimeout(context.Background(), 0)
-	_, err = c.Put(ctx, table, key, values)
+	putRequest, err = hrpc.NewPutStr(ctx, table, key, values)
+	_, err = c.Put(putRequest)
 	if err != gohbase.ErrDeadline {
 		t.Errorf("Put ignored the deadline")
 	}
@@ -160,7 +162,8 @@ func TestPutMultipleCells(t *testing.T) {
 	values["cf"]["b"] = []byte("b")
 	values["cf2"]["a"] = []byte("a")
 	c := gohbase.NewClient(*host)
-	_, err := c.Put(context.Background(), table, key, values)
+	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values)
+	_, err = c.Put(putRequest)
 	if err != nil {
 		t.Errorf("Put returned an error: %v", err)
 	}
@@ -284,7 +287,8 @@ func TestAppend(t *testing.T) {
 	// Appending " my name is Dog."
 	values := map[string]map[string][]byte{"cf": map[string][]byte{}}
 	values["cf"]["a"] = []byte(" my name is Dog.")
-	appRsp, err := c.Append(context.Background(), table, key, values)
+	appRequest, err := hrpc.NewAppStr(context.Background(), table, key, values)
+	appRsp, err := c.Append(appRequest)
 	if err != nil {
 		t.Errorf("Append returned an error: %v", err)
 	}
@@ -394,6 +398,7 @@ func performNPuts(keyPrefix string, num_ops int) error {
 func insertKeyValue(c *gohbase.Client, key, columnFamily string, value []byte) error {
 	values := map[string]map[string][]byte{columnFamily: map[string][]byte{}}
 	values[columnFamily]["a"] = value
-	_, err := c.Put(context.Background(), table, key, values)
+	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values)
+	_, err = c.Put(putRequest)
 	return err
 }

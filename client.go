@@ -251,8 +251,10 @@ func (c *Client) Scan(s *hrpc.Scan) ([]*pb.Result, error) {
 }
 
 // Put inserts or updates the values into the given row of the table.
-func (c *Client) Put(ctx context.Context, table string, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
-	resp, err := c.sendRPC(hrpc.NewPutStr(ctx, table, rowkey, values))
+// TODO: Do we want to combine the following four functions into a single function -
+// 		func (c *Client) Mutate(mutate *hrpc.Mutate) {  ?
+func (c *Client) Put(mutate *hrpc.Mutate) (*pb.MutateResponse, error) {
+	resp, err := c.sendRPC(mutate)
 	if err != nil {
 		return nil, err
 	}
@@ -260,8 +262,8 @@ func (c *Client) Put(ctx context.Context, table string, rowkey string, values ma
 }
 
 // Delete removes values from the given row of the table.
-func (c *Client) Delete(ctx context.Context, table, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
-	resp, err := c.sendRPC(hrpc.NewDelStr(ctx, table, rowkey, values))
+func (c *Client) Delete(mutate *hrpc.Mutate) (*pb.MutateResponse, error) {
+	resp, err := c.sendRPC(mutate)
 	if err != nil {
 		return nil, err
 	}
@@ -269,8 +271,8 @@ func (c *Client) Delete(ctx context.Context, table, rowkey string, values map[st
 }
 
 // Append atomically appends all the given values to their current values in HBase.
-func (c *Client) Append(ctx context.Context, table, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
-	resp, err := c.sendRPC(hrpc.NewAppStr(ctx, table, rowkey, values))
+func (c *Client) Append(mutate *hrpc.Mutate) (*pb.MutateResponse, error) {
+	resp, err := c.sendRPC(mutate)
 	if err != nil {
 		return nil, err
 	}
@@ -278,8 +280,8 @@ func (c *Client) Append(ctx context.Context, table, rowkey string, values map[st
 }
 
 // Increment atomically increments the given values in HBase.
-func (c *Client) Increment(ctx context.Context, table, rowkey string, values map[string]map[string][]byte) (*pb.MutateResponse, error) {
-	resp, err := c.sendRPC(hrpc.NewIncStr(ctx, table, rowkey, values))
+func (c *Client) Increment(mutate *hrpc.Mutate) (*pb.MutateResponse, error) {
+	resp, err := c.sendRPC(mutate)
 	if err != nil {
 		return nil, err
 	}
