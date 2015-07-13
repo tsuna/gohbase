@@ -112,6 +112,13 @@ func (g *Get) Serialize() ([]byte, error) {
 	if g.closestBefore {
 		get.Get.ClosestRowBefore = proto.Bool(true)
 	}
+	if g.filters != nil {
+		pbFilter, err := g.filters.ConstructPBFilter()
+		if err != nil {
+			return nil, err
+		}
+		get.Get.Filter = pbFilter
+	}
 	return proto.Marshal(get)
 }
 
