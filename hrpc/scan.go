@@ -161,6 +161,13 @@ func (s *Scan) Serialize() ([]byte, error) {
 			StartRow: s.startRow,
 			StopRow:  s.stopRow,
 		}
+		if s.filters != nil {
+			pbFilter, err := s.filters.ConstructPBFilter()
+			if err != nil {
+				return nil, err
+			}
+			scan.Scan.Filter = pbFilter
+		}
 	} else {
 		scan.ScannerId = s.scannerID
 	}
