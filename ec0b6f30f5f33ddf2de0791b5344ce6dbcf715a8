@@ -53,6 +53,24 @@
     },
     {
       "key": {
+        "uuid": "9ad9bd40_7dba656f",
+        "filename": "client.go",
+        "patchSetId": 2
+      },
+      "lineNbr": 425,
+      "author": {
+        "id": 1005314
+      },
+      "writtenOn": "2015-07-13T19:09:51Z",
+      "side": 1,
+      "message": "I\u0027ll take a shot at fixing that shortcoming next.\n\nPerhaps modifying the regionClientCache to have different region infos point to the same region client would be an acceptable approach (with requisite logic changes related to this)?",
+      "parentUuid": "9ad9bd40_0f96884c",
+      "revId": "ec0b6f30f5f33ddf2de0791b5344ce6dbcf715a8",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "9ad9bd40_efb884e7",
         "filename": "region/client.go",
         "patchSetId": 2
