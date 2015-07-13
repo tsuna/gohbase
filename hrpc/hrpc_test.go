@@ -42,6 +42,12 @@ func TestNewGet(t *testing.T) {
 	if err != nil || !confirmGetAttributes(get, ctx, tableb, keyb, fam, filter1) {
 		t.Errorf("Get5 didn't set attributes correctly.")
 	}
+	get, err = NewGet(ctx, tableb, keyb, Filters(filter1))
+	err = Families(fam)(get)
+	if err != nil || !confirmGetAttributes(get, ctx, tableb, keyb, fam, filter1) {
+		t.Errorf("Get6 didn't set attributes correctly.")
+	}
+
 }
 
 func confirmGetAttributes(g *Get, ctx context.Context, table, key []byte, fam map[string][]string, filter1 filter.Filter) bool {

@@ -198,17 +198,18 @@ func (c *Client) Scan(s *hrpc.Scan) ([]*pb.Result, error) {
 	ctx := s.GetContext()
 	table := s.Table()
 	families := s.GetFamilies()
+	filters := s.GetFilter()
 	startRow := s.GetStartRow()
 	stopRow := s.GetStopRow()
 	for {
 		// Make a new Scan RPC for this region
 		if rpc == nil {
 			// If it's the first region, just begin at the given startRow
-			rpc, _ = hrpc.NewScanRange(ctx, table, startRow, stopRow, hrpc.Families(families))
+			rpc, _ = hrpc.NewScanRange(ctx, table, startRow, stopRow, hrpc.Families(families), hrpc.Filters(filters))
 		} else {
 			// If it's not the first region, we want to start at whatever the
 			// last region's StopKey was
-			rpc, _ = hrpc.NewScanRange(ctx, table, rpc.GetRegionStop(), stopRow, hrpc.Families(families))
+			rpc, _ = hrpc.NewScanRange(ctx, table, rpc.GetRegionStop(), stopRow, hrpc.Families(families), hrpc.Filters(filters))
 		}
 
 		res, err := c.sendRPC(rpc)
