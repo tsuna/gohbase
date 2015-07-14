@@ -384,8 +384,14 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 			return nil, ErrDeadline
 		}
 
-		if res.NetError == nil {
-			return res.Msg, res.RPCError
+		err := res.Error
+		if _, ok := err.(region.RetryableError); ok {
+			return c.sendRPC(rpc)
+		} else if _, ok := err.(region.UnrecoverableError); ok {
+			// Prevents dropping into the else block below,
+			// error handling happens a few lines down
+		} else {
+			return res.Msg, res.Error
 		}
 	}
 

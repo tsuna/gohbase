@@ -34,9 +34,8 @@ type Call interface {
 // RPCResult is struct that will contain both the resulting message from an RPC
 // call, and any errors that may have occurred related to making the RPC call.
 type RPCResult struct {
-	Msg      proto.Message
-	RPCError error
-	NetError error
+	Msg   proto.Message
+	Error error
 }
 
 type base struct {

@@ -28,15 +28,30 @@ var (
 	// request that we didn't send
 	ErrMissingCallID = errors.New("HBase responded to a nonsensical call id")
 
-	// javaNetExceptions is a map where all Java exceptions that we can handle
-	// are listed (as keys). When an error listed here is encountered, this
-	// client will abort and close it's connection, and gohbase will attempt
-	// to create a new client for this region. If a Java error is encountered
-	// that is not in this list, it is passed up to the user of gohbase.
-	javaNetExceptions = map[string]struct{}{
+	// javaRetryableExceptions is a map where all Java exceptions that signify
+	// the RPC should be sent again are listed (as keys). If a Java exception
+	// listed here is returned by HBase, the client should attempt to resend
+	// the RPC message, potentially via a different region client.
+	javaRetryableExceptions = map[string]struct{}{
 		"org.apache.hadoop.hbase.exceptions.RegionOpeningException": struct{}{},
 	}
 )
+
+type UnrecoverableError struct {
+	err error
+}
+
+func (ue UnrecoverableError) Error() string {
+	return ue.err.Error()
+}
+
+type RetryableError struct {
+	err error
+}
+
+func (re RetryableError) Error() string {
+	return re.err.Error()
+}
 
 // Client manages a connection to a RegionServer.
 type Client struct {
@@ -137,14 +152,19 @@ func (c *Client) processRpcs() {
 
 			err := c.sendRPC(rpc)
 			if err != nil {
-				c.sendErr = err
+				_, ok := err.(UnrecoverableError)
+				if ok {
+					c.sendErr = err
 
-				c.writeMutex.Lock()
-				c.rpcs = append(c.rpcs, rpcs[i:]...)
-				c.writeMutex.Unlock()
+					c.writeMutex.Lock()
+					c.rpcs = append(c.rpcs, rpcs[i:]...)
+					c.writeMutex.Unlock()
 
-				c.errorEncountered()
-				return
+					c.errorEncountered()
+					return
+				} else {
+					rpc.GetResultChan() <- hrpc.RPCResult{nil, err}
+				}
 			}
 		}
 	}
@@ -214,20 +234,19 @@ func (c *Client) receiveRpcs() {
 			err = proto.UnmarshalMerge(buf, rpcResp)
 			buf = buf[respLen:]
 
-			rpc.GetResultChan() <- hrpc.RPCResult{rpcResp, err, nil}
+			rpc.GetResultChan() <- hrpc.RPCResult{rpcResp, err}
 		} else {
 			// TODO: Properly handle this error
 			err := fmt.Errorf("HBase java exception %s: \n%s",
 				*resp.Exception.ExceptionClassName, *resp.Exception.StackTrace)
-			_, ok := javaNetExceptions[*resp.Exception.ExceptionClassName]
+			_, ok := javaRetryableExceptions[*resp.Exception.ExceptionClassName]
 			if ok {
-				// This is an error that we shouldn't send to the user
-				c.sendErr = err
-				c.errorEncountered()
-				return
+				// This is a recoverable error. The client should retry.
+				rpc.GetResultChan() <- hrpc.RPCResult{nil, RetryableError{err}}
+			} else {
+				// This is an error that we should send to the user
+				rpc.GetResultChan() <- hrpc.RPCResult{nil, err}
 			}
-			// This is an error that we should send to the user
-			rpc.GetResultChan() <- hrpc.RPCResult{nil, err, nil}
 		}
 
 		c.sentRPCsMutex.Lock()
@@ -238,7 +257,7 @@ func (c *Client) receiveRpcs() {
 
 func (c *Client) errorEncountered() {
 	c.writeMutex.Lock()
-	res := hrpc.RPCResult{nil, nil, c.sendErr}
+	res := hrpc.RPCResult{nil, UnrecoverableError{c.sendErr}}
 	for _, rpc := range c.rpcs {
 		rpc.GetResultChan() <- res
 	}
@@ -360,7 +379,7 @@ func (c *Client) sendRPC(rpc hrpc.Call) error {
 
 	err = c.write(buf)
 	if err != nil {
-		return err
+		return UnrecoverableError{err}
 	}
 
 	return nil
