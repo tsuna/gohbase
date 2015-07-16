@@ -37,20 +37,25 @@ var (
 	}
 )
 
+// UnrecoverableError is an error that this region.Client can't recover from.
+// The connection to the RegionServer has to be closed and all queued and
+// outstanding RPCs will be failed / retried.
 type UnrecoverableError struct {
-	err error
+	error
 }
 
-func (ue UnrecoverableError) Error() string {
-	return ue.err.Error()
+func (e UnrecoverableError) Error() string {
+	return error(e).Error()
 }
 
+// RetryableError is an error that indicates the RPC should be retried because
+// the error is transient (e.g. a region being momentarily unavailable).
 type RetryableError struct {
-	err error
+	error
 }
 
-func (re RetryableError) Error() string {
-	return re.err.Error()
+func (e RetryableError) Error() string {
+	return error(e).Error()
 }
 
 // Client manages a connection to a RegionServer.
@@ -162,9 +167,8 @@ func (c *Client) processRpcs() {
 
 					c.errorEncountered()
 					return
-				} else {
-					rpc.GetResultChan() <- hrpc.RPCResult{nil, err}
 				}
+				rpc.GetResultChan() <- hrpc.RPCResult{nil, err}
 			}
 		}
 	}
