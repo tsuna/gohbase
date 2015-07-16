@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9ad9bd40_9cc5583e",
+        "filename": "client.go",
+        "patchSetId": 2
+      },
+      "lineNbr": 248,
+      "author": {
+        "id": 1005314
+      },
+      "writtenOn": "2015-07-16T18:42:34Z",
+      "side": 1,
+      "message": "If we do combine them, we\u0027ll need to make sure the documentation for the resulting function makes sense. As a user if I want to put something into HBase, \"mutate\" isn\u0027t the first word I\u0027d be looking for.",
+      "revId": "4fc7e0207084c81e364f17defa0cd4b94622d01c",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
