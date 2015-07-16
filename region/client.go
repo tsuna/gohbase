@@ -26,13 +26,15 @@ var (
 
 	// ErrMissingCallID is used when HBase sends us a response message for a
 	// request that we didn't send
-	ErrMissingCallID = errors.New("HBase responded to a nonsensical call id")
+	ErrMissingCallID = errors.New("HBase responded to a nonsensical call ID")
 
 	// javaRetryableExceptions is a map where all Java exceptions that signify
 	// the RPC should be sent again are listed (as keys). If a Java exception
 	// listed here is returned by HBase, the client should attempt to resend
 	// the RPC message, potentially via a different region client.
 	javaRetryableExceptions = map[string]struct{}{
+		"org.apache.hadoop.hbase.NotServingRegionException":         struct{}{},
+		"org.apache.hadoop.hbase.exceptions.RegionMovedException":   struct{}{},
 		"org.apache.hadoop.hbase.exceptions.RegionOpeningException": struct{}{},
 	}
 )
