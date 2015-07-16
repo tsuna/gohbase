@@ -144,10 +144,10 @@ func NewClient(zkquorum string, options ...Option) *Client {
 		},
 	}
 	c.metaRegionInfo.MarkUnavailable()
-	go c.reestablishRegion(c.metaRegionInfo)
 	for _, option := range options {
 		option(c)
 	}
+	go c.reestablishRegion(c.metaRegionInfo)
 	return c
 }
 
