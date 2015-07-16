@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9ad9bd40_88f99782",
+        "filename": "client.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 147,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-16T16:31:23Z",
+      "side": 1,
+      "message": "Shouldn\u0027t we do this after applying the options?",
+      "revId": "736a9a4903c2da8aaa9bdf80ab293b0e29f67725",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
