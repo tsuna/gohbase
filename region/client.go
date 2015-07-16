@@ -233,27 +233,23 @@ func (c *Client) receiveRpcs() {
 			return
 		}
 
+		var rpcResp proto.Message
 		if resp.Exception == nil {
 			respLen, nb = proto.DecodeVarint(buf)
 			buf = buf[nb:]
-			rpcResp := rpc.NewResponse()
-			err = proto.UnmarshalMerge(buf, rpcResp)
+			rpcResp = rpc.NewResponse()
 			buf = buf[respLen:]
-
-			rpc.GetResultChan() <- hrpc.RPCResult{rpcResp, err}
+			err = proto.UnmarshalMerge(buf, rpcResp)
 		} else {
-			// TODO: Properly handle this error
-			err := fmt.Errorf("HBase java exception %s: \n%s",
-				*resp.Exception.ExceptionClassName, *resp.Exception.StackTrace)
-			_, ok := javaRetryableExceptions[*resp.Exception.ExceptionClassName]
-			if ok {
+			javaClass := *resp.Exception.ExceptionClassName
+			err = fmt.Errorf("HBase Java exception %s: \n%s", javaClass,
+				*resp.Exception.StackTrace)
+			if _, ok := javaRetryableExceptions[javaClass]; ok {
 				// This is a recoverable error. The client should retry.
-				rpc.GetResultChan() <- hrpc.RPCResult{nil, RetryableError{err}}
-			} else {
-				// This is an error that we should send to the user
-				rpc.GetResultChan() <- hrpc.RPCResult{nil, err}
+				err = RetryableError{err}
 			}
 		}
+		rpc.GetResultChan() <- hrpc.RPCResult{rpcResp, err}
 
 		c.sentRPCsMutex.Lock()
 		delete(c.sentRPCs, *resp.CallId)
