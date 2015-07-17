@@ -143,11 +143,9 @@ func NewClient(zkquorum string, options ...Option) *Client {
 			StopKey:    []byte{},
 		},
 	}
-	c.metaRegionInfo.MarkUnavailable()
 	for _, option := range options {
 		option(c)
 	}
-	go c.reestablishRegion(c.metaRegionInfo)
 	return c
 }
 
@@ -338,13 +336,9 @@ func (c *Client) clientFor(region *regioninfo.Info) *region.Client {
 // region client. Results will be written to the rpc's result and error
 // channels.
 func (c *Client) queueRPC(rpc hrpc.Call) error {
-	table := rpc.Table()
-	key := rpc.Key()
-	reg := c.getRegion(table, key)
-
 	var client *region.Client
-	if reg != nil {
-		ch := reg.GetAvailabilityChan()
+	if rpc.GetRegion() == c.metaRegionInfo {
+		ch := c.metaRegionInfo.GetAvailabilityChan()
 		if ch != nil {
 			select {
 			case <-ch:
@@ -353,23 +347,50 @@ func (c *Client) queueRPC(rpc hrpc.Call) error {
 				return ErrDeadline
 			}
 		}
-
-		client = c.clientFor(reg)
+		return c.metaClient.QueueRPC(rpc)
 	} else {
-		var err error
-		client, reg, err = c.locateRegion(rpc.Context(), table, key)
-		if err != nil {
-			return err
+		table := rpc.Table()
+		key := rpc.Key()
+		reg := c.getRegion(table, key)
+
+		if reg != nil {
+			ch := reg.GetAvailabilityChan()
+			if ch != nil {
+				select {
+				case <-ch:
+					return c.queueRPC(rpc)
+				case <-rpc.Context().Done():
+					return ErrDeadline
+				}
+			}
+
+			client = c.clientFor(reg)
+		} else {
+			var err error
+			client, reg, err = c.locateRegion(rpc.Context(), table, key)
+			if err != nil {
+				return err
+			}
 		}
+		rpc.SetRegion(reg)
+		return client.QueueRPC(rpc)
 	}
-	rpc.SetRegion(reg)
-	return client.QueueRPC(rpc)
 }
 
 // sendRPC takes an RPC call, and will send it to the correct region server. If
 // the correct region server is offline or otherwise unavailable, sendRPC will
 // continually retry until the deadline set on the RPC's context is exceeded.
 func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
+	// The first time an RPC is sent to the meta region, the meta client will
+	// have not yet been intialized. Check if this is the case, try to mark
+	// the meta region info as unavailable, and if it hadn't been marked as
+	// unavailable yet start a goroutine to connect to it.
+	if rpc.GetRegion() == c.metaRegionInfo && c.metaClient == nil {
+		marked := c.metaRegionInfo.MarkUnavailable()
+		if marked {
+			go c.reestablishRegion(c.metaRegionInfo)
+		}
+	}
 	err := c.queueRPC(rpc)
 	if err == ErrDeadline {
 		return nil, err
@@ -431,6 +452,8 @@ func (c *Client) locateRegion(ctx context.Context, table, key []byte) (*region.C
 		}
 	}
 
+	fmt.Printf("Looking up region for \"%s\" \"%s\"\n", string(table), string(key))
+
 	return c.discoverRegion(ctx, resp.(*pb.GetResponse))
 }
 
@@ -447,6 +470,8 @@ var newRegion = func(ret chan newRegResult, host string, port uint16, queueSize 
 // Adds a new region to our regions cache.
 func (c *Client) discoverRegion(ctx context.Context, metaRow *pb.GetResponse) (*region.Client, *regioninfo.Info, error) {
 	if metaRow.Result == nil {
+		// The result for the lookup in the meta table
+		fmt.Printf("nil result!\n")
 		return nil, nil, errors.New("table not found")
 	}
 	var host string
