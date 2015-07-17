@@ -238,8 +238,8 @@ func (c *Client) receiveRpcs() {
 			respLen, nb = proto.DecodeVarint(buf)
 			buf = buf[nb:]
 			rpcResp = rpc.NewResponse()
-			buf = buf[respLen:]
 			err = proto.UnmarshalMerge(buf, rpcResp)
+			buf = buf[respLen:]
 		} else {
 			javaClass := *resp.Exception.ExceptionClassName
 			err = fmt.Errorf("HBase Java exception %s: \n%s", javaClass,
