@@ -147,7 +147,6 @@ func NewClient(zkquorum string, options ...Option) *Client {
 	for _, option := range options {
 		option(c)
 	}
-	go c.reestablishRegion(c.metaRegionInfo)
 	return c
 }
 
