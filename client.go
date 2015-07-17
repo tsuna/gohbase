@@ -143,11 +143,9 @@ func NewClient(zkquorum string, options ...Option) *Client {
 			StopKey:    []byte{},
 		},
 	}
-	c.metaRegionInfo.MarkUnavailable()
 	for _, option := range options {
 		option(c)
 	}
-	go c.reestablishRegion(c.metaRegionInfo)
 	return c
 }
 
@@ -370,6 +368,16 @@ func (c *Client) queueRPC(rpc hrpc.Call) error {
 // the correct region server is offline or otherwise unavailable, sendRPC will
 // continually retry until the deadline set on the RPC's context is exceeded.
 func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
+	// The first time an RPC is sent to the meta region, the meta client will
+	// have not yet been intialized. Check if this is the case, try to mark
+	// the meta region info as unavailable, and if it hadn't been marked as
+	// unavailable yet start a goroutine to connect to it.
+	if rpc.GetRegion() == c.metaRegionInfo && c.metaClient == nil {
+		marked := c.metaRegionInfo.MarkUnavailable()
+		if marked {
+			go c.reestablishRegion(c.metaRegionInfo)
+		}
+	}
 	err := c.queueRPC(rpc)
 	if err == ErrDeadline {
 		return nil, err
