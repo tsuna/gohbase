@@ -55,6 +55,9 @@ func TestGet(t *testing.T) {
 	}
 
 	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
+	if err != nil {
+		t.Fatalf("Failed to create Get request: %s", err)
+	}
 	rsp, err := c.Get(get)
 	if err != nil {
 		t.Errorf("Get returned an error: %v", err)
@@ -66,7 +69,10 @@ func TestGet(t *testing.T) {
 	}
 
 	ctx, _ := context.WithTimeout(context.Background(), 0)
-	get.SetContext(ctx)
+	get, err = hrpc.NewGetStr(ctx, table, key, hrpc.Families(headers))
+	if err != nil {
+		t.Fatalf("Failed to create Get request: %s", err)
+	}
 	_, err = c.Get(get)
 	if err != gohbase.ErrDeadline {
 		t.Errorf("Get ignored the deadline")

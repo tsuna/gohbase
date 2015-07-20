@@ -30,7 +30,6 @@ type Call interface {
 	GetResultChan() chan RPCResult
 
 	GetContext() context.Context
-	SetContext(ctx context.Context) error
 
 	SetFamilies(fam map[string][]string) error
 	SetFilter(ft filter.Filter) error
@@ -57,11 +56,6 @@ type base struct {
 
 func (b *base) GetContext() context.Context {
 	return b.ctx
-}
-
-func (b *base) SetContext(ctx context.Context) error {
-	b.ctx = ctx
-	return nil
 }
 
 func (b *base) GetRegion() *regioninfo.Info {
