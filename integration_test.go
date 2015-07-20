@@ -68,6 +68,14 @@ func TestGet(t *testing.T) {
 			val, rsp_value)
 	}
 
+	get.ExistsOnly()
+	rsp, err = c.Get(get)
+	if err != nil {
+		t.Errorf("Get returned an error: %v", err)
+	} else if !*rsp.Result.Exists {
+		t.Error("Get claimed that our row didn't exist")
+	}
+
 	ctx, _ := context.WithTimeout(context.Background(), 0)
 	get, err = hrpc.NewGetStr(ctx, table, key, hrpc.Families(headers))
 	if err != nil {
@@ -85,12 +93,18 @@ func TestGetDoesntExist(t *testing.T) {
 	headers := map[string][]string{"cf": nil}
 	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
 	rsp, err := c.Get(get)
-	num_results := len(rsp.GetResult().Cell)
-	if num_results != 0 {
-		t.Errorf("Get expected 0 cells. Received: %d", num_results)
-	}
 	if err != nil {
 		t.Errorf("Get returned an error: %v", err)
+	} else if results := len(rsp.GetResult().Cell); results != 0 {
+		t.Errorf("Get expected 0 cells. Received: %d", results)
+	}
+
+	get.ExistsOnly()
+	rsp, err = c.Get(get)
+	if err != nil {
+		t.Errorf("Get returned an error: %v", err)
+	} else if *rsp.Result.Exists {
+		t.Error("Get claimed that our non-existent row exists")
 	}
 }
 
