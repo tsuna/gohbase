@@ -196,7 +196,7 @@ func TestMultiplePutsGetsSequentially(t *testing.T) {
 	const num_ops = 1000
 	keyPrefix := "row3"
 	headers := map[string][]string{"cf": nil}
-	c := gohbase.NewClient(*host)
+	c := gohbase.NewClient(*host, gohbase.FlushInterval(time.Millisecond))
 	err := performNPuts(keyPrefix, num_ops)
 	if err != nil {
 		t.Errorf("Put returned an error: %v", err)
