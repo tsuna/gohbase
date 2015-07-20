@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9ad9bd40_2796e74c",
+        "filename": "client.go",
+        "patchSetId": 4
+      },
+      "lineNbr": 495,
+      "author": {
+        "id": 1005314
+      },
+      "writtenOn": "2015-07-20T21:41:27Z",
+      "side": 1,
+      "message": "s/region/reg/",
+      "range": {
+        "startLine": 495,
+        "startChar": 27,
+        "endLine": 495,
+        "endChar": 33
+      },
+      "revId": "0c95c49698ad6b93e4d41b7d4075dd36787b06e4",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
