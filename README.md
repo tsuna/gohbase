@@ -15,11 +15,11 @@ HBase >= 1.0
 ## Example Usage
 
 #### Create a client
-```
+```go
 client := gohbase.NewClient("localhost")
 ```
 #### Insert a cell
-```
+```go
 // Values maps a ColumnFamily -> Qualifiers -> Values.
 values := map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte{0}}}
 putRequest, err := hrpc.NewPutStr(context.Background(), "table", "key", values)
@@ -27,13 +27,13 @@ rsp, err := client.Put(putRequest)
 ```
 
 #### Get an entire row
-```
+```go
 getRequest, err := hrpc.NewGetStr(context.Background(), "table", "row")
 getRsp, err := client.Get(getRequest)
 ```
 
 #### Get a specific cell
-```
+```go
 // Perform a get for the cell with key "15", column family "cf" and qualifier "a"
 family := map[string][]string{"cf": []string{"a"}}
 getRequest, err := hrpc.NewGetStr(context.Background(), "table", "15",
@@ -42,7 +42,7 @@ getRsp, err := client.Get(getRequest)
 ```
 
 #### Get a specific cell with a filter
-```
+```go
 pFilter := filter.NewKeyOnlyFilter(true)
 family := map[string][]string{"cf": []string{"a"}}
 getRequest, err := hrpc.NewGetStr(context.Background(), "table", "15",
@@ -51,7 +51,7 @@ getRsp, err := client.Get(getRequest)
 ```
 
 #### Scan with a filter
-```
+```go
 pFilter := filter.NewPrefixFilter([]byte("7"))
 scanRequest, err := hrpc.NewScanStr(context.Background(), "table",
 		hrpc.Filters(pFilter))
