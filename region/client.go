@@ -9,10 +9,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"net"
 	"sync"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
@@ -131,7 +132,16 @@ func (c *Client) processRpcs() {
 
 		select {
 		case <-time.After(c.flushInterval):
-			c.writeMutex.Lock()
+			select {
+			case <-c.process:
+			// If we got a message on c.process at the same time as our
+			// timeout elapsed, we'll non-deterministically land in either
+			// cases of this outer select.  Here we double-check whether
+			// something was written onto c.process, in which case we don't
+			// grab the lock (see comment below in the other case).
+			default:
+				c.writeMutex.Lock()
+			}
 		case <-c.process:
 			// We don't acquire the lock here, because the thread that sent
 			// something on the process channel will have locked the mutex,
