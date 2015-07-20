@@ -193,7 +193,7 @@ func TestPutMultipleCells(t *testing.T) {
 }
 
 func TestMultiplePutsGetsSequentially(t *testing.T) {
-	const num_ops = 1000
+	const num_ops = 100
 	keyPrefix := "row3"
 	headers := map[string][]string{"cf": nil}
 	c := gohbase.NewClient(*host)
