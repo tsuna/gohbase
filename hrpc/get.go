@@ -18,7 +18,13 @@ type Get struct {
 
 	families map[string][]string //Maps a column family to a list of qualifiers
 
+	// Return the row for the given key or, if this key doesn't exist,
+	// whichever key happens to be right before.
 	closestBefore bool
+
+	// Don't return any KeyValue, just say whether the row key exists in the
+	// table or not.
+	existsOnly bool
 
 	filters filter.Filter
 }
@@ -98,6 +104,13 @@ func (g *Get) SetFamilies(f map[string][]string) error {
 	return nil
 }
 
+// ExistsOnly makes this Get request not return any KeyValue, merely whether
+// or not the given row key exists in the table.
+func (g *Get) ExistsOnly() error {
+	g.existsOnly = true
+	return nil
+}
+
 // Serialize serializes this RPC into a buffer.
 func (g *Get) Serialize() ([]byte, error) {
 	get := &pb.GetRequest{
@@ -109,6 +122,9 @@ func (g *Get) Serialize() ([]byte, error) {
 	}
 	if g.closestBefore {
 		get.Get.ClosestRowBefore = proto.Bool(true)
+	}
+	if g.existsOnly {
+		get.Get.ExistenceOnly = proto.Bool(true)
 	}
 	if g.filters != nil {
 		pbFilter, err := g.filters.ConstructPBFilter()
