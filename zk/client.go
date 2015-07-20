@@ -9,9 +9,10 @@ package zk
 import (
 	"encoding/binary"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"strings"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/samuel/go-zookeeper/zk"
@@ -32,12 +33,12 @@ func LocateMeta(zkquorum string) (string, uint16, error) {
 		return "", 0,
 			fmt.Errorf("Error connecting to ZooKeeper at %v: %s", zks, err)
 	}
+	defer zkconn.Close()
 	buf, _, err := zkconn.Get(znode + "/meta-region-server")
 	if err != nil {
 		return "", 0,
 			fmt.Errorf("Failed to read the meta-region-server znode: %s", err)
 	}
-	zkconn.Close()
 	if len(buf) == 0 {
 		log.Fatal("meta-region-server was empty!")
 	} else if buf[0] != 0xFF {
