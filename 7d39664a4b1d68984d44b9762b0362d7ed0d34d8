@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9ad9bd40_5f21f5b2",
+        "filename": "hrpc/call.go",
+        "patchSetId": 10
+      },
+      "lineNbr": 108,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-20T18:33:36Z",
+      "side": 1,
+      "message": "You can only add one filter so maybe this should be singular?",
+      "revId": "7d39664a4b1d68984d44b9762b0362d7ed0d34d8",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_9f2b7d93",
+        "filename": "hrpc/scan.go",
+        "patchSetId": 10
+      },
+      "lineNbr": 110,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-20T18:33:36Z",
+      "side": 1,
+      "message": "We shouldn\u0027t copy-paste this method on all the RPCs... Is this something we can move to the base RPC struct?",
+      "revId": "7d39664a4b1d68984d44b9762b0362d7ed0d34d8",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
