@@ -1,0 +1,50 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9ad9bd40_7aba4724",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 4
+      },
+      "lineNbr": 18,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-20T18:43:56Z",
+      "side": 1,
+      "message": "What did it break / how?  I just rebased this commit and all the integration tests pass.",
+      "range": {
+        "startLine": 16,
+        "startChar": 56,
+        "endLine": 18,
+        "endChar": 56
+      },
+      "revId": "cb7e944e0ab2991925046b5c1eed800100a9d1b7",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_5aabc3d5",
+        "filename": "client.go",
+        "patchSetId": 4
+      },
+      "lineNbr": 128,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-20T18:43:56Z",
+      "side": 1,
+      "message": "I find this misleading since we only multiply our default value, not the value that the end user would pass.  I\u0027d recommend removing this.",
+      "range": {
+        "startLine": 127,
+        "startChar": 0,
+        "endLine": 128,
+        "endChar": 42
+      },
+      "revId": "cb7e944e0ab2991925046b5c1eed800100a9d1b7",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
