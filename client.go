@@ -36,6 +36,13 @@ var (
 
 	// ErrDeadline is returned when the deadline of a request has been exceeded
 	ErrDeadline = errors.New("deadline exceeded")
+
+	// Default timeouts
+
+	// How long to wait for a region lookup (either meta lookup or finding
+	// meta in ZooKeeper).  Should be greater than or equal to the ZooKeeper
+	// session timeout.
+	regionLookupTimeout = 30 * time.Second
 )
 
 type Option func(*Client)
@@ -600,18 +607,11 @@ func (c *Client) reestablishRegion(reg *regioninfo.Info) {
 		// request that the user of gohbase initiated, and is instead an
 		// internal goroutine that may be servicing any number of requests
 		// initiated by the user.
-		ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
+		ctx, _ := context.WithTimeout(context.Background(), regionLookupTimeout)
 		var err error
-		if reg == c.metaRegionInfo {
-			ret := make(chan error)
-			go c.locateMeta(ret)
-
-			select {
-			case err = <-ret:
-			case <-ctx.Done():
-				continue
-			}
-		} else {
+		if reg == c.metaRegionInfo { // If we're looking for the meta region..
+			err = c.locateMeta(ctx) // .. look it up in ZooKeeper.
+		} else { // Otherwise do a normal meta lookup.
 			_, _, err = c.locateRegion(ctx, reg.Table, reg.StartKey)
 		}
 		if err == nil {
@@ -623,18 +623,30 @@ func (c *Client) reestablishRegion(reg *regioninfo.Info) {
 	}
 }
 
-// Looks up the meta region in ZooKeeper.
-func (c *Client) locateMeta(ret chan error) {
+// Asynchronously looks up the meta region in ZooKeeper.
+func (c *Client) locateMeta(ctx context.Context) error {
+	errchan := make(chan error)
+	go c.locateMetaSync(errchan)
+	select {
+	case err := <-errchan:
+		return err
+	case <-ctx.Done():
+		return ErrDeadline
+	}
+}
+
+// Synchronously looks up the meta region in ZooKeeper.
+func (c *Client) locateMetaSync(errchan chan<- error) {
 	host, port, err := zk.LocateMeta(c.zkquorum)
 	if err != nil {
-		log.Printf("Error while locating meta: %s", err)
-		ret <- err
+		log.Errorf("Error while locating meta: %s", err)
+		errchan <- err
 		return
 	}
 	log.WithFields(log.Fields{
 		"Host": host,
 		"Port": port,
-	}).Debug("Located META from ZooKeeper")
+	}).Debug("Located META in ZooKeeper")
 	c.metaClient, err = region.NewClient(host, port, c.rpcQueueSize, c.flushInterval)
-	ret <- err
+	errchan <- err
 }
