@@ -123,6 +123,16 @@ func NewClient(host string, port uint16, queueSize int, flushInterval time.Durat
 	return c, nil
 }
 
+// Host returns the host that this client talks to
+func (c *Client) Host() string {
+	return c.host
+}
+
+// Port returns the port that this client talks over
+func (c *Client) Port() uint16 {
+	return c.port
+}
+
 func (c *Client) processRpcs() {
 	for {
 		if c.sendErr != nil {
