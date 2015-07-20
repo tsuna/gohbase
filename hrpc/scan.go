@@ -48,7 +48,11 @@ func NewScan(ctx context.Context, table []byte, options ...func(Call) error) (*S
 		},
 		closeScanner: false,
 	}
-	return scan.applyOptions(options...)
+	err := applyOptions(scan, options...)
+	if err != nil {
+		return nil, err
+	}
+	return scan, nil
 }
 
 // NewScanRange is equivalent to NewScan but adds two additional parameters - startRow, stopRow.
@@ -65,7 +69,11 @@ func NewScanRange(ctx context.Context, table, startRow, stopRow []byte,
 		startRow:     startRow,
 		stopRow:      stopRow,
 	}
-	return scan.applyOptions(options...)
+	err := applyOptions(scan, options...)
+	if err != nil {
+		return nil, err
+	}
+	return scan, nil
 }
 
 // NewScanStr wraps NewScan but allows the table to be specified as a string.
@@ -105,16 +113,6 @@ func NewCloseFromID(ctx context.Context, table []byte, scannerID uint64, startRo
 		scannerID:    &scannerID,
 		closeScanner: true,
 	}
-}
-
-func (s *Scan) applyOptions(options ...func(Call) error) (*Scan, error) {
-	for _, option := range options {
-		err := option(s)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return s, nil
 }
 
 // GetName returns the name of this RPC call.

@@ -74,6 +74,16 @@ func (b *base) regionSpecifier() *pb.RegionSpecifier {
 	}
 }
 
+func applyOptions(call Call, options ...func(Call) error) error {
+	for _, option := range options {
+		err := option(call)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (b *base) Table() []byte {
 	return b.table
 }

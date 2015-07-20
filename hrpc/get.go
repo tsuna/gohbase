@@ -39,7 +39,11 @@ func NewGet(ctx context.Context, table, key []byte, options ...func(Call) error)
 			ctx:   ctx,
 		},
 	}
-	return g.applyOptions(options...)
+	err := applyOptions(g, options...)
+	if err != nil {
+		return nil, err
+	}
+	return g, nil
 }
 
 // NewGetStr wraps NewGet to allow string table names and keys.
@@ -58,15 +62,9 @@ func NewGetBefore(ctx context.Context, table, key []byte, options ...func(Call) 
 		},
 		closestBefore: true,
 	}
-	return g.applyOptions(options...)
-}
-
-func (g *Get) applyOptions(options ...func(Call) error) (*Get, error) {
-	for _, option := range options {
-		err := option(g)
-		if err != nil {
-			return nil, err
-		}
+	err := applyOptions(g, options...)
+	if err != nil {
+		return nil, err
 	}
 	return g, nil
 }
