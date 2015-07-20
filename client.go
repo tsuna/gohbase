@@ -52,6 +52,9 @@ type regionClientCache struct {
 	m sync.Mutex
 
 	clients map[*regioninfo.Info]*region.Client
+
+	// Used to quickly look up all the regioninfos that map to a specific client
+	clientsToInfos map[*region.Client][]*regioninfo.Info
 }
 
 func (rcc *regionClientCache) get(r *regioninfo.Info) *region.Client {
@@ -64,13 +67,35 @@ func (rcc *regionClientCache) get(r *regioninfo.Info) *region.Client {
 func (rcc *regionClientCache) put(r *regioninfo.Info, c *region.Client) {
 	rcc.m.Lock()
 	rcc.clients[r] = c
+	lst := rcc.clientsToInfos[c]
+	rcc.clientsToInfos[c] = append(lst, r)
 	rcc.m.Unlock()
 }
 
-func (rcc *regionClientCache) del(r *regioninfo.Info) {
+func (rcc *regionClientCache) clientDown(reg *regioninfo.Info, f func(*regioninfo.Info)) {
 	rcc.m.Lock()
-	delete(rcc.clients, r)
+	c := rcc.clients[reg]
+	for _, reg := range rcc.clientsToInfos[c] {
+		delete(rcc.clients, reg)
+		succ := reg.MarkUnavailable()
+		if succ {
+			go f(reg)
+		}
+	}
+	delete(rcc.clientsToInfos, c)
 	rcc.m.Unlock()
+}
+
+func (rcc *regionClientCache) checkForClient(host string, port uint16) *region.Client {
+	rcc.m.Lock()
+	for client, _ := range rcc.clientsToInfos {
+		if client.Host() == host && client.Port() == port {
+			rcc.m.Unlock()
+			return client
+		}
+	}
+	rcc.m.Unlock()
+	return nil
 }
 
 // key -> region cache.
@@ -114,6 +139,13 @@ func (krc *keyRegionCache) put(key []byte, reg *regioninfo.Info) *regioninfo.Inf
 	return oldV.(*regioninfo.Info)
 }
 
+func (krc *keyRegionCache) del(key []byte) bool {
+	krc.m.Lock()
+	success := krc.regions.Delete(key)
+	krc.m.Unlock()
+	return success
+}
+
 // A Client provides access to an HBase cluster.
 type Client struct {
 	regions keyRegionCache
@@ -142,8 +174,11 @@ func NewClient(zkquorum string, options ...Option) *Client {
 		"Host": zkquorum,
 	}).Debug("Creating new client.")
 	c := &Client{
-		regions:       keyRegionCache{regions: b.TreeNew(regioninfo.CompareGeneric)},
-		clients:       regionClientCache{clients: make(map[*regioninfo.Info]*region.Client)},
+		regions: keyRegionCache{regions: b.TreeNew(regioninfo.CompareGeneric)},
+		clients: regionClientCache{
+			clients:        make(map[*regioninfo.Info]*region.Client),
+			clientsToInfos: make(map[*region.Client][]*regioninfo.Info),
+		},
 		zkquorum:      zkquorum,
 		rpcQueueSize:  100,
 		flushInterval: 20 * time.Millisecond,
@@ -405,15 +440,6 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 	err := c.queueRPC(rpc)
 	if err == ErrDeadline {
 		return nil, err
-	} else if err != nil {
-		log.WithFields(log.Fields{
-			"Type":  rpc.GetName(),
-			"Table": string(rpc.Table()),
-			"Key":   string(rpc.Key()),
-		}).Debug("We hit an error queuing the RPC. Resending.")
-		// There was an error locating the region for the RPC, or the client
-		// for the region encountered an error and has shut down.
-		return c.sendRPC(rpc)
 	}
 	if err == nil {
 		var res hrpc.RPCResult
@@ -426,13 +452,6 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 		}
 
 		err := res.Error
-		log.WithFields(log.Fields{
-			"Type":   rpc.GetName(),
-			"Table":  string(rpc.Table()),
-			"Key":    string(rpc.Key()),
-			"Result": res.Msg,
-			"Error":  err,
-		}).Debug("Successfully sent RPC. Returning.")
 
 		if _, ok := err.(region.RetryableError); ok {
 			return c.sendRPC(rpc)
@@ -440,6 +459,13 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 			// Prevents dropping into the else block below,
 			// error handling happens a few lines down
 		} else {
+			log.WithFields(log.Fields{
+				"Type":   rpc.GetName(),
+				"Table":  string(rpc.Table()),
+				"Key":    string(rpc.Key()),
+				"Result": res.Msg,
+				"Error":  err,
+			}).Debug("Successfully sent RPC. Returning.")
 			return res.Msg, res.Error
 		}
 	}
@@ -453,13 +479,19 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 		"Type":  rpc.GetName(),
 		"Table": string(rpc.Table()),
 		"Key":   string(rpc.Key()),
-	}).Debug("Encountered a network error. Region unavailable?")
+	}).Debug("Encountered a network error. Region is unavailable.")
 
 	if region != nil {
-		succ := region.MarkUnavailable()
-		if succ {
-			go c.reestablishRegion(region)
+		if region == c.metaRegionInfo {
+			succ := c.metaRegionInfo.MarkUnavailable()
+			if succ {
+				go c.reestablishRegion(region)
+			}
+		} else {
+			c.clients.clientDown(region, c.reestablishRegion)
 		}
+	} else {
+		// queueRPC won't set the region on the RPC if locateRegion returned an error
 	}
 	log.WithFields(log.Fields{
 		"Type":  rpc.GetName(),
@@ -544,6 +576,14 @@ func (c *Client) discoverRegion(ctx context.Context, metaRow *pb.GetResponse) (*
 		}
 	}
 
+	// Check if there's already a client in the cache for talking to this host
+	// and port
+	client := c.clients.checkForClient(host, port)
+	if client != nil {
+		c.addRegionToCache(reg, client)
+		return client, reg, nil
+	}
+
 	var res newRegResult
 	ret := make(chan newRegResult)
 	go newRegion(ret, host, port, c.rpcQueueSize, c.flushInterval)
@@ -590,16 +630,11 @@ func (c *Client) addRegionToCache(reg *regioninfo.Info, client *region.Client) {
 // reestablishRegion will continually attempt to reestablish a connection to a
 // given region
 func (c *Client) reestablishRegion(reg *regioninfo.Info) {
-	// The meta client is not kept in the region client cache.
-	if reg != c.metaRegionInfo {
-		// This region is inaccessible, and a new client will be created, so the
-		// client will be removed from the region client cache.
-		c.clients.del(reg)
-	}
+	backoffAmount := 16
 	for {
 		log.WithFields(log.Fields{
-			"Table":      reg.Table,
-			"RegionName": reg.RegionName,
+			"Table":      string(reg.Table),
+			"RegionName": string(reg.RegionName),
 			"StartKey":   reg.StartKey,
 			"StopKey":    reg.StopKey,
 		}).Warn("Attempting to re-establish region.")
@@ -618,8 +653,12 @@ func (c *Client) reestablishRegion(reg *regioninfo.Info) {
 			reg.MarkAvailable()
 			return
 		}
-		// TODO: Make this configurable, or verify that it's a sane number
-		time.Sleep(time.Millisecond * 100)
+		time.Sleep(time.Millisecond * time.Duration(backoffAmount))
+		if backoffAmount < 5000 {
+			backoffAmount *= 2
+		} else {
+			backoffAmount += 5000
+		}
 	}
 }
 
