@@ -45,6 +45,9 @@ type regionClientCache struct {
 	m sync.Mutex
 
 	clients map[*regioninfo.Info]*region.Client
+
+	// Used to quickly look up all the regioninfos that map to a specific client
+	clientsToInfos map[*region.Client][]*regioninfo.Info
 }
 
 func (rcc *regionClientCache) get(r *regioninfo.Info) *region.Client {
@@ -57,13 +60,41 @@ func (rcc *regionClientCache) get(r *regioninfo.Info) *region.Client {
 func (rcc *regionClientCache) put(r *regioninfo.Info, c *region.Client) {
 	rcc.m.Lock()
 	rcc.clients[r] = c
+	lst, ok := rcc.clientsToInfos[c]
+	if ok {
+		rcc.clientsToInfos[c] = append(lst, r)
+	} else {
+		rcc.clientsToInfos[c] = []*regioninfo.Info{r}
+	}
 	rcc.m.Unlock()
 }
 
-func (rcc *regionClientCache) del(r *regioninfo.Info) {
+func (rcc *regionClientCache) delAll(c *region.Client) {
 	rcc.m.Lock()
-	delete(rcc.clients, r)
+	for _, reg := range rcc.clientsToInfos[c] {
+		delete(rcc.clients, reg)
+	}
+	delete(rcc.clientsToInfos, c)
 	rcc.m.Unlock()
+}
+
+func (rcc *regionClientCache) getInfos(c *region.Client) []*regioninfo.Info {
+	rcc.m.Lock()
+	is := rcc.clientsToInfos[c]
+	rcc.m.Unlock()
+	return is
+}
+
+func (rcc *regionClientCache) checkForClient(host string, port uint16) *region.Client {
+	rcc.m.Lock()
+	for client, _ := range rcc.clientsToInfos {
+		if client.Host() == host && client.Port() == port {
+			rcc.m.Unlock()
+			return client
+		}
+	}
+	rcc.m.Unlock()
+	return nil
 }
 
 // key -> region cache.
@@ -107,6 +138,13 @@ func (krc *keyRegionCache) put(key []byte, reg *regioninfo.Info) *regioninfo.Inf
 	return oldV.(*regioninfo.Info)
 }
 
+func (krc *keyRegionCache) del(key []byte) bool {
+	krc.m.Lock()
+	success := krc.regions.Delete(key)
+	krc.m.Unlock()
+	return success
+}
+
 // A Client provides access to an HBase cluster.
 type Client struct {
 	regions keyRegionCache
@@ -127,13 +165,18 @@ type Client struct {
 	flushInterval time.Duration
 
 	metaRegionInfo *regioninfo.Info
+
+	regionDownLock sync.Mutex
 }
 
 // NewClient creates a new HBase client.
 func NewClient(zkquorum string, options ...Option) *Client {
 	c := &Client{
-		regions:       keyRegionCache{regions: b.TreeNew(regioninfo.CompareGeneric)},
-		clients:       regionClientCache{clients: make(map[*regioninfo.Info]*region.Client)},
+		regions: keyRegionCache{regions: b.TreeNew(regioninfo.CompareGeneric)},
+		clients: regionClientCache{
+			clients:        make(map[*regioninfo.Info]*region.Client),
+			clientsToInfos: make(map[*region.Client][]*regioninfo.Info),
+		},
 		zkquorum:      zkquorum,
 		rpcQueueSize:  100,
 		flushInterval: 20,
@@ -142,6 +185,7 @@ func NewClient(zkquorum string, options ...Option) *Client {
 			RegionName: []byte("hbase:meta,,1"),
 			StopKey:    []byte{},
 		},
+		regionDownLock: sync.Mutex{},
 	}
 	c.metaRegionInfo.MarkUnavailable()
 	for _, option := range options {
@@ -401,9 +445,15 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 	region := rpc.GetRegion()
 
 	if region != nil {
+		// reestablishRegion will mark all known regions in this region server
+		// as unavailable, and we want to prevent other threads from checking
+		// if they should start reestablishRegion before this is done.
+		c.regionDownLock.Lock()
 		succ := region.MarkUnavailable()
 		if succ {
 			go c.reestablishRegion(region)
+		} else {
+			c.regionDownLock.Unlock()
 		}
 	}
 
@@ -485,6 +535,14 @@ func (c *Client) discoverRegion(ctx context.Context, metaRow *pb.GetResponse) (*
 		}
 	}
 
+	// Check if there's already a client in the cache for talking to this host
+	// and port
+	client := c.clients.checkForClient(host, port)
+	if client != nil {
+		c.addRegionToCache(reg, client)
+		return client, reg, nil
+	}
+
 	var res newRegResult
 	ret := make(chan newRegResult)
 	go newRegion(ret, host, port, c.rpcQueueSize, c.flushInterval)
@@ -526,12 +584,43 @@ func (c *Client) addRegionToCache(reg *regioninfo.Info, client *region.Client) {
 // reestablishRegion will continually attempt to reestablish a connection to a
 // given region
 func (c *Client) reestablishRegion(reg *regioninfo.Info) {
-	// The meta client is not kept in the region client cache.
+	var regionInfos []*regioninfo.Info
+
+	// First mark all regioninfo.Infos that share the client used by reg as
+	// unavailable. If reg is the c.metaRegionInfo, it does not share a client
+	// with any other regioninfos.
+
 	if reg != c.metaRegionInfo {
-		// This region is inaccessible, and a new client will be created, so the
-		// client will be removed from the region client cache.
-		c.clients.del(reg)
+		// This is the client in the cache for the now-unreachable region server
+		client := c.clients.get(reg)
+
+		// All regions with the exception of the one passed in need to be marked
+		// as unavailable
+		regionInfos = c.clients.getInfos(client)
+		for _, info := range regionInfos {
+			if info != reg {
+				marked := info.MarkUnavailable()
+				if !marked {
+					// If the region was already marked as unavailable, there
+					// are multiple reestablishRegions running for the same
+					// region
+					// TODO: log an error here
+				}
+			}
+		}
+
+		// This region server is inaccessible, and a new client will be created,
+		// so the client will be removed from the region client cache for all
+		// region infos using it.
+		c.clients.delAll(client)
+
+		c.regionDownLock.Unlock()
 	}
+
+	// Next, continually retry finding the region server for the given region
+	// info and mark any relevant regioninfos as available once found.
+
+	backoffAmount := 16
 	for {
 		// A new context is created here because this is not specific to any
 		// request that the user of gohbase initiated, and is instead an
@@ -556,12 +645,18 @@ func (c *Client) reestablishRegion(reg *regioninfo.Info) {
 		} else {
 			_, _, err := c.locateRegion(ctx, reg.Table, reg.StartKey)
 			if err == nil {
-				reg.MarkAvailable()
+				for _, info := range regionInfos {
+					info.MarkAvailable()
+				}
 				return
 			}
 		}
-		// TODO: Make this configurable, or verify that it's a sane number
-		time.Sleep(time.Millisecond * 100)
+		time.Sleep(time.Millisecond * time.Duration(backoffAmount))
+		if backoffAmount < 5000 {
+			backoffAmount *= 2
+		} else {
+			backoffAmount += 5000
+		}
 	}
 }
 
