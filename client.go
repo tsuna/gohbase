@@ -601,27 +601,22 @@ func (c *Client) reestablishRegion(reg *regioninfo.Info) {
 		// internal goroutine that may be servicing any number of requests
 		// initiated by the user.
 		ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
+		var err error
 		if reg == c.metaRegionInfo {
 			ret := make(chan error)
 			go c.locateMeta(ret)
 
-			var err error
 			select {
 			case err = <-ret:
 			case <-ctx.Done():
 				continue
 			}
-
-			if err == nil {
-				c.metaRegionInfo.MarkAvailable()
-				return
-			}
 		} else {
-			_, _, err := c.locateRegion(ctx, reg.Table, reg.StartKey)
-			if err == nil {
-				reg.MarkAvailable()
-				return
-			}
+			_, _, err = c.locateRegion(ctx, reg.Table, reg.StartKey)
+		}
+		if err == nil {
+			reg.MarkAvailable()
+			return
 		}
 		// TODO: Make this configurable, or verify that it's a sane number
 		time.Sleep(time.Millisecond * 100)
