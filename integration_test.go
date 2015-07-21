@@ -62,7 +62,7 @@ func TestGet(t *testing.T) {
 	if err != nil {
 		t.Errorf("Get returned an error: %v", err)
 	}
-	rsp_value := rsp.Result.Cell[0].GetValue()
+	rsp_value := rsp.Cells[0].Value
 	if !bytes.Equal(rsp_value, val) {
 		t.Errorf("Get returned an incorrect result. Expected: %v, Got: %v",
 			val, rsp_value)
@@ -72,7 +72,7 @@ func TestGet(t *testing.T) {
 	rsp, err = c.Get(get)
 	if err != nil {
 		t.Errorf("Get returned an error: %v", err)
-	} else if !*rsp.Result.Exists {
+	} else if !*rsp.Exists {
 		t.Error("Get claimed that our row didn't exist")
 	}
 
@@ -95,7 +95,7 @@ func TestGetDoesntExist(t *testing.T) {
 	rsp, err := c.Get(get)
 	if err != nil {
 		t.Errorf("Get returned an error: %v", err)
-	} else if results := len(rsp.GetResult().Cell); results != 0 {
+	} else if results := len(rsp.Cells); results != 0 {
 		t.Errorf("Get expected 0 cells. Received: %d", results)
 	}
 
@@ -103,7 +103,7 @@ func TestGetDoesntExist(t *testing.T) {
 	rsp, err = c.Get(get)
 	if err != nil {
 		t.Errorf("Get returned an error: %v", err)
-	} else if *rsp.Result.Exists {
+	} else if *rsp.Exists {
 		t.Error("Get claimed that our non-existent row exists")
 	}
 }
@@ -121,8 +121,8 @@ func TestGetBadColumnFamily(t *testing.T) {
 	if err == nil {
 		t.Errorf("Get didn't return an error! (It should have)")
 	}
-	if rsp.GetResult() != nil {
-		t.Errorf("Get expected no result. Received: %v", rsp.GetResult())
+	if rsp != nil {
+		t.Errorf("Get expected no result. Received: %v", rsp)
 	}
 }
 
@@ -141,15 +141,15 @@ func TestGetMultipleCells(t *testing.T) {
 	families := map[string][]string{"cf": nil, "cf2": nil}
 	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(families))
 	rsp, err := c.Get(get)
-	cells := rsp.GetResult().Cell
+	cells := rsp.Cells
 	num_results := len(cells)
 	if num_results != 2 {
 		t.Errorf("Get expected 2 cells. Received: %d", num_results)
 	}
 	for _, cell := range cells {
-		if !bytes.Equal(cell.GetFamily(), cell.GetValue()) {
+		if !bytes.Equal(cell.Family, cell.Value) {
 			t.Errorf("Get returned an incorrect result. Expected: %v, Received: %v",
-				cell.GetFamily(), cell.GetValue())
+				cell.Family, cell.Value)
 		}
 	}
 }
@@ -268,7 +268,7 @@ func TestPutReflection(t *testing.T) {
 			" One Ring to bring them all and in the darkness bind them"),
 	}
 
-	for _, cell := range rsp.Result.Cell {
+	for _, cell := range rsp.Cells {
 		want, ok := expected[string(cell.Qualifier)]
 		if !ok {
 			t.Errorf("Unexpected qualifier: %q in %#v", cell.Qualifier, rsp)
@@ -298,14 +298,14 @@ func TestPutMultipleCells(t *testing.T) {
 	if err != nil {
 		t.Errorf("Get returned an error: %v", err)
 	}
-	cells := rsp.GetResult().Cell
+	cells := rsp.Cells
 	if len(cells) != 3 {
 		t.Errorf("Get expected 3 cells. Received: %d", len(cells))
 	}
 	for _, cell := range cells {
-		if !bytes.Equal(cell.GetQualifier(), cell.GetValue()) {
+		if !bytes.Equal(cell.Qualifier, cell.Value) {
 			t.Errorf("Get returned an incorrect result. Expected: %v, Received: %v",
-				cell.GetQualifier(), cell.GetValue())
+				cell.Qualifier, cell.Value)
 		}
 	}
 
@@ -327,10 +327,10 @@ func TestMultiplePutsGetsSequentially(t *testing.T) {
 		if err != nil {
 			t.Errorf("Get returned an error: %v", err)
 		}
-		if len(rsp.Result.Cell) != 1 {
-			t.Errorf("Incorrect number of cells returned by Get: %d", len(rsp.Result.Cell))
+		if len(rsp.Cells) != 1 {
+			t.Errorf("Incorrect number of cells returned by Get: %d", len(rsp.Cells))
 		}
-		rsp_value := rsp.Result.Cell[0].GetValue()
+		rsp_value := rsp.Cells[0].Value
 		if !bytes.Equal(rsp_value, []byte(fmt.Sprintf("%d", i))) {
 			t.Errorf("Get returned an incorrect result. Expected: %v, Got: %v",
 				[]byte(fmt.Sprintf("%d", i)), rsp_value)
@@ -368,7 +368,7 @@ func TestMultiplePutsGetsParallel(t *testing.T) {
 			if err != nil {
 				t.Errorf("(Parallel) Get returned an error: %v", err)
 			} else {
-				rsp_value := rsp.Result.Cell[0].GetValue()
+				rsp_value := rsp.Cells[0].Value
 				if !bytes.Equal(rsp_value, []byte(key)) {
 					t.Errorf("Get returned an incorrect result.")
 				}
@@ -391,7 +391,7 @@ func TestTimestampIncreasing(t *testing.T) {
 			t.Errorf("Get returned an error: %v", err)
 			break
 		}
-		newTime := rsp.GetResult().Cell[0].GetTimestamp()
+		newTime := *rsp.Cells[0].Timestamp
 		if newTime <= oldTime {
 			t.Errorf("Timestamps are not increasing. Old Time: %v, New Time: %v",
 				oldTime, newTime)
@@ -417,11 +417,11 @@ func TestAppend(t *testing.T) {
 	if err != nil {
 		t.Errorf("Append returned an error: %v", err)
 	}
-	if appRsp.GetResult() == nil {
+	if appRsp == nil {
 		t.Errorf("Append doesn't return updated value.")
 	}
 	// Verifying new result is "Hello my name is Dog."
-	result := appRsp.GetResult().Cell[0].GetValue()
+	result := appRsp.Cells[0].Value
 	if !bytes.Equal([]byte("Hello my name is Dog."), result) {
 		t.Errorf("Append returned an incorrect result. Expected: %v, Receieved: %v",
 			[]byte("Hello my name is Dog."), result)
@@ -431,11 +431,11 @@ func TestAppend(t *testing.T) {
 	headers := map[string][]string{"cf": nil}
 	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
 	rsp, err := c.Get(get)
-	cells := rsp.GetResult().Cell
+	cells := rsp.Cells
 	if len(cells) != 1 {
 		t.Errorf("Get expected 1 cells. Received: %d", len(cells))
 	}
-	result = cells[0].GetValue()
+	result = cells[0].Value
 	if !bytes.Equal([]byte("Hello my name is Dog."), result) {
 		t.Errorf("Append returned an incorrect result. Expected: %v, Receieved: %v",
 			[]byte("Hello my name is Dog."), result)
@@ -469,7 +469,7 @@ func TestChangingRegionServers(t *testing.T) {
 	if err != nil {
 		t.Errorf("Get returned an error: %v", err)
 	}
-	rsp_value := rsp.Result.Cell[0].GetValue()
+	rsp_value := rsp.Cells[0].Value
 	if !bytes.Equal(rsp_value, val) {
 		t.Errorf("Get returned an incorrect result. Expected: %v, Received: %v",
 			val, rsp_value)
