@@ -11,6 +11,7 @@ import (
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/regioninfo"
 	"golang.org/x/net/context"
+	"unsafe"
 )
 
 // Call represents an HBase RPC call.
@@ -115,3 +116,39 @@ func Filters(fl filter.Filter) func(Call) error {
 		return g.SetFilter(fl)
 	}
 }
+
+// Cell is the smallest level of granularity in returned results.
+// Represents a single cell in HBase (a row will have one cell for every qualifier).
+type Cell pb.Cell
+
+// Result holds a slice of Cells as well as miscellaneous information about the response.
+type Result struct {
+	Cells  []*Cell
+	Exists bool
+	Stale  bool
+	// Any other variables we want to include.
+}
+
+// ToLocalResult takes a protobuf Result type and converts it to our own Result type in constant time.
+func ToLocalResult(pbr *pb.Result) *Result {
+	var exists bool
+	var stale bool
+	if pbr.Exists != nil {
+		exists = *pbr.Exists
+	}
+	if pbr.Stale != nil {
+		stale = *pbr.Stale
+	}
+	return &Result{
+		// Should all be O(1) operations.
+		Cells:  toLocalCells(pbr),
+		Exists: exists,
+		Stale:  stale,
+	}
+}
+
+func toLocalCells(pbr *pb.Result) []*Cell {
+	return *(*[]*Cell)(unsafe.Pointer(pbr))
+}
+
+// We can now define any helper functions on Result that we want.
