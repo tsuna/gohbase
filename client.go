@@ -176,26 +176,26 @@ func FlushInterval(interval time.Duration) Option {
 }
 
 // CheckTable returns an error if the given table name doesn't exist.
-func (c *Client) CheckTable(ctx context.Context, table string) (*pb.GetResponse, error) {
+func (c *Client) CheckTable(ctx context.Context, table string) (*hrpc.Result, error) {
 	getStr, _ := hrpc.NewGetStr(ctx, table, "theKey")
 	resp, err := c.sendRPC(getStr)
 	if err != nil {
 		return nil, err
 	}
-	return resp.(*pb.GetResponse), err
+	return hrpc.ToLocalResult(resp.(*pb.GetResponse).Result), nil
 }
 
 // Get returns a single row fetched from HBase.
-func (c *Client) Get(get *hrpc.Get) (*pb.GetResponse, error) {
+func (c *Client) Get(get *hrpc.Get) (*hrpc.Result, error) {
 	resp, err := c.sendRPC(get)
 	if err != nil {
 		return nil, err
 	}
-	return resp.(*pb.GetResponse), err
+	return hrpc.ToLocalResult(resp.(*pb.GetResponse).Result), nil
 }
 
 // Scan retrieves the values specified in families from the given range.
-func (c *Client) Scan(s *hrpc.Scan) ([]*pb.Result, error) {
+func (c *Client) Scan(s *hrpc.Scan) ([]*hrpc.Result, error) {
 	var results []*pb.Result
 	var scanres *pb.ScanResponse
 	var rpc *hrpc.Scan
@@ -250,47 +250,51 @@ func (c *Client) Scan(s *hrpc.Scan) ([]*pb.Result, error) {
 		// that (2) we're not trying to scan until the end of the table).
 		// (1)                               (2)                  (3)
 		if len(rpc.GetRegionStop()) == 0 || (len(stopRow) != 0 && bytes.Compare(stopRow, rpc.GetRegionStop()) <= 0) {
-			return results, nil
+			// Do we want to be returning a slice of Result objects or should we just
+			// put all the Cells into the same Result object?
+			localResults := make([]*hrpc.Result, len(results))
+			for idx, result := range results {
+				localResults[idx] = hrpc.ToLocalResult(result)
+			}
+			return localResults, nil
 		}
 	}
 }
 
 // Put inserts or updates the values into the given row of the table.
-// TODO: Do we want to combine the following four functions into a single function -
-// 		func (c *Client) Mutate(mutate *hrpc.Mutate) {  ?
-func (c *Client) Put(mutate *hrpc.Mutate) (*pb.MutateResponse, error) {
+func (c *Client) Put(mutate *hrpc.Mutate) (*hrpc.Result, error) {
 	resp, err := c.sendRPC(mutate)
 	if err != nil {
 		return nil, err
 	}
-	return resp.(*pb.MutateResponse), err
+	return hrpc.ToLocalResult(resp.(*pb.MutateResponse).Result), err
 }
 
 // Delete removes values from the given row of the table.
-func (c *Client) Delete(mutate *hrpc.Mutate) (*pb.MutateResponse, error) {
+func (c *Client) Delete(mutate *hrpc.Mutate) (*hrpc.Result, error) {
 	resp, err := c.sendRPC(mutate)
 	if err != nil {
 		return nil, err
 	}
-	return resp.(*pb.MutateResponse), err
+	return hrpc.ToLocalResult(resp.(*pb.MutateResponse).Result), err
 }
 
 // Append atomically appends all the given values to their current values in HBase.
-func (c *Client) Append(mutate *hrpc.Mutate) (*pb.MutateResponse, error) {
+func (c *Client) Append(mutate *hrpc.Mutate) (*hrpc.Result, error) {
 	resp, err := c.sendRPC(mutate)
 	if err != nil {
 		return nil, err
 	}
-	return resp.(*pb.MutateResponse), err
+	return hrpc.ToLocalResult(resp.(*pb.MutateResponse).Result), err
 }
 
 // Increment atomically increments the given values in HBase.
-func (c *Client) Increment(mutate *hrpc.Mutate) (*pb.MutateResponse, error) {
+func (c *Client) Increment(mutate *hrpc.Mutate) (*hrpc.Result, error) {
 	resp, err := c.sendRPC(mutate)
 	if err != nil {
 		return nil, err
 	}
-	return resp.(*pb.MutateResponse), err
+	return hrpc.ToLocalResult(resp.(*pb.MutateResponse).Result), err
 }
 
 // Creates the META key to search for in order to locate the given key.
