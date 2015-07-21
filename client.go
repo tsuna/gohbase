@@ -179,12 +179,13 @@ func (c *Client) CheckTable(ctx context.Context, table string) (*pb.GetResponse,
 }
 
 // Get returns a single row fetched from HBase.
-func (c *Client) Get(get *hrpc.Get) (*pb.GetResponse, error) {
+func (c *Client) Get(get *hrpc.Get) ([]*hrpc.Cell, error) {
 	resp, err := c.sendRPC(get)
 	if err != nil {
 		return nil, err
 	}
-	return resp.(*pb.GetResponse), err
+	// This can be cleaned up but leaving as-is until we decide on the best approach to take.
+	return (*hrpc.Result)(resp.(*pb.GetResponse).Result).GetCells(), err
 }
 
 // Scan retrieves the values specified in families from the given range.
@@ -249,8 +250,6 @@ func (c *Client) Scan(s *hrpc.Scan) ([]*pb.Result, error) {
 }
 
 // Put inserts or updates the values into the given row of the table.
-// TODO: Do we want to combine the following four functions into a single function -
-// 		func (c *Client) Mutate(mutate *hrpc.Mutate) {  ?
 func (c *Client) Put(mutate *hrpc.Mutate) (*pb.MutateResponse, error) {
 	resp, err := c.sendRPC(mutate)
 	if err != nil {

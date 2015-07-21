@@ -11,6 +11,8 @@ import (
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/regioninfo"
 	"golang.org/x/net/context"
+	"reflect"
+	"unsafe"
 )
 
 // Call represents an HBase RPC call.
@@ -114,4 +116,44 @@ func Filters(fl filter.Filter) func(Call) error {
 	return func(g Call) error {
 		return g.SetFilter(fl)
 	}
+}
+
+type Result pb.Result
+type Cell pb.Cell
+type CellType pb.CellType
+
+func (r *Result) GetCells() []*Cell {
+	// We have two options here, both of which are pretty terrible.
+	// Problem is we've aliased pb.Result but the field Cell is still the type []*pb.Cell
+	// Because we've also aliased pb.Cell -> Cell we'd like to be able to return []*Cell for
+	// GetCells().
+
+	// Option 1: Use the unsafe package and do a simple in place pointer conversion.
+	//
+	//	Pros:	Very fast. We're only adjusting the type of the header pointer.
+	//
+	//	Cons: 	Breaks type system. "Packages that import unsafe may be non-portable and
+	//		are not protected by the Go 1 compatibility guidelines."
+
+	header := *(*reflect.SliceHeader)(unsafe.Pointer(&r.Cell))
+	return *(*[]*Cell)(unsafe.Pointer(&header))
+
+	// Option 2: Iterate over the list and do a conversion on every pointer.
+	//
+	//	Pros:	Type safe. Idiomatic.
+	//
+	//	Cons:	Relatively slow. While we're only copying pointers we're still doing
+	//		unneccesary work just to hide the pb layer. Also the number of cells can
+	//		be very large and we need to be wary of any extra O(n) operations we're
+	//		doing on them.
+
+	cellSlice := make([]*Cell, len(r.Cell))
+	for i := range r.Cell {
+		cellSlice[i] = (*Cell)(r.Cell[i])
+	}
+	return cellSlice
+}
+
+func (c *Cell) GetCellType() CellType {
+	return CellType(*c.CellType)
 }
