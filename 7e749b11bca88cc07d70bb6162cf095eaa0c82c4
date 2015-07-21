@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9ad9bd40_ef3e91d9",
+        "filename": "client.go",
+        "patchSetId": 6
+      },
+      "lineNbr": 491,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-21T01:32:23Z",
+      "side": 1,
+      "message": "This needs to be one atomic step.",
+      "range": {
+        "startLine": 490,
+        "startChar": 0,
+        "endLine": 491,
+        "endChar": 26
+      },
+      "revId": "7e749b11bca88cc07d70bb6162cf095eaa0c82c4",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
