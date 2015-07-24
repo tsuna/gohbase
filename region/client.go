@@ -20,6 +20,9 @@ import (
 	"github.com/tsuna/gohbase/pb"
 )
 
+// ClientType is a type alias to represent the type of this region client
+type ClientType string
+
 var (
 	// ErrShortWrite is used when the writer thread only succeeds in writing
 	// part of its buffer to the socket, and not all of the buffer was sent
@@ -38,6 +41,15 @@ var (
 		"org.apache.hadoop.hbase.exceptions.RegionMovedException":   struct{}{},
 		"org.apache.hadoop.hbase.exceptions.RegionOpeningException": struct{}{},
 	}
+)
+
+const (
+	// RegionClient is a ClientType that means this will be a normal client
+	RegionClient = ClientType("ClientService")
+
+	// MasterClient is a ClientType that means this client will talk to the
+	// master server
+	MasterClient = ClientType("MasterService")
 )
 
 // UnrecoverableError is an error that this region.Client can't recover from.
@@ -97,7 +109,7 @@ type Client struct {
 }
 
 // NewClient creates a new RegionClient.
-func NewClient(host string, port uint16, queueSize int, flushInterval time.Duration) (*Client, error) {
+func NewClient(host string, port uint16, ctype ClientType, queueSize int, flushInterval time.Duration) (*Client, error) {
 	addr := fmt.Sprintf("%s:%d", host, port)
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
@@ -115,7 +127,7 @@ func NewClient(host string, port uint16, queueSize int, flushInterval time.Durat
 		rpcQueueSize:  queueSize,
 		flushInterval: flushInterval,
 	}
-	err = c.sendHello()
+	err = c.sendHello(ctype)
 	if err != nil {
 		return nil, err
 	}
@@ -326,12 +338,12 @@ func (c *Client) readFully(buf []byte) error {
 }
 
 // Sends the "hello" message needed when opening a new connection.
-func (c *Client) sendHello() error {
+func (c *Client) sendHello(ctype ClientType) error {
 	connHeader := &pb.ConnectionHeader{
 		UserInfo: &pb.UserInformation{
 			EffectiveUser: proto.String("gopher"),
 		},
-		ServiceName: proto.String("ClientService"),
+		ServiceName: proto.String(string(ctype)),
 		//CellBlockCodecClass: "org.apache.hadoop.hbase.codec.KeyValueCodec",
 	}
 	data, err := proto.Marshal(connHeader)
