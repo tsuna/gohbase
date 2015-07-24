@@ -535,7 +535,7 @@ type newRegResult struct {
 }
 
 var newRegion = func(ret chan newRegResult, host string, port uint16, queueSize int, queueTimeout time.Duration) {
-	c, e := region.NewClient(host, port, queueSize, queueTimeout)
+	c, e := region.NewClient(host, port, region.RegionClient, queueSize, queueTimeout)
 	ret <- newRegResult{c, e}
 }
 
@@ -680,7 +680,7 @@ func (c *Client) locateMeta(ctx context.Context) error {
 
 // Synchronously looks up the meta region in ZooKeeper.
 func (c *Client) locateMetaSync(errchan chan<- error) {
-	host, port, err := zk.LocateMeta(c.zkquorum)
+	host, port, err := zk.LocateResource(c.zkquorum, zk.Meta)
 	if err != nil {
 		log.Errorf("Error while locating meta: %s", err)
 		errchan <- err
@@ -690,6 +690,6 @@ func (c *Client) locateMetaSync(errchan chan<- error) {
 		"Host": host,
 		"Port": port,
 	}).Debug("Located META in ZooKeeper")
-	c.metaClient, err = region.NewClient(host, port, c.rpcQueueSize, c.flushInterval)
+	c.metaClient, err = region.NewClient(host, port, region.RegionClient, c.rpcQueueSize, c.flushInterval)
 	errchan <- err
 }
