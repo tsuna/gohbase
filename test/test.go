@@ -12,6 +12,10 @@ import (
 	"os"
 	"os/exec"
 	"path"
+
+	"github.com/tsuna/gohbase"
+	"github.com/tsuna/gohbase/hrpc"
+	"golang.org/x/net/context"
 )
 
 // This error is returned when the HBASE_HOME environment variable is unset
@@ -41,8 +45,11 @@ func getShellCmd() (*exec.Cmd, io.WriteCloser, error) {
 
 // CreateTable finds the HBase shell via the HBASE_HOME environment variable,
 // and creates the given table with the given families
-func CreateTable(table string, cFamilies []string) error {
-	DeleteTable(table) // Drop the table in case it already exists
+func CreateTable(host, table string, cFamilies []string) error {
+	// If the table exists, delete it
+	DeleteTable(host, table)
+	// Don't check the error, since one will be returned if the table doesn't
+	// exist
 
 	cmd, stdin, err := getShellCmd()
 	if err != nil {
@@ -67,23 +74,20 @@ func CreateTable(table string, cFamilies []string) error {
 
 // DeleteTable finds the HBase shell via the HBASE_HOME environment variable,
 // and disables and drops the given table
-func DeleteTable(table string) error {
-	cmd, stdin, err := getShellCmd()
+func DeleteTable(host, table string) error {
+	ac := gohbase.NewAdminClient(host)
+	dit := hrpc.NewDisableTable(context.Background(), []byte(table))
+	_, err := ac.DisableTable(dit)
 	if err != nil {
 		return err
 	}
 
-	var buf1 bytes.Buffer
-	buf1.WriteString("disable '" + table + "'\n")
-	stdin.Write(buf1.Bytes())
-
-	var buf2 bytes.Buffer
-	buf2.WriteString("drop '" + table + "'\n")
-	stdin.Write(buf2.Bytes())
-
-	stdin.Write([]byte("exit\n"))
-
-	return cmd.Wait()
+	det := hrpc.NewDeleteTable(context.Background(), []byte(table))
+	_, err = ac.DeleteTable(det)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // LaunchRegionServers uses the script local-regionservers.sh to create new

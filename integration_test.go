@@ -27,12 +27,12 @@ var host = flag.String("HBase Host", "localhost", "The location where HBase is r
 const table = "test1"
 
 func TestMain(m *testing.M) {
-	err := test.CreateTable(table, []string{"cf", "cf2"})
+	err := test.CreateTable(*host, table, []string{"cf", "cf2"})
 	if err != nil {
 		panic(err)
 	}
 	res := m.Run()
-	err = test.DeleteTable(table)
+	err = test.DeleteTable(*host, table)
 	if err != nil {
 		panic(err)
 	}
