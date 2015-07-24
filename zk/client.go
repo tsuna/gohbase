@@ -19,14 +19,17 @@ import (
 	"github.com/tsuna/gohbase/pb"
 )
 
+type ResourceName string
+
 const (
 	sessionTimeout = 30
 
-	znode = "/hbase"
+	Meta   = ResourceName("/hbase/meta-region-server")
+	Master = ResourceName("/hbase/master")
 )
 
-// LocateMeta returns the location of the meta table.
-func LocateMeta(zkquorum string) (string, uint16, error) {
+// LocateResource returns the location of the specified resource.
+func LocateResource(zkquorum string, resource ResourceName) (string, uint16, error) {
 	zks := strings.Split(zkquorum, ",")
 	zkconn, _, err := zk.Connect(zks, time.Duration(sessionTimeout)*time.Second)
 	if err != nil {
@@ -34,34 +37,45 @@ func LocateMeta(zkquorum string) (string, uint16, error) {
 			fmt.Errorf("Error connecting to ZooKeeper at %v: %s", zks, err)
 	}
 	defer zkconn.Close()
-	buf, _, err := zkconn.Get(znode + "/meta-region-server")
+	buf, _, err := zkconn.Get(string(resource))
 	if err != nil {
 		return "", 0,
-			fmt.Errorf("Failed to read the meta-region-server znode: %s", err)
+			fmt.Errorf("Failed to read the %s znode: %s", resource, err)
 	}
 	if len(buf) == 0 {
-		log.Fatal("meta-region-server was empty!")
+		log.Fatal("%s was empty!", resource)
 	} else if buf[0] != 0xFF {
 		return "", 0,
-			fmt.Errorf("The first byte of meta-region-server was 0x%x, not 0xFF", buf[0])
+			fmt.Errorf("The first byte of %s was 0x%x, not 0xFF", resource, buf[0])
 	}
 	metadataLen := binary.BigEndian.Uint32(buf[1:])
 	if metadataLen < 1 || metadataLen > 65000 {
-		return "", 0, fmt.Errorf("Invalid metadata length: %d", metadataLen)
+		return "", 0, fmt.Errorf("Invalid metadata length for %s: %d", resource, metadataLen)
 	}
 	buf = buf[1+4+metadataLen:]
 	magic := binary.BigEndian.Uint32(buf)
 	const pbufMagic = 1346524486 // 4 bytes: "PBUF"
 	if magic != pbufMagic {
-		return "", 0, fmt.Errorf("Invalid magic number: %d", magic)
+		return "", 0, fmt.Errorf("Invalid magic number for %s: %d", resource, magic)
 	}
 	buf = buf[4:]
-	meta := &pb.MetaRegionServer{}
-	err = proto.UnmarshalMerge(buf, meta)
-	if err != nil {
-		return "", 0,
-			fmt.Errorf("Failed to deserialize the MetaRegionServer entry from ZK: %s", err)
+	var server *pb.ServerName
+	if resource == Meta {
+		meta := &pb.MetaRegionServer{}
+		err = proto.UnmarshalMerge(buf, meta)
+		if err != nil {
+			return "", 0,
+				fmt.Errorf("Failed to deserialize the MetaRegionServer entry from ZK: %s", err)
+		}
+		server = meta.Server
+	} else {
+		master := &pb.Master{}
+		err = proto.UnmarshalMerge(buf, master)
+		if err != nil {
+			return "", 0,
+				fmt.Errorf("Failed to deserialize the Master entry from ZK: %s", err)
+		}
+		server = master.Master
 	}
-	server := meta.Server
 	return *server.HostName, uint16(*server.Port), nil
 }
