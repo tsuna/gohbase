@@ -162,6 +162,9 @@ func TestPut(t *testing.T) {
 	}
 	c := gohbase.NewClient(*host)
 	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values)
+	if err != nil {
+		t.Errorf("NewPutStr returned an error: %v", err)
+	}
 	_, err = c.Put(putRequest)
 	if err != nil {
 		t.Errorf("Put returned an error: %v", err)
@@ -173,6 +176,152 @@ func TestPut(t *testing.T) {
 	if err != gohbase.ErrDeadline {
 		t.Errorf("Put ignored the deadline")
 	}
+}
+
+func TestPutReflection(t *testing.T) {
+	key := "row2.25"
+	number := 150
+	data := struct {
+		AnInt       int        `hbase:"cf:a"`
+		AnInt8      int8       `hbase:"cf:b"`
+		AnInt16     int16      `hbase:"cf:c"`
+		AnInt32     int32      `hbase:"cf:d"`
+		AnInt64     int64      `hbase:"cf:e"`
+		AnUInt      uint       `hbase:"cf:f"`
+		AnUInt8     uint8      `hbase:"cf:g"`
+		AnUInt16    uint16     `hbase:"cf:h"`
+		AnUInt32    uint32     `hbase:"cf:i"`
+		AnUInt64    uint64     `hbase:"cf:j"`
+		AFloat32    float32    `hbase:"cf:k"`
+		AFloat64    float64    `hbase:"cf:l"`
+		AComplex64  complex64  `hbase:"cf:m"`
+		AComplex128 complex128 `hbase:"cf:n"`
+		APointer    *int       `hbase:"cf:o"`
+		AnArray     [6]uint8   `hbase:"cf:p"`
+		ASlice      []uint8    `hbase:"cf:q"`
+		AString     string     `hbase:"cf:r"`
+	}{
+		AnInt:       10,
+		AnInt8:      20,
+		AnInt16:     30,
+		AnInt32:     40,
+		AnInt64:     50,
+		AnUInt:      60,
+		AnUInt8:     70,
+		AnUInt16:    80,
+		AnUInt32:    90,
+		AnUInt64:    100,
+		AFloat32:    110,
+		AFloat64:    120,
+		AComplex64:  130,
+		AComplex128: 140,
+		APointer:    &number,
+		AnArray:     [6]uint8{4, 8, 15, 26, 23, 42},
+		ASlice:      []uint8{1, 1, 3, 5, 8, 13, 21, 34, 55},
+		AString:     "One Ring to rule them all, One Ring to find them, One Ring to bring them all and in the darkness bind them",
+	}
+
+	if host == nil {
+		t.Fatal("Host is not set!")
+	}
+
+	c := gohbase.NewClient(*host)
+	putRequest, err := hrpc.NewPutStrRef(context.Background(), table, key, data)
+	if err != nil {
+		t.Errorf("NewPutStrRef returned an error: %v", err)
+	}
+
+	_, err = c.Put(putRequest)
+	if err != nil {
+		t.Errorf("Put returned an error: %v", err)
+	}
+
+	headers := map[string][]string{"cf": nil}
+	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
+	if err != nil {
+		t.Fatalf("Failed to create Get request: %s", err)
+	}
+	rsp, err := c.Get(get)
+	if err != nil {
+		t.Errorf("Get returned an error: %v", err)
+	}
+	for _, cell := range rsp.Result.Cell {
+		switch string(cell.Qualifier) {
+		case "a":
+			if !bytes.Equal(cell.Value, []byte{10}) {
+				t.Errorf("qualifier 'a' didn't match: %v", cell.Value)
+			}
+		case "b":
+			if !bytes.Equal(cell.Value, []byte{20}) {
+				t.Errorf("qualifier 'b' didn't match: %v", cell.Value)
+			}
+		case "c":
+			if !bytes.Equal(cell.Value, []byte{30, 0}) {
+				t.Errorf("qualifier 'c' didn't match: %v", cell.Value)
+			}
+		case "d":
+			if !bytes.Equal(cell.Value, []byte{40, 0, 0, 0}) {
+				t.Errorf("qualifier 'd' didn't match: %v", cell.Value)
+			}
+		case "e":
+			if !bytes.Equal(cell.Value, []byte{50, 0, 0, 0, 0, 0, 0, 0}) {
+				t.Errorf("qualifier 'e' didn't match: %v", cell.Value)
+			}
+		case "f":
+			if !bytes.Equal(cell.Value, []byte{60}) {
+				t.Errorf("qualifier 'f' didn't match: %v", cell.Value)
+			}
+		case "g":
+			if !bytes.Equal(cell.Value, []byte{70}) {
+				t.Errorf("qualifier 'g' didn't match: %v", cell.Value)
+			}
+		case "h":
+			if !bytes.Equal(cell.Value, []byte{80, 0}) {
+				t.Errorf("qualifier 'h' didn't match: %v", cell.Value)
+			}
+		case "i":
+			if !bytes.Equal(cell.Value, []byte{90, 0, 0, 0}) {
+				t.Errorf("qualifier 'i' didn't match: %v", cell.Value)
+			}
+		case "j":
+			if !bytes.Equal(cell.Value, []byte{100, 0, 0, 0, 0, 0, 0, 0}) {
+				t.Errorf("qualifier 'j' didn't match: %v", cell.Value)
+			}
+		case "k":
+			if !bytes.Equal(cell.Value, []byte{0, 0, 220, 66}) {
+				t.Errorf("qualifier 'k' didn't match: %v", cell.Value)
+			}
+		case "l":
+			if !bytes.Equal(cell.Value, []byte{0, 0, 0, 0, 0, 0, 94, 64}) {
+				t.Errorf("qualifier 'l' didn't match: %v", cell.Value)
+			}
+		case "m":
+			if !bytes.Equal(cell.Value, []byte{0, 0, 2, 67, 0, 0, 0, 0}) {
+				t.Errorf("qualifier 'm' didn't match: %v", cell.Value)
+			}
+		case "n":
+			if !bytes.Equal(cell.Value, []byte{0, 0, 0, 0, 0, 128, 97, 64, 0, 0, 0, 0, 0, 0, 0, 0}) {
+				t.Errorf("qualifier 'n' didn't match: %v", cell.Value)
+			}
+		case "o":
+			if !bytes.Equal(cell.Value, []byte{150}) {
+				t.Errorf("qualifier 'o' didn't match: %v", cell.Value)
+			}
+		case "p":
+			if !bytes.Equal(cell.Value, []byte{4, 8, 15, 26, 23, 42}) {
+				t.Errorf("qualifier 'p' didn't match: %v", cell.Value)
+			}
+		case "q":
+			if !bytes.Equal(cell.Value, []byte{1, 1, 3, 5, 8, 13, 21, 34, 55}) {
+				t.Errorf("qualifier 'q' didn't match: %v", cell.Value)
+			}
+		case "r":
+			if !bytes.Equal(cell.Value, []byte("One Ring to rule them all, One Ring to find them, One Ring to bring them all and in the darkness bind them")) {
+				t.Errorf("qualifier 'r' didn't match: %v", cell.Value)
+			}
+		}
+	}
+
 }
 
 func TestPutMultipleCells(t *testing.T) {
