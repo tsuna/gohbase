@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9ad9bd40_46abb674",
+        "filename": "integration_test.go",
+        "patchSetId": 1
+      },
+      "lineNbr": 303,
+      "author": {
+        "id": 1005314
+      },
+      "writtenOn": "2015-07-28T20:30:52Z",
+      "side": 1,
+      "message": "Someone should verify that the byte slices I\u0027m using in this entire switch block are sane.",
+      "range": {
+        "startLine": 303,
+        "startChar": 31,
+        "endLine": 303,
+        "endChar": 88
+      },
+      "revId": "314092cfd91240c224cbbdb078a1d6f4ad4dc760",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
