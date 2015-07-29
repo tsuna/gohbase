@@ -1,0 +1,55 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9ad9bd40_b7b2ea03",
+        "filename": "client.go",
+        "patchSetId": 8
+      },
+      "lineNbr": 444,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-29T07:53:35Z",
+      "side": 1,
+      "message": "nit: should now be an \"else if\".",
+      "revId": "f337be92a53fed4ed33cc44061ef46af5ca5f5ea",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_57c35e56",
+        "filename": "client.go",
+        "patchSetId": 8
+      },
+      "lineNbr": 491,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-29T07:53:35Z",
+      "side": 1,
+      "message": "Instead of having to pass c.reestablishRegion here, maybe clientDown could return a boolean to indicate whether or not you\u0027re the first one to find out that this region is unavailable?\n\nAlso clientDown() will mark all the regions that are using the same region.Client as unavailable.  But we don\u0027t do this when dealing with the meta region, which seems wrong to me.  If the meta region is unavailable because of an unrecoverable error, we should probably apply the same logic as clientDown.  The problem might be that we can\u0027t because at line 77 won\u0027t find the client connected to the RS housing the meta region, so we won\u0027t be able to invalidate other regions..?  If yes, then that\u0027s probably an indication that we need to revisit some things, as this is definitely a latent bug / code smell.",
+      "revId": "f337be92a53fed4ed33cc44061ef46af5ca5f5ea",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_d7ae8e97",
+        "filename": "client.go",
+        "patchSetId": 8
+      },
+      "lineNbr": 633,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-07-29T07:53:35Z",
+      "side": 1,
+      "message": "Let\u0027s multiply by time.Millisecond here, so we\u0027re more explicit as to what the units are.",
+      "revId": "f337be92a53fed4ed33cc44061ef46af5ca5f5ea",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
