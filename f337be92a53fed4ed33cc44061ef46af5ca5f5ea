@@ -36,6 +36,24 @@
     },
     {
       "key": {
+        "uuid": "9ad9bd40_7f0cb4ed",
+        "filename": "client.go",
+        "patchSetId": 8
+      },
+      "lineNbr": 491,
+      "author": {
+        "id": 1005314
+      },
+      "writtenOn": "2015-07-29T17:46:35Z",
+      "side": 1,
+      "message": "The reason I chose to not apply the same or similar logic to the meta region is because the meta region is never in our caches, we maintain direct pointers to both the regioninfo and the region client, and even with these proposed changes the meta region client will never be used by any regioninfo except the metaRegionInfo. Either we could move the meta region info and client into the cache, and stop treating them as special, or we\u0027ll not be able to apply cache specific logic like clientDown to them.\n\nAlso a boolean return value isn\u0027t sufficient, since a separate goroutine is started for each region that has not yet been marked as unavailable, so how about if clientDown returned a list of all regions that must be reestablished?",
+      "parentUuid": "9ad9bd40_57c35e56",
+      "revId": "f337be92a53fed4ed33cc44061ef46af5ca5f5ea",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "9ad9bd40_d7ae8e97",
         "filename": "client.go",
         "patchSetId": 8
