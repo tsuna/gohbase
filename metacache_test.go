@@ -15,7 +15,7 @@ import (
 
 func TestMetaCache(t *testing.T) {
 	client := NewClient("~invalid.quorum~") // We shouldn't connect to ZK.
-	reg := client.getRegion([]byte("test"), []byte("theKey"))
+	reg := client.getRegionFromCache([]byte("test"), []byte("theKey"))
 	if reg != nil {
 		t.Errorf("Found region %#v even though the cache was empty?!", reg)
 	}
@@ -27,13 +27,14 @@ func TestMetaCache(t *testing.T) {
 		StopKey:    []byte(""),
 	}
 	regClient := &region.Client{}
-	client.addRegionToCache(wholeTable, regClient)
+	client.regions.put(wholeTable.RegionName, wholeTable)
+	client.clients.put(wholeTable, regClient)
 
-	reg = client.getRegion([]byte("test"), []byte("theKey"))
+	reg = client.getRegionFromCache([]byte("test"), []byte("theKey"))
 	if !reflect.DeepEqual(reg, wholeTable) {
 		t.Errorf("Found region %#v but expected %#v", reg, wholeTable)
 	}
-	reg = client.getRegion([]byte("test"), []byte("")) // edge case.
+	reg = client.getRegionFromCache([]byte("test"), []byte("")) // edge case.
 	if !reflect.DeepEqual(reg, wholeTable) {
 		t.Errorf("Found region %#v but expected %#v", reg, wholeTable)
 	}
@@ -47,21 +48,24 @@ func TestMetaCache(t *testing.T) {
 		RegionName: []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		StopKey:    []byte("foo"),
 	}
-	client.addRegionToCache(region1, regClient)
+	client.regions.put(region1.RegionName, region1)
+	client.clients.put(region1, regClient)
 
 	region2 := &regioninfo.Info{
 		Table:      []byte("test"),
 		RegionName: []byte("test,foo,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		StopKey:    []byte("gohbase"),
 	}
-	client.addRegionToCache(region2, regClient)
+	client.regions.put(region2.RegionName, region2)
+	client.clients.put(region2, regClient)
 
 	region3 := &regioninfo.Info{
 		Table:      []byte("test"),
 		RegionName: []byte("test,gohbase,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		StopKey:    []byte(""),
 	}
-	client.addRegionToCache(region3, regClient)
+	client.regions.put(region3.RegionName, region3)
+	client.clients.put(region3, regClient)
 
 	testcases := []struct {
 		key string
@@ -76,7 +80,7 @@ func TestMetaCache(t *testing.T) {
 		{key: "gohbase", reg: region3},
 	}
 	for i, testcase := range testcases {
-		reg = client.getRegion([]byte("test"), []byte(testcase.key))
+		reg = client.getRegionFromCache([]byte("test"), []byte(testcase.key))
 		if !reflect.DeepEqual(reg, testcase.reg) {
 			t.Errorf("[#%d] Found region %#v but expected %#v", i, reg, testcase.reg)
 		}
@@ -88,13 +92,14 @@ func TestMetaCache(t *testing.T) {
 		RegionName: []byte("test,gohbase,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		StopKey:    []byte("zab"),
 	}
-	client.addRegionToCache(region3, regClient)
+	client.regions.put(region3.RegionName, region3)
+	client.clients.put(region3, regClient)
 
-	reg = client.getRegion([]byte("test"), []byte("theKey"))
+	reg = client.getRegionFromCache([]byte("test"), []byte("theKey"))
 	if !reflect.DeepEqual(reg, region3) {
 		t.Errorf("Found region %#v but expected %#v", reg, region3)
 	}
-	reg = client.getRegion([]byte("test"), []byte("zoo"))
+	reg = client.getRegionFromCache([]byte("test"), []byte("zoo"))
 	if reg != nil {
 		t.Errorf("Shouldn't have found any region yet found %#v", reg)
 	}
