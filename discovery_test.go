@@ -8,25 +8,16 @@ package gohbase
 import (
 	"bytes"
 	"testing"
-	"time"
 
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/regioninfo"
-	"golang.org/x/net/context"
 )
 
 func TestRegionDiscovery(t *testing.T) {
 	client := NewClient("~invalid.quorum~") // We shouldn't connect to ZK.
-	reg := client.getRegion([]byte("test"), []byte("theKey"))
+	reg := client.getRegionFromCache([]byte("test"), []byte("theKey"))
 	if reg != nil {
 		t.Errorf("Found region %#v even though the cache was empty?!", reg)
-	}
-
-	// Stub out how we create new regions.
-	savedNewRegion := newRegion
-	defer func() { newRegion = savedNewRegion }()
-	newRegion = func(res chan newRegResult, host string, port uint16, queueSize int, queueTimeout time.Duration) {
-		res <- newRegResult{nil, nil}
 	}
 
 	// Inject a "test" table with a single region that covers the entire key
@@ -61,12 +52,13 @@ func TestRegionDiscovery(t *testing.T) {
 			},
 		}}}
 
-	_, _, err := client.discoverRegion(context.Background(), metaRow)
+	reg, _, _, err := client.parseMetaTableResponse(metaRow)
+	client.regions.put(reg.RegionName, reg)
 	if err != nil {
 		t.Fatalf("Failed to discover region: %s", err)
 	}
 
-	reg = client.getRegion([]byte("test"), []byte("theKey"))
+	reg = client.getRegionFromCache([]byte("test"), []byte("theKey"))
 	if reg == nil {
 		t.Fatal("Region not found even though we injected it in the cache.")
 	}
@@ -83,7 +75,7 @@ func TestRegionDiscovery(t *testing.T) {
 		t.Errorf("Found region %#v \nbut expected %#v", reg, expected)
 	}
 
-	reg = client.getRegion([]byte("notfound"), []byte("theKey"))
+	reg = client.getRegionFromCache([]byte("notfound"), []byte("theKey"))
 	if reg != nil {
 		t.Errorf("Found region %#v even though this table doesn't exist", reg)
 	}
