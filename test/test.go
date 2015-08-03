@@ -75,15 +75,15 @@ func CreateTable(host, table string, cFamilies []string) error {
 // DeleteTable finds the HBase shell via the HBASE_HOME environment variable,
 // and disables and drops the given table
 func DeleteTable(host, table string) error {
-	ac := gohbase.NewAdminClient(host)
+	ac := gohbase.NewClient(host, gohbase.Admin())
 	dit := hrpc.NewDisableTable(context.Background(), []byte(table))
-	_, err := ac.DisableTable(dit)
+	_, err := ac.SendRPC(dit)
 	if err != nil {
 		return err
 	}
 
 	det := hrpc.NewDeleteTable(context.Background(), []byte(table))
-	_, err = ac.DeleteTable(det)
+	_, err = ac.SendRPC(det)
 	if err != nil {
 		return err
 	}

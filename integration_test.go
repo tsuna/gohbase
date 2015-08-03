@@ -18,6 +18,7 @@ import (
 
 	"github.com/tsuna/gohbase"
 	"github.com/tsuna/gohbase/hrpc"
+	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/test"
 	"golang.org/x/net/context"
 )
@@ -58,21 +59,21 @@ func TestGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create Get request: %s", err)
 	}
-	rsp, err := c.Get(get)
+	rsp, err := c.SendRPC(get)
 	if err != nil {
 		t.Errorf("Get returned an error: %v", err)
 	}
-	rsp_value := rsp.Result.Cell[0].GetValue()
+	rsp_value := rsp.(*pb.GetResponse).Result.Cell[0].GetValue()
 	if !bytes.Equal(rsp_value, val) {
 		t.Errorf("Get returned an incorrect result. Expected: %v, Got: %v",
 			val, rsp_value)
 	}
 
 	get.ExistsOnly()
-	rsp, err = c.Get(get)
+	rsp, err = c.SendRPC(get)
 	if err != nil {
 		t.Errorf("Get returned an error: %v", err)
-	} else if !*rsp.Result.Exists {
+	} else if !*rsp.(*pb.GetResponse).Result.Exists {
 		t.Error("Get claimed that our row didn't exist")
 	}
 
@@ -81,7 +82,7 @@ func TestGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create Get request: %s", err)
 	}
-	_, err = c.Get(get)
+	_, err = c.SendRPC(get)
 	if err != gohbase.ErrDeadline {
 		t.Errorf("Get ignored the deadline")
 	}
@@ -92,18 +93,18 @@ func TestGetDoesntExist(t *testing.T) {
 	c := gohbase.NewClient(*host)
 	headers := map[string][]string{"cf": nil}
 	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
-	rsp, err := c.Get(get)
+	rsp, err := c.SendRPC(get)
 	if err != nil {
 		t.Errorf("Get returned an error: %v", err)
-	} else if results := len(rsp.GetResult().Cell); results != 0 {
+	} else if results := len(rsp.(*pb.GetResponse).GetResult().Cell); results != 0 {
 		t.Errorf("Get expected 0 cells. Received: %d", results)
 	}
 
 	get.ExistsOnly()
-	rsp, err = c.Get(get)
+	rsp, err = c.SendRPC(get)
 	if err != nil {
 		t.Errorf("Get returned an error: %v", err)
-	} else if *rsp.Result.Exists {
+	} else if *rsp.(*pb.GetResponse).Result.Exists {
 		t.Error("Get claimed that our non-existent row exists")
 	}
 }
@@ -117,12 +118,12 @@ func TestGetBadColumnFamily(t *testing.T) {
 	}
 	families := map[string][]string{"badcf": nil}
 	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(families))
-	rsp, err := c.Get(get)
+	rsp, err := c.SendRPC(get)
 	if err == nil {
 		t.Errorf("Get didn't return an error! (It should have)")
 	}
-	if rsp.GetResult() != nil {
-		t.Errorf("Get expected no result. Received: %v", rsp.GetResult())
+	if rsp != nil {
+		t.Errorf("Get expected no result. Received: %v", rsp.(*pb.GetResponse).GetResult())
 	}
 }
 
@@ -140,8 +141,8 @@ func TestGetMultipleCells(t *testing.T) {
 
 	families := map[string][]string{"cf": nil, "cf2": nil}
 	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(families))
-	rsp, err := c.Get(get)
-	cells := rsp.GetResult().Cell
+	rsp, err := c.SendRPC(get)
+	cells := rsp.(*pb.GetResponse).GetResult().Cell
 	num_results := len(cells)
 	if num_results != 2 {
 		t.Errorf("Get expected 2 cells. Received: %d", num_results)
@@ -165,14 +166,14 @@ func TestPut(t *testing.T) {
 	if err != nil {
 		t.Errorf("NewPutStr returned an error: %v", err)
 	}
-	_, err = c.Put(putRequest)
+	_, err = c.SendRPC(putRequest)
 	if err != nil {
 		t.Errorf("Put returned an error: %v", err)
 	}
 
 	ctx, _ := context.WithTimeout(context.Background(), 0)
 	putRequest, err = hrpc.NewPutStr(ctx, table, key, values)
-	_, err = c.Put(putRequest)
+	_, err = c.SendRPC(putRequest)
 	if err != gohbase.ErrDeadline {
 		t.Errorf("Put ignored the deadline")
 	}
@@ -231,7 +232,7 @@ func TestPutReflection(t *testing.T) {
 		t.Errorf("NewPutStrRef returned an error: %v", err)
 	}
 
-	_, err = c.Put(putRequest)
+	_, err = c.SendRPC(putRequest)
 	if err != nil {
 		t.Errorf("Put returned an error: %v", err)
 	}
@@ -241,7 +242,7 @@ func TestPutReflection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create Get request: %s", err)
 	}
-	rsp, err := c.Get(get)
+	rsp, err := c.SendRPC(get)
 	if err != nil {
 		t.Errorf("Get returned an error: %v", err)
 	}
@@ -268,7 +269,7 @@ func TestPutReflection(t *testing.T) {
 			" One Ring to bring them all and in the darkness bind them"),
 	}
 
-	for _, cell := range rsp.Result.Cell {
+	for _, cell := range rsp.(*pb.GetResponse).Result.Cell {
 		want, ok := expected[string(cell.Qualifier)]
 		if !ok {
 			t.Errorf("Unexpected qualifier: %q in %#v", cell.Qualifier, rsp)
@@ -288,17 +289,17 @@ func TestPutMultipleCells(t *testing.T) {
 	values["cf2"]["a"] = []byte("a")
 	c := gohbase.NewClient(*host)
 	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values)
-	_, err = c.Put(putRequest)
+	_, err = c.SendRPC(putRequest)
 	if err != nil {
 		t.Errorf("Put returned an error: %v", err)
 	}
 	families := map[string][]string{"cf": nil, "cf2": nil}
 	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(families))
-	rsp, err := c.Get(get)
+	rsp, err := c.SendRPC(get)
 	if err != nil {
 		t.Errorf("Get returned an error: %v", err)
 	}
-	cells := rsp.GetResult().Cell
+	cells := rsp.(*pb.GetResponse).GetResult().Cell
 	if len(cells) != 3 {
 		t.Errorf("Get expected 3 cells. Received: %d", len(cells))
 	}
@@ -323,14 +324,14 @@ func TestMultiplePutsGetsSequentially(t *testing.T) {
 	for i := num_ops - 1; i >= 0; i-- {
 		key := keyPrefix + fmt.Sprintf("%d", i)
 		get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
-		rsp, err := c.Get(get)
+		rsp, err := c.SendRPC(get)
 		if err != nil {
 			t.Errorf("Get returned an error: %v", err)
 		}
-		if len(rsp.Result.Cell) != 1 {
-			t.Errorf("Incorrect number of cells returned by Get: %d", len(rsp.Result.Cell))
+		if len(rsp.(*pb.GetResponse).Result.Cell) != 1 {
+			t.Errorf("Incorrect number of cells returned by Get: %d", len(rsp.(*pb.GetResponse).Result.Cell))
 		}
-		rsp_value := rsp.Result.Cell[0].GetValue()
+		rsp_value := rsp.(*pb.GetResponse).Result.Cell[0].GetValue()
 		if !bytes.Equal(rsp_value, []byte(fmt.Sprintf("%d", i))) {
 			t.Errorf("Get returned an incorrect result. Expected: %v, Got: %v",
 				[]byte(fmt.Sprintf("%d", i)), rsp_value)
@@ -364,11 +365,11 @@ func TestMultiplePutsGetsParallel(t *testing.T) {
 		go func(client *gohbase.Client, key string) {
 			defer wg.Done()
 			get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
-			rsp, err := c.Get(get)
+			rsp, err := c.SendRPC(get)
 			if err != nil {
 				t.Errorf("(Parallel) Get returned an error: %v", err)
 			} else {
-				rsp_value := rsp.Result.Cell[0].GetValue()
+				rsp_value := rsp.(*pb.GetResponse).Result.Cell[0].GetValue()
 				if !bytes.Equal(rsp_value, []byte(key)) {
 					t.Errorf("Get returned an incorrect result.")
 				}
@@ -386,12 +387,12 @@ func TestTimestampIncreasing(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		insertKeyValue(c, key, "cf", []byte("1"))
 		get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
-		rsp, err := c.Get(get)
+		rsp, err := c.SendRPC(get)
 		if err != nil {
 			t.Errorf("Get returned an error: %v", err)
 			break
 		}
-		newTime := rsp.GetResult().Cell[0].GetTimestamp()
+		newTime := rsp.(*pb.GetResponse).GetResult().Cell[0].GetTimestamp()
 		if newTime <= oldTime {
 			t.Errorf("Timestamps are not increasing. Old Time: %v, New Time: %v",
 				oldTime, newTime)
@@ -413,15 +414,15 @@ func TestAppend(t *testing.T) {
 	values := map[string]map[string][]byte{"cf": map[string][]byte{}}
 	values["cf"]["a"] = []byte(" my name is Dog.")
 	appRequest, err := hrpc.NewAppStr(context.Background(), table, key, values)
-	appRsp, err := c.Append(appRequest)
+	appRsp, err := c.SendRPC(appRequest)
 	if err != nil {
 		t.Errorf("Append returned an error: %v", err)
 	}
-	if appRsp.GetResult() == nil {
+	if appRsp.(*pb.MutateResponse).GetResult() == nil {
 		t.Errorf("Append doesn't return updated value.")
 	}
 	// Verifying new result is "Hello my name is Dog."
-	result := appRsp.GetResult().Cell[0].GetValue()
+	result := appRsp.(*pb.MutateResponse).GetResult().Cell[0].GetValue()
 	if !bytes.Equal([]byte("Hello my name is Dog."), result) {
 		t.Errorf("Append returned an incorrect result. Expected: %v, Receieved: %v",
 			[]byte("Hello my name is Dog."), result)
@@ -430,8 +431,8 @@ func TestAppend(t *testing.T) {
 	// Make sure the change was actually committed.
 	headers := map[string][]string{"cf": nil}
 	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
-	rsp, err := c.Get(get)
-	cells := rsp.GetResult().Cell
+	rsp, err := c.SendRPC(get)
+	cells := rsp.(*pb.GetResponse).GetResult().Cell
 	if len(cells) != 1 {
 		t.Errorf("Get expected 1 cells. Received: %d", len(cells))
 	}
@@ -465,11 +466,11 @@ func TestChangingRegionServers(t *testing.T) {
 	// All regions should now be on server 3.
 	test.StopRegionServers([]string{"1", "2"})
 	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
-	rsp, err := c.Get(get)
+	rsp, err := c.SendRPC(get)
 	if err != nil {
 		t.Errorf("Get returned an error: %v", err)
 	}
-	rsp_value := rsp.Result.Cell[0].GetValue()
+	rsp_value := rsp.(*pb.GetResponse).Result.Cell[0].GetValue()
 	if !bytes.Equal(rsp_value, val) {
 		t.Errorf("Get returned an incorrect result. Expected: %v, Received: %v",
 			val, rsp_value)
@@ -502,7 +503,7 @@ func BenchmarkGet(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		key := keyPrefix + fmt.Sprintf("%d", i)
 		get, _ := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
-		c.Get(get)
+		c.SendRPC(get)
 	}
 }
 
@@ -524,6 +525,6 @@ func insertKeyValue(c *gohbase.Client, key, columnFamily string, value []byte) e
 	values := map[string]map[string][]byte{columnFamily: map[string][]byte{}}
 	values[columnFamily]["a"] = value
 	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values)
-	_, err = c.Put(putRequest)
+	_, err = c.SendRPC(putRequest)
 	return err
 }
