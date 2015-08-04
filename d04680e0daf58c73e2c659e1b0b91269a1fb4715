@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9ad9bd40_f508d3db",
+        "filename": "hrpc/mutate.go",
+        "patchSetId": 2
+      },
+      "lineNbr": 262,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-08-04T07:45:25Z",
+      "side": 1,
+      "message": "In my experience, doing this kind of data manipulation on the original data with a type switch is one order of magnitude faster than working on the reflect.Value – so we can maybe try to pass the original m.data (in addition to its reflect.Value) and have a reflection-free type switch fast path for common types (string, bool, integer types, etc) and only resort to reflection for the remaining cases?",
+      "revId": "d04680e0daf58c73e2c659e1b0b91269a1fb4715",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_555b3ff5",
+        "filename": "integration_test.go",
+        "patchSetId": 2
+      },
+      "lineNbr": 250,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-08-04T07:45:25Z",
+      "side": 1,
+      "message": "Instead of all these cases and duplicated if/Errorf calls, how about having a map[string][]byte that is keyed by qualifier and maps to the expected value for this qualifier?",
+      "revId": "d04680e0daf58c73e2c659e1b0b91269a1fb4715",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
