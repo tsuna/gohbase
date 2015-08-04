@@ -1,0 +1,50 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9ad9bd40_55441f1a",
+        "filename": "hrpc/call.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 129,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-08-04T07:31:09Z",
+      "side": 1,
+      "message": "Can these become just booleans?  We can dereference the pointers in ToLocalResult.",
+      "range": {
+        "startLine": 128,
+        "startChar": 0,
+        "endLine": 129,
+        "endChar": 13
+      },
+      "revId": "572d3d29e36b94d4a5b4a80b80cdb00057b5a390",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_d54f4f32",
+        "filename": "hrpc/call.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 145,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-08-04T07:31:09Z",
+      "side": 1,
+      "message": "I think you don\u0027t need the roundtrip via reflect.SliceHeader if you just do:\n\n  return *(*[]*Cell)(unsafe.Pointer(\u0026pbr))",
+      "range": {
+        "startLine": 144,
+        "startChar": 0,
+        "endLine": 145,
+        "endChar": 44
+      },
+      "revId": "572d3d29e36b94d4a5b4a80b80cdb00057b5a390",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
