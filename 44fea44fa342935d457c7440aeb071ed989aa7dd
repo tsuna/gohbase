@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9ad9bd40_2223de56",
+        "filename": "hrpc/call.go",
+        "patchSetId": 4
+      },
+      "lineNbr": 146,
+      "author": {
+        "id": 1005347
+      },
+      "writtenOn": "2015-08-04T23:38:59Z",
+      "side": 1,
+      "message": "One issue with converting these from pointers is that with the pointer if \u0027Exists\u0027 and \u0027Stale\u0027 aren\u0027t applicable to an RPC it\u0027d come back as nil. Now however we always default to False even if Stale + Exists are nil.\n\nFeel like causes a programmer trap where we\u0027re misleadingly returning False for both when they\u0027re not actually set in the response.",
+      "range": {
+        "startLine": 145,
+        "startChar": 0,
+        "endLine": 146,
+        "endChar": 16
+      },
+      "revId": "44fea44fa342935d457c7440aeb071ed989aa7dd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
