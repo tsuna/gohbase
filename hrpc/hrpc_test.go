@@ -7,10 +7,12 @@ package hrpc
 
 import (
 	"bytes"
-	"github.com/tsuna/gohbase/filter"
-	"golang.org/x/net/context"
 	"reflect"
 	"testing"
+
+	"github.com/tsuna/gohbase/filter"
+	"github.com/tsuna/gohbase/regioninfo"
+	"golang.org/x/net/context"
 )
 
 func TestNewGet(t *testing.T) {
@@ -108,4 +110,94 @@ func confirmScanAttributes(s *Scan, ctx context.Context, table, start, stop []by
 		return false
 	}
 	return true
+}
+
+func BenchmarkMutateSerializeWithNestedMaps(b *testing.B) {
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		data := map[string]map[string][]byte{
+			"cf": map[string][]byte{
+				"a": []byte{10},
+				"b": []byte{20},
+				"c": []byte{30, 0},
+				"d": []byte{40, 0, 0, 0},
+				"e": []byte{50, 0, 0, 0, 0, 0, 0, 0},
+				"f": []byte{60},
+				"g": []byte{70},
+				"h": []byte{80, 0},
+				"i": []byte{90, 0, 0, 0},
+				"j": []byte{100, 0, 0, 0, 0, 0, 0, 0},
+				"k": []byte{0, 0, 220, 66},
+				"l": []byte{0, 0, 0, 0, 0, 0, 94, 64},
+				"m": []byte{0, 0, 2, 67, 0, 0, 0, 0},
+				"n": []byte{0, 0, 0, 0, 0, 128, 97, 64, 0, 0, 0, 0, 0, 0, 0, 0},
+				"o": []byte{150},
+				"p": []byte{4, 8, 15, 26, 23, 42},
+				"q": []byte{1, 1, 3, 5, 8, 13, 21, 34, 55},
+				"r": []byte("One Ring to rule them all, One Ring to find them, One Ring to bring them all and in the darkness bind them"),
+			},
+		}
+		mutate, err := NewPutStr(context.Background(), "", "", data)
+		if err != nil {
+			b.Errorf("Error creating mutate: %v", err)
+		}
+		mutate.SetRegion(&regioninfo.Info{})
+		mutate.Serialize()
+	}
+}
+
+func BenchmarkMutateSerializeWithReflection(b *testing.B) {
+	b.ReportAllocs()
+
+	type teststr struct {
+		AnInt       int        `hbase:"cf:a"`
+		AnInt8      int8       `hbase:"cf:b"`
+		AnInt16     int16      `hbase:"cf:c"`
+		AnInt32     int32      `hbase:"cf:d"`
+		AnInt64     int64      `hbase:"cf:e"`
+		AnUInt      uint       `hbase:"cf:f"`
+		AnUInt8     uint8      `hbase:"cf:g"`
+		AnUInt16    uint16     `hbase:"cf:h"`
+		AnUInt32    uint32     `hbase:"cf:i"`
+		AnUInt64    uint64     `hbase:"cf:j"`
+		AFloat32    float32    `hbase:"cf:k"`
+		AFloat64    float64    `hbase:"cf:l"`
+		AComplex64  complex64  `hbase:"cf:m"`
+		AComplex128 complex128 `hbase:"cf:n"`
+		APointer    *int       `hbase:"cf:o"`
+		AnArray     [6]uint8   `hbase:"cf:p"`
+		ASlice      []uint8    `hbase:"cf:q"`
+		AString     string     `hbase:"cf:r"`
+	}
+
+	number := 150
+	for i := 0; i < b.N; i++ {
+		str := teststr{
+			AnInt:       10,
+			AnInt8:      20,
+			AnInt16:     30,
+			AnInt32:     40,
+			AnInt64:     50,
+			AnUInt:      60,
+			AnUInt8:     70,
+			AnUInt16:    80,
+			AnUInt32:    90,
+			AnUInt64:    100,
+			AFloat32:    110,
+			AFloat64:    120,
+			AComplex64:  130,
+			AComplex128: 140,
+			APointer:    &number,
+			AnArray:     [6]uint8{4, 8, 15, 26, 23, 42},
+			ASlice:      []uint8{1, 1, 3, 5, 8, 13, 21, 34, 55},
+			AString:     "One Ring to rule them all, One Ring to find them, One Ring to bring them all and in the darkness bind them",
+		}
+		mutate, err := NewPutStrRef(context.Background(), "", "", str)
+		if err != nil {
+			b.Errorf("Error creating mutate: %v", err)
+		}
+		mutate.SetRegion(&regioninfo.Info{})
+		mutate.Serialize()
+	}
 }
