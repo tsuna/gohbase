@@ -398,7 +398,7 @@ func (c *Client) sendRPCToRegion(rpc hrpc.Call, reg *regioninfo.Info) (proto.Mes
 		} else if _, ok := res.Error.(region.UnrecoverableError); ok {
 			// If it was an unrecoverable error, the region client is
 			// considered dead.
-			if c.clientType == AdminClient || reg == c.metaRegionInfo {
+			if reg == c.metaRegionInfo || reg == c.adminRegionInfo {
 				// If this is the admin client or the meta table, mark the
 				// region as unavailable and start up a goroutine to
 				// reconnect if it wasn't already marked as such.
@@ -456,12 +456,11 @@ func (c *Client) findRegionForRPC(rpc hrpc.Call) (proto.Message, error) {
 		// the cache while we were looking it up.
 		c.regionsLock.Lock()
 
-		reg2 := c.getRegionFromCache(rpc.Table(), rpc.Key())
-		if reg2 != nil {
+		if existing := c.getRegionFromCache(rpc.Table(), rpc.Key()); existing != nil {
 			// The region was added to the cache while we were looking it
 			// up. Send the RPC to the region that was in the cache.
 			c.regionsLock.Unlock()
-			return c.sendRPCToRegion(rpc, reg2)
+			return c.sendRPCToRegion(rpc, existing)
 		}
 
 		// The region wasn't added to the cache while we were looking it
@@ -495,8 +494,7 @@ func (c *Client) findRegionForRPC(rpc hrpc.Call) (proto.Message, error) {
 func (c *Client) getRegionFromCache(table, key []byte) *regioninfo.Info {
 	if c.clientType == AdminClient {
 		return c.adminRegionInfo
-	}
-	if bytes.Equal(table, metaTableName) {
+	} else if bytes.Equal(table, metaTableName) {
 		return c.metaRegionInfo
 	}
 	regionName := createRegionSearchKey(table, key)
@@ -652,11 +650,13 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 			ctx, _ := context.WithTimeout(context.Background(), regionLookupTimeout)
 
 			resChan := make(chan newRegResult)
+			var clientType region.ClientType
 			if c.clientType == StandardClient {
-				go newRegion(resChan, region.RegionClient, host, port, c.rpcQueueSize, c.flushInterval)
+				clientType = region.RegionClient
 			} else {
-				go newRegion(resChan, region.MasterClient, host, port, c.rpcQueueSize, c.flushInterval)
+				clientType = region.MasterClient
 			}
+			go newRegion(resChan, clientType, host, port, c.rpcQueueSize, c.flushInterval)
 
 			select {
 			case res := <-resChan:
