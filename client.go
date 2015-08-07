@@ -338,10 +338,14 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 func (c *Client) sendRPCToRegion(rpc hrpc.Call, reg *regioninfo.Info) (proto.Message, error) {
 	// On the first sendRPC to the meta or admin regions, a goroutine must be
 	// manually kicked off for the meta or admin region client
-	if reg == c.adminRegionInfo && c.adminClient == nil && !c.adminRegionInfo.IsUnavailable() ||
-		reg == c.metaRegionInfo && c.metaClient == nil && !c.metaRegionInfo.IsUnavailable() {
-		reg.MarkUnavailable()
-		go c.reestablishRegion(reg)
+	if c.adminClient == nil && reg == c.adminRegionInfo && !c.adminRegionInfo.IsUnavailable() ||
+		c.metaClient == nil && reg == c.metaRegionInfo && !c.metaRegionInfo.IsUnavailable() {
+		c.regionsLock.Lock()
+		if !c.metaRegionInfo.IsUnavailable() {
+			reg.MarkUnavailable()
+			go c.reestablishRegion(reg)
+		}
+		c.regionsLock.Unlock()
 	}
 	// The region was in the cache, check
 	// if the region is marked as available
