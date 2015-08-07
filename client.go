@@ -37,6 +37,10 @@ var (
 	// ErrDeadline is returned when the deadline of a request has been exceeded
 	ErrDeadline = errors.New("deadline exceeded")
 
+	// TableNotFound is returned when attempting to access a table that
+	// doesn't exist on this cluster.
+	TableNotFound = errors.New("table not found")
+
 	// Default timeouts
 
 	// How long to wait for a region lookup (either meta lookup or finding
@@ -448,6 +452,9 @@ func (c *Client) findRegionForRPC(rpc hrpc.Call) (proto.Message, error) {
 		reg, host, port, err := c.locateRegion(ctx, rpc.Table(), rpc.Key())
 
 		if err != nil {
+			if err == TableNotFound {
+				return nil, err
+			}
 			// There was an error with the meta table. Let's sleep for some
 			// backoff amount and retry.
 			backoff, err = sleepAndIncreaseBackoff(ctx, backoff)
@@ -575,9 +582,18 @@ func (c *Client) locateRegion(ctx context.Context, table, key []byte) (*regionin
 		}
 	}
 
-	reg, host, port, err := c.parseMetaTableResponse(resp.(*pb.GetResponse))
+	metaRow := resp.(*pb.GetResponse)
+	if metaRow.Result == nil {
+		return nil, "", 0, TableNotFound
+	}
+
+	reg, host, port, err := c.parseMetaTableResponse(metaRow)
 	if err != nil {
 		return nil, "", 0, err
+	}
+	if !bytes.Equal(table, reg.Table()) {
+		return nil, "", 0, fmt.Errorf("WTF: Meta returned an entry for the wrong table!"+
+			"  Looked up table=%q key=%q got region=%s", table, key, reg)
 	}
 	// TODO: check reg is what we wanted
 	return reg, host, port, nil
@@ -689,6 +705,11 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 			}
 		}
 		if err != nil {
+			if err == TableNotFound {
+				c.regions.del(originalReg.RegionName)
+				originalReg.MarkAvailable()
+				return
+			}
 			// This will be hit if either there was an error locating the
 			// region, or the region was located but there was an error
 			// connecting to it.
