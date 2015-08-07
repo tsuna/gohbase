@@ -483,6 +483,9 @@ func (c *Client) findRegionForRPC(rpc hrpc.Call) (proto.Message, error) {
 		c.regionsLock.Unlock()
 
 		// Check if there's already a client for this region server
+		// TODO: This is wrong, checkForClient should be used in
+		// establishRegion otherwise we make the assumption that every time we
+		// find a region, we need a new client for it.
 		client := c.clients.checkForClient(host, port)
 		if client != nil {
 			// There's already a client, add it to the cache and mark the
@@ -673,6 +676,8 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 			} else {
 				clientType = region.MasterClient
 			}
+			// TODO: we should be using checkForClient here because we might
+			// not need to create a new connection for this host/port.
 			go newRegion(ctx, resChan, clientType, host, port, c.rpcQueueSize, c.flushInterval)
 
 			select {
