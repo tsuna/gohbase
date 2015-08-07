@@ -441,14 +441,18 @@ func (c *Client) findRegionForRPC(rpc hrpc.Call) (proto.Message, error) {
 	// must be looked up in the meta table
 
 	backoff := backoffStart
+	ctx := rpc.GetContext()
 	for {
 		// Look up the region in the meta table
-		reg, host, port, err := c.locateRegion(rpc.GetContext(), rpc.Table(), rpc.Key())
+		reg, host, port, err := c.locateRegion(ctx, rpc.Table(), rpc.Key())
 
 		if err != nil {
 			// There was an error with the meta table. Let's sleep for some
 			// backoff amount and retry.
-			backoff = sleepAndIncreaseBackoff(backoff)
+			backoff, err = sleepAndIncreaseBackoff(ctx, backoff)
+			if err != nil {
+				return nil, err
+			}
 			continue
 		}
 
@@ -646,9 +650,8 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 	backoff := backoffStart
 
 	for {
+		ctx, _ := context.WithTimeout(context.Background(), regionLookupTimeout)
 		if port != 0 && err == nil {
-			ctx, _ := context.WithTimeout(context.Background(), regionLookupTimeout)
-
 			resChan := make(chan newRegResult)
 			var clientType region.ClientType
 			if c.clientType == StandardClient {
@@ -682,15 +685,20 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 					err = res.Err
 				}
 			case <-ctx.Done():
+				// TODO we should probably do something like close(resChan)
+				// to not leak a region.Client just because we gave up here.
+				err = ErrDeadline
 			}
 		}
 		if err != nil {
 			// This will be hit if either there was an error locating the
 			// region, or the region was located but there was an error
 			// connecting to it.
-			backoff = sleepAndIncreaseBackoff(backoff)
+			backoff, err = sleepAndIncreaseBackoff(ctx, backoff)
+			if err != nil {
+				continue
+			}
 		}
-		ctx, _ := context.WithTimeout(context.Background(), regionLookupTimeout)
 		if c.clientType == AdminClient {
 			host, port, err = c.locateResource(ctx, zk.Master)
 		} else if reg == c.metaRegionInfo {
@@ -701,12 +709,17 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 	}
 }
 
-func sleepAndIncreaseBackoff(backoff time.Duration) time.Duration {
-	time.Sleep(backoff)
+func sleepAndIncreaseBackoff(ctx context.Context, backoff time.Duration) (time.Duration, error) {
+	select {
+	case <-time.After(backoff):
+	case <-ctx.Done():
+		return 0, ErrDeadline
+	}
+	// TODO: Revisit how we back off here.
 	if backoff < 5000*time.Millisecond {
-		return backoff * 2
+		return backoff * 2, nil
 	} else {
-		return backoff + 5000*time.Millisecond
+		return backoff + 5000*time.Millisecond, nil
 	}
 }
 
