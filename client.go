@@ -378,7 +378,7 @@ func (c *Client) sendRPCToRegion(rpc hrpc.Call, reg *regioninfo.Info) (proto.Mes
 			}
 			// Recurse, which will result in blocking until
 			// the region is available again.
-			return c.sendRPC(rpc)
+			goto unavailable
 		}
 
 		// Wait for the response
@@ -416,23 +416,24 @@ func (c *Client) sendRPCToRegion(rpc hrpc.Call, reg *regioninfo.Info) (proto.Mes
 				}
 			}
 
-			// Recurse, which will result in blocking on the unavailable
-			// region for this request until it's available.
-			return c.sendRPC(rpc)
+			// Fall through to the case of the region being unavailable,
+			// which will result in blocking until it's available again.
+			goto unavailable
 		} else {
 			// RPC was successfully sent, or an unknown type of error
 			// occurred. In either case, return the results.
 			return res.Msg, res.Error
 		}
-	} else {
-		// The region is unavailable. Wait for it to become available,
-		// or for the deadline to be exceeded.
-		select {
-		case <-ch:
-			return c.sendRPC(rpc)
-		case <-rpc.GetContext().Done():
-			return nil, ErrDeadline
-		}
+	}
+
+	// The region is unavailable. Wait for it to become available,
+	// or for the deadline to be exceeded.
+unavailable:
+	select {
+	case <-ch:
+		return c.sendRPC(rpc)
+	case <-rpc.GetContext().Done():
+		return nil, ErrDeadline
 	}
 }
 
