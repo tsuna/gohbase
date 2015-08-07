@@ -482,13 +482,10 @@ func (c *Client) findRegionForRPC(rpc hrpc.Call) (proto.Message, error) {
 			// new region as available.
 			c.clients.put(reg, client)
 			reg.MarkAvailable()
-
-			// Send the RPC to the new region
-			return c.sendRPCToRegion(rpc, reg)
+		} else {
+			// Start a goroutine to connect to the region
+			go c.establishRegion(reg, host, port)
 		}
-
-		// Start a goroutine to connect to the region
-		go c.establishRegion(reg, host, port)
 
 		// Send the RPC to the new region
 		return c.sendRPCToRegion(rpc, reg)
