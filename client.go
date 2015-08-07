@@ -741,14 +741,15 @@ type ResourceResult struct {
 
 // Asynchronously looks up the meta region in ZooKeeper.
 func (c *Client) locateResource(ctx context.Context, res zk.ResourceName) (string, uint16, error) {
-	reschan := make(chan ResourceResult)
+	// We make this a buffered channel so that if we stop waiting due to a
+	// timeout, we won't block the locateResourceSync() that we start in a
+	// separate goroutine.
+	reschan := make(chan ResourceResult, 1)
 	go c.locateResourceSync(res, reschan)
 	select {
 	case res := <-reschan:
 		return res.host, res.port, res.err
 	case <-ctx.Done():
-		// TODO: here we should do something about reschan because otherwise
-		// locateResourceSync's goroutine is gonna be stock forever.
 		return "", 0, ErrDeadline
 	}
 }
