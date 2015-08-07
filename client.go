@@ -657,7 +657,7 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 			} else {
 				clientType = region.MasterClient
 			}
-			go newRegion(resChan, clientType, host, port, c.rpcQueueSize, c.flushInterval)
+			go newRegion(ctx, resChan, clientType, host, port, c.rpcQueueSize, c.flushInterval)
 
 			select {
 			case res := <-resChan:
@@ -721,10 +721,16 @@ func sleepAndIncreaseBackoff(ctx context.Context, backoff time.Duration) (time.D
 	}
 }
 
-func newRegion(ret chan newRegResult, clientType region.ClientType, host string, port uint16, queueSize int, queueTimeout time.Duration) {
+func newRegion(ctx context.Context, ret chan newRegResult, clientType region.ClientType,
+	host string, port uint16, queueSize int, queueTimeout time.Duration) {
 	c, e := region.NewClient(host, port, clientType, queueSize, queueTimeout)
-	// TODO: check if we should close the client or send it back
-	ret <- newRegResult{c, e}
+	select {
+	case ret <- newRegResult{c, e}:
+		// Hooray!
+	case <-ctx.Done():
+		// We timed out, too bad, nobody expects this client anymore, ditch it.
+		c.Close()
+	}
 }
 
 type ResourceResult struct {

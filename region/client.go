@@ -109,7 +109,8 @@ type Client struct {
 }
 
 // NewClient creates a new RegionClient.
-func NewClient(host string, port uint16, ctype ClientType, queueSize int, flushInterval time.Duration) (*Client, error) {
+func NewClient(host string, port uint16, ctype ClientType,
+	queueSize int, flushInterval time.Duration) (*Client, error) {
 	addr := fmt.Sprintf("%s:%d", host, port)
 	conn, err := net.Dial("tcp", addr) // TODO: DialTimeout
 	if err != nil {
@@ -134,6 +135,14 @@ func NewClient(host string, port uint16, ctype ClientType, queueSize int, flushI
 	go c.processRpcs() // Writer goroutine
 	go c.receiveRpcs() // Reader goroutine
 	return c, nil
+}
+
+// Close asks this region.Client to close its connection to the RegionServer.
+// All queued and outstanding RPCs, if any, will be failed as if a connection
+// error had happened.
+func (c *Client) Close() {
+	c.sendErr = errors.New("shutting down")
+	c.errorEncountered()
 }
 
 // Host returns the host that this client talks to
