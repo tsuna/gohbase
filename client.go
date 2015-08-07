@@ -704,7 +704,7 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 		} else if reg == c.metaRegionInfo {
 			host, port, err = c.locateResource(ctx, zk.Meta)
 		} else {
-			reg, host, port, err = c.locateRegion(ctx, reg.Table, reg.StartKey)
+			reg, host, port, err = c.locateRegion(ctx, originalReg.Table, originalReg.StartKey)
 		}
 	}
 }
