@@ -575,13 +575,16 @@ func (c *Client) locateRegion(ctx context.Context, table, key []byte) (*regionin
 		}
 	}
 
-	if resp == nil {
-		return nil, "", 0, errors.New("table not found")
+	reg, host, port, err := c.parseMetaTableResponse(resp.(*pb.GetResponse))
+	if err != nil {
+		return nil, "", 0, err
 	}
-
-	return c.parseMetaTableResponse(resp.(*pb.GetResponse))
+	// TODO: check reg is what we wanted
+	return reg, host, port, nil
 }
 
+// parseMetaTableResponse parses the contents of a row from the meta table.
+// It's guaranteed to return a region info and a host/port OR return an error.
 func (c *Client) parseMetaTableResponse(metaRow *pb.GetResponse) (*regioninfo.Info, string, uint16, error) {
 	var reg *regioninfo.Info
 	var host string
@@ -619,6 +622,19 @@ func (c *Client) parseMetaTableResponse(metaRow *pb.GetResponse) (*regioninfo.In
 			// regions_cache with the daughter regions of the split.
 		}
 	}
+
+	if reg == nil {
+		// There was no regioninfo in the row in meta, this is really not
+		// expected.
+		err := fmt.Errorf("Meta seems to be broken, there was no regioninfo in %s",
+			metaRow)
+		log.Error(err.Error())
+		return nil, "", 0, err
+	} else if port == 0 { // Either both `host' and `port' are set, or both aren't.
+		return nil, "", 0, fmt.Errorf("Meta doesn't have a server location in %s",
+			metaRow)
+	}
+
 	return reg, host, port, nil
 }
 
