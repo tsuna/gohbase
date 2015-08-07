@@ -89,8 +89,8 @@ func (rcc *regionClientCache) clientDown(reg *regioninfo.Info) []*regioninfo.Inf
 	var downregions []*regioninfo.Info
 	c := rcc.clients[reg]
 	for _, reg := range rcc.clientsToInfos[c] {
-		delete(rcc.clients, reg)
 		succ := reg.MarkUnavailable()
+		delete(rcc.clients, reg)
 		if succ {
 			downregions = append(downregions, reg)
 		}
@@ -356,7 +356,13 @@ func (c *Client) sendRPCToRegion(rpc hrpc.Call, reg *regioninfo.Info) (proto.Mes
 		rpc.SetRegion(reg)
 
 		// Queue the RPC to be sent to the region
-		err := c.clientFor(reg).QueueRPC(rpc)
+		client := c.clientFor(reg)
+		var err error
+		if client == nil {
+			err = errors.New("no client for this region")
+		} else {
+			err = client.QueueRPC(rpc)
+		}
 
 		if err != nil {
 			// There was an error queueing the RPC.
