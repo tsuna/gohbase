@@ -145,6 +145,8 @@ func (krc *keyRegionCache) get(key []byte) ([]byte, *regioninfo.Info) {
 
 func (krc *keyRegionCache) put(key []byte, reg *regioninfo.Info) *regioninfo.Info {
 	krc.m.Lock()
+	// TODO: We need to remove all the entries that are overlap with the range
+	// of the new region being added here, if any.
 	oldV, _ := krc.regions.Put(key, func(interface{}, bool) (interface{}, bool) { return reg, true })
 	krc.m.Unlock()
 	if oldV == nil {
@@ -168,6 +170,7 @@ type Client struct {
 
 	regions keyRegionCache
 
+	// TODO: document what this protects.
 	regionsLock sync.Mutex
 
 	// Maps a *regioninfo.Info to the *region.Client that we think currently
@@ -390,6 +393,7 @@ func (c *Client) sendRPCToRegion(rpc hrpc.Call, reg *regioninfo.Info) (proto.Mes
 		if _, ok := res.Error.(region.RetryableError); ok {
 			// If it was an error that can be resolved by trying to send
 			// the RPC again, send it again
+			// TODO: Try to mark `reg' as unavailable.
 			return c.sendRPC(rpc)
 		} else if _, ok := res.Error.(region.UnrecoverableError); ok {
 			// If it was an unrecoverable error, the region client is
@@ -648,7 +652,11 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 					} else {
 						c.clients.put(reg, res.Client)
 						if reg != originalReg {
-							// TODO: remove originalReg from c.regions
+							// Here `reg' is guaranteed to be available, so we
+							// must publish the region->client mapping first,
+							// because as soon as we add it to the key->region
+							// mapping here, concurrent readers are gonna want
+							// to find the client.
 							c.regions.put(reg.RegionName, reg)
 						}
 					}
@@ -706,6 +714,8 @@ func (c *Client) locateResource(ctx context.Context, res zk.ResourceName) (strin
 	case res := <-reschan:
 		return res.host, res.port, res.err
 	case <-ctx.Done():
+		// TODO: here we should do something about reschan because otherwise
+		// locateResourceSync's goroutine is gonna be stock forever.
 		return "", 0, ErrDeadline
 	}
 }

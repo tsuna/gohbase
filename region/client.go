@@ -111,7 +111,7 @@ type Client struct {
 // NewClient creates a new RegionClient.
 func NewClient(host string, port uint16, ctype ClientType, queueSize int, flushInterval time.Duration) (*Client, error) {
 	addr := fmt.Sprintf("%s:%d", host, port)
-	conn, err := net.Dial("tcp", addr)
+	conn, err := net.Dial("tcp", addr) // TODO: DialTimeout
 	if err != nil {
 		return nil,
 			fmt.Errorf("failed to connect to the RegionServer at %s: %s", addr, err)
