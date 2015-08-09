@@ -609,10 +609,15 @@ func (c *Client) locateRegion(ctx context.Context,
 		return nil, "", 0, err
 	}
 	if !bytes.Equal(table, reg.Table) {
+		// This would indicate a bug in HBase.
 		return nil, "", 0, fmt.Errorf("WTF: Meta returned an entry for the wrong table!"+
 			"  Looked up table=%q key=%q got region=%s", table, key, reg)
+	} else if len(reg.StopKey) != 0 &&
+		bytes.Compare(key, reg.StopKey) >= 0 {
+		// This would indicate a hole in the meta table.
+		return nil, "", 0, fmt.Errorf("WTF: Meta returned an entry for the wrong region!"+
+			"  Looked up table=%q key=%q got region=%s", table, key, reg)
 	}
-	// TODO: check reg is what we wanted
 	return reg, host, port, nil
 }
 
