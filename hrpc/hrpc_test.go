@@ -55,8 +55,8 @@ func TestNewGet(t *testing.T) {
 func confirmGetAttributes(g *Get, ctx context.Context, table, key []byte,
 	fam map[string][]string, filter1 filter.Filter) bool {
 	if g.GetContext() != ctx ||
-		bytes.Compare(g.Table(), table) != 0 ||
-		bytes.Compare(g.Key(), key) != 0 ||
+		!bytes.Equal(g.Table(), table) ||
+		!bytes.Equal(g.Key(), key) ||
 		!reflect.DeepEqual(g.GetFamilies(), fam) ||
 		reflect.TypeOf(g.GetFilter()) != reflect.TypeOf(filter1) {
 		return false
@@ -104,9 +104,9 @@ func TestNewScan(t *testing.T) {
 func confirmScanAttributes(s *Scan, ctx context.Context, table, start, stop []byte,
 	fam map[string][]string, filter1 filter.Filter) bool {
 	if s.GetContext() != ctx ||
-		bytes.Compare(s.Table(), table) != 0 ||
-		bytes.Compare(s.GetStartRow(), start) != 0 ||
-		bytes.Compare(s.GetStopRow(), stop) != 0 ||
+		!bytes.Equal(s.Table(), table) ||
+		!bytes.Equal(s.GetStartRow(), start) ||
+		!bytes.Equal(s.GetStopRow(), stop) ||
 		!reflect.DeepEqual(s.GetFamilies(), fam) ||
 		reflect.TypeOf(s.GetFilter()) != reflect.TypeOf(filter1) {
 		return false
