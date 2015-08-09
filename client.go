@@ -745,9 +745,9 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 			}
 		}
 		if c.clientType == AdminClient {
-			host, port, err = c.locateResource(ctx, zk.Master)
+			host, port, err = c.zkLookup(ctx, zk.Master)
 		} else if reg == c.metaRegionInfo {
-			host, port, err = c.locateResource(ctx, zk.Meta)
+			host, port, err = c.zkLookup(ctx, zk.Meta)
 		} else {
 			reg, host, port, err = c.locateRegion(ctx, originalReg.Table, originalReg.StartKey)
 		}
@@ -786,13 +786,13 @@ type ResourceResult struct {
 	err  error
 }
 
-// Asynchronously looks up the meta region in ZooKeeper.
-func (c *Client) locateResource(ctx context.Context, res zk.ResourceName) (string, uint16, error) {
+// Asynchronously looks up the meta region or HMaster in ZooKeeper.
+func (c *Client) zkLookup(ctx context.Context, res zk.ResourceName) (string, uint16, error) {
 	// We make this a buffered channel so that if we stop waiting due to a
-	// timeout, we won't block the locateResourceSync() that we start in a
+	// timeout, we won't block the zkLookupSync() that we start in a
 	// separate goroutine.
 	reschan := make(chan ResourceResult, 1)
-	go c.locateResourceSync(res, reschan)
+	go c.zkLookupSync(res, reschan)
 	select {
 	case res := <-reschan:
 		return res.host, res.port, res.err
@@ -801,8 +801,8 @@ func (c *Client) locateResource(ctx context.Context, res zk.ResourceName) (strin
 	}
 }
 
-// Synchronously looks up the meta region in ZooKeeper.
-func (c *Client) locateResourceSync(res zk.ResourceName, reschan chan<- ResourceResult) {
+// Synchronously looks up the meta region or HMaster in ZooKeeper.
+func (c *Client) zkLookupSync(res zk.ResourceName, reschan chan<- ResourceResult) {
 	host, port, err := zk.LocateResource(c.zkquorum, res)
 	reschan <- ResourceResult{host, port, err}
 }
