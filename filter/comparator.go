@@ -131,7 +131,8 @@ func (c *BinaryPrefixComparator) ConstructPBComparator() (*pb.Comparator, error)
 type BitComparator pb.BitComparator
 
 // NewBitComparator is TODO
-func NewBitComparator(bitwiseOp BitComparatorBitwiseOp, comparable *ByteArrayComparable) *BitComparator {
+func NewBitComparator(bitwiseOp BitComparatorBitwiseOp,
+	comparable *ByteArrayComparable) *BitComparator {
 	op := pb.BitComparator_BitwiseOp(bitwiseOp)
 	return &BitComparator{
 		Comparable: comparable.toPB(),

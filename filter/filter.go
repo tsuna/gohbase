@@ -386,7 +386,8 @@ func (f FirstKeyOnlyFilter) ConstructPBFilter() (*pb.Filter, error) {
 type FirstKeyValueMatchingQualifiersFilter pb.FirstKeyValueMatchingQualifiersFilter
 
 // NewFirstKeyValueMatchingQualifiersFilter is TODO
-func NewFirstKeyValueMatchingQualifiersFilter(qualifiers [][]byte) *FirstKeyValueMatchingQualifiersFilter {
+func NewFirstKeyValueMatchingQualifiersFilter(
+	qualifiers [][]byte) *FirstKeyValueMatchingQualifiersFilter {
 	return &FirstKeyValueMatchingQualifiersFilter{
 		Qualifiers: qualifiers,
 	}
@@ -662,7 +663,8 @@ func (f *SingleColumnValueFilter) ConstructPBFilter() (*pb.Filter, error) {
 type SingleColumnValueExcludeFilter pb.SingleColumnValueExcludeFilter
 
 // NewSingleColumnValueExcludeFilter is TODO
-func NewSingleColumnValueExcludeFilter(filter *SingleColumnValueFilter) *SingleColumnValueExcludeFilter {
+func NewSingleColumnValueExcludeFilter(
+	filter *SingleColumnValueFilter) *SingleColumnValueExcludeFilter {
 	return &SingleColumnValueExcludeFilter{
 		SingleColumnValueFilter: (*pb.SingleColumnValueFilter)(filter),
 	}

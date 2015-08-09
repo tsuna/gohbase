@@ -48,7 +48,8 @@ type Mutate struct {
 }
 
 // baseMutate will return a Mutate struct without the mutationType filled in.
-func baseMutate(ctx context.Context, table, key string, values map[string]map[string][]byte, data interface{}) *Mutate {
+func baseMutate(ctx context.Context, table, key string,
+	values map[string]map[string][]byte, data interface{}) *Mutate {
 	return &Mutate{
 		base: base{
 			table: []byte(table),
@@ -62,7 +63,8 @@ func baseMutate(ctx context.Context, table, key string, values map[string]map[st
 
 // NewPutStr creates a new Mutation request that will put the given values into
 // HBase under the given table and key.
-func NewPutStr(ctx context.Context, table, key string, values map[string]map[string][]byte) (*Mutate, error) {
+func NewPutStr(ctx context.Context, table, key string,
+	values map[string]map[string][]byte) (*Mutate, error) {
 	m := baseMutate(ctx, table, key, values, nil)
 	m.mutationType = pb.MutationProto_PUT
 	return m, nil
@@ -82,7 +84,8 @@ func NewPutStrRef(ctx context.Context, table, key string, data interface{}) (*Mu
 
 // NewDelStr creates a new Mutation request that will delete the given values
 // from HBase under the given table and key.
-func NewDelStr(ctx context.Context, table, key string, values map[string]map[string][]byte) (*Mutate, error) {
+func NewDelStr(ctx context.Context, table, key string,
+	values map[string]map[string][]byte) (*Mutate, error) {
 	m := baseMutate(ctx, table, key, values, nil)
 	m.mutationType = pb.MutationProto_DELETE
 	return m, nil
@@ -101,7 +104,8 @@ func NewDelStrRef(ctx context.Context, table, key string, data interface{}) (*Mu
 
 // NewAppStr creates a new Mutation request that will append the given values
 // to their existing values in HBase under the given table and key.
-func NewAppStr(ctx context.Context, table, key string, values map[string]map[string][]byte) (*Mutate, error) {
+func NewAppStr(ctx context.Context, table, key string,
+	values map[string]map[string][]byte) (*Mutate, error) {
 	m := baseMutate(ctx, table, key, values, nil)
 	m.mutationType = pb.MutationProto_APPEND
 	return m, nil
@@ -120,7 +124,8 @@ func NewAppStrRef(ctx context.Context, table, key string, data interface{}) (*Mu
 
 // NewIncStr creates a new Mutation request that will increment the given values
 // in HBase under the given table and key.
-func NewIncStr(ctx context.Context, table, key string, values map[string]map[string][]byte) (*Mutate, error) {
+func NewIncStr(ctx context.Context, table, key string,
+	values map[string]map[string][]byte) (*Mutate, error) {
 	m := baseMutate(ctx, table, key, values, nil)
 	m.mutationType = pb.MutationProto_INCREMENT
 	return m, nil
@@ -379,7 +384,8 @@ func valueToBytes(val reflect.Value) ([]byte, error) {
 		if kind == reflect.Array || kind == reflect.Slice || kind == reflect.String {
 			// We won't be able to deserialize this later into the correct types, since
 			// arrays/slices/strings don't have a defined size.
-			return nil, fmt.Errorf("Slices and arrays of type %s is unsupported", val.Index(0).Type().Name())
+			return nil, fmt.Errorf("Slices and arrays of type %s is unsupported",
+				val.Index(0).Type().Name())
 		}
 		var allbytes []byte
 		for i := 0; i < val.Len(); i++ {

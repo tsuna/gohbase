@@ -218,7 +218,7 @@ func TestPutReflection(t *testing.T) {
 		APointer:    &number,
 		AnArray:     [6]uint8{4, 8, 15, 26, 23, 42},
 		ASlice:      []uint8{1, 1, 3, 5, 8, 13, 21, 34, 55},
-		AString:     "One Ring to rule them all, One Ring to find them, One Ring to bring them all and in the darkness bind them",
+		AString:     "This is a test string.",
 	}
 
 	if host == nil {
@@ -264,8 +264,7 @@ func TestPutReflection(t *testing.T) {
 		"o": []byte{150},
 		"p": []byte{4, 8, 15, 26, 23, 42},
 		"q": []byte{1, 1, 3, 5, 8, 13, 21, 34, 55},
-		"r": []byte("One Ring to rule them all, One Ring to find them," +
-			" One Ring to bring them all and in the darkness bind them"),
+		"r": []byte("This is a test string."),
 	}
 
 	for _, cell := range rsp.Cells {

@@ -53,13 +53,15 @@ func NewGet(ctx context.Context, table, key []byte, options ...func(Call) error)
 }
 
 // NewGetStr wraps NewGet to allow string table names and keys.
-func NewGetStr(ctx context.Context, table, key string, options ...func(Call) error) (*Get, error) {
+func NewGetStr(ctx context.Context, table, key string,
+	options ...func(Call) error) (*Get, error) {
 	return NewGet(ctx, []byte(table), []byte(key), options...)
 }
 
 // NewGetBefore creates a new Get request for the row right before the given
 // key in the given table and family. Accepts functional options.
-func NewGetBefore(ctx context.Context, table, key []byte, options ...func(Call) error) (*Get, error) {
+func NewGetBefore(ctx context.Context, table, key []byte,
+	options ...func(Call) error) (*Get, error) {
 	g := &Get{
 		base: base{
 			table: table,

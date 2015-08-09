@@ -6,12 +6,13 @@
 package hrpc
 
 import (
+	"unsafe"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/regioninfo"
 	"golang.org/x/net/context"
-	"unsafe"
 )
 
 // Call represents an HBase RPC call.
@@ -129,7 +130,8 @@ type Result struct {
 	// Any other variables we want to include.
 }
 
-// ToLocalResult takes a protobuf Result type and converts it to our own Result type in constant time.
+// ToLocalResult takes a protobuf Result type and converts it to our own
+// Result type in constant time.
 func ToLocalResult(pbr *pb.Result) *Result {
 	if pbr == nil {
 		return &Result{}

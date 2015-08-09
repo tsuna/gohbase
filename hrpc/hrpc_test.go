@@ -52,7 +52,8 @@ func TestNewGet(t *testing.T) {
 
 }
 
-func confirmGetAttributes(g *Get, ctx context.Context, table, key []byte, fam map[string][]string, filter1 filter.Filter) bool {
+func confirmGetAttributes(g *Get, ctx context.Context, table, key []byte,
+	fam map[string][]string, filter1 filter.Filter) bool {
 	if g.GetContext() != ctx ||
 		bytes.Compare(g.Table(), table) != 0 ||
 		bytes.Compare(g.Key(), key) != 0 ||
@@ -100,7 +101,8 @@ func TestNewScan(t *testing.T) {
 	}
 }
 
-func confirmScanAttributes(s *Scan, ctx context.Context, table, start, stop []byte, fam map[string][]string, filter1 filter.Filter) bool {
+func confirmScanAttributes(s *Scan, ctx context.Context, table, start, stop []byte,
+	fam map[string][]string, filter1 filter.Filter) bool {
 	if s.GetContext() != ctx ||
 		bytes.Compare(s.Table(), table) != 0 ||
 		bytes.Compare(s.GetStartRow(), start) != 0 ||
@@ -135,7 +137,7 @@ func BenchmarkMutateSerializeWithNestedMaps(b *testing.B) {
 				"o": []byte{150},
 				"p": []byte{4, 8, 15, 26, 23, 42},
 				"q": []byte{1, 1, 3, 5, 8, 13, 21, 34, 55},
-				"r": []byte("One Ring to rule them all, One Ring to find them, One Ring to bring them all and in the darkness bind them"),
+				"r": []byte("This is a test string."),
 			},
 		}
 		mutate, err := NewPutStr(context.Background(), "", "", data)
@@ -191,7 +193,7 @@ func BenchmarkMutateSerializeWithReflection(b *testing.B) {
 			APointer:    &number,
 			AnArray:     [6]uint8{4, 8, 15, 26, 23, 42},
 			ASlice:      []uint8{1, 1, 3, 5, 8, 13, 21, 34, 55},
-			AString:     "One Ring to rule them all, One Ring to find them, One Ring to bring them all and in the darkness bind them",
+			AString:     "This is a test string.",
 		}
 		mutate, err := NewPutStrRef(context.Background(), "", "", str)
 		if err != nil {

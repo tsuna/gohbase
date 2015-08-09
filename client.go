@@ -151,7 +151,9 @@ func (krc *keyRegionCache) put(key []byte, reg *regioninfo.Info) *regioninfo.Inf
 	krc.m.Lock()
 	// TODO: We need to remove all the entries that are overlap with the range
 	// of the new region being added here, if any.
-	oldV, _ := krc.regions.Put(key, func(interface{}, bool) (interface{}, bool) { return reg, true })
+	oldV, _ := krc.regions.Put(key, func(interface{}, bool) (interface{}, bool) {
+		return reg, true
+	})
 	krc.m.Unlock()
 	if oldV == nil {
 		return nil
@@ -264,14 +266,14 @@ func (c *Client) Scan(s *hrpc.Scan) ([]*hrpc.Result, error) {
 	stopRow := s.GetStopRow()
 	for {
 		// Make a new Scan RPC for this region
-		if rpc == nil {
-			// If it's the first region, just begin at the given startRow
-			rpc, _ = hrpc.NewScanRange(ctx, table, startRow, stopRow, hrpc.Families(families), hrpc.Filters(filters))
-		} else {
+		if rpc != nil {
 			// If it's not the first region, we want to start at whatever the
 			// last region's StopKey was
-			rpc, _ = hrpc.NewScanRange(ctx, table, rpc.GetRegionStop(), stopRow, hrpc.Families(families), hrpc.Filters(filters))
+			startRow = rpc.GetRegionStop()
 		}
+		// TODO: ignoring the error here is just wrong.
+		rpc, _ = hrpc.NewScanRange(ctx, table, startRow, stopRow,
+			hrpc.Families(families), hrpc.Filters(filters))
 
 		res, err := c.sendRPC(rpc)
 		if err != nil {
@@ -305,8 +307,10 @@ func (c *Client) Scan(s *hrpc.Scan) ([]*hrpc.Result, error) {
 		// because (1) it's the last region or (3) because its stop_key is
 		// greater than or equal to the stop_key of this scanner provided
 		// that (2) we're not trying to scan until the end of the table).
-		// (1)                               (2)                  (3)
-		if len(rpc.GetRegionStop()) == 0 || (len(stopRow) != 0 && bytes.Compare(stopRow, rpc.GetRegionStop()) <= 0) {
+		// (1)
+		if len(rpc.GetRegionStop()) == 0 ||
+			// (2)                (3)
+			len(stopRow) != 0 && bytes.Compare(stopRow, rpc.GetRegionStop()) <= 0 {
 			// Do we want to be returning a slice of Result objects or should we just
 			// put all the Cells into the same Result object?
 			localResults := make([]*hrpc.Result, len(results))
@@ -565,7 +569,9 @@ func (c *Client) clientFor(region *regioninfo.Info) *region.Client {
 }
 
 // Locates the region in which the given row key for the given table is.
-func (c *Client) locateRegion(ctx context.Context, table, key []byte) (*regioninfo.Info, string, uint16, error) {
+func (c *Client) locateRegion(ctx context.Context,
+	table, key []byte) (*regioninfo.Info, string, uint16, error) {
+
 	metaKey := createRegionSearchKey(table, key)
 	rpc, _ := hrpc.NewGetBefore(ctx, metaTableName, metaKey, hrpc.Families(infoFamily))
 	rpc.SetRegion(c.metaRegionInfo)
@@ -604,7 +610,9 @@ func (c *Client) locateRegion(ctx context.Context, table, key []byte) (*regionin
 
 // parseMetaTableResponse parses the contents of a row from the meta table.
 // It's guaranteed to return a region info and a host/port OR return an error.
-func (c *Client) parseMetaTableResponse(metaRow *pb.GetResponse) (*regioninfo.Info, string, uint16, error) {
+func (c *Client) parseMetaTableResponse(metaRow *pb.GetResponse) (
+	*regioninfo.Info, string, uint16, error) {
+
 	var reg *regioninfo.Info
 	var host string
 	var port uint16
