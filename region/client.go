@@ -211,7 +211,7 @@ func (c *Client) processRpcs() {
 					c.errorEncountered()
 					return
 				}
-				rpc.GetResultChan() <- hrpc.RPCResult{nil, err}
+				rpc.GetResultChan() <- hrpc.RPCResult{Error: err}
 			}
 		}
 	}
@@ -263,14 +263,15 @@ func (c *Client) receiveRpcs() {
 				"CallId": *resp.CallId,
 			}).Error("Received a response with an unexpected call ID")
 
-			log.Warn("Waiting for responses to the following calls: ")
+			log.Error("Waiting for responses to the following calls:")
 			c.sentRPCsMutex.Lock()
-			for k := range c.sentRPCs {
-				log.Error("\t\t%d, ", k)
+			for id, call := range c.sentRPCs {
+				log.Errorf("\t\t%d: %v", id, call)
 			}
 			c.sentRPCsMutex.Unlock()
 
-			c.sendErr = fmt.Errorf("HBase sent a response with an unexpected call ID: %d", resp.CallId)
+			c.sendErr = fmt.Errorf("HBase sent a response with an unexpected call ID: %d",
+				resp.CallId)
 			c.errorEncountered()
 			return
 		}
@@ -291,7 +292,7 @@ func (c *Client) receiveRpcs() {
 				err = RetryableError{err}
 			}
 		}
-		rpc.GetResultChan() <- hrpc.RPCResult{rpcResp, err}
+		rpc.GetResultChan() <- hrpc.RPCResult{Msg: rpcResp, Error: err}
 
 		c.sentRPCsMutex.Lock()
 		delete(c.sentRPCs, *resp.CallId)
@@ -301,7 +302,7 @@ func (c *Client) receiveRpcs() {
 
 func (c *Client) errorEncountered() {
 	c.writeMutex.Lock()
-	res := hrpc.RPCResult{nil, UnrecoverableError{c.sendErr}}
+	res := hrpc.RPCResult{Error: UnrecoverableError{c.sendErr}}
 	for _, rpc := range c.rpcs {
 		rpc.GetResultChan() <- res
 	}

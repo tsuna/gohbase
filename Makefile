@@ -17,7 +17,7 @@ all: install
 install:
 	$(GO) install ./...
 
-check: test fmtcheck lint
+check: vet test fmtcheck lint
 
 COVER_PKGS := `find ./* -name '*_test.go' | xargs -I{} dirname {} | sort -u`
 COVER_MODE := count
@@ -36,6 +36,9 @@ coverage: coverdata
 fmtcheck:
 	errors=`gofmt -l .`; if test -n "$$errors"; then echo Check these files for style errors:; echo "$$errors"; exit 1; fi
 
+vet:
+	$(GO) vet ./...
+
 lint:
 	find ./* -type d ! -name pb | xargs -L 1 $(GOLINT) &>lint; :
 	if test -s lint; then echo Check these packages for golint:; cat lint; rm lint; exit 1; else rm lint; fi
@@ -48,4 +51,4 @@ test:
 integration:
 	$(GO) test $(GOTEST_FLAGS) -timeout=$(INTEGRATION_TIMEOUT) -v integration_test.go
 
-.PHONY: all check coverage coverdata fmtcheck install integration lint test
+.PHONY: all check coverage coverdata fmtcheck install integration lint test vet

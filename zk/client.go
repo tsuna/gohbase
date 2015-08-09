@@ -50,7 +50,7 @@ func LocateResource(zkquorum string, resource ResourceName) (string, uint16, err
 			fmt.Errorf("Failed to read the %s znode: %s", resource, err)
 	}
 	if len(buf) == 0 {
-		log.Fatal("%s was empty!", resource)
+		log.Fatalf("%s was empty!", resource)
 	} else if buf[0] != 0xFF {
 		return "", 0,
 			fmt.Errorf("The first byte of %s was 0x%x, not 0xFF", resource, buf[0])
