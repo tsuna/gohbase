@@ -106,7 +106,7 @@ func (rcc *regionClientCache) clientDown(reg *regioninfo.Info) []*regioninfo.Inf
 
 func (rcc *regionClientCache) checkForClient(host string, port uint16) *region.Client {
 	rcc.m.Lock()
-	for client, _ := range rcc.clientsToInfos {
+	for client := range rcc.clientsToInfos {
 		if client.Host() == host && client.Port() == port {
 			rcc.m.Unlock()
 			return client
@@ -248,8 +248,10 @@ func Admin() Option {
 
 // CheckTable returns an error if the given table name doesn't exist.
 func (c *Client) CheckTable(ctx context.Context, table string) error {
-	getStr, _ := hrpc.NewGetStr(ctx, table, "theKey")
-	_, err := c.SendRPC(getStr)
+	getStr, err := hrpc.NewGetStr(ctx, table, "theKey")
+	if err == nil {
+		_, err = c.SendRPC(getStr)
+	}
 	return err
 }
 
@@ -271,9 +273,12 @@ func (c *Client) Scan(s *hrpc.Scan) ([]*hrpc.Result, error) {
 			// last region's StopKey was
 			startRow = rpc.GetRegionStop()
 		}
-		// TODO: ignoring the error here is just wrong.
-		rpc, _ = hrpc.NewScanRange(ctx, table, startRow, stopRow,
+
+		rpc, err := hrpc.NewScanRange(ctx, table, startRow, stopRow,
 			hrpc.Families(families), hrpc.Filters(filters))
+		if err != nil {
+			return nil, err
+		}
 
 		res, err := c.sendRPC(rpc)
 		if err != nil {
@@ -573,7 +578,10 @@ func (c *Client) locateRegion(ctx context.Context,
 	table, key []byte) (*regioninfo.Info, string, uint16, error) {
 
 	metaKey := createRegionSearchKey(table, key)
-	rpc, _ := hrpc.NewGetBefore(ctx, metaTableName, metaKey, hrpc.Families(infoFamily))
+	rpc, err := hrpc.NewGetBefore(ctx, metaTableName, metaKey, hrpc.Families(infoFamily))
+	if err != nil {
+		return nil, "", 0, err
+	}
 	rpc.SetRegion(c.metaRegionInfo)
 	resp, err := c.sendRPC(rpc)
 
