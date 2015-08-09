@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 
 	"github.com/tsuna/gohbase"
 	"github.com/tsuna/gohbase/hrpc"
@@ -75,11 +76,14 @@ func CreateTable(host, table string, cFamilies []string) error {
 // DeleteTable finds the HBase shell via the HBASE_HOME environment variable,
 // and disables and drops the given table
 func DeleteTable(host, table string) error {
+	// TODO: We leak this client.
 	ac := gohbase.NewClient(host, gohbase.Admin())
 	dit := hrpc.NewDisableTable(context.Background(), []byte(table))
 	_, err := ac.SendRPC(dit)
 	if err != nil {
-		return err
+		if !strings.Contains(err.Error(), "TableNotEnabledException") {
+			return err
+		}
 	}
 
 	det := hrpc.NewDeleteTable(context.Background(), []byte(table))
