@@ -6,17 +6,14 @@
 package hrpc
 
 import (
-	"errors"
-
 	"github.com/golang/protobuf/proto"
-	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
 	"golang.org/x/net/context"
 )
 
 // CreateTable represents a CreateTable HBase call
 type CreateTable struct {
-	base
+	tableOp
 
 	columns []string
 }
@@ -25,10 +22,10 @@ type CreateTable struct {
 // table in HBase. For use by the admin client.
 func NewCreateTable(ctx context.Context, table []byte, columns []string) *CreateTable {
 	ct := &CreateTable{
-		base: base{
+		tableOp: tableOp{base{
 			table: table,
 			ctx:   ctx,
-		},
+		}},
 		columns: columns,
 	}
 	return ct
@@ -64,18 +61,4 @@ func (ct *CreateTable) Serialize() ([]byte, error) {
 // RPC.
 func (ct *CreateTable) NewResponse() proto.Message {
 	return &pb.CreateTableResponse{}
-}
-
-// SetFilter always returns an error when used on Mutate objects. Do not use.
-// Exists solely so Mutate can implement the Call interface.
-func (ct *CreateTable) SetFilter(ft filter.Filter) error {
-	// Not allowed. Throw an error
-	return errors.New("Cannot set filter on mutate operation.")
-}
-
-// SetFamilies always returns an error when used on Mutate objects. Do not use.
-// Exists solely so Mutate can implement the Call interface.
-func (ct *CreateTable) SetFamilies(fam map[string][]string) error {
-	// Not allowed. Throw an error
-	return errors.New("Cannot set families on mutate operation.")
 }

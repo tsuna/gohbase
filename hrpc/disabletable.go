@@ -6,27 +6,24 @@
 package hrpc
 
 import (
-	"errors"
-
 	"github.com/golang/protobuf/proto"
-	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
 	"golang.org/x/net/context"
 )
 
 // DisableTable represents a DisableTable HBase call
 type DisableTable struct {
-	base
+	tableOp
 }
 
 // NewDisableTable creates a new DisableTable request that will disable the
 // given table in HBase. For use by the admin client.
 func NewDisableTable(ctx context.Context, table []byte) *DisableTable {
 	dt := &DisableTable{
-		base{
+		tableOp{base{
 			table: table,
 			ctx:   ctx,
-		},
+		}},
 	}
 	return dt
 }
@@ -52,18 +49,4 @@ func (dt *DisableTable) Serialize() ([]byte, error) {
 // RPC.
 func (dt *DisableTable) NewResponse() proto.Message {
 	return &pb.DisableTableResponse{}
-}
-
-// SetFilter always returns an error when used on Mutate objects. Do not use.
-// Exists solely so DisableTable can implement the Call interface.
-func (dt *DisableTable) SetFilter(ft filter.Filter) error {
-	// Not allowed. Throw an error
-	return errors.New("Cannot set filter on disable table operation.")
-}
-
-// SetFamilies always returns an error when used on Mutate objects. Do not use.
-// Exists solely so DisableTable can implement the Call interface.
-func (dt *DisableTable) SetFamilies(fam map[string][]string) error {
-	// Not allowed. Throw an error
-	return errors.New("Cannot set families on disable table operation.")
 }

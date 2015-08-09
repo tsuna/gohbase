@@ -6,27 +6,24 @@
 package hrpc
 
 import (
-	"errors"
-
 	"github.com/golang/protobuf/proto"
-	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
 	"golang.org/x/net/context"
 )
 
 // DeleteTable represents a DeleteTable HBase call
 type DeleteTable struct {
-	base
+	tableOp
 }
 
-// NewDeleteTable creates a new DeleteTable request that will delete the given
-// table in HBase. For use by the admin client.
+// NewDeleteTable creates a new DeleteTable request that will delete the
+// given table in HBase. For use by the admin client.
 func NewDeleteTable(ctx context.Context, table []byte) *DeleteTable {
 	dt := &DeleteTable{
-		base{
+		tableOp{base{
 			table: table,
 			ctx:   ctx,
-		},
+		}},
 	}
 	return dt
 }
@@ -52,18 +49,4 @@ func (dt *DeleteTable) Serialize() ([]byte, error) {
 // RPC.
 func (dt *DeleteTable) NewResponse() proto.Message {
 	return &pb.DeleteTableResponse{}
-}
-
-// SetFilter always returns an error when used on Mutate objects. Do not use.
-// Exists solely so DeleteTable can implement the Call interface.
-func (dt *DeleteTable) SetFilter(ft filter.Filter) error {
-	// Not allowed. Throw an error
-	return errors.New("Cannot set filter on disable table operation.")
-}
-
-// SetFamilies always returns an error when used on Mutate objects. Do not use.
-// Exists solely so DeleteTable can implement the Call interface.
-func (dt *DeleteTable) SetFamilies(fam map[string][]string) error {
-	// Not allowed. Throw an error
-	return errors.New("Cannot set families on disable table operation.")
 }
