@@ -53,10 +53,10 @@ func TestRegionDiscovery(t *testing.T) {
 		}}}
 
 	reg, _, _, err := client.parseMetaTableResponse(metaRow)
-	client.regions.put(reg.RegionName, reg)
 	if err != nil {
 		t.Fatalf("Failed to discover region: %s", err)
 	}
+	client.regions.put(reg.RegionName, reg)
 
 	reg = client.getRegionFromCache([]byte("test"), []byte("theKey"))
 	if reg == nil {
