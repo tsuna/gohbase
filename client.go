@@ -780,7 +780,9 @@ func newRegion(ctx context.Context, ret chan newRegResult, clientType region.Cli
 	}
 }
 
-type ResourceResult struct {
+// zkResult contains the result of a ZooKeeper lookup (when we're looking for
+// the meta region or the HMaster).
+type zkResult struct {
 	host string
 	port uint16
 	err  error
@@ -791,7 +793,7 @@ func (c *Client) zkLookup(ctx context.Context, res zk.ResourceName) (string, uin
 	// We make this a buffered channel so that if we stop waiting due to a
 	// timeout, we won't block the zkLookupSync() that we start in a
 	// separate goroutine.
-	reschan := make(chan ResourceResult, 1)
+	reschan := make(chan zkResult, 1)
 	go c.zkLookupSync(res, reschan)
 	select {
 	case res := <-reschan:
@@ -802,7 +804,8 @@ func (c *Client) zkLookup(ctx context.Context, res zk.ResourceName) (string, uin
 }
 
 // Synchronously looks up the meta region or HMaster in ZooKeeper.
-func (c *Client) zkLookupSync(res zk.ResourceName, reschan chan<- ResourceResult) {
+func (c *Client) zkLookupSync(res zk.ResourceName, reschan chan<- zkResult) {
 	host, port, err := zk.LocateResource(c.zkquorum, res)
-	reschan <- ResourceResult{host, port, err}
+	// This is guaranteed to never block as the channel is always buffered.
+	reschan <- zkResult{host, port, err}
 }
