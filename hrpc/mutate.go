@@ -47,7 +47,7 @@ type Mutate struct {
 	data interface{}
 }
 
-// baseMutate will return a Mutate struct without the mutationType filled in.
+// baseMutate returns a Mutate struct without the mutationType filled in.
 func baseMutate(ctx context.Context, table, key string,
 	values map[string]map[string][]byte, data interface{}) *Mutate {
 	return &Mutate{
@@ -61,8 +61,8 @@ func baseMutate(ctx context.Context, table, key string,
 	}
 }
 
-// NewPutStr creates a new Mutation request that will put the given values into
-// HBase under the given table and key.
+// NewPutStr creates a new Mutation request to insert the given
+// family-column-values in the given row key of the given table.
 func NewPutStr(ctx context.Context, table, key string,
 	values map[string]map[string][]byte) (*Mutate, error) {
 	m := baseMutate(ctx, table, key, values, nil)
@@ -70,9 +70,9 @@ func NewPutStr(ctx context.Context, table, key string,
 	return m, nil
 }
 
-// NewPutStrRef creates a new Mutation request that will put the given values into
-// HBase under the given table and key. The data argument must be a struct with
-// fields containing the "hbase" tag.
+// NewPutStrRef creates a new Mutation request to insert the given
+// data structure in the given row key of the given table.  The `data'
+// argument must be a string with fields defined using the "hbase" tag.
 func NewPutStrRef(ctx context.Context, table, key string, data interface{}) (*Mutate, error) {
 	if !isAStruct(data) {
 		return nil, ErrNotAStruct
@@ -82,8 +82,8 @@ func NewPutStrRef(ctx context.Context, table, key string, data interface{}) (*Mu
 	return m, nil
 }
 
-// NewDelStr creates a new Mutation request that will delete the given values
-// from HBase under the given table and key.
+// NewDelStr creates a new Mutation request to delete the given
+// family-column-values from the given row key of the given table.
 func NewDelStr(ctx context.Context, table, key string,
 	values map[string]map[string][]byte) (*Mutate, error) {
 	m := baseMutate(ctx, table, key, values, nil)
@@ -91,8 +91,9 @@ func NewDelStr(ctx context.Context, table, key string,
 	return m, nil
 }
 
-// NewDelStrRef creates a new Mutation request that will delete the given values
-// from HBase under the given table and key.
+// NewDelStrRef creates a new Mutation request to delete the given
+// data structure from the given row key of the given table.  The `data'
+// argument must be a string with fields defined using the "hbase" tag.
 func NewDelStrRef(ctx context.Context, table, key string, data interface{}) (*Mutate, error) {
 	if !isAStruct(data) {
 		return nil, ErrNotAStruct
@@ -102,8 +103,9 @@ func NewDelStrRef(ctx context.Context, table, key string, data interface{}) (*Mu
 	return m, nil
 }
 
-// NewAppStr creates a new Mutation request that will append the given values
-// to their existing values in HBase under the given table and key.
+// NewAppStr creates a new Mutation request to append the given
+// family-column-values into the existing cells in HBase (or create them if
+// needed), in given row key of the given table.
 func NewAppStr(ctx context.Context, table, key string,
 	values map[string]map[string][]byte) (*Mutate, error) {
 	m := baseMutate(ctx, table, key, values, nil)

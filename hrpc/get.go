@@ -29,15 +29,9 @@ type Get struct {
 	filters filter.Filter
 }
 
-// NewGet is called to construct a Get* object which is then passed as the sole parameter for a
-// client.Get(). Uses functional options for arguments, for more information see -
-// http://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis
-// Allows usage like the following -
-//	get, err := hrpc.NewGet(ctx, table, key)
-//	get, err := hrpc.NewGet(ctx, table, key, hrpc.Families(fam))
-//	get, err := hrpc.NewGet(ctx, table, key, hrpc.Filters(filter))
-//	get, err := hrpc.NewGet(ctx, table, key, hrpc.Families(fam), hrpc.Filters(filter))
-func NewGet(ctx context.Context, table, key []byte, options ...func(Call) error) (*Get, error) {
+// NewGet creates a new Get request for the given table and row key.
+func NewGet(ctx context.Context, table, key []byte,
+	options ...func(Call) error) (*Get, error) {
 	g := &Get{
 		base: base{
 			table: table,
@@ -52,14 +46,14 @@ func NewGet(ctx context.Context, table, key []byte, options ...func(Call) error)
 	return g, nil
 }
 
-// NewGetStr wraps NewGet to allow string table names and keys.
+// NewGetStr creates a new Get request for the given table and row key.
 func NewGetStr(ctx context.Context, table, key string,
 	options ...func(Call) error) (*Get, error) {
 	return NewGet(ctx, []byte(table), []byte(key), options...)
 }
 
-// NewGetBefore creates a new Get request for the row right before the given
-// key in the given table and family. Accepts functional options.
+// NewGetBefore creates a new Get request for the row with a key equal to or
+// immediately less than the given key, in the given table.
 func NewGetBefore(ctx context.Context, table, key []byte,
 	options ...func(Call) error) (*Get, error) {
 	g := &Get{
@@ -82,24 +76,24 @@ func (g *Get) GetName() string {
 	return "Get"
 }
 
-// GetFilter returns current set filter
+// GetFilter returns the filter of this Get request.
 func (g *Get) GetFilter() filter.Filter {
 	return g.filters
 }
 
-// GetFamilies returns current set family
+// GetFamilies returns the families to retrieve with this Get request.
 func (g *Get) GetFamilies() map[string][]string {
 	return g.families
 }
 
-// SetFilter sets filter to use and returns the object
+// SetFilter sets filter to use for this Get request.
 func (g *Get) SetFilter(f filter.Filter) error {
 	g.filters = f
 	// TODO: Validation?
 	return nil
 }
 
-// SetFamilies sets families to use and returns the object
+// SetFamilies sets families to retrieve with this Get request.
 func (g *Get) SetFamilies(f map[string][]string) error {
 	g.families = f
 	// TODO: Validation?

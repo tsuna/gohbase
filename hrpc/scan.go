@@ -29,17 +29,7 @@ type Scan struct {
 	filters filter.Filter
 }
 
-// NewScan is called to construct a Scan* object which is then passed as the sole parameter for a
-// client.Scan(). Uses functional options for arguments, see
-// http://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis for more information.
-//
-// Allows usage like the following -
-//
-//	scan, err := hrpc.NewScan(ctx, table)
-//	scan, err := hrpc.NewScan(ctx, table, hrpc.Families(fam))
-//	scan, err := hrpc.NewScan(ctx, table, hrpc.Filters(filter))
-//	scan, err := hrpc.NewScan(ctx, table, hrpc.Families(fam), hrpc.Filters(filter))
-//
+// NewScan creates a scanner for the given table.
 func NewScan(ctx context.Context, table []byte, options ...func(Call) error) (*Scan, error) {
 	scan := &Scan{
 		base: base{
@@ -55,8 +45,9 @@ func NewScan(ctx context.Context, table []byte, options ...func(Call) error) (*S
 	return scan, nil
 }
 
-// NewScanRange is equivalent to NewScan but adds two additional parameters - startRow, stopRow.
-// This allows a range to be scanned without having to go through the overhead of using a RowFilter
+// NewScanRange creates a scanner for the given table and key range.
+// The range is half-open, i.e. [startRow; stopRow[ -- stopRow is not
+// included in the range.
 func NewScanRange(ctx context.Context, table, startRow, stopRow []byte,
 	options ...func(Call) error) (*Scan, error) {
 	scan := &Scan{
@@ -76,20 +67,24 @@ func NewScanRange(ctx context.Context, table, startRow, stopRow []byte,
 	return scan, nil
 }
 
-// NewScanStr wraps NewScan but allows the table to be specified as a string.
+// NewScanStr creates a scanner for the given table.
 func NewScanStr(ctx context.Context, table string, options ...func(Call) error) (*Scan, error) {
 	return NewScan(ctx, []byte(table), options...)
 }
 
-// NewScanRangeStr wraps NewScanRange but allows table, startRow, stopRow to be specified as strings
+// NewScanRangeStr creates a scanner for the given table and key range.
+// The range is half-open, i.e. [startRow; stopRow[ -- stopRow is not
+// included in the range.
 func NewScanRangeStr(ctx context.Context, table, startRow, stopRow string,
 	options ...func(Call) error) (*Scan, error) {
 	return NewScanRange(ctx, []byte(table), []byte(startRow), []byte(stopRow), options...)
 }
 
-// NewScanFromID creates a new Scan request that will return additional results
-// from a given scanner ID.
-func NewScanFromID(ctx context.Context, table []byte, scannerID uint64, startRow []byte) *Scan {
+// NewScanFromID creates a new Scan request that will return additional
+// results from the given scanner ID.  This is an internal method, users
+// are not expected to deal with scanner IDs.
+func NewScanFromID(ctx context.Context, table []byte,
+	scannerID uint64, startRow []byte) *Scan {
 	return &Scan{
 		base: base{
 			table: []byte(table),
@@ -101,9 +96,11 @@ func NewScanFromID(ctx context.Context, table []byte, scannerID uint64, startRow
 	}
 }
 
-// NewCloseFromID creates a new Scan request that will close the scan for a
-// given scanner ID.
-func NewCloseFromID(ctx context.Context, table []byte, scannerID uint64, startRow []byte) *Scan {
+// NewCloseFromID creates a new Scan request that will close the scanner for
+// the given scanner ID.  This is an internal method, users are not expected
+// to deal with scanner IDs.
+func NewCloseFromID(ctx context.Context, table []byte,
+	scannerID uint64, startRow []byte) *Scan {
 	return &Scan{
 		base: base{
 			table: []byte(table),
@@ -120,32 +117,34 @@ func (s *Scan) GetName() string {
 	return "Scan"
 }
 
-// GetStopRow returns the set stopRow.
+// GetStopRow returns the end key (exclusive) of this scanner.
 func (s *Scan) GetStopRow() []byte {
 	return s.stopRow
 }
 
-// GetStartRow returns the set startRow.
+// GetStartRow returns the start key (inclusive) of this scanner.
 func (s *Scan) GetStartRow() []byte {
 	return s.startRow
 }
 
-// GetFamilies returns the set families.
+// GetFamilies returns the set families covered by this scanner.
+// If no families are specified then all the families are scanned.
 func (s *Scan) GetFamilies() map[string][]string {
 	return s.families
 }
 
 // GetRegionStop returns the stop key of the region currently being scanned.
+// This is an internal method, end users are not expected to use it.
 func (s *Scan) GetRegionStop() []byte {
 	return s.region.StopKey
 }
 
-// GetFilter returns the set filter.
+// GetFilter returns the filter set on this scanner.
 func (s *Scan) GetFilter() filter.Filter {
 	return s.filters
 }
 
-// Serialize will convert this Scan into a serialized protobuf message ready
+// Serialize converts this Scan into a serialized protobuf message ready
 // to be sent to an HBase node.
 func (s *Scan) Serialize() ([]byte, error) {
 	scan := &pb.ScanRequest{
@@ -172,13 +171,13 @@ func (s *Scan) Serialize() ([]byte, error) {
 	return proto.Marshal(scan)
 }
 
-// NewResponse creates an empty protobuf message to read the response of this
-// RPC.
+// NewResponse creates an empty protobuf message to read the response
+// of this RPC.
 func (s *Scan) NewResponse() proto.Message {
 	return &pb.ScanResponse{}
 }
 
-// SetFamilies sets the request's families.
+// SetFamilies sets the families covered by this scanner.
 func (s *Scan) SetFamilies(fam map[string][]string) error {
 	s.families = fam
 	return nil
