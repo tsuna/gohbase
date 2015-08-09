@@ -4,6 +4,8 @@
 # that can be found in the COPYING file.
 
 GO := go
+TEST_TIMEOUT := 30s
+INTEGRATION_TIMEOUT := 60s
 GOTEST_FLAGS :=
 
 DEFAULT_GOPATH := $${GOPATH%%:*}
@@ -41,9 +43,9 @@ lint:
 # lint.  See https://github.com/golang/lint/issues/65
 
 test:
-	$(GO) test $(GOTEST_FLAGS) ./...
+	$(GO) test $(GOTEST_FLAGS) -timeout=$(TEST_TIMEOUT) ./...
 
 integration:
-	$(MAKE) test GOTEST_FLAGS="$(GOTEST_FLAGS) -v -tags integration"
+	$(GO) test $(GOTEST_FLAGS) -timeout=$(INTEGRATION_TIMEOUT) -v integration_test.go
 
 .PHONY: all check coverage coverdata fmtcheck install integration lint test
