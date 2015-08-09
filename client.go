@@ -41,6 +41,10 @@ var (
 	// doesn't exist on this cluster.
 	TableNotFound = errors.New("table not found")
 
+	// TableOffline is returned when attempting to access a table that
+	// has been disabled on this cluster.
+	TableOffline = errors.New("table offline")
+
 	// Default timeouts
 
 	// How long to wait for a region lookup (either meta lookup or finding
@@ -404,6 +408,7 @@ func (c *Client) sendRPCToRegion(rpc hrpc.Call, reg *regioninfo.Info) (proto.Mes
 
 		// Check for errors
 		if _, ok := res.Error.(region.RetryableError); ok {
+			log.Warning(res.Error.Error())
 			// If it was an error that can be resolved by trying to send
 			// the RPC again, send it again
 			// TODO: Try to mark `reg' as unavailable.
@@ -461,7 +466,7 @@ func (c *Client) findRegionForRPC(rpc hrpc.Call) (proto.Message, error) {
 		reg, host, port, err := c.locateRegion(ctx, rpc.Table(), rpc.Key())
 
 		if err != nil {
-			if err == TableNotFound {
+			if err == TableNotFound || err == TableOffline {
 				return nil, err
 			}
 			// There was an error with the meta table. Let's sleep for some
@@ -630,13 +635,17 @@ func (c *Client) parseMetaTableResponse(metaRow *pb.GetResponse) (
 	var host string
 	var port uint16
 
+	log.WithFields(log.Fields{"row": metaRow}).Info("parsing meta entry")
 	for _, cell := range metaRow.Result.Cell {
 		switch string(cell.Qualifier) {
 		case "regioninfo":
 			var err error
-			reg, err = regioninfo.InfoFromCell(cell)
+			var status regioninfo.Status
+			reg, status, err = regioninfo.InfoFromCell(cell)
 			if err != nil {
 				return nil, "", 0, err
+			} else if status == regioninfo.Offline {
+				return nil, "", 0, TableOffline
 			}
 		case "server":
 			value := cell.Value
@@ -731,7 +740,7 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 			}
 		}
 		if err != nil {
-			if err == TableNotFound {
+			if err == TableNotFound || err == TableOffline {
 				c.regions.del(originalReg.RegionName)
 				originalReg.MarkAvailable()
 				return

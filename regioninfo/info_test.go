@@ -28,12 +28,14 @@ func TestInfoFromMeta(t *testing.T) {
 		Timestamp: proto.Uint64(1431921690626),
 		CellType:  &put,
 	}
-	info, err := InfoFromCell(cell)
+	info, status, err := InfoFromCell(cell)
 	if err == nil || !strings.HasPrefix(err.Error(), "empty value") {
 		t.Errorf("Unexpected error on empty value: %s", err)
+	} else if status != Unknown {
+		t.Errorf("Bad region status: %v", status)
 	}
 	cell.Value = buf
-	info, err = InfoFromCell(cell)
+	info, status, err = InfoFromCell(cell)
 	if err != nil {
 		t.Fatalf("Failed to parse cell: %s", err)
 	}
@@ -42,6 +44,9 @@ func TestInfoFromMeta(t *testing.T) {
 	}
 	if len(info.StopKey) != 0 {
 		t.Errorf("Expected empty StopKey but got %q", info.StopKey)
+	}
+	if status != OK {
+		t.Errorf("Bad region status: %v", status)
 	}
 
 	expected := `*regioninfo.Info{Table: "table", RegionName: "table,foo,` +
@@ -52,21 +57,24 @@ func TestInfoFromMeta(t *testing.T) {
 
 	// Corrupt the protobuf.
 	buf[4] = 0xFF
-	_, err = InfoFromCell(cell)
+	_, status, err = InfoFromCell(cell)
 	if err == nil || !strings.HasPrefix(err.Error(), "failed to decode") {
 		t.Errorf("Unexpected error on corrupt protobuf: %s", err)
+	}
+	if status != Unknown {
+		t.Errorf("Bad region status: %v", status)
 	}
 
 	// Corrupt the magic number.
 	buf[1] = 0xFF
-	_, err = InfoFromCell(cell)
+	_, _, err = InfoFromCell(cell)
 	if err == nil || !strings.HasPrefix(err.Error(), "invalid magic number") {
 		t.Errorf("Unexpected error on invalid magic number %s", err)
 	}
 
 	// Corrupt the magic number (first byte).
 	buf[0] = 0xFF
-	_, err = InfoFromCell(cell)
+	_, _, err = InfoFromCell(cell)
 	if err == nil || !strings.HasPrefix(err.Error(), "unsupported region info version") {
 		t.Errorf("Unexpected error on invalid magic number %s", err)
 	}

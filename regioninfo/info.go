@@ -11,8 +11,24 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
+)
+
+// Status indicates the region's status according to the meta table entry.
+type Status int
+
+const (
+	// Unknown status indicates the meta lookup probably failed.
+	Unknown Status = iota
+	// OK indicates the region is allegedly online.
+	OK
+	// Offline indicates that the table has been disabled.
+	Offline
+	// Split indicates that this region is likely to be
+	// in the middle of splitting.
+	Split
 )
 
 // Info describes a region.
@@ -39,23 +55,32 @@ type Info struct {
 
 // InfoFromCell parses a KeyValue from the meta table and creates the
 // corresponding Info object.
-func InfoFromCell(cell *pb.Cell) (*Info, error) {
+func InfoFromCell(cell *pb.Cell) (*Info, Status, error) {
+	status := Unknown
 	value := cell.Value
 	if len(value) == 0 {
-		return nil, fmt.Errorf("empty value in %q", cell)
+		return nil, status, fmt.Errorf("empty value in %q", cell)
 	} else if value[0] != 'P' {
-		return nil, fmt.Errorf("unsupported region info version %d in %q",
+		return nil, status, fmt.Errorf("unsupported region info version %d in %q",
 			value[0], cell)
 	}
 	const pbufMagic = 1346524486 // 4 bytes: "PBUF"
 	magic := binary.BigEndian.Uint32(value)
 	if magic != pbufMagic {
-		return nil, fmt.Errorf("invalid magic number in %q", cell)
+		return nil, status, fmt.Errorf("invalid magic number in %q", cell)
 	}
 	regInfo := &pb.RegionInfo{}
 	err := proto.UnmarshalMerge(value[4:len(value)-4], regInfo)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode %q: %s", cell, err)
+		return nil, status, fmt.Errorf("failed to decode %q: %s", cell, err)
+	}
+	logrus.WithFields(logrus.Fields{"proto": regInfo}).Info("de-serialized pb")
+	if regInfo.Offline != nil && *regInfo.Offline {
+		status = Offline
+	} else if regInfo.Split != nil && *regInfo.Split {
+		status = Split
+	} else {
+		status = OK
 	}
 	return &Info{
 		Table:         regInfo.TableName.Qualifier,
@@ -63,7 +88,7 @@ func InfoFromCell(cell *pb.Cell) (*Info, error) {
 		StartKey:      regInfo.StartKey,
 		StopKey:       regInfo.EndKey,
 		availableLock: sync.Mutex{},
-	}, nil
+	}, status, nil
 }
 
 // IsUnavailable returns true if this region has been marked as unavailable.

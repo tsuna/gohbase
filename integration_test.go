@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/tsuna/gohbase"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/test"
@@ -105,6 +106,32 @@ func TestGetDoesntExist(t *testing.T) {
 		t.Errorf("Get returned an error: %v", err)
 	} else if *rsp.Exists {
 		t.Error("Get claimed that our non-existent row exists")
+	}
+}
+
+func TestDisabledTable(t *testing.T) {
+	// TODO: We leak the master client.
+	master := gohbase.NewClient(*host, gohbase.Admin())
+	logrus.WithFields(logrus.Fields{"table": table}).Info("Disabling table")
+	_, err := master.SendRPC(hrpc.NewDisableTable(context.Background(), []byte(table)))
+	if err != nil {
+		t.Fatalf("Failed to disable %q: %s", table, err)
+	}
+
+	key := "TestDisabledTable"
+	c := gohbase.NewClient(*host)
+	headers := map[string][]string{"cf": nil}
+	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
+	logrus.WithFields(logrus.Fields{"table": table}).Info("Trying to access table")
+	_, err = c.SendRPC(get)
+	if err != nil {
+		t.Errorf("Get returned an error: %v", err)
+	}
+
+	logrus.WithFields(logrus.Fields{"table": table}).Info("Enabling table")
+	_, err = master.SendRPC(hrpc.NewEnableTable(context.Background(), []byte(table)))
+	if err != nil {
+		t.Fatalf("Failed to enable %q: %s", table, err)
 	}
 }
 
