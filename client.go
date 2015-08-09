@@ -690,7 +690,9 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 	for {
 		ctx, _ := context.WithTimeout(context.Background(), regionLookupTimeout)
 		if port != 0 && err == nil {
-			resChan := make(chan newRegResult)
+			// Make this channel buffered so that if we time out we don't
+			// block the newRegion goroutine forever.
+			ch := make(chan newRegResult, 1)
 			var clientType region.ClientType
 			if c.clientType == StandardClient {
 				clientType = region.RegionClient
@@ -699,10 +701,10 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 			}
 			// TODO: we should be using checkForClient here because we might
 			// not need to create a new connection for this host/port.
-			go newRegion(ctx, resChan, clientType, host, port, c.rpcQueueSize, c.flushInterval)
+			go newRegion(ctx, ch, clientType, host, port, c.rpcQueueSize, c.flushInterval)
 
 			select {
-			case res := <-resChan:
+			case res := <-ch:
 				if res.Err == nil {
 					if c.clientType == AdminClient {
 						c.adminClient = res.Client
@@ -725,8 +727,6 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 					err = res.Err
 				}
 			case <-ctx.Done():
-				// TODO we should probably do something like close(resChan)
-				// to not leak a region.Client just because we gave up here.
 				err = ErrDeadline
 			}
 		}
