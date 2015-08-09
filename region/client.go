@@ -60,7 +60,7 @@ type UnrecoverableError struct {
 }
 
 func (e UnrecoverableError) Error() string {
-	return error(e).Error()
+	return e.error.Error()
 }
 
 // RetryableError is an error that indicates the RPC should be retried because
@@ -70,7 +70,7 @@ type RetryableError struct {
 }
 
 func (e RetryableError) Error() string {
-	return error(e).Error()
+	return e.error.Error()
 }
 
 // Client manages a connection to a RegionServer.
