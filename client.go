@@ -357,7 +357,8 @@ func (c *Client) sendRPCToRegion(rpc hrpc.Call, reg *regioninfo.Info) (proto.Mes
 	if c.adminClient == nil && reg == c.adminRegionInfo && !c.adminRegionInfo.IsUnavailable() ||
 		c.metaClient == nil && reg == c.metaRegionInfo && !c.metaRegionInfo.IsUnavailable() {
 		c.regionsLock.Lock()
-		if !c.metaRegionInfo.IsUnavailable() {
+		if reg == c.metaRegionInfo && !c.metaRegionInfo.IsUnavailable() ||
+			reg == c.adminRegionInfo && !c.adminRegionInfo.IsUnavailable() {
 			reg.MarkUnavailable()
 			go c.reestablishRegion(reg)
 		}
