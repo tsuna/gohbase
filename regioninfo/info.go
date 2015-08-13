@@ -95,8 +95,9 @@ func (i *Info) MarkUnavailable() bool {
 // MarkAvailable will mark this region as available again, by closing the struct
 // returned by GetAvailabilityChan
 func (i *Info) MarkAvailable() {
-	close(i.available)
+	ch := i.available
 	i.available = nil
+	close(ch)
 }
 
 func (i *Info) String() string {
