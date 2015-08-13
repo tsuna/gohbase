@@ -47,9 +47,9 @@ lint:
 # lint.  See https://github.com/golang/lint/issues/65
 
 test:
-	$(GO) test $(GOTEST_FLAGS) -timeout=$(TEST_TIMEOUT) ./...
+	$(GO) test $(GOTEST_FLAGS) -race -timeout=$(TEST_TIMEOUT) ./...
 
 integration:
-	$(GO) test $(GOTEST_FLAGS) -timeout=$(INTEGRATION_TIMEOUT) -v integration_test.go
+	$(GO) test $(GOTEST_FLAGS) -race -timeout=$(INTEGRATION_TIMEOUT) -v integration_test.go
 
 .PHONY: all check coverage coverdata fmtcheck install integration lint test vet

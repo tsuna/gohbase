@@ -6,6 +6,7 @@
 package hrpc
 
 import (
+	"sync"
 	"unsafe"
 
 	"github.com/golang/protobuf/proto"
@@ -54,6 +55,8 @@ type base struct {
 	resultch chan RPCResult
 
 	ctx context.Context
+
+	resultchLock sync.Mutex
 }
 
 func (b *base) GetContext() context.Context {
@@ -95,12 +98,14 @@ func (b *base) Key() []byte {
 }
 
 func (b *base) GetResultChan() chan RPCResult {
+	b.resultchLock.Lock()
 	if b.resultch == nil {
 		// Buffered channels, so that if a writer thread sends a message (or
 		// reports an error) after the deadline it doesn't block due to the
 		// requesting thread having moved on.
 		b.resultch = make(chan RPCResult, 1)
 	}
+	b.resultchLock.Unlock()
 	return b.resultch
 }
 
