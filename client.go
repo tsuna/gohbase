@@ -92,11 +92,11 @@ func (rcc *regionClientCache) clientDown(reg *regioninfo.Info) []*regioninfo.Inf
 	rcc.m.Lock()
 	var downregions []*regioninfo.Info
 	c := rcc.clients[reg]
-	for _, reg := range rcc.clientsToInfos[c] {
-		succ := reg.MarkUnavailable()
-		delete(rcc.clients, reg)
+	for _, sharedReg := range rcc.clientsToInfos[c] {
+		succ := sharedReg.MarkUnavailable()
+		delete(rcc.clients, sharedReg)
 		if succ {
-			downregions = append(downregions, reg)
+			downregions = append(downregions, sharedReg)
 		}
 	}
 	delete(rcc.clientsToInfos, c)
