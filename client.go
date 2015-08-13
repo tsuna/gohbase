@@ -88,6 +88,28 @@ func (rcc *regionClientCache) put(r *regioninfo.Info, c *region.Client) {
 	rcc.m.Unlock()
 }
 
+func (rcc *regionClientCache) del(r *regioninfo.Info) {
+	rcc.m.Lock()
+	c := rcc.clients[r]
+
+	if c != nil {
+		// c can be nil if the regioninfo is not in the cache
+		// e.g. it's already been deleted.
+		delete(rcc.clients, r)
+
+		var index int
+		for i, reg := range rcc.clientsToInfos[c] {
+			if reg == r {
+				index = i
+			}
+		}
+		rcc.clientsToInfos[c] = append(
+			rcc.clientsToInfos[c][:index],
+			rcc.clientsToInfos[c][index+1:]...)
+	}
+	rcc.m.Unlock()
+}
+
 func (rcc *regionClientCache) clientDown(reg *regioninfo.Info) []*regioninfo.Info {
 	rcc.m.Lock()
 	var downregions []*regioninfo.Info
@@ -403,10 +425,21 @@ func (c *Client) sendRPCToRegion(rpc hrpc.Call, reg *regioninfo.Info) (proto.Mes
 
 		// Check for errors
 		if _, ok := res.Error.(region.RetryableError); ok {
-			// If it was an error that can be resolved by trying to send
-			// the RPC again, send it again
-			// TODO: Try to mark `reg' as unavailable.
-			return c.sendRPC(rpc)
+			// There's an error specific to this region, but
+			// our region client is fine. Mark this region as
+			// unavailable (as opposed to all regions sharing
+			// the client), and start a goroutine to reestablish
+			// it.
+			first := reg.MarkUnavailable()
+			if first {
+				go c.reestablishRegion(reg)
+			}
+			if reg != c.metaRegionInfo && reg != c.adminRegionInfo {
+				// The client won't be in the cache if this is the
+				// meta or admin region
+				c.clients.del(reg)
+			}
+			return c.waitOnRegion(rpc, reg)
 		} else if _, ok := res.Error.(region.UnrecoverableError); ok {
 			// If it was an unrecoverable error, the region client is
 			// considered dead.
