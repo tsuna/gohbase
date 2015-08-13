@@ -366,8 +366,7 @@ func (c *Client) sendRPCToRegion(rpc hrpc.Call, reg *regioninfo.Info) (proto.Mes
 	}
 	// The region was in the cache, check
 	// if the region is marked as available
-	ch := reg.GetAvailabilityChan()
-	if ch == nil {
+	if !reg.IsUnavailable() {
 		// The region is available
 
 		rpc.SetRegion(reg)
@@ -390,9 +389,8 @@ func (c *Client) sendRPCToRegion(rpc hrpc.Call, reg *regioninfo.Info) (proto.Mes
 			if first {
 				go c.reestablishRegion(reg)
 			}
-			// Recurse, which will result in blocking until
-			// the region is available again.
-			goto unavailable
+			// Block until the region becomes available.
+			return c.waitOnRegion(rpc, reg)
 		}
 
 		// Wait for the response
@@ -432,17 +430,25 @@ func (c *Client) sendRPCToRegion(rpc hrpc.Call, reg *regioninfo.Info) (proto.Mes
 
 			// Fall through to the case of the region being unavailable,
 			// which will result in blocking until it's available again.
-			goto unavailable
+			return c.waitOnRegion(rpc, reg)
 		} else {
 			// RPC was successfully sent, or an unknown type of error
 			// occurred. In either case, return the results.
 			return res.Msg, res.Error
 		}
 	}
+	return c.waitOnRegion(rpc, reg)
+}
 
+func (c *Client) waitOnRegion(rpc hrpc.Call, reg *regioninfo.Info) (proto.Message, error) {
+	ch := reg.GetAvailabilityChan()
+	if ch == nil {
+		// WTF, this region is available? Maybe it was marked as such
+		// since waitOnRegion was called.
+		return c.sendRPC(rpc)
+	}
 	// The region is unavailable. Wait for it to become available,
 	// or for the deadline to be exceeded.
-unavailable:
 	select {
 	case <-ch:
 		return c.sendRPC(rpc)
