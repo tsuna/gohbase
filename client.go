@@ -498,23 +498,12 @@ func (c *Client) findRegionForRPC(rpc hrpc.Call) (proto.Message, error) {
 
 		c.regionsLock.Unlock()
 
-		// Check if there's already a client for this region server
-		// TODO: This is wrong, checkForClient should be used in
-		// establishRegion otherwise we make the assumption that every time we
-		// find a region, we need a new client for it.
-		client := c.clients.checkForClient(host, port)
-		if client != nil {
-			// There's already a client, add it to the cache and mark the
-			// new region as available.
-			c.clients.put(reg, client)
-			reg.MarkAvailable()
-		} else {
-			// Start a goroutine to connect to the region
-			go c.establishRegion(reg, host, port)
-		}
+		// Start a goroutine to connect to the region
+		go c.establishRegion(reg, host, port)
 
-		// Send the RPC to the new region
-		return c.sendRPCToRegion(rpc, reg)
+		// Wait for the new region to become
+		// available, and then send the RPC
+		return c.waitOnRegion(rpc, reg)
 	}
 }
 
@@ -697,6 +686,18 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 	for {
 		ctx, _ := context.WithTimeout(context.Background(), regionLookupTimeout)
 		if port != 0 && err == nil {
+			// If this isn't the admin or meta region, check if a client
+			// for this host/port already exists
+			if c.clientType != AdminClient && reg != c.metaRegionInfo {
+				client := c.clients.checkForClient(host, port)
+				if client != nil {
+					// There's already a client, add it to the
+					// cache and mark the new region as available.
+					c.clients.put(reg, client)
+					originalReg.MarkAvailable()
+					return
+				}
+			}
 			// Make this channel buffered so that if we time out we don't
 			// block the newRegion goroutine forever.
 			ch := make(chan newRegResult, 1)
@@ -706,8 +707,6 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 			} else {
 				clientType = region.MasterClient
 			}
-			// TODO: we should be using checkForClient here because we might
-			// not need to create a new connection for this host/port.
 			go newRegion(ctx, ch, clientType, host, port, c.rpcQueueSize, c.flushInterval)
 
 			select {
