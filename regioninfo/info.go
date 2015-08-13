@@ -68,14 +68,20 @@ func InfoFromCell(cell *pb.Cell) (*Info, error) {
 
 // IsUnavailable returns true if this region has been marked as unavailable.
 func (i *Info) IsUnavailable() bool {
-	return i.available != nil
+	i.availableLock.Lock()
+	res := i.available != nil
+	i.availableLock.Unlock()
+	return res
 }
 
 // GetAvailabilityChan returns a channel that can be used to wait on for
 // notification that a connection to this region has been reestablished.
 // If this region is not marked as unavailable, nil will be returned.
 func (i *Info) GetAvailabilityChan() <-chan struct{} {
-	return i.available
+	i.availableLock.Lock()
+	ch := i.available
+	i.availableLock.Unlock()
+	return ch
 }
 
 // MarkUnavailable will mark this region as unavailable, by creating the struct
@@ -95,9 +101,11 @@ func (i *Info) MarkUnavailable() bool {
 // MarkAvailable will mark this region as available again, by closing the struct
 // returned by GetAvailabilityChan
 func (i *Info) MarkAvailable() {
+	i.availableLock.Lock()
 	ch := i.available
 	i.available = nil
 	close(ch)
+	i.availableLock.Unlock()
 }
 
 func (i *Info) String() string {

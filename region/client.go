@@ -90,7 +90,8 @@ type Client struct {
 	writeMutex *sync.Mutex
 
 	// sendErr is set once a write fails.
-	sendErr error
+	sendErr     error
+	sendErrLock sync.Mutex
 
 	rpcs []hrpc.Call
 
@@ -141,7 +142,7 @@ func NewClient(host string, port uint16, ctype ClientType,
 // All queued and outstanding RPCs, if any, will be failed as if a connection
 // error had happened.
 func (c *Client) Close() {
-	c.sendErr = errors.New("shutting down")
+	c.setSendErr(errors.New("shutting down"))
 	c.errorEncountered()
 }
 
@@ -155,9 +156,22 @@ func (c *Client) Port() uint16 {
 	return c.port
 }
 
+func (c *Client) getSendErr() error {
+	c.sendErrLock.Lock()
+	err := c.sendErr
+	c.sendErrLock.Unlock()
+	return err
+}
+
+func (c *Client) setSendErr(err error) {
+	c.sendErrLock.Lock()
+	c.sendErr = err
+	c.sendErrLock.Unlock()
+}
+
 func (c *Client) processRpcs() {
 	for {
-		if c.sendErr != nil {
+		if c.getSendErr() != nil {
 			return
 		}
 
@@ -202,7 +216,7 @@ func (c *Client) processRpcs() {
 			if err != nil {
 				_, ok := err.(UnrecoverableError)
 				if ok {
-					c.sendErr = err
+					c.setSendErr(err)
 
 					c.writeMutex.Lock()
 					c.rpcs = append(c.rpcs, rpcs[i:]...)
@@ -222,7 +236,7 @@ func (c *Client) receiveRpcs() {
 	for {
 		err := c.readFully(sz[:])
 		if err != nil {
-			c.sendErr = err
+			c.setSendErr(err)
 			c.errorEncountered()
 			return
 		}
@@ -230,7 +244,7 @@ func (c *Client) receiveRpcs() {
 		buf := make([]byte, binary.BigEndian.Uint32(sz[:]))
 		err = c.readFully(buf)
 		if err != nil {
-			c.sendErr = err
+			c.setSendErr(err)
 			c.errorEncountered()
 			return
 		}
@@ -242,14 +256,14 @@ func (c *Client) receiveRpcs() {
 		buf = buf[respLen:]
 		if err != nil {
 			// Failed to deserialize the response header
-			c.sendErr = err
+			c.setSendErr(err)
 			c.errorEncountered()
 			return
 		}
 		if resp.CallId == nil {
 			// Response doesn't have a call ID
 			log.Error("Response doesn't have a call ID!")
-			c.sendErr = ErrMissingCallID
+			c.setSendErr(ErrMissingCallID)
 			c.errorEncountered()
 			return
 		}
@@ -270,8 +284,8 @@ func (c *Client) receiveRpcs() {
 			}
 			c.sentRPCsMutex.Unlock()
 
-			c.sendErr = fmt.Errorf("HBase sent a response with an unexpected call ID: %d",
-				resp.CallId)
+			c.setSendErr(fmt.Errorf("HBase sent a response with an unexpected call ID: %d",
+				resp.CallId))
 			c.errorEncountered()
 			return
 		}
@@ -302,7 +316,7 @@ func (c *Client) receiveRpcs() {
 
 func (c *Client) errorEncountered() {
 	c.writeMutex.Lock()
-	res := hrpc.RPCResult{Error: UnrecoverableError{c.sendErr}}
+	res := hrpc.RPCResult{Error: UnrecoverableError{c.getSendErr()}}
 	for _, rpc := range c.rpcs {
 		rpc.GetResultChan() <- res
 	}
@@ -374,8 +388,9 @@ func (c *Client) sendHello(ctype ClientType) error {
 // QueueRPC will add an rpc call to the queue for processing by the writer
 // goroutine
 func (c *Client) QueueRPC(rpc hrpc.Call) error {
-	if c.sendErr != nil {
-		return c.sendErr
+	sendErr := c.getSendErr()
+	if sendErr != nil {
+		return sendErr
 	}
 	c.writeMutex.Lock()
 	c.rpcs = append(c.rpcs, rpc)
