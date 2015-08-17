@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9ad9bd40_2e5d57ed",
+        "filename": "hrpc/call.go",
+        "patchSetId": 2
+      },
+      "lineNbr": 59,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-08-17T23:22:35Z",
+      "side": 1,
+      "message": "It would be good to say what this protects and always put the lock before the attribute it\u0027s protecting.  I know the name is fairly explicit here, but it\u0027s good to encode those assumptions in comments anyway.",
+      "revId": "9058039f8169797d05a2d0957e123d30ab8e7d43",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
