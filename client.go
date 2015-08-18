@@ -351,16 +351,10 @@ func (c *Client) Scan(s *hrpc.Scan) ([]*hrpc.Result, error) {
 
 func (c *Client) SendRPC(rpc hrpc.Call) (*hrpc.Result, error) {
 	pbmsg, err := c.sendRPC(rpc)
-
-	var rsp *hrpc.Result
-	switch r := pbmsg.(type) {
-	case *pb.GetResponse:
-		rsp = hrpc.ToLocalResult(r.Result)
-	case *pb.MutateResponse:
-		rsp = hrpc.ToLocalResult(r.Result)
+	if err != nil {
+		return nil, err
 	}
-
-	return rsp, err
+	return hrpc.ToLocalResult(r.Result), nil
 }
 
 func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
