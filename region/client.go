@@ -234,7 +234,7 @@ func (c *Client) processRpcs() {
 func (c *Client) receiveRpcs() {
 	var sz [4]byte
 	for {
-		err := c.readFully(sz[:])
+		err := c.readFully(sz[:], time.Time{})
 		if err != nil {
 			c.setSendErr(err)
 			c.errorEncountered()
@@ -242,7 +242,7 @@ func (c *Client) receiveRpcs() {
 		}
 
 		buf := make([]byte, binary.BigEndian.Uint32(sz[:]))
-		err = c.readFully(buf)
+		err = c.readFully(buf, time.Now().Add(10*time.Second))
 		if err != nil {
 			c.setSendErr(err)
 			c.errorEncountered()
@@ -350,10 +350,15 @@ func (c *Client) write(buf []byte) error {
 }
 
 // Tries to read enough data to fully fill up the given buffer.
-func (c *Client) readFully(buf []byte) error {
+func (c *Client) readFully(buf []byte, deadline time.Time) error {
 	// TODO: Handle short reads.
+	err := c.conn.SetReadDeadline(deadline)
 	n, err := c.conn.Read(buf)
 	if err != nil {
+		if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
+			// TODO: Panic?
+			panic(fmt.Errorf("Timeout: %#v", c))
+		}
 		return fmt.Errorf("Failed to read from the RS: %s", err)
 	} else if n != len(buf) {
 		return fmt.Errorf("Failed to read everything from the RS: %s", err)
@@ -434,6 +439,10 @@ func (c *Client) sendRPC(rpc hrpc.Call) error {
 	buf = append(buf, payload...)
 
 	c.sentRPCsMutex.Lock()
+	if c.sentRPCs == nil {
+		c.sentRPCsMutex.Unlock()
+		return UnrecoverableError{errors.New("Shutting down")}
+	}
 	c.sentRPCs[c.id] = rpc
 	c.sentRPCsMutex.Unlock()
 
