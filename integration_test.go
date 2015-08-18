@@ -441,6 +441,128 @@ func TestAppend(t *testing.T) {
 	}
 }
 
+func checkVal(t *testing.T, c *gohbase.Client, key string, expected []byte) {
+	get, err := hrpc.NewGetStr(context.Background(), table, key,
+		hrpc.Families(map[string][]string{"cf": nil}))
+	if err != nil {
+		t.Errorf("Couldn't create get: %v", err)
+	}
+	rsp, err := c.SendRPC(get)
+	if err != nil {
+		t.Errorf("Get returned an error: %v", err)
+	}
+	rsp_value := rsp.Cells[0].Value
+	if !bytes.Equal(rsp_value, expected) {
+		t.Errorf("Unexpected value for row %s. Got: %v, expected %v",
+			key, rsp_value, expected)
+	}
+}
+
+func TestBufferedIncrement1(t *testing.T) {
+	keyPrefix := "bufIncRow_1_"
+
+	c := gohbase.NewClient(*host,
+		gohbase.BuffIncFlushTimeout(time.Second*2),
+		gohbase.FlushInterval(0),
+		gohbase.IncCacheSize(50))
+	for i := 0; i < 100; i++ {
+		key := keyPrefix + fmt.Sprintf("%d", i)
+		err := insertKeyValue(c, key, "cf", []byte{0, 0, 0, 0, 0, 0, 0, 0})
+		if err != nil {
+			t.Errorf("Put returned an error: %v", err)
+		}
+	}
+	var incErrs []chan error
+	for i := 0; i < 100; i++ {
+		key := keyPrefix + fmt.Sprintf("%d", i)
+		ch := make(chan error)
+		incErrs = append(incErrs, ch)
+		go func() {
+			_, err := c.BufferedIncrement(table, key, "cf", "a", 1)
+			ch <- err
+		}()
+	}
+
+	for i := 0; i < 50; i++ {
+		err := <-incErrs[i]
+		if err != nil {
+			t.Errorf("Error encountered performing buffered increment: %v",
+				err)
+		}
+	}
+	for i := 0; i < 100; i++ {
+		key := keyPrefix + fmt.Sprintf("%d", i)
+		var expected []byte
+		if i < 50 {
+			expected = []byte{0, 0, 0, 0, 0, 0, 0, 1}
+		} else {
+			expected = []byte{0, 0, 0, 0, 0, 0, 0, 0}
+		}
+		checkVal(t, c, key, expected)
+	}
+	for i := 50; i < 100; i++ {
+		err := <-incErrs[i]
+		if err != nil {
+			t.Errorf("Error encountered performing buffered increment: %v",
+				err)
+		}
+	}
+	for i := 0; i < 100; i++ {
+		key := keyPrefix + fmt.Sprintf("%d", i)
+		checkVal(t, c, key, []byte{0, 0, 0, 0, 0, 0, 0, 1})
+	}
+
+}
+
+func TestBufferedIncrement2(t *testing.T) {
+	keyPrefix := "bufIncRow_2_"
+	c := gohbase.NewClient(*host,
+		gohbase.BuffIncFlushTimeout(time.Second*2),
+		gohbase.FlushInterval(0),
+		gohbase.IncCacheSize(5))
+
+	for i := 0; i < 5; i++ {
+		key := keyPrefix + fmt.Sprintf("%d", i)
+		err := insertKeyValue(c, key, "cf", []byte{0, 0, 0, 0, 0, 0, 0, 0})
+		if err != nil {
+			t.Errorf("Put returned an error: %v", err)
+		}
+	}
+
+	var incErrs []chan error
+	for i := 0; i < 100; i++ {
+		key := keyPrefix + fmt.Sprintf("%d", i%5)
+		ch := make(chan error)
+		incErrs = append(incErrs, ch)
+		go func() {
+			_, err := c.BufferedIncrement(table, key, "cf", "a", 2)
+			ch <- err
+		}()
+	}
+
+	for _, ch := range incErrs {
+		select {
+		case err := <-ch:
+			t.Errorf("Increment not batched properly. Returned with err %v",
+				err)
+		default:
+		}
+	}
+
+	for _, ch := range incErrs {
+		err := <-ch
+		if err != nil {
+			t.Errorf("Error encountered performing buffered increment: %v",
+				err)
+		}
+	}
+
+	for i := 0; i < 5; i++ {
+		key := keyPrefix + fmt.Sprintf("%d", i)
+		checkVal(t, c, key, []byte{0, 0, 0, 0, 0, 0, 0, 40})
+	}
+}
+
 // Note: This function currently causes an infinite loop in the client throwing the error -
 // 2015/06/19 14:34:11 Encountered an error while reading: Failed to read from the RS: EOF
 func TestChangingRegionServers(t *testing.T) {
@@ -523,6 +645,9 @@ func insertKeyValue(c *gohbase.Client, key, columnFamily string, value []byte) e
 	values := map[string]map[string][]byte{columnFamily: map[string][]byte{}}
 	values[columnFamily]["a"] = value
 	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values)
+	if err != nil {
+		return err
+	}
 	_, err = c.SendRPC(putRequest)
 	return err
 }

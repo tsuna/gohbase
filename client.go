@@ -7,6 +7,7 @@ package gohbase
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -16,6 +17,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/cznic/b"
+	"github.com/golang/groupcache/lru"
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
@@ -190,6 +192,30 @@ func (krc *keyRegionCache) del(key []byte) bool {
 	return success
 }
 
+// broadcast is a broadcast channel used by the buffered increment operation
+type broadcast struct {
+	val     interface{}
+	chans   []chan interface{}
+	brdLock sync.Mutex
+}
+
+func (b *broadcast) Write(v interface{}) {
+	b.brdLock.Lock()
+	b.val = v
+	for _, ch := range b.chans {
+		ch <- v
+	}
+	b.brdLock.Unlock()
+}
+
+func (b *broadcast) Listen() chan interface{} {
+	b.brdLock.Lock()
+	ch := make(chan interface{}, 1)
+	b.chans = append(b.chans, ch)
+	b.brdLock.Unlock()
+	return ch
+}
+
 // A Client provides access to an HBase cluster.
 type Client struct {
 	clientType int
@@ -198,7 +224,8 @@ type Client struct {
 
 	regions keyRegionCache
 
-	// TODO: document what this protects.
+	// Used when checking if a region has been looked up in the meta table
+	// multiple times concurrently.
 	regionsLock sync.Mutex
 
 	// Maps a *regioninfo.Info to the *region.Client that we think currently
@@ -216,6 +243,13 @@ type Client struct {
 
 	// The timeout before flushing the RPC queue in the region client
 	flushInterval time.Duration
+
+	// The LRU cache for batching together increment operations
+	incCache *lru.Cache
+	// The cache for buffered increment operations is flushed this frequently
+	incTimeout time.Duration
+	// incBufLock prevents concurrent access to incCache, as that is not safe
+	incBufLock sync.Mutex
 }
 
 // NewClient creates a new HBase client.
@@ -239,15 +273,19 @@ func NewClient(zkquorum string, options ...Option) *Client {
 			StopKey:    []byte{},
 		},
 		adminRegionInfo: &regioninfo.Info{},
+		incCache:        lru.New(65535),
+		incTimeout:      100 * time.Millisecond,
 	}
 	for _, option := range options {
 		option(c)
 	}
+	c.incCache.OnEvicted = c.incCacheOnEvict
+	go c.clearCacheLoop()
 	return c
 }
 
 // RpcQueueSize will return an option that will set the size of the RPC queues
-// used in a given client
+// used in a given client. The default is 100.
 func RpcQueueSize(size int) Option {
 	return func(c *Client) {
 		c.rpcQueueSize = size
@@ -255,17 +293,117 @@ func RpcQueueSize(size int) Option {
 }
 
 // FlushInterval will return an option that will set the timeout for flushing
-// the RPC queues used in a given client
+// the RPC queues used in a given client. The default is 20 millseconds.
 func FlushInterval(interval time.Duration) Option {
 	return func(c *Client) {
 		c.flushInterval = interval
 	}
 }
 
+// IncCacheSize will set the cache size for buffered increment operations.
+// The default is to have no max size, only sending operations after the
+// increment timeout..
+func IncCacheSize(size int) Option {
+	return func(c *Client) {
+		c.incCache = lru.New(size)
+	}
+}
+
+// BuffIncFlushTimeout will set the frequency that the cache for buffered
+// increments is emptied.
+func BuffIncFlushTimeout(interval time.Duration) Option {
+	return func(c *Client) {
+		c.incTimeout = interval
+	}
+}
+
+// Admin will make this client an admin client, which changes the operations
+// it's capable of doing.
 func Admin() Option {
 	return func(c *Client) {
 		c.clientType = AdminClient
 	}
+}
+
+func (c *Client) clearCacheLoop() {
+	for {
+		c.incBufLock.Lock()
+		size := c.incCache.Len()
+		for i := 0; i < size; i++ {
+			c.incCache.RemoveOldest()
+		}
+		c.incBufLock.Unlock()
+		time.Sleep(c.incTimeout)
+	}
+}
+
+type incBufVal struct {
+	key   [4]string
+	num   int64
+	resch *broadcast
+}
+
+type incBufResult struct {
+	Msg *hrpc.Result
+	Err error
+}
+
+func (c *Client) addToIncCache(key [4]string, num int64) *broadcast {
+	var ch *broadcast
+	c.incBufLock.Lock()
+	oldValIntf, ok := c.incCache.Get(key)
+	if ok {
+		oldVal := oldValIntf.(incBufVal)
+		c.incCache.Add(key, incBufVal{
+			key:   key,
+			num:   oldVal.num + num,
+			resch: oldVal.resch,
+		})
+		ch = oldVal.resch
+	} else {
+		newVal := incBufVal{
+			key:   key,
+			num:   num,
+			resch: &broadcast{},
+		}
+		c.incCache.Add(key, newVal)
+		ch = newVal.resch
+	}
+	c.incBufLock.Unlock()
+	return ch
+}
+
+func (c *Client) incCacheOnEvict(key lru.Key, value interface{}) {
+	cacheKey := key.([4]string)
+	table := cacheKey[0]
+	rpckey := cacheKey[1]
+	colfam := cacheKey[2]
+	colqual := cacheKey[3]
+
+	buf := make([]byte, 8)
+
+	bufVal := value.(incBufVal)
+
+	binary.BigEndian.PutUint64(buf, uint64(bufVal.num))
+	//binary.PutVarint(buf, bufVal.num)
+
+	incRpc, err := hrpc.NewIncStr(context.Background(), table, rpckey,
+		map[string]map[string][]byte{
+			colfam: map[string][]byte{
+				colqual: buf[:],
+			},
+		})
+
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error": err,
+		}).Debug("Sending buffered increment")
+		return
+	}
+
+	msg, err := c.SendRPC(incRpc)
+
+	bufVal.resch.Write(incBufResult{Msg: msg, Err: err})
 }
 
 // CheckTable returns an error if the given table name doesn't exist.
@@ -347,6 +485,20 @@ func (c *Client) Scan(s *hrpc.Scan) ([]*hrpc.Result, error) {
 			return localResults, nil
 		}
 	}
+}
+
+// BufferedIncrement will increment a value in HBase, while combining
+// together increment calls to the same cell in a row. Deadlines will
+// not be followed here.
+func (c *Client) BufferedIncrement(table, key, colfam, colqual string,
+	value int64) (*hrpc.Result, error) {
+
+	cachekey := [4]string{table, key, colfam, colqual}
+	ch := c.addToIncCache(cachekey, value)
+
+	res := <-ch.Listen()
+	typedRes := res.(incBufResult)
+	return typedRes.Msg, typedRes.Err
 }
 
 func (c *Client) SendRPC(rpc hrpc.Call) (*hrpc.Result, error) {
