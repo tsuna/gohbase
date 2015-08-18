@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9ad9bd40_ee744f38",
+        "filename": "region/client.go",
+        "patchSetId": 3
+      },
+      "lineNbr": 444,
+      "author": {
+        "id": 1005313
+      },
+      "writtenOn": "2015-08-18T00:41:31Z",
+      "side": 1,
+      "message": "It would be good to put an error message in there.  Something like:\n\n  return UnrecoverableError{errors.New(\"shutting down\")}\n\nPS: it would have been nice to commit this bug fix separately from the timeout addition.",
+      "revId": "b18e9ba0bb60021c77008025d4929c92f31a0574",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
