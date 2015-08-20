@@ -151,7 +151,7 @@ func (m *Mutate) GetName() string {
 
 // Serialize converts this mutate object into a protobuf message suitable for
 // sending to an HBase server
-func (m *Mutate) Serialize() ([]byte, error) {
+func (m *Mutate) Serialize() (proto.Message, error) {
 	if m.data == nil {
 		return m.serialize()
 	}
@@ -160,7 +160,7 @@ func (m *Mutate) Serialize() ([]byte, error) {
 
 // serialize is a helper function for Serialize. It is used when there is a
 // map[string]map[string][]byte to be serialized.
-func (m *Mutate) serialize() ([]byte, error) {
+func (m *Mutate) serialize() (*pb.MutateRequest, error) {
 	// We need to convert everything in the values field
 	// to a protobuf ColumnValue
 	bytevalues := make([]*pb.MutationProto_ColumnValue, len(m.values))
@@ -188,19 +188,19 @@ func (m *Mutate) serialize() ([]byte, error) {
 		i++
 	}
 	mutate := &pb.MutateRequest{
-		Region: m.regionSpecifier(),
+		Region: m.RegionSpecifier(),
 		Mutation: &pb.MutationProto{
 			Row:         m.key,
 			MutateType:  &m.mutationType,
 			ColumnValue: bytevalues,
 		},
 	}
-	return proto.Marshal(mutate)
+	return mutate, nil
 }
 
 // serializeWithReflect is a helper function for Serialize. It is used when
 // there is a struct with tagged fields to be serialized.
-func (m *Mutate) serializeWithReflect() ([]byte, error) {
+func (m *Mutate) serializeWithReflect() (*pb.MutateRequest, error) {
 	typeOf := reflect.TypeOf(m.data)
 	valueOf := reflect.Indirect(reflect.ValueOf(m.data))
 
@@ -222,6 +222,7 @@ func (m *Mutate) serializeWithReflect() ([]byte, error) {
 		cnames := strings.SplitN(tagval, ":", 2)
 		if len(cnames) != 2 {
 			// If the tag doesn't contain a colon, it's set improperly
+			// TODO log an error
 			return nil, fmt.Errorf("Invalid column family and column qualifier: \"%s\"", cnames)
 		}
 		cfamily := cnames[0]
@@ -254,14 +255,14 @@ func (m *Mutate) serializeWithReflect() ([]byte, error) {
 
 	}
 	mutate := &pb.MutateRequest{
-		Region: m.regionSpecifier(),
+		Region: m.RegionSpecifier(),
 		Mutation: &pb.MutationProto{
 			Row:         m.key,
 			MutateType:  &m.mutationType,
 			ColumnValue: pbcolumns,
 		},
 	}
-	return proto.Marshal(mutate)
+	return mutate, nil
 }
 
 // valueToBytes will convert a given value from the reflect package into its

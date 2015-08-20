@@ -506,6 +506,8 @@ func (c *Client) SendRPC(rpc hrpc.Call) (*hrpc.Result, error) {
 
 	var rsp *hrpc.Result
 	switch r := pbmsg.(type) {
+	case *pb.Result:
+		rsp = hrpc.ToLocalResult(r)
 	case *pb.GetResponse:
 		rsp = hrpc.ToLocalResult(r.Result)
 	case *pb.MutateResponse:
@@ -764,6 +766,7 @@ func (c *Client) locateRegion(ctx context.Context,
 		return nil, "", 0, err
 	}
 	rpc.SetRegion(c.metaRegionInfo)
+	rpc.AvoidBatching = true
 	resp, err := c.sendRPC(rpc)
 
 	if err != nil {

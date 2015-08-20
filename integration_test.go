@@ -117,12 +117,9 @@ func TestGetBadColumnFamily(t *testing.T) {
 	}
 	families := map[string][]string{"badcf": nil}
 	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(families))
-	rsp, err := c.SendRPC(get)
+	_, err = c.SendRPC(get)
 	if err == nil {
 		t.Errorf("Get didn't return an error! (It should have)")
-	}
-	if rsp != nil {
-		t.Errorf("Get expected no result. Received: %v", rsp)
 	}
 }
 

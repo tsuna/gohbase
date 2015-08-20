@@ -25,7 +25,7 @@ type Call interface {
 	GetRegion() *regioninfo.Info
 	SetRegion(region *regioninfo.Info)
 	GetName() string
-	Serialize() ([]byte, error)
+	Serialize() (proto.Message, error)
 	// Returns a newly created (default-state) protobuf in which to store the
 	// response of this call.
 	NewResponse() proto.Message
@@ -36,6 +36,8 @@ type Call interface {
 
 	SetFamilies(fam map[string][]string) error
 	SetFilter(ft filter.Filter) error
+
+	RegionSpecifier() *pb.RegionSpecifier
 }
 
 // RPCResult is struct that will contain both the resulting message from an RPC
@@ -71,7 +73,7 @@ func (b *base) SetRegion(region *regioninfo.Info) {
 	b.region = region
 }
 
-func (b *base) regionSpecifier() *pb.RegionSpecifier {
+func (b *base) RegionSpecifier() *pb.RegionSpecifier {
 	regionType := pb.RegionSpecifier_REGION_NAME
 	return &pb.RegionSpecifier{
 		Type:  &regionType,

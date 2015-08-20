@@ -146,9 +146,9 @@ func (s *Scan) GetFilter() filter.Filter {
 
 // Serialize converts this Scan into a serialized protobuf message ready
 // to be sent to an HBase node.
-func (s *Scan) Serialize() ([]byte, error) {
+func (s *Scan) Serialize() (proto.Message, error) {
 	scan := &pb.ScanRequest{
-		Region:       s.regionSpecifier(),
+		Region:       s.RegionSpecifier(),
 		CloseScanner: &s.closeScanner,
 		NumberOfRows: proto.Uint32(20), //TODO: make this configurable
 	}
@@ -168,7 +168,7 @@ func (s *Scan) Serialize() ([]byte, error) {
 	} else {
 		scan.ScannerId = s.scannerID
 	}
-	return proto.Marshal(scan)
+	return scan, nil
 }
 
 // NewResponse creates an empty protobuf message to read the response
