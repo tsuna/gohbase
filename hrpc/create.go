@@ -38,7 +38,7 @@ func (ct *CreateTable) GetName() string {
 
 // Serialize will convert this HBase call into a slice of bytes to be written to
 // the network
-func (ct *CreateTable) Serialize() ([]byte, error) {
+func (ct *CreateTable) Serialize() (proto.Message, error) {
 	pbcols := make([]*pb.ColumnFamilySchema, len(ct.columns))
 	for i, col := range ct.columns {
 		pbcols[i] = &pb.ColumnFamilySchema{
@@ -54,7 +54,7 @@ func (ct *CreateTable) Serialize() ([]byte, error) {
 			ColumnFamilies: pbcols,
 		},
 	}
-	return proto.Marshal(ctable)
+	return ctable, nil
 }
 
 // NewResponse creates an empty protobuf message to read the response of this

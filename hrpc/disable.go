@@ -35,14 +35,14 @@ func (dt *DisableTable) GetName() string {
 
 // Serialize will convert this HBase call into a slice of bytes to be written to
 // the network
-func (dt *DisableTable) Serialize() ([]byte, error) {
+func (dt *DisableTable) Serialize() (proto.Message, error) {
 	dtreq := &pb.DisableTableRequest{
 		TableName: &pb.TableName{
 			Namespace: []byte("default"),
 			Qualifier: dt.table,
 		},
 	}
-	return proto.Marshal(dtreq)
+	return dtreq, nil
 }
 
 // NewResponse creates an empty protobuf message to read the response of this

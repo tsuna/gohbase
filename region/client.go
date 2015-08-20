@@ -18,6 +18,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
+	"github.com/tsuna/gohbase/regioninfo"
 )
 
 // ClientType is a type alias to represent the type of this region client
@@ -193,14 +194,10 @@ func (c *Client) processRpcs() {
 			// and will not release it so as to transfer ownership
 		}
 
-		rpcs := make([]hrpc.Call, len(c.rpcs))
-		for i, rpc := range c.rpcs {
-			rpcs[i] = rpc
-		}
-		c.rpcs = nil
-		c.writeMutex.Unlock()
+		toSend := make([]hrpc.Call, 0, len(c.rpcs))
+		regions := make(map[*regioninfo.Info][]hrpc.Call)
 
-		for i, rpc := range rpcs {
+		for _, rpc := range c.rpcs {
 			// If the deadline has been exceeded, don't bother sending the
 			// request. The function that placed the RPC in our queue should
 			// stop waiting for a result and return an error.
@@ -212,6 +209,26 @@ func (c *Client) processRpcs() {
 			default:
 			}
 
+			info := rpc.GetRegion()
+			switch rpc.GetName() {
+			case "Get", "Mutate":
+				if g, ok := rpc.(*hrpc.Get); ok && g.AvoidBatching {
+					toSend = append(toSend, rpc)
+				} else {
+					regions[info] = append(regions[info], rpc)
+				}
+			default:
+				toSend = append(toSend, rpc)
+			}
+		}
+		c.rpcs = nil
+		c.writeMutex.Unlock()
+
+		if len(regions) > 0 {
+			toSend = append(toSend, newMultiRequest(regions))
+		}
+
+		for i, rpc := range toSend {
 			err := c.sendRPC(rpc)
 			if err != nil {
 				_, ok := err.(UnrecoverableError)
@@ -219,7 +236,7 @@ func (c *Client) processRpcs() {
 					c.setSendErr(err)
 
 					c.writeMutex.Lock()
-					c.rpcs = append(c.rpcs, rpcs[i:]...)
+					c.rpcs = append(c.rpcs, toSend[i:]...)
 					c.writeMutex.Unlock()
 
 					c.errorEncountered()
@@ -306,7 +323,11 @@ func (c *Client) receiveRpcs() {
 				err = RetryableError{err}
 			}
 		}
-		rpc.GetResultChan() <- hrpc.RPCResult{Msg: rpcResp, Error: err}
+		if mr, ok := rpc.(*multiRequest); ok {
+			mr.SendResults(rpcResp, err)
+		} else {
+			rpc.GetResultChan() <- hrpc.RPCResult{Msg: rpcResp, Error: err}
+		}
 
 		c.sentRPCsMutex.Lock()
 		delete(c.sentRPCs, *resp.CallId)
@@ -415,9 +436,13 @@ func (c *Client) sendRPC(rpc hrpc.Call) error {
 		RequestParam: proto.Bool(true),
 	}
 
-	payload, err := rpc.Serialize()
+	pbmsg, err := rpc.Serialize()
 	if err != nil {
 		return fmt.Errorf("Failed to serialize RPC: %s", err)
+	}
+	payload, err := proto.Marshal(pbmsg)
+	if err != nil {
+		return fmt.Errorf("Failed to marshal RPC: %s", err)
 	}
 	payloadLen := proto.EncodeVarint(uint64(len(payload)))
 

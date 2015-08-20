@@ -27,6 +27,10 @@ type Get struct {
 	existsOnly bool
 
 	filters filter.Filter
+
+	// AvoidBatching can be set to true to prevent this Get from being combined
+	// with other operations.
+	AvoidBatching bool
 }
 
 // NewGet creates a new Get request for the given table and row key.
@@ -108,9 +112,9 @@ func (g *Get) ExistsOnly() error {
 }
 
 // Serialize serializes this RPC into a buffer.
-func (g *Get) Serialize() ([]byte, error) {
+func (g *Get) Serialize() (proto.Message, error) {
 	get := &pb.GetRequest{
-		Region: g.regionSpecifier(),
+		Region: g.RegionSpecifier(),
 		Get: &pb.Get{
 			Row:    g.key,
 			Column: familiesToColumn(g.families),
@@ -129,7 +133,7 @@ func (g *Get) Serialize() ([]byte, error) {
 		}
 		get.Get.Filter = pbFilter
 	}
-	return proto.Marshal(get)
+	return get, nil
 }
 
 // NewResponse creates an empty protobuf message to read the response of this

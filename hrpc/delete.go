@@ -35,14 +35,14 @@ func (dt *DeleteTable) GetName() string {
 
 // Serialize will convert this HBase call into a slice of bytes to be written to
 // the network
-func (dt *DeleteTable) Serialize() ([]byte, error) {
+func (dt *DeleteTable) Serialize() (proto.Message, error) {
 	dtreq := &pb.DeleteTableRequest{
 		TableName: &pb.TableName{
 			Namespace: []byte("default"),
 			Qualifier: dt.table,
 		},
 	}
-	return proto.Marshal(dtreq)
+	return dtreq, nil
 }
 
 // NewResponse creates an empty protobuf message to read the response of this
