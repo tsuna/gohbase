@@ -878,10 +878,13 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 			// for this host/port already exists
 			if c.clientType != AdminClient && reg != c.metaRegionInfo {
 				client := c.clients.checkForClient(host, port)
-				if client != nil {
+				if client != nil && !c.sendProbe(ctx, reg, client) {
 					// There's already a client, add it to the
 					// cache and mark the new region as available.
 					c.clients.put(reg, client)
+					if reg != originalReg {
+						c.regions.put(reg.RegionName, reg)
+					}
 					originalReg.MarkAvailable()
 					return
 				}
@@ -905,6 +908,10 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 					} else if reg == c.metaRegionInfo {
 						c.metaClient = res.Client
 					} else {
+						if !c.sendProbe(ctx, reg, res.Client) {
+							err = errors.New("probe failed")
+							break
+						}
 						c.clients.put(reg, res.Client)
 						if reg != originalReg {
 							// Here `reg' is guaranteed to be available, so we
@@ -1002,4 +1009,46 @@ func (c *Client) zkLookupSync(res zk.ResourceName, reschan chan<- zkResult) {
 	host, port, err := zk.LocateResource(c.zkquorum, res)
 	// This is guaranteed to never block as the channel is always buffered.
 	reschan <- zkResult{host, port, err}
+}
+
+// sends a probe to the given client for the given region. Returns whether or
+// not the probe was successful.
+func (c *Client) sendProbe(ctx context.Context, reg *regioninfo.Info, client *region.Client) bool {
+	probeSuffix := []byte(":gohbase~probe~;_;<")
+
+	probeKey := make([]byte, 0, len(reg.StartKey)+len(probeSuffix))
+	probeKey = append(probeKey, reg.StartKey...)
+	probeKey = append(probeKey, probeSuffix...)
+
+	get, err := hrpc.NewGetStr(ctx, string(reg.Table), string(probeKey))
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Region": reg,
+			"Client": client,
+		}).Error("Error creating probe RPC. Should never happen.")
+		return false
+	}
+	err = get.ExistsOnly()
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Region": reg,
+			"Client": client,
+		}).Error("Error creating probe RPC. Should never happen.")
+		return false
+	}
+	get.SetRegion(reg)
+	get.AvoidBatching = true
+
+	err = client.QueueRPC(get)
+	if err != nil {
+		return false
+	}
+
+	var res hrpc.RPCResult
+	select {
+	case res = <-get.GetResultChan():
+	case <-ctx.Done():
+		return false
+	}
+	return res.Error == nil
 }
