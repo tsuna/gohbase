@@ -216,7 +216,7 @@ type Client struct {
 
 	// The timeout before flushing the RPC queue in the region client
 	flushInterval time.Duration
-	
+
 	// Master and Meta resource names
 	master zk.ResourceName
 	meta   zk.ResourceName
