@@ -20,14 +20,14 @@ import (
 )
 
 // This error is returned when the HBASE_HOME environment variable is unset
-var ErrHomeUnset = errors.New("Environment variable HBASE_HOME is not set")
+var errHomeUnset = errors.New("Environment variable HBASE_HOME is not set")
 
 // getShellCmd returns a new shell subprocess (already started) along with its
 // stdin
 func getShellCmd() (*exec.Cmd, io.WriteCloser, error) {
 	hbaseHome := os.Getenv("HBASE_HOME")
 	if len(hbaseHome) == 0 {
-		return nil, nil, ErrHomeUnset
+		return nil, nil, errHomeUnset
 	}
 	hbaseShell := path.Join(hbaseHome, "bin", "hbase")
 	cmd := exec.Command(hbaseShell, "shell")
