@@ -156,7 +156,7 @@ func TestGetMultipleCells(t *testing.T) {
 
 func TestPut(t *testing.T) {
 	key := "row2"
-	values := map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte("1")}}
+	values := map[string]map[string][]byte{"cf": {"a": []byte("1")}}
 	if host == nil {
 		t.Fatal("Host is not set!")
 	}
@@ -247,23 +247,23 @@ func TestPutReflection(t *testing.T) {
 	}
 
 	expected := map[string][]byte{
-		"a": []byte{10},
-		"b": []byte{20},
-		"c": []byte{30, 0},
-		"d": []byte{40, 0, 0, 0},
-		"e": []byte{50, 0, 0, 0, 0, 0, 0, 0},
-		"f": []byte{60},
-		"g": []byte{70},
-		"h": []byte{80, 0},
-		"i": []byte{90, 0, 0, 0},
-		"j": []byte{100, 0, 0, 0, 0, 0, 0, 0},
-		"k": []byte{0, 0, 220, 66},
-		"l": []byte{0, 0, 0, 0, 0, 0, 94, 64},
-		"m": []byte{0, 0, 2, 67, 0, 0, 0, 0},
-		"n": []byte{0, 0, 0, 0, 0, 128, 97, 64, 0, 0, 0, 0, 0, 0, 0, 0},
-		"o": []byte{150},
-		"p": []byte{4, 8, 15, 26, 23, 42},
-		"q": []byte{1, 1, 3, 5, 8, 13, 21, 34, 55},
+		"a": {10},
+		"b": {20},
+		"c": {30, 0},
+		"d": {40, 0, 0, 0},
+		"e": {50, 0, 0, 0, 0, 0, 0, 0},
+		"f": {60},
+		"g": {70},
+		"h": {80, 0},
+		"i": {90, 0, 0, 0},
+		"j": {100, 0, 0, 0, 0, 0, 0, 0},
+		"k": {0, 0, 220, 66},
+		"l": {0, 0, 0, 0, 0, 0, 94, 64},
+		"m": {0, 0, 2, 67, 0, 0, 0, 0},
+		"n": {0, 0, 0, 0, 0, 128, 97, 64, 0, 0, 0, 0, 0, 0, 0, 0},
+		"o": {150},
+		"p": {4, 8, 15, 26, 23, 42},
+		"q": {1, 1, 3, 5, 8, 13, 21, 34, 55},
 		"r": []byte("This is a test string."),
 	}
 
@@ -281,7 +281,7 @@ func TestPutReflection(t *testing.T) {
 
 func TestPutMultipleCells(t *testing.T) {
 	key := "row2.5"
-	values := map[string]map[string][]byte{"cf": map[string][]byte{}, "cf2": map[string][]byte{}}
+	values := map[string]map[string][]byte{"cf": {}, "cf2": {}}
 	values["cf"]["a"] = []byte("a")
 	values["cf"]["b"] = []byte("b")
 	values["cf2"]["a"] = []byte("a")
@@ -409,7 +409,7 @@ func TestAppend(t *testing.T) {
 		t.Errorf("Put returned an error: %v", insertErr)
 	}
 	// Appending " my name is Dog."
-	values := map[string]map[string][]byte{"cf": map[string][]byte{}}
+	values := map[string]map[string][]byte{"cf": {}}
 	values["cf"]["a"] = []byte(" my name is Dog.")
 	appRequest, err := hrpc.NewAppStr(context.Background(), table, key, values)
 	appRsp, err := c.SendRPC(appRequest)
@@ -520,7 +520,7 @@ func performNPuts(keyPrefix string, num_ops int) error {
 
 // Helper function. Given a client, key, columnFamily, value inserts into the table under column 'a'
 func insertKeyValue(c *gohbase.Client, key, columnFamily string, value []byte) error {
-	values := map[string]map[string][]byte{columnFamily: map[string][]byte{}}
+	values := map[string]map[string][]byte{columnFamily: {}}
 	values[columnFamily]["a"] = value
 	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values)
 	_, err = c.SendRPC(putRequest)
