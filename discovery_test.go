@@ -14,7 +14,8 @@ import (
 )
 
 func TestRegionDiscovery(t *testing.T) {
-	client := NewClient("~invalid.quorum~") // We shouldn't connect to ZK.
+	client := newClient("~invalid.quorum~") // We shouldn't connect to ZK.
+
 	reg := client.getRegionFromCache([]byte("test"), []byte("theKey"))
 	if reg != nil {
 		t.Errorf("Found region %#v even though the cache was empty?!", reg)

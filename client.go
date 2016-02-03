@@ -56,7 +56,7 @@ const (
 	adminClient
 )
 
-type Option func(*Client)
+type Option func(*client)
 
 type newRegResult struct {
 	Client *region.Client
@@ -191,7 +191,7 @@ func (krc *keyRegionCache) del(key []byte) bool {
 }
 
 // A Client provides access to an HBase cluster.
-type Client struct {
+type client struct {
 	clientType int
 
 	zkquorum string
@@ -218,12 +218,41 @@ type Client struct {
 	flushInterval time.Duration
 }
 
+// Client a regular HBase client
+type Client interface {
+	CheckTable(ctx context.Context, table string) error
+	Scan(s *hrpc.Scan) ([]*hrpc.Result, error)
+	Get(g *hrpc.Get) (*hrpc.Result, error)
+	Put(p *hrpc.Mutate) (*hrpc.Result, error)
+	Delete(d *hrpc.Mutate) (*hrpc.Result, error)
+	Append(a *hrpc.Mutate) (*hrpc.Result, error)
+}
+
+// AdminClient to perform admistrative operations with HMaster
+type AdminClient interface {
+	CreateTable(t *hrpc.CreateTable) (*hrpc.Result, error)
+	DeleteTable(t *hrpc.DeleteTable) (*hrpc.Result, error)
+	EnableTable(t *hrpc.EnableTable) (*hrpc.Result, error)
+	DisableTable(t *hrpc.DisableTable) (*hrpc.Result, error)
+}
+
 // NewClient creates a new HBase client.
-func NewClient(zkquorum string, options ...Option) *Client {
+func NewClient(zkquorum string, options ...Option) Client {
+	return newClient(zkquorum, options...)
+}
+
+// NewAdminClient creates an admin HBase client.
+func NewAdminClient(zkquorum string, options ...Option) AdminClient {
+	c := newClient(zkquorum, options...)
+	c.clientType = adminClient
+	return c
+}
+
+func newClient(zkquorum string, options ...Option) *client {
 	log.WithFields(log.Fields{
 		"Host": zkquorum,
 	}).Debug("Creating new client.")
-	c := &Client{
+	c := &client{
 		clientType: standardClient,
 		regions:    keyRegionCache{regions: b.TreeNew(regioninfo.CompareGeneric)},
 		clients: regionClientCache{
@@ -249,7 +278,7 @@ func NewClient(zkquorum string, options ...Option) *Client {
 // RpcQueueSize will return an option that will set the size of the RPC queues
 // used in a given client
 func RpcQueueSize(size int) Option {
-	return func(c *Client) {
+	return func(c *client) {
 		c.rpcQueueSize = size
 	}
 }
@@ -257,19 +286,13 @@ func RpcQueueSize(size int) Option {
 // FlushInterval will return an option that will set the timeout for flushing
 // the RPC queues used in a given client
 func FlushInterval(interval time.Duration) Option {
-	return func(c *Client) {
+	return func(c *client) {
 		c.flushInterval = interval
 	}
 }
 
-func Admin() Option {
-	return func(c *Client) {
-		c.clientType = adminClient
-	}
-}
-
 // CheckTable returns an error if the given table name doesn't exist.
-func (c *Client) CheckTable(ctx context.Context, table string) error {
+func (c *client) CheckTable(ctx context.Context, table string) error {
 	getStr, err := hrpc.NewGetStr(ctx, table, "theKey")
 	if err == nil {
 		_, err = c.SendRPC(getStr)
@@ -278,7 +301,7 @@ func (c *Client) CheckTable(ctx context.Context, table string) error {
 }
 
 // Scan retrieves the values specified in families from the given range.
-func (c *Client) Scan(s *hrpc.Scan) ([]*hrpc.Result, error) {
+func (c *client) Scan(s *hrpc.Scan) ([]*hrpc.Result, error) {
 	var results []*pb.Result
 	var scanres *pb.ScanResponse
 	var rpc *hrpc.Scan
@@ -349,7 +372,104 @@ func (c *Client) Scan(s *hrpc.Scan) ([]*hrpc.Result, error) {
 	}
 }
 
-func (c *Client) SendRPC(rpc hrpc.Call) (*hrpc.Result, error) {
+func (c *client) Get(g *hrpc.Get) (*hrpc.Result, error) {
+	pbmsg, err := c.sendRPC(g)
+	if err != nil {
+		return nil, err
+	}
+
+	r, ok := pbmsg.(*pb.GetResponse)
+	if !ok {
+		return nil, fmt.Errorf("sendRPC returned not a GetResponse")
+	}
+
+	return hrpc.ToLocalResult(r.Result), nil
+}
+
+func (c *client) Put(p *hrpc.Mutate) (*hrpc.Result, error) {
+	return c.mutate(p)
+}
+
+func (c *client) Delete(d *hrpc.Mutate) (*hrpc.Result, error) {
+	return c.mutate(d)
+}
+
+func (c *client) Append(a *hrpc.Mutate) (*hrpc.Result, error) {
+	return c.mutate(a)
+}
+
+func (c *client) mutate(m *hrpc.Mutate) (*hrpc.Result, error) {
+	pbmsg, err := c.sendRPC(m)
+	if err != nil {
+		return nil, err
+	}
+
+	r, ok := pbmsg.(*pb.MutateResponse)
+	if !ok {
+		return nil, fmt.Errorf("sendRPC returned not a MutateResponse")
+	}
+
+	return hrpc.ToLocalResult(r.Result), nil
+}
+
+func (c *client) CreateTable(t *hrpc.CreateTable) (*hrpc.Result, error) {
+	pbmsg, err := c.sendRPC(t)
+	if err != nil {
+		return nil, err
+	}
+
+	_, ok := pbmsg.(*pb.CreateTableResponse)
+	if !ok {
+		return nil, fmt.Errorf("sendRPC returned not a CreateTableResponse")
+	}
+
+	return &hrpc.Result{}, nil
+}
+
+func (c *client) DeleteTable(t *hrpc.DeleteTable) (*hrpc.Result, error) {
+	pbmsg, err := c.sendRPC(t)
+	if err != nil {
+		return nil, err
+	}
+
+	_, ok := pbmsg.(*pb.DeleteTableResponse)
+	if !ok {
+		return nil, fmt.Errorf("sendRPC returned not a DeleteTableResponse")
+	}
+
+	return &hrpc.Result{}, nil
+}
+
+func (c *client) EnableTable(t *hrpc.EnableTable) (*hrpc.Result, error) {
+	pbmsg, err := c.sendRPC(t)
+	if err != nil {
+		return nil, err
+	}
+
+	_, ok := pbmsg.(*pb.EnableTableResponse)
+	if !ok {
+		return nil, fmt.Errorf("sendRPC returned not a EnableTableResponse")
+	}
+
+	return &hrpc.Result{}, nil
+}
+
+func (c *client) DisableTable(t *hrpc.DisableTable) (*hrpc.Result, error) {
+	pbmsg, err := c.sendRPC(t)
+	if err != nil {
+		return nil, err
+	}
+
+	_, ok := pbmsg.(*pb.DisableTableResponse)
+	if !ok {
+		return nil, fmt.Errorf("sendRPC returned not a DisableTableResponse")
+	}
+
+	return &hrpc.Result{}, nil
+}
+
+// Could be removed in favour of above
+func (c *client) SendRPC(rpc hrpc.Call) (*hrpc.Result, error) {
 	pbmsg, err := c.sendRPC(rpc)
 
 	var rsp *hrpc.Result
@@ -363,7 +483,7 @@ func (c *Client) SendRPC(rpc hrpc.Call) (*hrpc.Result, error) {
 	return rsp, err
 }
 
-func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
+func (c *client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 	// Check the cache for a region that can handle this request
 	reg := c.getRegionFromCache(rpc.Table(), rpc.Key())
 	if reg != nil {
@@ -373,7 +493,7 @@ func (c *Client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 	}
 }
 
-func (c *Client) sendRPCToRegion(rpc hrpc.Call, reg *regioninfo.Info) (proto.Message, error) {
+func (c *client) sendRPCToRegion(rpc hrpc.Call, reg *regioninfo.Info) (proto.Message, error) {
 	// On the first sendRPC to the meta or admin regions, a goroutine must be
 	// manually kicked off for the meta or admin region client
 	if c.adminClient == nil && reg == c.adminRegionInfo && !c.adminRegionInfo.IsUnavailable() ||
@@ -472,7 +592,7 @@ func (c *Client) sendRPCToRegion(rpc hrpc.Call, reg *regioninfo.Info) (proto.Mes
 	}
 }
 
-func (c *Client) waitOnRegion(rpc hrpc.Call, reg *regioninfo.Info) (proto.Message, error) {
+func (c *client) waitOnRegion(rpc hrpc.Call, reg *regioninfo.Info) (proto.Message, error) {
 	ch := reg.GetAvailabilityChan()
 	if ch == nil {
 		// WTF, this region is available? Maybe it was marked as such
@@ -489,7 +609,7 @@ func (c *Client) waitOnRegion(rpc hrpc.Call, reg *regioninfo.Info) (proto.Messag
 	}
 }
 
-func (c *Client) findRegionForRPC(rpc hrpc.Call) (proto.Message, error) {
+func (c *client) findRegionForRPC(rpc hrpc.Call) (proto.Message, error) {
 	// The region was not in the cache, it
 	// must be looked up in the meta table
 
@@ -540,7 +660,7 @@ func (c *Client) findRegionForRPC(rpc hrpc.Call) (proto.Message, error) {
 }
 
 // Searches in the regions cache for the region hosting the given row.
-func (c *Client) getRegionFromCache(table, key []byte) *regioninfo.Info {
+func (c *client) getRegionFromCache(table, key []byte) *regioninfo.Info {
 	if c.clientType == adminClient {
 		return c.adminRegionInfo
 	} else if bytes.Equal(table, metaTableName) {
@@ -591,7 +711,7 @@ func createRegionSearchKey(table, key []byte) []byte {
 }
 
 // Returns the client currently known to hose the given region, or NULL.
-func (c *Client) clientFor(region *regioninfo.Info) *region.Client {
+func (c *client) clientFor(region *regioninfo.Info) *region.Client {
 	if c.clientType == adminClient {
 		return c.adminClient
 	}
@@ -602,7 +722,7 @@ func (c *Client) clientFor(region *regioninfo.Info) *region.Client {
 }
 
 // Locates the region in which the given row key for the given table is.
-func (c *Client) locateRegion(ctx context.Context,
+func (c *client) locateRegion(ctx context.Context,
 	table, key []byte) (*regioninfo.Info, string, uint16, error) {
 
 	metaKey := createRegionSearchKey(table, key)
@@ -651,7 +771,7 @@ func (c *Client) locateRegion(ctx context.Context,
 
 // parseMetaTableResponse parses the contents of a row from the meta table.
 // It's guaranteed to return a region info and a host/port OR return an error.
-func (c *Client) parseMetaTableResponse(metaRow *pb.GetResponse) (
+func (c *client) parseMetaTableResponse(metaRow *pb.GetResponse) (
 	*regioninfo.Info, string, uint16, error) {
 
 	var reg *regioninfo.Info
@@ -706,11 +826,11 @@ func (c *Client) parseMetaTableResponse(metaRow *pb.GetResponse) (
 	return reg, host, port, nil
 }
 
-func (c *Client) reestablishRegion(reg *regioninfo.Info) {
+func (c *client) reestablishRegion(reg *regioninfo.Info) {
 	c.establishRegion(reg, "", 0)
 }
 
-func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port uint16) {
+func (c *client) establishRegion(originalReg *regioninfo.Info, host string, port uint16) {
 	var err error
 	reg := originalReg
 	backoff := backoffStart
@@ -827,7 +947,7 @@ type zkResult struct {
 }
 
 // Asynchronously looks up the meta region or HMaster in ZooKeeper.
-func (c *Client) zkLookup(ctx context.Context, res zk.ResourceName) (string, uint16, error) {
+func (c *client) zkLookup(ctx context.Context, res zk.ResourceName) (string, uint16, error) {
 	// We make this a buffered channel so that if we stop waiting due to a
 	// timeout, we won't block the zkLookupSync() that we start in a
 	// separate goroutine.
@@ -842,7 +962,7 @@ func (c *Client) zkLookup(ctx context.Context, res zk.ResourceName) (string, uin
 }
 
 // Synchronously looks up the meta region or HMaster in ZooKeeper.
-func (c *Client) zkLookupSync(res zk.ResourceName, reschan chan<- zkResult) {
+func (c *client) zkLookupSync(res zk.ResourceName, reschan chan<- zkResult) {
 	host, port, err := zk.LocateResource(c.zkquorum, res)
 	// This is guaranteed to never block as the channel is always buffered.
 	reschan <- zkResult{host, port, err}

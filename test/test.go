@@ -77,9 +77,9 @@ func CreateTable(host, table string, cFamilies []string) error {
 // and disables and drops the given table
 func DeleteTable(host, table string) error {
 	// TODO: We leak this client.
-	ac := gohbase.NewClient(host, gohbase.Admin())
+	ac := gohbase.NewAdminClient(host)
 	dit := hrpc.NewDisableTable(context.Background(), []byte(table))
-	_, err := ac.SendRPC(dit)
+	_, err := ac.DisableTable(dit)
 	if err != nil {
 		if !strings.Contains(err.Error(), "TableNotEnabledException") {
 			return err
@@ -87,7 +87,7 @@ func DeleteTable(host, table string) error {
 	}
 
 	det := hrpc.NewDeleteTable(context.Background(), []byte(table))
-	_, err = ac.SendRPC(det)
+	_, err = ac.DeleteTable(det)
 	if err != nil {
 		return err
 	}

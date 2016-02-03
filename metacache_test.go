@@ -14,7 +14,8 @@ import (
 )
 
 func TestMetaCache(t *testing.T) {
-	client := NewClient("~invalid.quorum~") // We shouldn't connect to ZK.
+	client := newClient("~invalid.quorum~") // We shouldn't connect to ZK.
+
 	reg := client.getRegionFromCache([]byte("test"), []byte("theKey"))
 	if reg != nil {
 		t.Errorf("Found region %#v even though the cache was empty?!", reg)
@@ -40,7 +41,7 @@ func TestMetaCache(t *testing.T) {
 	}
 
 	// Clear our client.
-	client = NewClient("~invalid.quorum~")
+	client = newClient("~invalid.quorum~")
 
 	// Inject 3 entries in the cache.
 	region1 := &regioninfo.Info{
