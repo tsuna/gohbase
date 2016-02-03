@@ -441,6 +441,70 @@ func TestAppend(t *testing.T) {
 	}
 }
 
+func TestIncrement(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	key := "row102"
+
+	// test incerement
+	incRequest, err := hrpc.NewIncStrSingle(context.Background(), table, key, "cf", "a", 1)
+	result, err := c.Increment(incRequest)
+	if err != nil {
+		t.Fatalf("Increment returned an error: %v", err)
+	}
+
+	if result != 1 {
+		t.Fatalf("Increment's result is %d, want 1", result)
+	}
+
+	incRequest, err = hrpc.NewIncStrSingle(context.Background(), table, key, "cf", "a", 5)
+	result, err = c.Increment(incRequest)
+	if err != nil {
+		t.Fatalf("Increment returned an error: %v", err)
+	}
+
+	if result != 6 {
+		t.Fatalf("Increment's result is %d, want 6", result)
+	}
+}
+
+func TestIncrementParallel(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	key := "row102.5"
+
+	// TODO: Currently have to CheckTable before initiating N requests
+	// 	otherwise we face runaway client generation - one for each request.
+	c.CheckTable(context.Background(), table)
+
+	numParallel := 10
+
+	// test incerement
+	var wg sync.WaitGroup
+	for i := 0; i < numParallel; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			incRequest, err := hrpc.NewIncStrSingle(context.Background(), table, key, "cf", "a", 1)
+			_, err = c.Increment(incRequest)
+			if err != nil {
+				t.Errorf("Increment returned an error: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	// do one more to check if there's a correct value
+	incRequest, err := hrpc.NewIncStrSingle(context.Background(), table, key, "cf", "a", 1)
+	result, err := c.Increment(incRequest)
+	if err != nil {
+		t.Fatalf("Increment returned an error: %v", err)
+	}
+
+	if result != int64(numParallel+1) {
+		t.Fatalf("Increment's result is %d, want %d", result, numParallel+1)
+	}
+
+}
+
 // Note: This function currently causes an infinite loop in the client throwing the error -
 // 2015/06/19 14:34:11 Encountered an error while reading: Failed to read from the RS: EOF
 func TestChangingRegionServers(t *testing.T) {

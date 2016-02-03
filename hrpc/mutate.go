@@ -6,6 +6,8 @@
 package hrpc
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"reflect"
@@ -122,6 +124,21 @@ func NewAppStrRef(ctx context.Context, table, key string, data interface{}) (*Mu
 	m := baseMutate(ctx, table, key, nil, data)
 	m.mutationType = pb.MutationProto_APPEND
 	return m, nil
+}
+
+// NewIncStrSingle creates a new Mutation request that will increment the given value
+// by amount in HBase under the given table, key, family and qualifier.
+func NewIncStrSingle(ctx context.Context, table, key string, family string,
+	qualifier string, amount int64) (*Mutate, error) {
+
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, binary.BigEndian, amount)
+	if err != nil {
+		return nil, fmt.Errorf("binary.Write failed: %s", err)
+	}
+
+	value := map[string]map[string][]byte{family: map[string][]byte{qualifier: buf.Bytes()}}
+	return NewIncStr(ctx, table, key, value)
 }
 
 // NewIncStr creates a new Mutation request that will increment the given values

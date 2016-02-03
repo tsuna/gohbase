@@ -7,6 +7,7 @@ package gohbase
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -226,6 +227,7 @@ type Client interface {
 	Put(p *hrpc.Mutate) (*hrpc.Result, error)
 	Delete(d *hrpc.Mutate) (*hrpc.Result, error)
 	Append(a *hrpc.Mutate) (*hrpc.Result, error)
+	Increment(i *hrpc.Mutate) (int64, error)
 }
 
 // AdminClient to perform admistrative operations with HMaster
@@ -396,6 +398,21 @@ func (c *client) Delete(d *hrpc.Mutate) (*hrpc.Result, error) {
 
 func (c *client) Append(a *hrpc.Mutate) (*hrpc.Result, error) {
 	return c.mutate(a)
+}
+
+func (c *client) Increment(i *hrpc.Mutate) (int64, error) {
+	r, err := c.mutate(i)
+	if err != nil {
+		return 0, err
+	}
+
+	if len(r.Cells) != 1 {
+		return 0, fmt.Errorf("Increment returned %d cells, but we expected exactly one.",
+			len(r.Cells))
+	}
+
+	val := binary.BigEndian.Uint64(r.Cells[0].Value)
+	return int64(val), nil
 }
 
 func (c *client) mutate(m *hrpc.Mutate) (*hrpc.Result, error) {
