@@ -228,6 +228,8 @@ type Client interface {
 	Delete(d *hrpc.Mutate) (*hrpc.Result, error)
 	Append(a *hrpc.Mutate) (*hrpc.Result, error)
 	Increment(i *hrpc.Mutate) (int64, error)
+	CheckAndPut(p *hrpc.Mutate, family string, qualifier string,
+		expectedValue []byte) (bool, error)
 }
 
 // AdminClient to perform admistrative operations with HMaster
@@ -427,6 +429,31 @@ func (c *client) mutate(m *hrpc.Mutate) (*hrpc.Result, error) {
 	}
 
 	return hrpc.ToLocalResult(r.Result), nil
+}
+
+func (c *client) CheckAndPut(p *hrpc.Mutate, family string,
+	qualifier string, expectedValue []byte) (bool, error) {
+	cas, err := hrpc.NewCheckAndPut(p, family, qualifier, expectedValue)
+	if err != nil {
+		return false, err
+	}
+
+	pbmsg, err := c.sendRPC(cas)
+	if err != nil {
+		return false, err
+	}
+
+	r, ok := pbmsg.(*pb.MutateResponse)
+	if !ok {
+		return false, fmt.Errorf("sendRPC returned a %T instead of MutateResponse", pbmsg)
+	}
+
+	if r.Processed == nil {
+		return false, fmt.Errorf("Protobuf in the response didn't contain the field "+
+			"indicating whether the CheckAndPut was successful or not: %s", r)
+	}
+
+	return r.GetProcessed(), nil
 }
 
 func (c *client) CreateTable(t *hrpc.CreateTable) (*hrpc.Result, error) {

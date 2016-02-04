@@ -38,7 +38,6 @@ var (
 type Mutate struct {
 	base
 
-	row          *[]byte
 	mutationType pb.MutationProto_MutationType //*int32
 
 	// values is a map of column families to a map of column qualifiers to bytes
@@ -169,15 +168,21 @@ func (m *Mutate) GetName() string {
 // Serialize converts this mutate object into a protobuf message suitable for
 // sending to an HBase server
 func (m *Mutate) Serialize() ([]byte, error) {
+	mutateRequest, err := m.serializeToProto()
+	if err != nil {
+		return nil, fmt.Errorf("Error serializing request: %s", err)
+	}
+	return proto.Marshal(mutateRequest)
+}
+
+func (m *Mutate) serializeToProto() (*pb.MutateRequest, error) {
 	if m.data == nil {
-		return m.serialize()
+		return m.serializeNoReflect(), nil
 	}
 	return m.serializeWithReflect()
 }
 
-// serialize is a helper function for Serialize. It is used when there is a
-// map[string]map[string][]byte to be serialized.
-func (m *Mutate) serialize() ([]byte, error) {
+func (m *Mutate) serializeNoReflect() *pb.MutateRequest {
 	// We need to convert everything in the values field
 	// to a protobuf ColumnValue
 	bytevalues := make([]*pb.MutationProto_ColumnValue, len(m.values))
@@ -204,7 +209,7 @@ func (m *Mutate) serialize() ([]byte, error) {
 		}
 		i++
 	}
-	mutate := &pb.MutateRequest{
+	return &pb.MutateRequest{
 		Region: m.regionSpecifier(),
 		Mutation: &pb.MutationProto{
 			Row:         m.key,
@@ -212,12 +217,11 @@ func (m *Mutate) serialize() ([]byte, error) {
 			ColumnValue: bytevalues,
 		},
 	}
-	return proto.Marshal(mutate)
 }
 
 // serializeWithReflect is a helper function for Serialize. It is used when
 // there is a struct with tagged fields to be serialized.
-func (m *Mutate) serializeWithReflect() ([]byte, error) {
+func (m *Mutate) serializeWithReflect() (*pb.MutateRequest, error) {
 	typeOf := reflect.TypeOf(m.data)
 	valueOf := reflect.Indirect(reflect.ValueOf(m.data))
 
@@ -270,15 +274,14 @@ func (m *Mutate) serializeWithReflect() ([]byte, error) {
 		pbcolumns = append(pbcolumns, colval)
 
 	}
-	mutate := &pb.MutateRequest{
+	return &pb.MutateRequest{
 		Region: m.regionSpecifier(),
 		Mutation: &pb.MutationProto{
 			Row:         m.key,
 			MutateType:  &m.mutationType,
 			ColumnValue: pbcolumns,
 		},
-	}
-	return proto.Marshal(mutate)
+	}, nil
 }
 
 // valueToBytes will convert a given value from the reflect package into its

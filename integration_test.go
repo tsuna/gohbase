@@ -502,7 +502,116 @@ func TestIncrementParallel(t *testing.T) {
 	if result != int64(numParallel+1) {
 		t.Fatalf("Increment's result is %d, want %d", result, numParallel+1)
 	}
+}
 
+func TestCheckAndPut(t *testing.T) {
+	c := gohbase.NewClient(*host)
+
+	key := "row100"
+	ef := "cf"
+	eq := "a"
+
+	var castests = []struct {
+		inValues        map[string]map[string][]byte
+		inExpectedValue []byte
+		out             bool
+	}{
+		{map[string]map[string][]byte{"cf": map[string][]byte{"b": []byte("2")}},
+			nil, true}, // nil instead of empty byte array
+		{map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte("1")}},
+			[]byte{}, true},
+		{map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte("1")}},
+			[]byte{}, false},
+		{map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte("2")}},
+			[]byte("1"), true},
+		{map[string]map[string][]byte{"cf": map[string][]byte{"b": []byte("2")}},
+			[]byte("2"), true}, // put diff column
+		{map[string]map[string][]byte{"cf": map[string][]byte{"b": []byte("2")}},
+			[]byte{}, false}, // diff column
+		{map[string]map[string][]byte{"cf": map[string][]byte{
+			"b": []byte("100"),
+			"a": []byte("100"),
+		}}, []byte("2"), true}, // multiple values
+	}
+
+	for _, tt := range castests {
+		putRequest, err := hrpc.NewPutStr(context.Background(), table, key, tt.inValues)
+		if err != nil {
+			t.Fatalf("NewPutStr returned an error: %v", err)
+		}
+
+		casRes, err := c.CheckAndPut(putRequest, ef, eq, tt.inExpectedValue)
+
+		if err != nil {
+			t.Fatalf("CheckAndPut error: %s", err)
+		}
+
+		if casRes != tt.out {
+			t.Errorf("CheckAndPut with put values=%q and expectedValue=%q returned %v, want %v",
+				tt.inValues, tt.inExpectedValue, casRes, tt.out)
+		}
+	}
+
+	// TODO: check the resulting state by performing a Get request
+}
+
+func TestCheckAndPutNotPut(t *testing.T) {
+	key := "row101"
+	c := gohbase.NewClient(*host)
+	values := map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte("lol")}}
+
+	appRequest, err := hrpc.NewAppStr(context.Background(), table, key, values)
+	_, err = c.CheckAndPut(appRequest, "cf", "a", []byte{})
+	if err == nil {
+		t.Error("CheckAndPut: should not allow anything but Put request")
+	}
+}
+
+func TestCheckAndPutParallel(t *testing.T) {
+	c := gohbase.NewClient(*host)
+
+	keyPrefix := "row100.5"
+	// TODO: Currently have to CheckTable before initiating the requests
+	// 	otherwise we face runaway client generation - one for each request.
+	c.CheckTable(context.Background(), table)
+
+	values := map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte("1")}}
+	capTestFunc := func(p *hrpc.Mutate, ch chan bool) {
+		casRes, err := c.CheckAndPut(p, "cf", "a", []byte{})
+
+		if err != nil {
+			t.Errorf("CheckAndPut error: %s", err)
+		}
+
+		ch <- casRes
+	}
+
+	// make 10 pairs of CheckAndPut requests
+	for i := 0; i < 10; i++ {
+		ch := make(chan bool, 2)
+		putRequest1, err := hrpc.NewPutStr(context.Background(), table, keyPrefix+string(i), values)
+		if err != nil {
+			t.Fatalf("NewPutStr returned an error: %v", err)
+		}
+		putRequest2, err := hrpc.NewPutStr(context.Background(), table, keyPrefix+string(i), values)
+		if err != nil {
+			t.Fatalf("NewPutStr returned an error: %v", err)
+		}
+
+		go capTestFunc(putRequest1, ch)
+		go capTestFunc(putRequest2, ch)
+
+		first := <-ch
+		second := <-ch
+
+		if first && second {
+			t.Error("CheckAndPut: both requests cannot succeed")
+		}
+
+		if !first && !second {
+			t.Error("CheckAndPut: both requests cannot fail")
+		}
+	}
 }
 
 // Note: This function currently causes an infinite loop in the client throwing the error -
