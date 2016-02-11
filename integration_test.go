@@ -22,17 +22,22 @@ import (
 	"golang.org/x/net/context"
 )
 
-var host = flag.String("HBase Host", "localhost", "The location where HBase is running")
+var host = flag.String("host", "localhost", "The location where HBase is running")
 
 const table = "test1"
 
 func TestMain(m *testing.M) {
-	err := test.CreateTable(*host, table, []string{"cf", "cf2"})
+	if host == nil {
+		panic("Host is not set!")
+	}
+
+	ac := gohbase.NewAdminClient(*host)
+	err := test.CreateTable(ac, table, []string{"cf", "cf2"})
 	if err != nil {
 		panic(err)
 	}
 	res := m.Run()
-	err = test.DeleteTable(*host, table)
+	err = test.DeleteTable(ac, table)
 	if err != nil {
 		panic(err)
 	}

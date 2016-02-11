@@ -30,7 +30,7 @@ func TestCreateTable(t *testing.T) {
 	testTableName := "test1_" + getTimestampString()
 	t.Log("testTableName=" + testTableName)
 
-	ac := gohbase.NewClient(*host, gohbase.Admin())
+	ac := gohbase.NewAdminClient(*host)
 	crt := hrpc.NewCreateTable(context.Background(), []byte(testTableName), []string{"cf", "cf2"})
 	err := ac.CreateTable(crt)
 	if err != nil {
@@ -58,7 +58,7 @@ func TestCreateTable(t *testing.T) {
 func TestDisableDeleteTable(t *testing.T) {
 	testTableName := "test1_" + getTimestampString()
 	t.Log("testTableName=" + testTableName)
-	ac := gohbase.NewClient(*host, gohbase.Admin())
+	ac := gohbase.NewAdminClient(*host)
 
 	crt := hrpc.NewCreateTable(context.Background(), []byte(testTableName), []string{"cf", "cf2"})
 	err := ac.CreateTable(crt)
@@ -101,7 +101,7 @@ func TestDisableDeleteTable(t *testing.T) {
 func TestEnableTable(t *testing.T) {
 	testTableName := "test1_" + getTimestampString()
 	t.Log("testTableName=" + testTableName)
-	ac := gohbase.NewClient(*host, gohbase.Admin())
+	ac := gohbase.NewAdminClient(*host)
 
 	crt := hrpc.NewCreateTable(context.Background(), []byte(testTableName), []string{"cf", "cf2"})
 	err := ac.CreateTable(crt)

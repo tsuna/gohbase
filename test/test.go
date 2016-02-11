@@ -6,12 +6,8 @@
 package test
 
 import (
-	"bytes"
-	"errors"
-	"io"
 	"os"
 	"os/exec"
-	"path"
 	"strings"
 
 	"github.com/tsuna/gohbase"
@@ -19,67 +15,27 @@ import (
 	"golang.org/x/net/context"
 )
 
-// This error is returned when the HBASE_HOME environment variable is unset
-var errHomeUnset = errors.New("Environment variable HBASE_HOME is not set")
-
-// getShellCmd returns a new shell subprocess (already started) along with its
-// stdin
-func getShellCmd() (*exec.Cmd, io.WriteCloser, error) {
-	hbaseHome := os.Getenv("HBASE_HOME")
-	if len(hbaseHome) == 0 {
-		return nil, nil, errHomeUnset
-	}
-	hbaseShell := path.Join(hbaseHome, "bin", "hbase")
-	cmd := exec.Command(hbaseShell, "shell")
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	err = cmd.Start()
-	if err != nil {
-		stdin.Close()
-		return nil, nil, err
-	}
-	return cmd, stdin, nil
-}
-
-// CreateTable finds the HBase shell via the HBASE_HOME environment variable,
-// and creates the given table with the given families
-func CreateTable(host, table string, cFamilies []string) error {
+// CreateTable creates the given table with the given families
+func CreateTable(client gohbase.AdminClient, table string, cFamilies []string) error {
 	// If the table exists, delete it
-	DeleteTable(host, table)
+	DeleteTable(client, table)
 	// Don't check the error, since one will be returned if the table doesn't
 	// exist
 
-	cmd, stdin, err := getShellCmd()
+	ct := hrpc.NewCreateTable(context.Background(), []byte(table), cFamilies)
+	err := client.CreateTable(ct)
 	if err != nil {
 		return err
 	}
 
-	var buf bytes.Buffer
-	buf.WriteString("create '" + table + "'")
-
-	for _, f := range cFamilies {
-		buf.WriteString(", '")
-		buf.WriteString(f)
-		buf.WriteString("'")
-	}
-	buf.WriteString("\n")
-
-	stdin.Write(buf.Bytes())
-	stdin.Write([]byte("exit\n"))
-
-	return cmd.Wait()
+	return nil
 }
 
 // DeleteTable finds the HBase shell via the HBASE_HOME environment variable,
 // and disables and drops the given table
-func DeleteTable(host, table string) error {
-	// TODO: We leak this client.
-	ac := gohbase.NewAdminClient(host)
+func DeleteTable(client gohbase.AdminClient, table string) error {
 	dit := hrpc.NewDisableTable(context.Background(), []byte(table))
-	err := ac.DisableTable(dit)
+	err := client.DisableTable(dit)
 	if err != nil {
 		if !strings.Contains(err.Error(), "TableNotEnabledException") {
 			return err
@@ -87,7 +43,7 @@ func DeleteTable(host, table string) error {
 	}
 
 	det := hrpc.NewDeleteTable(context.Background(), []byte(table))
-	err = ac.DeleteTable(det)
+	err = client.DeleteTable(det)
 	if err != nil {
 		return err
 	}
