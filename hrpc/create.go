@@ -36,13 +36,36 @@ func (ct *CreateTable) GetName() string {
 	return "CreateTable"
 }
 
+var defaultAttributes = map[string]string{
+	"BLOOMFILTER":         "ROW",
+	"VERSIONS":            "3",
+	"IN_MEMORY":           "false",
+	"KEEP_DELETED_CELLS":  "FALSE",
+	"DATA_BLOCK_ENCODING": "FAST_DIFF",
+	"TTL":               "2147483647",
+	"COMPRESSION":       "NONE",
+	"MIN_VERSIONS":      "0",
+	"BLOCKCACHE":        "true",
+	"BLOCKSIZE":         "65536",
+	"REPLICATION_SCOPE": "0",
+}
+
 // Serialize will convert this HBase call into a slice of bytes to be written to
 // the network
 func (ct *CreateTable) Serialize() ([]byte, error) {
 	pbcols := make([]*pb.ColumnFamilySchema, len(ct.columns))
+	attrs := make([]*pb.BytesBytesPair, 0, len(defaultAttributes))
+	for key, attr := range defaultAttributes {
+		attrs = append(attrs, &pb.BytesBytesPair{
+			First:  []byte(key),
+			Second: []byte(attr),
+		})
+	}
+
 	for i, col := range ct.columns {
 		pbcols[i] = &pb.ColumnFamilySchema{
-			Name: []byte(col),
+			Name:       []byte(col),
+			Attributes: attrs,
 		}
 	}
 	ctable := &pb.CreateTableRequest{

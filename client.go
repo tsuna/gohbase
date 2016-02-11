@@ -234,10 +234,10 @@ type Client interface {
 
 // AdminClient to perform admistrative operations with HMaster
 type AdminClient interface {
-	CreateTable(t *hrpc.CreateTable) (*hrpc.Result, error)
-	DeleteTable(t *hrpc.DeleteTable) (*hrpc.Result, error)
-	EnableTable(t *hrpc.EnableTable) (*hrpc.Result, error)
-	DisableTable(t *hrpc.DisableTable) (*hrpc.Result, error)
+	CreateTable(t *hrpc.CreateTable) error
+	DeleteTable(t *hrpc.DeleteTable) error
+	EnableTable(t *hrpc.EnableTable) error
+	DisableTable(t *hrpc.DisableTable) error
 }
 
 // NewClient creates a new HBase client.
@@ -456,60 +456,91 @@ func (c *client) CheckAndPut(p *hrpc.Mutate, family string,
 	return r.GetProcessed(), nil
 }
 
-func (c *client) CreateTable(t *hrpc.CreateTable) (*hrpc.Result, error) {
-	pbmsg, err := c.sendRPC(t)
-	if err != nil {
-		return nil, err
-	}
+func (c *client) checkProcedureWithBackoff(pContext context.Context, procID uint64) error {
+	backoff := backoffStart
+	ctx, cancel := context.WithTimeout(pContext, 30*time.Second)
+	defer cancel()
 
-	_, ok := pbmsg.(*pb.CreateTableResponse)
-	if !ok {
-		return nil, fmt.Errorf("sendRPC returned not a CreateTableResponse")
-	}
+	for {
+		req := hrpc.NewGetProcedureState(ctx, procID)
+		pbmsg, err := c.sendRPC(req)
+		if err != nil {
+			return err
+		}
 
-	return &hrpc.Result{}, nil
+		statusRes, ok := pbmsg.(*pb.GetProcedureResultResponse)
+		if !ok {
+			return fmt.Errorf("sendRPC returned not a GetProcedureResultResponse")
+		}
+
+		switch statusRes.GetState() {
+		case pb.GetProcedureResultResponse_NOT_FOUND:
+			return fmt.Errorf("Procedure not found")
+		case pb.GetProcedureResultResponse_FINISHED:
+			return nil
+		default:
+			backoff, err = sleepAndIncreaseBackoff(ctx, backoff)
+			if err != nil {
+				return err
+			}
+		}
+	}
 }
 
-func (c *client) DeleteTable(t *hrpc.DeleteTable) (*hrpc.Result, error) {
+func (c *client) CreateTable(t *hrpc.CreateTable) error {
 	pbmsg, err := c.sendRPC(t)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	_, ok := pbmsg.(*pb.DeleteTableResponse)
+	r, ok := pbmsg.(*pb.CreateTableResponse)
 	if !ok {
-		return nil, fmt.Errorf("sendRPC returned not a DeleteTableResponse")
+		return fmt.Errorf("sendRPC returned not a CreateTableResponse")
 	}
 
-	return &hrpc.Result{}, nil
+	return c.checkProcedureWithBackoff(t.GetContext(), r.GetProcId())
 }
 
-func (c *client) EnableTable(t *hrpc.EnableTable) (*hrpc.Result, error) {
+func (c *client) DeleteTable(t *hrpc.DeleteTable) error {
 	pbmsg, err := c.sendRPC(t)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	_, ok := pbmsg.(*pb.EnableTableResponse)
+	r, ok := pbmsg.(*pb.DeleteTableResponse)
 	if !ok {
-		return nil, fmt.Errorf("sendRPC returned not a EnableTableResponse")
+		return fmt.Errorf("sendRPC returned not a DeleteTableResponse")
 	}
 
-	return &hrpc.Result{}, nil
+	return c.checkProcedureWithBackoff(t.GetContext(), r.GetProcId())
 }
 
-func (c *client) DisableTable(t *hrpc.DisableTable) (*hrpc.Result, error) {
+func (c *client) EnableTable(t *hrpc.EnableTable) error {
 	pbmsg, err := c.sendRPC(t)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	_, ok := pbmsg.(*pb.DisableTableResponse)
+	r, ok := pbmsg.(*pb.EnableTableResponse)
 	if !ok {
-		return nil, fmt.Errorf("sendRPC returned not a DisableTableResponse")
+		return fmt.Errorf("sendRPC returned not a EnableTableResponse")
 	}
 
-	return &hrpc.Result{}, nil
+	return c.checkProcedureWithBackoff(t.GetContext(), r.GetProcId())
+}
+
+func (c *client) DisableTable(t *hrpc.DisableTable) error {
+	pbmsg, err := c.sendRPC(t)
+	if err != nil {
+		return err
+	}
+
+	r, ok := pbmsg.(*pb.DisableTableResponse)
+	if !ok {
+		return fmt.Errorf("sendRPC returned not a DisableTableResponse")
+	}
+
+	return c.checkProcedureWithBackoff(t.GetContext(), r.GetProcId())
 }
 
 // Could be removed in favour of above
