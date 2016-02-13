@@ -17,7 +17,7 @@ all: install
 install:
 	$(GO) install ./...
 
-check: vet test fmtcheck lint
+check: vet fmtcheck lint test integration
 
 COVER_PKGS := `find ./* -name '*_test.go' | xargs -I{} dirname {} | sort -u`
 COVER_MODE := count
@@ -50,6 +50,6 @@ test:
 	$(GO) test $(GOTEST_FLAGS) -race -timeout=$(TEST_TIMEOUT) ./...
 
 integration:
-	$(GO) test $(GOTEST_FLAGS) -race -timeout=$(INTEGRATION_TIMEOUT) -v integration_test.go
+	$(GO) test $(GOTEST_FLAGS) -race -timeout=$(INTEGRATION_TIMEOUT) -tags=integration
 
 .PHONY: all check coverage coverdata fmtcheck install integration lint test vet
