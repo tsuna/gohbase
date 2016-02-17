@@ -740,7 +740,7 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 			} else {
 				clientType = region.MasterClient
 			}
-			go newRegion(ctx, ch, clientType, host, port, c.rpcQueueSize, c.flushInterval)
+			go newRegionClient(ctx, ch, clientType, host, port, c.rpcQueueSize, c.flushInterval)
 
 			select {
 			case res := <-ch:
@@ -807,7 +807,7 @@ func sleepAndIncreaseBackoff(ctx context.Context, backoff time.Duration) (time.D
 	}
 }
 
-func newRegion(ctx context.Context, ret chan newRegResult, clientType region.ClientType,
+func newRegionClient(ctx context.Context, ret chan newRegResult, clientType region.ClientType,
 	host string, port uint16, queueSize int, queueTimeout time.Duration) {
 	c, e := region.NewClient(host, port, clientType, queueSize, queueTimeout)
 	select {
