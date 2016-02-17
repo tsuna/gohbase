@@ -388,89 +388,88 @@ func (c *Client) sendRPCToRegion(rpc hrpc.Call, reg *regioninfo.Info) (proto.Mes
 	}
 	// The region was in the cache, check
 	// if the region is marked as available
-	if !reg.IsUnavailable() {
-		// The region is available
-
-		rpc.SetRegion(reg)
-
-		// Queue the RPC to be sent to the region
-		client := c.clientFor(reg)
-		var err error
-		if client == nil {
-			err = errors.New("no client for this region")
-		} else {
-			err = client.QueueRPC(rpc)
-		}
-
-		if err != nil {
-			// There was an error queueing the RPC.
-			// Mark the region as unavailable.
-			first := reg.MarkUnavailable()
-			// If this was the first goroutine to mark the region as
-			// unavailable, start a goroutine to reestablish a connection
-			if first {
-				go c.reestablishRegion(reg)
-			}
-			// Block until the region becomes available.
-			return c.waitOnRegion(rpc, reg)
-		}
-
-		// Wait for the response
-		var res hrpc.RPCResult
-		select {
-		case res = <-rpc.GetResultChan():
-		case <-rpc.GetContext().Done():
-			return nil, ErrDeadline
-		}
-
-		// Check for errors
-		if _, ok := res.Error.(region.RetryableError); ok {
-			// There's an error specific to this region, but
-			// our region client is fine. Mark this region as
-			// unavailable (as opposed to all regions sharing
-			// the client), and start a goroutine to reestablish
-			// it.
-			first := reg.MarkUnavailable()
-			if first {
-				go c.reestablishRegion(reg)
-			}
-			if reg != c.metaRegionInfo && reg != c.adminRegionInfo {
-				// The client won't be in the cache if this is the
-				// meta or admin region
-				c.clients.del(reg)
-			}
-			return c.waitOnRegion(rpc, reg)
-		} else if _, ok := res.Error.(region.UnrecoverableError); ok {
-			// If it was an unrecoverable error, the region client is
-			// considered dead.
-			if reg == c.metaRegionInfo || reg == c.adminRegionInfo {
-				// If this is the admin client or the meta table, mark the
-				// region as unavailable and start up a goroutine to
-				// reconnect if it wasn't already marked as such.
-				first := reg.MarkUnavailable()
-				if first {
-					go c.reestablishRegion(reg)
-				}
-			} else {
-				// Else this is a normal region. Mark all the regions
-				// sharing this region's client as unavailable, and start
-				// a goroutine to reconnect for each of them.
-				downregions := c.clients.clientDown(reg)
-				for _, downreg := range downregions {
-					go c.reestablishRegion(downreg)
-				}
-			}
-
-			// Fall through to the case of the region being unavailable,
-			// which will result in blocking until it's available again.
-			return c.waitOnRegion(rpc, reg)
-		} else {
-			// RPC was successfully sent, or an unknown type of error
-			// occurred. In either case, return the results.
-			return res.Msg, res.Error
-		}
+	if reg.IsUnavailable() {
+		return c.waitOnRegion(rpc, reg)
 	}
-	return c.waitOnRegion(rpc, reg)
+
+	rpc.SetRegion(reg)
+
+	// Queue the RPC to be sent to the region
+	client := c.clientFor(reg)
+	var err error
+	if client == nil {
+		err = errors.New("no client for this region")
+	} else {
+		err = client.QueueRPC(rpc)
+	}
+
+	if err != nil {
+		// There was an error queueing the RPC.
+		// Mark the region as unavailable.
+		first := reg.MarkUnavailable()
+		// If this was the first goroutine to mark the region as
+		// unavailable, start a goroutine to reestablish a connection
+		if first {
+			go c.reestablishRegion(reg)
+		}
+		// Block until the region becomes available.
+		return c.waitOnRegion(rpc, reg)
+	}
+
+	// Wait for the response
+	var res hrpc.RPCResult
+	select {
+	case res = <-rpc.GetResultChan():
+	case <-rpc.GetContext().Done():
+		return nil, ErrDeadline
+	}
+
+	// Check for errors
+	if _, ok := res.Error.(region.RetryableError); ok {
+		// There's an error specific to this region, but
+		// our region client is fine. Mark this region as
+		// unavailable (as opposed to all regions sharing
+		// the client), and start a goroutine to reestablish
+		// it.
+		first := reg.MarkUnavailable()
+		if first {
+			go c.reestablishRegion(reg)
+		}
+		if reg != c.metaRegionInfo && reg != c.adminRegionInfo {
+			// The client won't be in the cache if this is the
+			// meta or admin region
+			c.clients.del(reg)
+		}
+		return c.waitOnRegion(rpc, reg)
+	} else if _, ok := res.Error.(region.UnrecoverableError); ok {
+		// If it was an unrecoverable error, the region client is
+		// considered dead.
+		if reg == c.metaRegionInfo || reg == c.adminRegionInfo {
+			// If this is the admin client or the meta table, mark the
+			// region as unavailable and start up a goroutine to
+			// reconnect if it wasn't already marked as such.
+			first := reg.MarkUnavailable()
+			if first {
+				go c.reestablishRegion(reg)
+			}
+		} else {
+			// Else this is a normal region. Mark all the regions
+			// sharing this region's client as unavailable, and start
+			// a goroutine to reconnect for each of them.
+			downregions := c.clients.clientDown(reg)
+			for _, downreg := range downregions {
+				go c.reestablishRegion(downreg)
+			}
+		}
+
+		// Fall through to the case of the region being unavailable,
+		// which will result in blocking until it's available again.
+		return c.waitOnRegion(rpc, reg)
+	} else {
+		// RPC was successfully sent, or an unknown type of error
+		// occurred. In either case, return the results.
+		return res.Msg, res.Error
+	}
 }
 
 func (c *Client) waitOnRegion(rpc hrpc.Call, reg *regioninfo.Info) (proto.Message, error) {
