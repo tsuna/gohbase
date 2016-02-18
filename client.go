@@ -67,34 +67,24 @@ type newRegResult struct {
 type clientRegionCache struct {
 	m sync.Mutex
 
-	clients map[hrpc.RegionInfo]*region.Client
-
-	regions map[*region.Client][]hrpc.RegionInfo
+	regions map[hrpc.RegionClient][]hrpc.RegionInfo
 }
 
-func (rcc *clientRegionCache) get(r hrpc.RegionInfo) *region.Client {
+func (rcc *clientRegionCache) put(r hrpc.RegionInfo, c hrpc.RegionClient) {
 	rcc.m.Lock()
-	c := rcc.clients[r]
-	rcc.m.Unlock()
-	return c
-}
+	defer rcc.m.Unlock()
 
-func (rcc *clientRegionCache) put(r hrpc.RegionInfo, c *region.Client) {
-	rcc.m.Lock()
-	rcc.clients[r] = c
 	lst := rcc.regions[c]
 	rcc.regions[c] = append(lst, r)
-	rcc.m.Unlock()
 }
 
 func (rcc *clientRegionCache) del(r hrpc.RegionInfo) {
 	rcc.m.Lock()
-	c := rcc.clients[r]
+	defer rcc.m.Unlock()
 
+	c := r.GetClient()
 	if c != nil {
-		// c can be nil if the region is not in the cache
-		// e.g. it's already been deleted.
-		delete(rcc.clients, r)
+		r.SetClient(nil)
 
 		var index int
 		for i, reg := range rcc.regions[c] {
@@ -106,34 +96,34 @@ func (rcc *clientRegionCache) del(r hrpc.RegionInfo) {
 			rcc.regions[c][:index],
 			rcc.regions[c][index+1:]...)
 	}
-	rcc.m.Unlock()
 }
 
 func (rcc *clientRegionCache) clientDown(reg hrpc.RegionInfo) []hrpc.RegionInfo {
 	rcc.m.Lock()
+	defer rcc.m.Unlock()
+
 	var downregions []hrpc.RegionInfo
-	c := rcc.clients[reg]
+	c := reg.GetClient()
 	for _, sharedReg := range rcc.regions[c] {
 		succ := sharedReg.MarkUnavailable()
-		delete(rcc.clients, sharedReg)
+		sharedReg.SetClient(nil)
 		if succ {
 			downregions = append(downregions, sharedReg)
 		}
 	}
 	delete(rcc.regions, c)
-	rcc.m.Unlock()
 	return downregions
 }
 
-func (rcc *clientRegionCache) checkForClient(host string, port uint16) *region.Client {
+func (rcc *clientRegionCache) checkForClient(host string, port uint16) hrpc.RegionClient {
 	rcc.m.Lock()
+	defer rcc.m.Unlock()
+
 	for client := range rcc.regions {
 		if client.Host() == host && client.Port() == port {
-			rcc.m.Unlock()
 			return client
 		}
 	}
-	rcc.m.Unlock()
 	return nil
 }
 
@@ -205,10 +195,8 @@ type client struct {
 	clients clientRegionCache
 
 	metaRegionInfo hrpc.RegionInfo
-	metaClient     *region.Client
 
 	adminRegionInfo hrpc.RegionInfo
-	adminClient     *region.Client
 
 	// The maximum size of the RPC queue in the region client
 	rpcQueueSize int
@@ -258,8 +246,7 @@ func newClient(zkquorum string, options ...Option) *client {
 		clientType: standardClient,
 		regions:    keyRegionCache{regions: b.TreeNew(region.CompareGeneric)},
 		clients: clientRegionCache{
-			clients: make(map[hrpc.RegionInfo]*region.Client),
-			regions: make(map[*region.Client][]hrpc.RegionInfo),
+			regions: make(map[hrpc.RegionClient][]hrpc.RegionInfo),
 		},
 		zkquorum:      zkquorum,
 		rpcQueueSize:  100,
@@ -567,14 +554,13 @@ func (c *client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 }
 
 func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Message, error) {
+	client := reg.GetClient()
 	// On the first sendRPC to the meta or admin regions, a goroutine must be
 	// manually kicked off for the meta or admin region client
-	if c.adminClient == nil && reg == c.adminRegionInfo && !c.adminRegionInfo.IsUnavailable() ||
-		c.metaClient == nil && reg == c.metaRegionInfo && !c.metaRegionInfo.IsUnavailable() {
+	if reg == c.adminRegionInfo && client == nil && !c.adminRegionInfo.IsUnavailable() ||
+		reg == c.metaRegionInfo && client == nil && !c.metaRegionInfo.IsUnavailable() {
 		c.regionsLock.Lock()
-		if reg == c.metaRegionInfo && !c.metaRegionInfo.IsUnavailable() ||
-			reg == c.adminRegionInfo && !c.adminRegionInfo.IsUnavailable() {
-			reg.MarkUnavailable()
+		if reg.MarkUnavailable() {
 			go c.reestablishRegion(reg)
 		}
 		c.regionsLock.Unlock()
@@ -588,7 +574,6 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 	rpc.SetRegion(reg)
 
 	// Queue the RPC to be sent to the region
-	client := c.clientFor(reg)
 	var err error
 	if client == nil {
 		err = errors.New("no client for this region")
@@ -783,17 +768,6 @@ func createRegionSearchKey(table, key []byte) []byte {
 	return metaKey
 }
 
-// Returns the client currently known to hose the given region, or NULL.
-func (c *client) clientFor(region hrpc.RegionInfo) *region.Client {
-	if c.clientType == adminClient {
-		return c.adminClient
-	}
-	if region == c.metaRegionInfo {
-		return c.metaClient
-	}
-	return c.clients.get(region)
-}
-
 // Locates the region in which the given row key for the given table is.
 func (c *client) locateRegion(ctx context.Context,
 	table, key []byte) (hrpc.RegionInfo, string, uint16, error) {
@@ -861,6 +835,7 @@ func (c *client) establishRegion(originalReg hrpc.RegionInfo, host string, port 
 				if client != nil {
 					// There's already a client, add it to the
 					// cache and mark the new region as available.
+					originalReg.SetClient(client)
 					c.clients.put(reg, client)
 					originalReg.MarkAvailable()
 					return
@@ -880,11 +855,8 @@ func (c *client) establishRegion(originalReg hrpc.RegionInfo, host string, port 
 			select {
 			case res := <-ch:
 				if res.Err == nil {
-					if c.clientType == adminClient {
-						c.adminClient = res.Client
-					} else if reg == c.metaRegionInfo {
-						c.metaClient = res.Client
-					} else {
+					reg.SetClient(res.Client)
+					if c.clientType != adminClient && reg != c.metaRegionInfo {
 						c.clients.put(reg, res.Client)
 						if reg != originalReg {
 							// Here `reg' is guaranteed to be available, so we
