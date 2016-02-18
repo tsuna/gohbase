@@ -52,8 +52,8 @@ var (
 )
 
 const (
-	StandardClient = iota
-	AdminClient
+	standardClient = iota
+	adminClient
 )
 
 type Option func(*Client)
@@ -224,7 +224,7 @@ func NewClient(zkquorum string, options ...Option) *Client {
 		"Host": zkquorum,
 	}).Debug("Creating new client.")
 	c := &Client{
-		clientType: StandardClient,
+		clientType: standardClient,
 		regions:    keyRegionCache{regions: b.TreeNew(regioninfo.CompareGeneric)},
 		clients: regionClientCache{
 			clients:        make(map[*regioninfo.Info]*region.Client),
@@ -264,7 +264,7 @@ func FlushInterval(interval time.Duration) Option {
 
 func Admin() Option {
 	return func(c *Client) {
-		c.clientType = AdminClient
+		c.clientType = adminClient
 	}
 }
 
@@ -541,7 +541,7 @@ func (c *Client) findRegionForRPC(rpc hrpc.Call) (proto.Message, error) {
 
 // Searches in the regions cache for the region hosting the given row.
 func (c *Client) getRegionFromCache(table, key []byte) *regioninfo.Info {
-	if c.clientType == AdminClient {
+	if c.clientType == adminClient {
 		return c.adminRegionInfo
 	} else if bytes.Equal(table, metaTableName) {
 		return c.metaRegionInfo
@@ -592,7 +592,7 @@ func createRegionSearchKey(table, key []byte) []byte {
 
 // Returns the client currently known to hose the given region, or NULL.
 func (c *Client) clientFor(region *regioninfo.Info) *region.Client {
-	if c.clientType == AdminClient {
+	if c.clientType == adminClient {
 		return c.adminClient
 	}
 	if region == c.metaRegionInfo {
@@ -720,7 +720,7 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 		if port != 0 && err == nil {
 			// If this isn't the admin or meta region, check if a client
 			// for this host/port already exists
-			if c.clientType != AdminClient && reg != c.metaRegionInfo {
+			if c.clientType != adminClient && reg != c.metaRegionInfo {
 				client := c.clients.checkForClient(host, port)
 				if client != nil {
 					// There's already a client, add it to the
@@ -734,7 +734,7 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 			// block the newRegion goroutine forever.
 			ch := make(chan newRegResult, 1)
 			var clientType region.ClientType
-			if c.clientType == StandardClient {
+			if c.clientType == standardClient {
 				clientType = region.RegionClient
 			} else {
 				clientType = region.MasterClient
@@ -744,7 +744,7 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 			select {
 			case res := <-ch:
 				if res.Err == nil {
-					if c.clientType == AdminClient {
+					if c.clientType == adminClient {
 						c.adminClient = res.Client
 					} else if reg == c.metaRegionInfo {
 						c.metaClient = res.Client
@@ -782,7 +782,7 @@ func (c *Client) establishRegion(originalReg *regioninfo.Info, host string, port
 				continue
 			}
 		}
-		if c.clientType == AdminClient {
+		if c.clientType == adminClient {
 			host, port, err = c.zkLookup(ctx, zk.Master)
 		} else if reg == c.metaRegionInfo {
 			host, port, err = c.zkLookup(ctx, zk.Meta)
