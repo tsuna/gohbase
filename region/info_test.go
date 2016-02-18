@@ -3,7 +3,7 @@
 // Use of this source code is governed by the Apache License 2.0
 // that can be found in the COPYING file.
 
-package region_test
+package region
 
 import (
 	"bytes"
@@ -12,7 +12,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
-	. "github.com/tsuna/gohbase/region"
 )
 
 // Test parsing the contents of a cell found in meta.
@@ -28,12 +27,12 @@ func TestInfoFromMeta(t *testing.T) {
 		Timestamp: proto.Uint64(1431921690626),
 		CellType:  &put,
 	}
-	info, err := InfoFromCell(cell)
+	info, err := infoFromCell(cell)
 	if err == nil || !strings.HasPrefix(err.Error(), "empty value") {
 		t.Errorf("Unexpected error on empty value: %s", err)
 	}
 	cell.Value = buf
-	info, err = InfoFromCell(cell)
+	info, err = infoFromCell(cell)
 	if err != nil {
 		t.Fatalf("Failed to parse cell: %s", err)
 	}
@@ -52,21 +51,21 @@ func TestInfoFromMeta(t *testing.T) {
 
 	// Corrupt the protobuf.
 	buf[4] = 0xFF
-	_, err = InfoFromCell(cell)
+	_, err = infoFromCell(cell)
 	if err == nil || !strings.HasPrefix(err.Error(), "failed to decode") {
 		t.Errorf("Unexpected error on corrupt protobuf: %s", err)
 	}
 
 	// Corrupt the magic number.
 	buf[1] = 0xFF
-	_, err = InfoFromCell(cell)
+	_, err = infoFromCell(cell)
 	if err == nil || !strings.HasPrefix(err.Error(), "invalid magic number") {
 		t.Errorf("Unexpected error on invalid magic number %s", err)
 	}
 
 	// Corrupt the magic number (first byte).
 	buf[0] = 0xFF
-	_, err = InfoFromCell(cell)
+	_, err = infoFromCell(cell)
 	if err == nil || !strings.HasPrefix(err.Error(), "unsupported region info version") {
 		t.Errorf("Unexpected error on invalid magic number %s", err)
 	}

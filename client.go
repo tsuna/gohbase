@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strconv"
 	"sync"
 	"time"
 
@@ -826,7 +825,7 @@ func (c *client) locateRegion(ctx context.Context,
 		return nil, "", 0, TableNotFound
 	}
 
-	reg, host, port, err := c.parseMetaTableResponse(metaRow)
+	reg, host, port, err := region.ParseRegionInfo(metaRow)
 	if err != nil {
 		return nil, "", 0, err
 	}
@@ -840,63 +839,6 @@ func (c *client) locateRegion(ctx context.Context,
 		return nil, "", 0, fmt.Errorf("WTF: Meta returned an entry for the wrong region!"+
 			"  Looked up table=%q key=%q got region=%s", table, key, reg)
 	}
-	return reg, host, port, nil
-}
-
-// parseMetaTableResponse parses the contents of a row from the meta table.
-// It's guaranteed to return a region info and a host/port OR return an error.
-func (c *client) parseMetaTableResponse(metaRow *pb.GetResponse) (
-	hrpc.RegionInfo, string, uint16, error) {
-
-	var reg hrpc.RegionInfo
-	var host string
-	var port uint16
-
-	for _, cell := range metaRow.Result.Cell {
-		switch string(cell.Qualifier) {
-		case "regioninfo":
-			var err error
-			reg, err = region.InfoFromCell(cell)
-			if err != nil {
-				return nil, "", 0, err
-			}
-		case "server":
-			value := cell.Value
-			if len(value) == 0 {
-				continue // Empty during NSRE.
-			}
-			colon := bytes.IndexByte(value, ':')
-			if colon < 1 { // Colon can't be at the beginning.
-				return nil, "", 0,
-					fmt.Errorf("broken meta: no colon found in info:server %q", cell)
-			}
-			host = string(value[:colon])
-			portU64, err := strconv.ParseUint(string(value[colon+1:]), 10, 16)
-			if err != nil {
-				return nil, "", 0, err
-			}
-			port = uint16(portU64)
-		default:
-			// Other kinds of qualifiers: ignore them.
-			// TODO: If this is the parent of a split region, there are two other
-			// KVs that could be useful: `info:splitA' and `info:splitB'.
-			// Need to investigate whether we can use those as a hint to update our
-			// regions_cache with the daughter regions of the split.
-		}
-	}
-
-	if reg == nil {
-		// There was no region in the row in meta, this is really not
-		// expected.
-		err := fmt.Errorf("Meta seems to be broken, there was no region in %s",
-			metaRow)
-		log.Error(err.Error())
-		return nil, "", 0, err
-	} else if port == 0 { // Either both `host' and `port' are set, or both aren't.
-		return nil, "", 0, fmt.Errorf("Meta doesn't have a server location in %s",
-			metaRow)
-	}
-
 	return reg, host, port, nil
 }
 

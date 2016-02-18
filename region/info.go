@@ -7,8 +7,10 @@
 package region
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
+	"strconv"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
@@ -41,9 +43,9 @@ type Info struct {
 	availableLock sync.Mutex
 }
 
-// InfoFromCell parses a KeyValue from the meta table and creates the
+// infoFromCell parses a KeyValue from the meta table and creates the
 // corresponding Info object.
-func InfoFromCell(cell *pb.Cell) (*Info, error) {
+func infoFromCell(cell *pb.Cell) (*Info, error) {
 	value := cell.Value
 	if len(value) == 0 {
 		return nil, fmt.Errorf("empty value in %q", cell)
@@ -68,6 +70,62 @@ func InfoFromCell(cell *pb.Cell) (*Info, error) {
 		StopKey:       regInfo.EndKey,
 		availableLock: sync.Mutex{},
 	}, nil
+}
+
+// ParseRegionInfo parses the contents of a row from the meta table.
+// It's guaranteed to return a region info and a host/port OR return an error.
+func ParseRegionInfo(metaRow *pb.GetResponse) (
+	*Info, string, uint16, error) {
+
+	var reg *Info
+	var host string
+	var port uint16
+
+	for _, cell := range metaRow.Result.Cell {
+		switch string(cell.Qualifier) {
+		case "regioninfo":
+			var err error
+			reg, err = infoFromCell(cell)
+			if err != nil {
+				return nil, "", 0, err
+			}
+		case "server":
+			value := cell.Value
+			if len(value) == 0 {
+				continue // Empty during NSRE.
+			}
+			colon := bytes.IndexByte(value, ':')
+			if colon < 1 { // Colon can't be at the beginning.
+				return nil, "", 0,
+					fmt.Errorf("broken meta: no colon found in info:server %q", cell)
+			}
+			host = string(value[:colon])
+			portU64, err := strconv.ParseUint(string(value[colon+1:]), 10, 16)
+			if err != nil {
+				return nil, "", 0, err
+			}
+			port = uint16(portU64)
+		default:
+			// Other kinds of qualifiers: ignore them.
+			// TODO: If this is the parent of a split region, there are two other
+			// KVs that could be useful: `info:splitA' and `info:splitB'.
+			// Need to investigate whether we can use those as a hint to update our
+			// regions_cache with the daughter regions of the split.
+		}
+	}
+
+	if reg == nil {
+		// There was no region in the row in meta, this is really not
+		// expected.
+		err := fmt.Errorf("Meta seems to be broken, there was no region in %s",
+			metaRow)
+		return nil, "", 0, err
+	} else if port == 0 { // Either both `host' and `port' are set, or both aren't.
+		return nil, "", 0, fmt.Errorf("Meta doesn't have a server location in %s",
+			metaRow)
+	}
+
+	return reg, host, port, nil
 }
 
 // IsUnavailable returns true if this region has been marked as unavailable.
