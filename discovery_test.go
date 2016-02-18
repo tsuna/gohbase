@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/tsuna/gohbase/pb"
-	"github.com/tsuna/gohbase/regioninfo"
+	"github.com/tsuna/gohbase/region"
 )
 
 func TestRegionDiscovery(t *testing.T) {
@@ -57,22 +57,22 @@ func TestRegionDiscovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to discover region: %s", err)
 	}
-	client.regions.put(reg.RegionName, reg)
+	client.regions.put(reg.GetName(), reg)
 
 	reg = client.getRegionFromCache([]byte("test"), []byte("theKey"))
 	if reg == nil {
 		t.Fatal("Region not found even though we injected it in the cache.")
 	}
-	expected := &regioninfo.Info{
-		Table:      []byte("test"),
-		RegionName: []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-		StartKey:   []byte(""),
-		StopKey:    []byte(""),
+	expected := &region.Info{
+		Table:    []byte("test"),
+		Name:     []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		StartKey: []byte(""),
+		StopKey:  []byte(""),
 	}
-	if !bytes.Equal(reg.Table, expected.Table) ||
-		!bytes.Equal(reg.RegionName, expected.RegionName) ||
-		!bytes.Equal(reg.StartKey, expected.StartKey) ||
-		!bytes.Equal(reg.StopKey, expected.StopKey) {
+	if !bytes.Equal(reg.GetTable(), expected.GetTable()) ||
+		!bytes.Equal(reg.GetName(), expected.GetName()) ||
+		!bytes.Equal(reg.GetStartKey(), expected.GetStartKey()) ||
+		!bytes.Equal(reg.GetStopKey(), expected.GetStopKey()) {
 		t.Errorf("Found region %#v \nbut expected %#v", reg, expected)
 	}
 

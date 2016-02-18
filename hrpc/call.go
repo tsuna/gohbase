@@ -12,9 +12,21 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
-	"github.com/tsuna/gohbase/regioninfo"
 	"golang.org/x/net/context"
 )
+
+// RegionInfo represents HBase region.
+type RegionInfo interface {
+	IsUnavailable() bool
+	GetAvailabilityChan() <-chan struct{}
+	MarkUnavailable() bool
+	MarkAvailable()
+	String() string
+	GetName() []byte
+	GetStopKey() []byte
+	GetStartKey() []byte
+	GetTable() []byte
+}
 
 // Call represents an HBase RPC call.
 type Call interface {
@@ -22,8 +34,8 @@ type Call interface {
 
 	Key() []byte
 
-	GetRegion() *regioninfo.Info
-	SetRegion(region *regioninfo.Info)
+	GetRegion() RegionInfo
+	SetRegion(region RegionInfo)
 	GetName() string
 	Serialize() ([]byte, error)
 	// Returns a newly created (default-state) protobuf in which to store the
@@ -50,7 +62,7 @@ type base struct {
 
 	key []byte
 
-	region *regioninfo.Info
+	region RegionInfo
 
 	// Protects access to resultch.
 	resultchLock sync.Mutex
@@ -64,11 +76,11 @@ func (b *base) GetContext() context.Context {
 	return b.ctx
 }
 
-func (b *base) GetRegion() *regioninfo.Info {
+func (b *base) GetRegion() RegionInfo {
 	return b.region
 }
 
-func (b *base) SetRegion(region *regioninfo.Info) {
+func (b *base) SetRegion(region RegionInfo) {
 	b.region = region
 }
 
@@ -76,7 +88,7 @@ func (b *base) regionSpecifier() *pb.RegionSpecifier {
 	regionType := pb.RegionSpecifier_REGION_NAME
 	return &pb.RegionSpecifier{
 		Type:  &regionType,
-		Value: []byte(b.region.RegionName),
+		Value: []byte(b.region.GetName()),
 	}
 }
 

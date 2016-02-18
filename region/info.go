@@ -3,8 +3,8 @@
 // Use of this source code is governed by the Apache License 2.0
 // that can be found in the COPYING file.
 
-// Package regioninfo contains data structures to represent HBase regions.
-package regioninfo
+// Package region contains data structures to represent HBase regions.
+package region
 
 import (
 	"encoding/binary"
@@ -20,8 +20,8 @@ type Info struct {
 	// Table name.
 	Table []byte
 
-	// RegionName.
-	RegionName []byte
+	// Name.
+	Name []byte
 
 	// StartKey
 	StartKey []byte
@@ -59,7 +59,7 @@ func InfoFromCell(cell *pb.Cell) (*Info, error) {
 	}
 	return &Info{
 		Table:         regInfo.TableName.Qualifier,
-		RegionName:    cell.Row,
+		Name:          cell.Row,
 		StartKey:      regInfo.StartKey,
 		StopKey:       regInfo.EndKey,
 		availableLock: sync.Mutex{},
@@ -109,8 +109,28 @@ func (i *Info) MarkAvailable() {
 }
 
 func (i *Info) String() string {
-	return fmt.Sprintf("*regioninfo.Info{Table: %q, RegionName: %q, StopKey: %q}",
-		i.Table, i.RegionName, i.StopKey)
+	return fmt.Sprintf("*region.Info{Table: %q, Name: %q, StopKey: %q}",
+		i.Table, i.Name, i.StopKey)
+}
+
+// GetName returns region name
+func (i *Info) GetName() []byte {
+	return i.Name
+}
+
+// GetStopKey return region stop key
+func (i *Info) GetStopKey() []byte {
+	return i.StopKey
+}
+
+// GetStartKey return region start key
+func (i *Info) GetStartKey() []byte {
+	return i.StartKey
+}
+
+// GetTable returns region table
+func (i *Info) GetTable() []byte {
+	return i.Table
 }
 
 // CompareGeneric is the same thing as Compare but for interface{}.

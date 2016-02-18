@@ -3,7 +3,7 @@
 // Use of this source code is governed by the Apache License 2.0
 // that can be found in the COPYING file.
 
-package regioninfo_test
+package region_test
 
 import (
 	"bytes"
@@ -12,7 +12,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
-	. "github.com/tsuna/gohbase/regioninfo"
+	. "github.com/tsuna/gohbase/region"
 )
 
 // Test parsing the contents of a cell found in meta.
@@ -37,14 +37,14 @@ func TestInfoFromMeta(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to parse cell: %s", err)
 	}
-	if !bytes.Equal(info.RegionName, regionName) {
-		t.Errorf("Unexpected regionName name: %q", info.RegionName)
+	if !bytes.Equal(info.Name, regionName) {
+		t.Errorf("Unexpected regionName name: %q", info.Name)
 	}
 	if len(info.StopKey) != 0 {
 		t.Errorf("Expected empty StopKey but got %q", info.StopKey)
 	}
 
-	expected := `*regioninfo.Info{Table: "table", RegionName: "table,foo,` +
+	expected := `*region.Info{Table: "table", Name: "table,foo,` +
 		`1431921690563.53e41f94d5c3087af0d13259b8c4186d.", StopKey: ""}`
 	if s := info.String(); s != expected {
 		t.Errorf("Unexpected string representation.\nExpected: %q\n  Actual: %q", expected, s)

@@ -136,7 +136,7 @@ func (s *Scan) GetFamilies() map[string][]string {
 // GetRegionStop returns the stop key of the region currently being scanned.
 // This is an internal method, end users are not expected to use it.
 func (s *Scan) GetRegionStop() []byte {
-	return s.region.StopKey
+	return s.region.GetStopKey()
 }
 
 // GetFilter returns the filter set on this scanner.
