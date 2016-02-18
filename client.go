@@ -63,13 +63,13 @@ type newRegResult struct {
 	Err    error
 }
 
-// client - region cache.
+// client -> region cache. Used to quickly look up all the
+// regioninfos that map to a specific client
 type clientRegionCache struct {
 	m sync.Mutex
 
 	clients map[hrpc.RegionInfo]*region.Client
 
-	// Used to quickly look up all the regioninfos that map to a specific client
 	regions map[*region.Client][]hrpc.RegionInfo
 }
 

@@ -26,6 +26,16 @@ type RegionInfo interface {
 	GetStopKey() []byte
 	GetStartKey() []byte
 	GetTable() []byte
+	SetClient(client RegionClient)
+	GetClient() RegionClient
+}
+
+// RegionClient represents HBase region client.
+type RegionClient interface {
+	Close()
+	Host() string
+	Port() uint16
+	QueueRPC(rpc Call) error
 }
 
 // Call represents an HBase RPC call.

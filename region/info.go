@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 )
 
@@ -28,6 +29,9 @@ type Info struct {
 
 	// StopKey.
 	StopKey []byte
+
+	// Client.
+	Client hrpc.RegionClient
 
 	// Once a region becomes unreachable, this channel is created, and any
 	// functions that wish to be notified when the region becomes available
@@ -131,6 +135,16 @@ func (i *Info) GetStartKey() []byte {
 // GetTable returns region table
 func (i *Info) GetTable() []byte {
 	return i.Table
+}
+
+// GetClient returns region client
+func (i *Info) GetClient() hrpc.RegionClient {
+	return i.Client
+}
+
+// SetClient sets region client
+func (i *Info) SetClient(c hrpc.RegionClient) {
+	i.Client = c
 }
 
 // CompareGeneric is the same thing as Compare but for interface{}.
