@@ -63,32 +63,32 @@ type newRegResult struct {
 	Err    error
 }
 
-// region -> client cache.
-type regionClientCache struct {
+// client - region cache.
+type clientRegionCache struct {
 	m sync.Mutex
 
 	clients map[hrpc.RegionInfo]*region.Client
 
 	// Used to quickly look up all the regioninfos that map to a specific client
-	clientsToInfos map[*region.Client][]hrpc.RegionInfo
+	regions map[*region.Client][]hrpc.RegionInfo
 }
 
-func (rcc *regionClientCache) get(r hrpc.RegionInfo) *region.Client {
+func (rcc *clientRegionCache) get(r hrpc.RegionInfo) *region.Client {
 	rcc.m.Lock()
 	c := rcc.clients[r]
 	rcc.m.Unlock()
 	return c
 }
 
-func (rcc *regionClientCache) put(r hrpc.RegionInfo, c *region.Client) {
+func (rcc *clientRegionCache) put(r hrpc.RegionInfo, c *region.Client) {
 	rcc.m.Lock()
 	rcc.clients[r] = c
-	lst := rcc.clientsToInfos[c]
-	rcc.clientsToInfos[c] = append(lst, r)
+	lst := rcc.regions[c]
+	rcc.regions[c] = append(lst, r)
 	rcc.m.Unlock()
 }
 
-func (rcc *regionClientCache) del(r hrpc.RegionInfo) {
+func (rcc *clientRegionCache) del(r hrpc.RegionInfo) {
 	rcc.m.Lock()
 	c := rcc.clients[r]
 
@@ -98,37 +98,37 @@ func (rcc *regionClientCache) del(r hrpc.RegionInfo) {
 		delete(rcc.clients, r)
 
 		var index int
-		for i, reg := range rcc.clientsToInfos[c] {
+		for i, reg := range rcc.regions[c] {
 			if reg == r {
 				index = i
 			}
 		}
-		rcc.clientsToInfos[c] = append(
-			rcc.clientsToInfos[c][:index],
-			rcc.clientsToInfos[c][index+1:]...)
+		rcc.regions[c] = append(
+			rcc.regions[c][:index],
+			rcc.regions[c][index+1:]...)
 	}
 	rcc.m.Unlock()
 }
 
-func (rcc *regionClientCache) clientDown(reg hrpc.RegionInfo) []hrpc.RegionInfo {
+func (rcc *clientRegionCache) clientDown(reg hrpc.RegionInfo) []hrpc.RegionInfo {
 	rcc.m.Lock()
 	var downregions []hrpc.RegionInfo
 	c := rcc.clients[reg]
-	for _, sharedReg := range rcc.clientsToInfos[c] {
+	for _, sharedReg := range rcc.regions[c] {
 		succ := sharedReg.MarkUnavailable()
 		delete(rcc.clients, sharedReg)
 		if succ {
 			downregions = append(downregions, sharedReg)
 		}
 	}
-	delete(rcc.clientsToInfos, c)
+	delete(rcc.regions, c)
 	rcc.m.Unlock()
 	return downregions
 }
 
-func (rcc *regionClientCache) checkForClient(host string, port uint16) *region.Client {
+func (rcc *clientRegionCache) checkForClient(host string, port uint16) *region.Client {
 	rcc.m.Lock()
-	for client := range rcc.clientsToInfos {
+	for client := range rcc.regions {
 		if client.Host() == host && client.Port() == port {
 			rcc.m.Unlock()
 			return client
@@ -203,7 +203,7 @@ type client struct {
 
 	// Maps a hrpc.RegionInfo to the *region.Client that we think currently
 	// serves it.
-	clients regionClientCache
+	clients clientRegionCache
 
 	metaRegionInfo hrpc.RegionInfo
 	metaClient     *region.Client
@@ -258,9 +258,9 @@ func newClient(zkquorum string, options ...Option) *client {
 	c := &client{
 		clientType: standardClient,
 		regions:    keyRegionCache{regions: b.TreeNew(region.CompareGeneric)},
-		clients: regionClientCache{
-			clients:        make(map[hrpc.RegionInfo]*region.Client),
-			clientsToInfos: make(map[*region.Client][]hrpc.RegionInfo),
+		clients: clientRegionCache{
+			clients: make(map[hrpc.RegionInfo]*region.Client),
+			regions: make(map[*region.Client][]hrpc.RegionInfo),
 		},
 		zkquorum:      zkquorum,
 		rpcQueueSize:  100,
