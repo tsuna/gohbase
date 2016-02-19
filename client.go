@@ -75,6 +75,11 @@ func (rcc *clientRegionCache) put(r hrpc.RegionInfo, c hrpc.RegionClient) {
 	defer rcc.m.Unlock()
 
 	lst := rcc.regions[c]
+	for _, existing := range lst {
+		if existing == r {
+			return
+		}
+	}
 	rcc.regions[c] = append(lst, r)
 }
 
@@ -834,8 +839,8 @@ func (c *client) establishRegion(originalReg hrpc.RegionInfo, host string, port 
 				client := c.clients.checkForClient(host, port)
 				if client != nil {
 					// There's already a client, add it to the
-					// cache and mark the new region as available.
-					originalReg.SetClient(client)
+					// region and mark it as available.
+					reg.SetClient(client)
 					c.clients.put(reg, client)
 					originalReg.MarkAvailable()
 					return
