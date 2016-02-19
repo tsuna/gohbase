@@ -564,11 +564,9 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 	// manually kicked off for the meta or admin region client
 	if reg == c.adminRegionInfo && client == nil && !c.adminRegionInfo.IsUnavailable() ||
 		reg == c.metaRegionInfo && client == nil && !c.metaRegionInfo.IsUnavailable() {
-		c.regionsLock.Lock()
 		if reg.MarkUnavailable() {
 			go c.reestablishRegion(reg)
 		}
-		c.regionsLock.Unlock()
 	}
 	// The region was in the cache, check
 	// if the region is marked as available
