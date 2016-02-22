@@ -57,7 +57,7 @@ func TestRegionDiscovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to discover region: %s", err)
 	}
-	client.regions.put(reg.GetName(), reg)
+	client.regions.put(reg)
 
 	reg = client.getRegionFromCache([]byte("test"), []byte("theKey"))
 	if reg == nil {

@@ -219,7 +219,7 @@ func (krc *keyRegionCache) getOverlaps(reg hrpc.RegionInfo) []hrpc.RegionInfo {
 	return overlaps
 }
 
-func (krc *keyRegionCache) put(key []byte, reg hrpc.RegionInfo) []hrpc.RegionInfo {
+func (krc *keyRegionCache) put(reg hrpc.RegionInfo) []hrpc.RegionInfo {
 	krc.m.Lock()
 	defer krc.m.Unlock()
 
@@ -229,7 +229,7 @@ func (krc *keyRegionCache) put(key []byte, reg hrpc.RegionInfo) []hrpc.RegionInf
 		krc.regions.Delete(o.GetName())
 	}
 
-	krc.regions.Put(key, func(interface{}, bool) (interface{}, bool) {
+	krc.regions.Put(reg.GetName(), func(interface{}, bool) (interface{}, bool) {
 		return reg, true
 	})
 	return os
@@ -772,7 +772,7 @@ func (c *client) findRegionForRPC(rpc hrpc.Call) (proto.Message, error) {
 		// The region wasn't added to the cache while we were looking it
 		// up. Mark this one as unavailable and add it to the cache.
 		reg.MarkUnavailable()
-		removed := c.regions.put(reg.GetName(), reg)
+		removed := c.regions.put(reg)
 		for _, r := range removed {
 			c.clients.del(r)
 		}
@@ -919,7 +919,7 @@ func (c *client) establishRegion(originalReg hrpc.RegionInfo, host string, port 
 						// able to find the client
 						c.clients.put(reg, res.Client)
 						if reg != originalReg {
-							removed := c.regions.put(reg.GetName(), reg)
+							removed := c.regions.put(reg)
 							for _, r := range removed {
 								c.clients.del(r)
 							}

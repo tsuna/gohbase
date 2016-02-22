@@ -31,7 +31,7 @@ func TestMetaCache(t *testing.T) {
 		StopKey:  []byte(""),
 	}
 	regClient := &region.Client{}
-	client.regions.put(wholeTable.GetName(), wholeTable)
+	client.regions.put(wholeTable)
 	client.clients.put(wholeTable, regClient)
 
 	reg = client.getRegionFromCache([]byte("test"), []byte("theKey"))
@@ -53,7 +53,7 @@ func TestMetaCache(t *testing.T) {
 		StartKey: []byte(""),
 		StopKey:  []byte("foo"),
 	}
-	client.regions.put(region1.GetName(), region1)
+	client.regions.put(region1)
 	client.clients.put(region1, regClient)
 
 	region2 := &region.Info{
@@ -62,7 +62,7 @@ func TestMetaCache(t *testing.T) {
 		StartKey: []byte("foo"),
 		StopKey:  []byte("gohbase"),
 	}
-	client.regions.put(region2.GetName(), region2)
+	client.regions.put(region2)
 	client.clients.put(region2, regClient)
 
 	region3 := &region.Info{
@@ -71,7 +71,7 @@ func TestMetaCache(t *testing.T) {
 		StartKey: []byte("gohbase"),
 		StopKey:  []byte(""),
 	}
-	client.regions.put(region3.GetName(), region3)
+	client.regions.put(region3)
 	client.clients.put(region3, regClient)
 
 	testcases := []struct {
@@ -99,7 +99,7 @@ func TestMetaCache(t *testing.T) {
 		Name:    []byte("test,gohbase,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		StopKey: []byte("zab"),
 	}
-	client.regions.put(region3.GetName(), region3)
+	client.regions.put(region3)
 	client.clients.put(region3, regClient)
 
 	reg = client.getRegionFromCache([]byte("test"), []byte("theKey"))
@@ -216,7 +216,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 		client.regions.regions.Clear()
 		// set up initial cache
 		for _, region := range tt.cachedRegions {
-			client.regions.put(region.GetName(), region)
+			client.regions.put(region)
 		}
 
 		expectedNames := make(regionNames, len(tt.expected))
