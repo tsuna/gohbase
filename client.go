@@ -796,8 +796,8 @@ func (c *client) getRegionFromCache(table, key []byte) hrpc.RegionInfo {
 		return c.metaRegionInfo
 	}
 	regionName := createRegionSearchKey(table, key)
-	regionKey, region := c.regions.get(regionName)
-	if region == nil || !isCacheKeyForTable(table, regionKey) {
+	_, region := c.regions.get(regionName)
+	if region == nil || !bytes.Equal(table, region.GetTable()) {
 		return nil
 	}
 
@@ -809,20 +809,6 @@ func (c *client) getRegionFromCache(table, key []byte) hrpc.RegionInfo {
 	}
 
 	return region
-}
-
-// Checks whether or not the given cache key is for the given table.
-func isCacheKeyForTable(table, cacheKey []byte) bool {
-	// Check we found an entry that's really for the requested table.
-	for i := 0; i < len(table); i++ {
-		if table[i] != cacheKey[i] { // This table isn't in the map, we found
-			return false // a key which is for another table.
-		}
-	}
-
-	// Make sure we didn't find another key that's for another table
-	// whose name is a prefix of the table name we were given.
-	return cacheKey[len(table)] == ','
 }
 
 // Creates the META key to search for in order to locate the given key.
