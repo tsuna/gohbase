@@ -144,6 +144,7 @@ func (krc *keyRegionCache) get(key []byte) ([]byte, hrpc.RegionInfo) {
 	// When seeking - "The Enumerator's position is possibly after the last item in the tree"
 	// http://godoc.org/github.com/cznic/b#Tree.Set
 	krc.m.Lock()
+
 	enum, ok := krc.regions.Seek(key)
 	k, v, err := enum.Prev()
 	if err == io.EOF && krc.regions.Len() > 0 {
@@ -154,27 +155,84 @@ func (krc *keyRegionCache) get(key []byte) ([]byte, hrpc.RegionInfo) {
 	} else if !ok {
 		k, v, err = enum.Prev()
 	}
-	// TODO: It would be nice if we could do just enum.Get() to avoid the
-	// unnecessary cost of seeking to the next entry.
-	krc.m.Unlock()
+	enum.Close()
 	if err != nil {
+		krc.m.Unlock()
 		return nil, nil
 	}
+	krc.m.Unlock()
 	return k.([]byte), v.(hrpc.RegionInfo)
 }
 
-func (krc *keyRegionCache) put(key []byte, reg hrpc.RegionInfo) hrpc.RegionInfo {
+func isRegionOverlap(regA, regB hrpc.RegionInfo) bool {
+	return bytes.Equal(regA.GetTable(), regB.GetTable()) &&
+		bytes.Compare(regA.GetStartKey(), regB.GetStopKey()) < 0 &&
+		bytes.Compare(regA.GetStopKey(), regB.GetStartKey()) > 0
+}
+
+func (krc *keyRegionCache) getOverlaps(reg hrpc.RegionInfo) []hrpc.RegionInfo {
+	var overlaps []hrpc.RegionInfo
+	var v interface{}
+	var err error
+
+	// deal with empty tree in the beginning so that we don't have to check
+	// EOF errors for enum later
+	if krc.regions.Len() == 0 {
+		return overlaps
+	}
+
+	enum, ok := krc.regions.Seek(reg.GetName())
+	if !ok {
+		// need to check if there are overlaps before what we found
+		_, _, err = enum.Prev()
+		if err == io.EOF {
+			// we are in the end of tree, get last entry
+			_, v = krc.regions.Last()
+			currReg := v.(hrpc.RegionInfo)
+			if isRegionOverlap(currReg, reg) {
+				return append(overlaps, currReg)
+			}
+		} else {
+			_, v, err = enum.Next()
+			if err == io.EOF {
+				// we are before the beginning of the tree now, get new enum
+				enum.Close()
+				enum, err = krc.regions.SeekFirst()
+			} else {
+				// otherwise, check for overlap before us
+				currReg := v.(hrpc.RegionInfo)
+				if isRegionOverlap(currReg, reg) {
+					overlaps = append(overlaps, currReg)
+				}
+			}
+		}
+	}
+
+	// now append all regions that overlap until the end of the tree
+	// or until they don't overlap
+	_, v, err = enum.Next()
+	for err == nil && isRegionOverlap(v.(hrpc.RegionInfo), reg) {
+		overlaps = append(overlaps, v.(hrpc.RegionInfo))
+		_, v, err = enum.Next()
+	}
+	enum.Close()
+	return overlaps
+}
+
+func (krc *keyRegionCache) put(key []byte, reg hrpc.RegionInfo) []hrpc.RegionInfo {
 	krc.m.Lock()
-	// TODO: We need to remove all the entries that are overlap with the range
-	// of the new region being added here, if any.
-	oldV, _ := krc.regions.Put(key, func(interface{}, bool) (interface{}, bool) {
+	defer krc.m.Unlock()
+
+	// Remove all the entries that are overlap with the range of the new region.
+	os := krc.getOverlaps(reg)
+	for _, o := range os {
+		krc.regions.Delete(o.GetName())
+	}
+
+	krc.regions.Put(key, func(interface{}, bool) (interface{}, bool) {
 		return reg, true
 	})
-	krc.m.Unlock()
-	if oldV == nil {
-		return nil
-	}
-	return oldV.(hrpc.RegionInfo)
+	return os
 }
 
 func (krc *keyRegionCache) del(key []byte) bool {
@@ -714,7 +772,10 @@ func (c *client) findRegionForRPC(rpc hrpc.Call) (proto.Message, error) {
 		// The region wasn't added to the cache while we were looking it
 		// up. Mark this one as unavailable and add it to the cache.
 		reg.MarkUnavailable()
-		c.regions.put(reg.GetName(), reg)
+		removed := c.regions.put(reg.GetName(), reg)
+		for _, r := range removed {
+			c.clients.del(r)
+		}
 
 		c.regionsLock.Unlock()
 
@@ -867,14 +928,15 @@ func (c *client) establishRegion(originalReg hrpc.RegionInfo, host string, port 
 				if res.Err == nil {
 					reg.SetClient(res.Client)
 					if c.clientType != adminClient && reg != c.metaRegionInfo {
+						// put will set region client so that as soon as we add
+						// it to the key->region mapping, concurrent readers are
+						// able to find the client
 						c.clients.put(reg, res.Client)
 						if reg != originalReg {
-							// Here `reg' is guaranteed to be available, so we
-							// must publish the region->client mapping first,
-							// because as soon as we add it to the key->region
-							// mapping here, concurrent readers are gonna want
-							// to find the client.
-							c.regions.put(reg.GetName(), reg)
+							removed := c.regions.put(reg.GetName(), reg)
+							for _, r := range removed {
+								c.clients.del(r)
+							}
 						}
 					}
 					originalReg.MarkAvailable()

@@ -6,9 +6,12 @@
 package gohbase
 
 import (
+	"bytes"
 	"reflect"
+	"sort"
 	"testing"
 
+	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/region"
 )
 
@@ -22,9 +25,10 @@ func TestMetaCache(t *testing.T) {
 
 	// Inject an entry in the cache.  This entry covers the entire key range.
 	wholeTable := &region.Info{
-		Table:   []byte("test"),
-		Name:    []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-		StopKey: []byte(""),
+		Table:    []byte("test"),
+		Name:     []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		StartKey: []byte(""),
+		StopKey:  []byte(""),
 	}
 	regClient := &region.Client{}
 	client.regions.put(wholeTable.GetName(), wholeTable)
@@ -44,25 +48,28 @@ func TestMetaCache(t *testing.T) {
 
 	// Inject 3 entries in the cache.
 	region1 := &region.Info{
-		Table:   []byte("test"),
-		Name:    []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-		StopKey: []byte("foo"),
+		Table:    []byte("test"),
+		Name:     []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		StartKey: []byte(""),
+		StopKey:  []byte("foo"),
 	}
 	client.regions.put(region1.GetName(), region1)
 	client.clients.put(region1, regClient)
 
 	region2 := &region.Info{
-		Table:   []byte("test"),
-		Name:    []byte("test,foo,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-		StopKey: []byte("gohbase"),
+		Table:    []byte("test"),
+		Name:     []byte("test,foo,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		StartKey: []byte("foo"),
+		StopKey:  []byte("gohbase"),
 	}
 	client.regions.put(region2.GetName(), region2)
 	client.clients.put(region2, regClient)
 
 	region3 := &region.Info{
-		Table:   []byte("test"),
-		Name:    []byte("test,gohbase,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-		StopKey: []byte(""),
+		Table:    []byte("test"),
+		Name:     []byte("test,gohbase,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		StartKey: []byte("gohbase"),
+		StopKey:  []byte(""),
 	}
 	client.regions.put(region3.GetName(), region3)
 	client.clients.put(region3, regClient)
@@ -103,4 +110,130 @@ func TestMetaCache(t *testing.T) {
 	if reg != nil {
 		t.Errorf("Shouldn't have found any region yet found %#v", reg)
 	}
+}
+
+type regionNames [][]byte
+
+func (a regionNames) Len() int           { return len(a) }
+func (a regionNames) Less(i, j int) bool { return bytes.Compare(a[i], a[j]) < 0 }
+func (a regionNames) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+
+func TestMetaCacheGetOverlaps(t *testing.T) {
+	region1 := &region.Info{
+		Table:    []byte("test"),
+		Name:     []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		StartKey: []byte(""),
+		StopKey:  []byte("foo"),
+	}
+
+	regionA := &region.Info{
+		Table:    []byte("hello"),
+		Name:     []byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		StartKey: []byte(""),
+		StopKey:  []byte("foo"),
+	}
+
+	regionB := &region.Info{
+		Table:    []byte("hello"),
+		Name:     []byte("hello,foo,987654321042.56f833d5569a27c7a43fbf547b4924a4."),
+		StartKey: []byte("foo"),
+		StopKey:  []byte("fox"),
+	}
+
+	regionC := &region.Info{
+		Table:    []byte("hello"),
+		Name:     []byte("hello,fox,987654321042.56f833d5569a27c7a43fbf547b4924a4."),
+		StartKey: []byte("fox"),
+		StopKey:  []byte("yolo"),
+	}
+
+	regionTests := []struct {
+		cachedRegions []hrpc.RegionInfo
+		newRegion     hrpc.RegionInfo
+		expected      []hrpc.RegionInfo
+	}{
+		{[]hrpc.RegionInfo{}, region1, []hrpc.RegionInfo{}},               // empty cache
+		{[]hrpc.RegionInfo{region1}, region1, []hrpc.RegionInfo{region1}}, // with itself
+		{ // different table
+			[]hrpc.RegionInfo{region1},
+			&region.Info{
+				Table:    []byte("hello"),
+				Name:     []byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+				StartKey: []byte(""),
+				StopKey:  []byte("fake"),
+			},
+			[]hrpc.RegionInfo{},
+		},
+		{ // overlaps with both
+			[]hrpc.RegionInfo{regionA, regionB},
+			&region.Info{
+				Table:    []byte("hello"),
+				Name:     []byte("hello,bar,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+				StartKey: []byte("bar"),
+				StopKey:  []byte("fop"),
+			},
+			[]hrpc.RegionInfo{regionA, regionB},
+		},
+		{ // overlaps with both, key start == old one
+			[]hrpc.RegionInfo{regionA, regionB},
+			&region.Info{
+				Table:    []byte("hello"),
+				Name:     []byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+				StartKey: []byte(""),
+				StopKey:  []byte("yolo"),
+			},
+			[]hrpc.RegionInfo{regionA, regionB},
+		},
+		{ // overlaps with second
+			[]hrpc.RegionInfo{regionA, regionB},
+			&region.Info{
+				Table:    []byte("hello"),
+				Name:     []byte("hello,fop,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+				StartKey: []byte("fop"),
+				StopKey:  []byte("yolo"),
+			},
+			[]hrpc.RegionInfo{regionB},
+		},
+		{ // overlaps with first, new key start == old one
+			[]hrpc.RegionInfo{regionA, regionB},
+			&region.Info{
+				Table:    []byte("hello"),
+				Name:     []byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+				StartKey: []byte(""),
+				StopKey:  []byte("abc"),
+			},
+			[]hrpc.RegionInfo{regionA},
+		},
+		{ // doesn't overlap, is between existing
+			[]hrpc.RegionInfo{regionA, regionC},
+			regionB,
+			[]hrpc.RegionInfo{},
+		},
+	}
+
+	client := newClient("~invalid.quorum~") // fake client
+	for i, tt := range regionTests {
+		client.regions.regions.Clear()
+		// set up initial cache
+		for _, region := range tt.cachedRegions {
+			client.regions.put(region.GetName(), region)
+		}
+
+		expectedNames := make(regionNames, len(tt.expected))
+		for i, r := range tt.expected {
+			expectedNames[i] = r.GetName()
+		}
+		os := client.regions.getOverlaps(tt.newRegion)
+		osNames := make(regionNames, len(os))
+		for i, o := range os {
+			osNames[i] = o.GetName()
+		}
+		sort.Sort(expectedNames)
+		sort.Sort(osNames)
+		if !reflect.DeepEqual(expectedNames, osNames) {
+			t.Errorf("=== TestMetaCacheGetOverlaps #%d: Expected overlaps %q, found %q", i+1,
+				expectedNames, osNames)
+		}
+	}
+
 }
