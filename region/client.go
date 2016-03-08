@@ -352,11 +352,15 @@ func (c *Client) write(buf []byte) error {
 // Tries to read enough data to fully fill up the given buffer.
 func (c *Client) readFully(buf []byte) error {
 	// TODO: Handle short reads.
-	n, err := c.conn.Read(buf)
-	if err != nil {
-		return fmt.Errorf("Failed to read from the RS: %s", err)
-	} else if n != len(buf) {
-		return fmt.Errorf("Failed to read everything from the RS: %s", err)
+	var err error
+	for read, total := 0, 0; total < len(buf); total += read {
+		read, err = c.conn.Read(buf[total:])
+		if err != nil {
+			return fmt.Errorf("Failed to read from the RS: %s", err)
+		}
+		if read == 0 {
+			return fmt.Errorf("Failed to read everything from the RS: expect %d but got %d.", len(buf), total)
+		}
 	}
 	return nil
 }
