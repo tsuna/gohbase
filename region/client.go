@@ -359,7 +359,8 @@ func (c *Client) readFully(buf []byte) error {
 			return fmt.Errorf("Failed to read from the RS: %s", err)
 		}
 		if read == 0 {
-			return fmt.Errorf("Failed to read everything from the RS: expect %d but got %d.", len(buf), total)
+			return fmt.Errorf("Failed to readFully from RS: expect %d but got %d.",
+				len(buf), total)
 		}
 	}
 	return nil
