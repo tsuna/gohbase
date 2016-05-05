@@ -17,7 +17,8 @@ all: install
 install:
 	$(GO) install ./...
 
-check: vet fmtcheck lint test integration
+check: vet fmtcheck lint test
+jenkins: check integration
 
 COVER_PKGS := `find ./* -name '*_test.go' | xargs -I{} dirname {} | sort -u`
 COVER_MODE := count
@@ -52,4 +53,4 @@ test:
 integration:
 	$(GO) test $(GOTEST_FLAGS) -race -timeout=$(INTEGRATION_TIMEOUT) -tags=integration
 
-.PHONY: all check coverage coverdata fmtcheck install integration lint test vet
+.PHONY: all check coverage coverdata fmtcheck install integration jenkins lint test vet
