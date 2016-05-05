@@ -200,12 +200,17 @@ func (i *Info) GetTable() []byte {
 
 // GetClient returns region client
 func (i *Info) GetClient() hrpc.RegionClient {
-	return i.Client
+	i.m.Lock()
+	c := i.Client
+	i.m.Unlock()
+	return c
 }
 
 // SetClient sets region client
 func (i *Info) SetClient(c hrpc.RegionClient) {
+	i.m.Lock()
 	i.Client = c
+	i.m.Unlock()
 }
 
 // CompareGeneric is the same thing as Compare but for interface{}.
