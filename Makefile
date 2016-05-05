@@ -8,9 +8,7 @@ TEST_TIMEOUT := 30s
 INTEGRATION_TIMEOUT := 120s
 GOTEST_FLAGS :=
 
-DEFAULT_GOPATH := $${GOPATH%%:*}
-GOPATH_BIN := $(DEFAULT_GOPATH)/bin
-GOLINT := $(GOPATH_BIN)/golint
+GOLINT := golint
 
 all: install
 
