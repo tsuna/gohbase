@@ -32,6 +32,11 @@ type Info struct {
 	// StopKey.
 	StopKey []byte
 
+	// The attributes before this mutex are supposed to be immutable.
+	// The attributes defined below can be changed and accesses must
+	// be protected with this mutex.
+	m sync.Mutex
+
 	// Client.
 	Client hrpc.RegionClient
 
@@ -39,8 +44,7 @@ type Info struct {
 	// functions that wish to be notified when the region becomes available
 	// again can read from this channel, which will be closed when the region
 	// is available again
-	available     chan struct{}
-	availableLock sync.Mutex
+	available chan struct{}
 }
 
 // infoFromCell parses a KeyValue from the meta table and creates the
@@ -64,11 +68,10 @@ func infoFromCell(cell *pb.Cell) (*Info, error) {
 		return nil, fmt.Errorf("failed to decode %q: %s", cell, err)
 	}
 	return &Info{
-		Table:         regInfo.TableName.Qualifier,
-		Name:          cell.Row,
-		StartKey:      regInfo.StartKey,
-		StopKey:       regInfo.EndKey,
-		availableLock: sync.Mutex{},
+		Table:    regInfo.TableName.Qualifier,
+		Name:     cell.Row,
+		StartKey: regInfo.StartKey,
+		StopKey:  regInfo.EndKey,
 	}, nil
 }
 
@@ -130,9 +133,9 @@ func ParseRegionInfo(metaRow *pb.GetResponse) (
 
 // IsUnavailable returns true if this region has been marked as unavailable.
 func (i *Info) IsUnavailable() bool {
-	i.availableLock.Lock()
+	i.m.Lock()
 	res := i.available != nil
-	i.availableLock.Unlock()
+	i.m.Unlock()
 	return res
 }
 
@@ -140,9 +143,9 @@ func (i *Info) IsUnavailable() bool {
 // notification that a connection to this region has been reestablished.
 // If this region is not marked as unavailable, nil will be returned.
 func (i *Info) GetAvailabilityChan() <-chan struct{} {
-	i.availableLock.Lock()
+	i.m.Lock()
 	ch := i.available
-	i.availableLock.Unlock()
+	i.m.Unlock()
 	return ch
 }
 
@@ -151,23 +154,23 @@ func (i *Info) GetAvailabilityChan() <-chan struct{} {
 // before this, true will be returned.
 func (i *Info) MarkUnavailable() bool {
 	created := false
-	i.availableLock.Lock()
+	i.m.Lock()
 	if i.available == nil {
 		i.available = make(chan struct{})
 		created = true
 	}
-	i.availableLock.Unlock()
+	i.m.Unlock()
 	return created
 }
 
 // MarkAvailable will mark this region as available again, by closing the struct
 // returned by GetAvailabilityChan
 func (i *Info) MarkAvailable() {
-	i.availableLock.Lock()
+	i.m.Lock()
 	ch := i.available
 	i.available = nil
 	close(ch)
-	i.availableLock.Unlock()
+	i.m.Unlock()
 }
 
 func (i *Info) String() string {
