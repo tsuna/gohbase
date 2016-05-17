@@ -22,9 +22,11 @@ func CreateTable(client gohbase.AdminClient, table string, cFamilies []string) e
 	// Don't check the error, since one will be returned if the table doesn't
 	// exist
 
-	ct := hrpc.NewCreateTable(context.Background(), []byte(table), cFamilies)
-	err := client.CreateTable(ct)
+	ct, err := hrpc.NewCreateTable(context.Background(), []byte(table), cFamilies)
 	if err != nil {
+		return err
+	}
+	if err := client.CreateTable(ct); err != nil {
 		return err
 	}
 

@@ -31,9 +31,13 @@ func TestCreateTable(t *testing.T) {
 	t.Log("testTableName=" + testTableName)
 
 	ac := gohbase.NewAdminClient(*host)
-	crt := hrpc.NewCreateTable(context.Background(), []byte(testTableName), []string{"cf", "cf2"})
-	err := ac.CreateTable(crt)
+	crt, err := hrpc.NewCreateTable(context.Background(), []byte(testTableName),
+		[]string{"cf", "cf2"})
 	if err != nil {
+		t.Errorf("NewCreateTable returned an error: %s", err)
+	}
+
+	if err := ac.CreateTable(crt); err != nil {
 		t.Errorf("CreateTable returned an error: %v", err)
 	}
 
@@ -60,9 +64,13 @@ func TestDisableDeleteTable(t *testing.T) {
 	t.Log("testTableName=" + testTableName)
 	ac := gohbase.NewAdminClient(*host)
 
-	crt := hrpc.NewCreateTable(context.Background(), []byte(testTableName), []string{"cf", "cf2"})
-	err := ac.CreateTable(crt)
+	crt, err := hrpc.NewCreateTable(context.Background(), []byte(testTableName),
+		[]string{"cf", "cf2"})
 	if err != nil {
+		t.Errorf("NewCreateTable returned an error: %s", err)
+	}
+
+	if err := ac.CreateTable(crt); err != nil {
 		t.Errorf("CreateTable returned an error: %v", err)
 	}
 
@@ -103,9 +111,13 @@ func TestEnableTable(t *testing.T) {
 	t.Log("testTableName=" + testTableName)
 	ac := gohbase.NewAdminClient(*host)
 
-	crt := hrpc.NewCreateTable(context.Background(), []byte(testTableName), []string{"cf", "cf2"})
-	err := ac.CreateTable(crt)
+	crt, err := hrpc.NewCreateTable(context.Background(), []byte(testTableName),
+		[]string{"cf", "cf2"})
 	if err != nil {
+		t.Errorf("NewCreateTable returned an error: %s", err)
+	}
+
+	if err := ac.CreateTable(crt); err != nil {
 		t.Errorf("CreateTable returned an error: %v", err)
 	}
 
