@@ -405,6 +405,61 @@ func TestTimestampIncreasing(t *testing.T) {
 	}
 }
 
+func TestPutTimestamp(t *testing.T) {
+	key := "TestPutTimestamp"
+	c := gohbase.NewClient(*host)
+	var putTs uint64 = 50
+	timestamp := time.Unix(0, int64(putTs*1e6))
+	putRequest, err := hrpc.NewPutStr(context.Background(), table, key,
+		map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte("1")}},
+		hrpc.Timestamp(timestamp))
+	_, err = c.Put(putRequest)
+	if err != nil {
+		t.Fatalf("Put failed: %s", err)
+	}
+	get, err := hrpc.NewGetStr(context.Background(), table, key,
+		hrpc.Families(map[string][]string{"cf": nil}))
+	rsp, err := c.Get(get)
+	if err != nil {
+		t.Fatalf("Get failed: %s", err)
+	}
+	getTs := *rsp.Cells[0].Timestamp
+	if getTs != putTs {
+		t.Errorf("Timestamps are not the same. Put Time: %v, Get Time: %v",
+			putTs, getTs)
+	}
+}
+
+func TestDeleteTimestamp(t *testing.T) {
+	key := "TestDeleteTimestamp"
+	c := gohbase.NewClient(*host)
+	var putTs uint64 = 50
+	timestamp := time.Unix(0, int64(putTs*1e6))
+	putRequest, err := hrpc.NewPutStr(context.Background(), table, key,
+		map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte("1")}},
+		hrpc.Timestamp(timestamp))
+	_, err = c.Put(putRequest)
+	if err != nil {
+		t.Fatalf("Put failed: %s", err)
+	}
+	deleteRequest, err := hrpc.NewDelStr(context.Background(), table, key,
+		map[string]map[string][]byte{"cf": map[string][]byte{"a": nil}},
+		hrpc.Timestamp(timestamp))
+	_, err = c.Delete(deleteRequest)
+	if err != nil {
+		t.Fatalf("Delete failed: %s", err)
+	}
+	get, err := hrpc.NewGetStr(context.Background(), table, key,
+		hrpc.Families(map[string][]string{"cf": nil}))
+	rsp, err := c.Get(get)
+	if err != nil {
+		t.Fatalf("Get failed: %s", err)
+	}
+	if len(rsp.Cells) != 0 {
+		t.Errorf("Timestamp wasn't deleted, get result length: %d", len(rsp.Cells))
+	}
+}
+
 func TestAppend(t *testing.T) {
 	key := "row7"
 	c := gohbase.NewClient(*host)

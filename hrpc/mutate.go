@@ -10,8 +10,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"reflect"
 	"strings"
+	"time"
 	"unsafe"
 
 	"github.com/golang/protobuf/proto"
@@ -34,6 +36,27 @@ var (
 	ErrUnsupportedInts = errors.New("ints are unsupported on your platform")
 )
 
+const (
+	// LatestTimestamp is default value for timestamp
+	LatestTimestamp = math.MaxUint64
+)
+
+// DurabilityType is used to set durability for Durability option
+type DurabilityType int32
+
+const (
+	// UseDefault is USER_DEFAULT
+	UseDefault DurabilityType = iota
+	// SkipWal is SKIP_WAL
+	SkipWal
+	// AsyncWal is ASYNC_WAL
+	AsyncWal
+	// SyncWal is SYNC_WAL
+	SyncWal
+	// FsyncWal is FSYNC_WAL
+	FsyncWal
+)
+
 // Mutate represents a mutation on HBase.
 type Mutate struct {
 	base
@@ -46,27 +69,69 @@ type Mutate struct {
 	// data is a struct passed in that has fields tagged to represent HBase
 	// columns
 	data interface{}
+
+	// timestamp to save at
+	timestamp uint64
+
+	// mutation durability
+	durability DurabilityType
+}
+
+// Timestamp sets timestamp for mutation queries.
+func Timestamp(ts time.Time) func(Call) error {
+	return func(o Call) error {
+		m, ok := o.(*Mutate)
+		if !ok {
+			return errors.New("Timestamp option can only be used with mutation queries.")
+		}
+		m.timestamp = uint64(ts.UnixNano() / 1e6)
+		return nil
+	}
+}
+
+// Durability sets durability for mutation queries.
+func Durability(d DurabilityType) func(Call) error {
+	return func(o Call) error {
+		m, ok := o.(*Mutate)
+		if !ok {
+			return errors.New("Durability option can only be used with mutation queries.")
+		}
+		if d < UseDefault || d > FsyncWal {
+			return errors.New("Invalid durability value.")
+		}
+		m.durability = d
+		return nil
+	}
 }
 
 // baseMutate returns a Mutate struct without the mutationType filled in.
-func baseMutate(ctx context.Context, table, key string,
-	values map[string]map[string][]byte, data interface{}) *Mutate {
-	return &Mutate{
+func baseMutate(ctx context.Context, table, key string, values map[string]map[string][]byte,
+	data interface{}, options ...func(Call) error) (*Mutate, error) {
+	m := &Mutate{
 		base: base{
 			table: []byte(table),
 			key:   []byte(key),
 			ctx:   ctx,
 		},
-		values: values,
-		data:   data,
+		values:    values,
+		data:      data,
+		timestamp: LatestTimestamp,
 	}
+	err := applyOptions(m, options...)
+	if err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // NewPutStr creates a new Mutation request to insert the given
 // family-column-values in the given row key of the given table.
 func NewPutStr(ctx context.Context, table, key string,
-	values map[string]map[string][]byte) (*Mutate, error) {
-	m := baseMutate(ctx, table, key, values, nil)
+	values map[string]map[string][]byte, options ...func(Call) error) (*Mutate, error) {
+	m, err := baseMutate(ctx, table, key, values, nil, options...)
+	if err != nil {
+		return nil, err
+	}
 	m.mutationType = pb.MutationProto_PUT
 	return m, nil
 }
@@ -74,11 +139,15 @@ func NewPutStr(ctx context.Context, table, key string,
 // NewPutStrRef creates a new Mutation request to insert the given
 // data structure in the given row key of the given table.  The `data'
 // argument must be a string with fields defined using the "hbase" tag.
-func NewPutStrRef(ctx context.Context, table, key string, data interface{}) (*Mutate, error) {
+func NewPutStrRef(ctx context.Context, table, key string, data interface{},
+	options ...func(Call) error) (*Mutate, error) {
 	if !isAStruct(data) {
 		return nil, ErrNotAStruct
 	}
-	m := baseMutate(ctx, table, key, nil, data)
+	m, err := baseMutate(ctx, table, key, nil, data, options...)
+	if err != nil {
+		return nil, err
+	}
 	m.mutationType = pb.MutationProto_PUT
 	return m, nil
 }
@@ -86,8 +155,11 @@ func NewPutStrRef(ctx context.Context, table, key string, data interface{}) (*Mu
 // NewDelStr creates a new Mutation request to delete the given
 // family-column-values from the given row key of the given table.
 func NewDelStr(ctx context.Context, table, key string,
-	values map[string]map[string][]byte) (*Mutate, error) {
-	m := baseMutate(ctx, table, key, values, nil)
+	values map[string]map[string][]byte, options ...func(Call) error) (*Mutate, error) {
+	m, err := baseMutate(ctx, table, key, values, nil, options...)
+	if err != nil {
+		return nil, err
+	}
 	m.mutationType = pb.MutationProto_DELETE
 	return m, nil
 }
@@ -95,11 +167,15 @@ func NewDelStr(ctx context.Context, table, key string,
 // NewDelStrRef creates a new Mutation request to delete the given
 // data structure from the given row key of the given table.  The `data'
 // argument must be a string with fields defined using the "hbase" tag.
-func NewDelStrRef(ctx context.Context, table, key string, data interface{}) (*Mutate, error) {
+func NewDelStrRef(ctx context.Context, table, key string, data interface{},
+	options ...func(Call) error) (*Mutate, error) {
 	if !isAStruct(data) {
 		return nil, ErrNotAStruct
 	}
-	m := baseMutate(ctx, table, key, nil, data)
+	m, err := baseMutate(ctx, table, key, nil, data, options...)
+	if err != nil {
+		return nil, err
+	}
 	m.mutationType = pb.MutationProto_DELETE
 	return m, nil
 }
@@ -108,19 +184,26 @@ func NewDelStrRef(ctx context.Context, table, key string, data interface{}) (*Mu
 // family-column-values into the existing cells in HBase (or create them if
 // needed), in given row key of the given table.
 func NewAppStr(ctx context.Context, table, key string,
-	values map[string]map[string][]byte) (*Mutate, error) {
-	m := baseMutate(ctx, table, key, values, nil)
+	values map[string]map[string][]byte, options ...func(Call) error) (*Mutate, error) {
+	m, err := baseMutate(ctx, table, key, values, nil, options...)
+	if err != nil {
+		return nil, err
+	}
 	m.mutationType = pb.MutationProto_APPEND
 	return m, nil
 }
 
 // NewAppStrRef creates a new Mutation request that will append the given values
 // to their existing values in HBase under the given table and key.
-func NewAppStrRef(ctx context.Context, table, key string, data interface{}) (*Mutate, error) {
+func NewAppStrRef(ctx context.Context, table, key string, data interface{},
+	options ...func(Call) error) (*Mutate, error) {
 	if !isAStruct(data) {
 		return nil, ErrNotAStruct
 	}
-	m := baseMutate(ctx, table, key, nil, data)
+	m, err := baseMutate(ctx, table, key, nil, data, options...)
+	if err != nil {
+		return nil, err
+	}
 	m.mutationType = pb.MutationProto_APPEND
 	return m, nil
 }
@@ -128,7 +211,7 @@ func NewAppStrRef(ctx context.Context, table, key string, data interface{}) (*Mu
 // NewIncStrSingle creates a new Mutation request that will increment the given value
 // by amount in HBase under the given table, key, family and qualifier.
 func NewIncStrSingle(ctx context.Context, table, key string, family string,
-	qualifier string, amount int64) (*Mutate, error) {
+	qualifier string, amount int64, options ...func(Call) error) (*Mutate, error) {
 
 	buf := new(bytes.Buffer)
 	err := binary.Write(buf, binary.BigEndian, amount)
@@ -137,25 +220,32 @@ func NewIncStrSingle(ctx context.Context, table, key string, family string,
 	}
 
 	value := map[string]map[string][]byte{family: map[string][]byte{qualifier: buf.Bytes()}}
-	return NewIncStr(ctx, table, key, value)
+	return NewIncStr(ctx, table, key, value, options...)
 }
 
 // NewIncStr creates a new Mutation request that will increment the given values
 // in HBase under the given table and key.
 func NewIncStr(ctx context.Context, table, key string,
-	values map[string]map[string][]byte) (*Mutate, error) {
-	m := baseMutate(ctx, table, key, values, nil)
+	values map[string]map[string][]byte, options ...func(Call) error) (*Mutate, error) {
+	m, err := baseMutate(ctx, table, key, values, nil, options...)
+	if err != nil {
+		return nil, err
+	}
 	m.mutationType = pb.MutationProto_INCREMENT
 	return m, nil
 }
 
 // NewIncStrRef creates a new Mutation request that will increment the given values
 // in HBase under the given table and key.
-func NewIncStrRef(ctx context.Context, table, key string, data interface{}) (*Mutate, error) {
+func NewIncStrRef(ctx context.Context, table, key string, data interface{},
+	options ...func(Call) error) (*Mutate, error) {
 	if !isAStruct(data) {
 		return nil, ErrNotAStruct
 	}
-	m := baseMutate(ctx, table, key, nil, data)
+	m, err := baseMutate(ctx, table, key, nil, data, options...)
+	if err != nil {
+		return nil, err
+	}
 	m.mutationType = pb.MutationProto_INCREMENT
 	return m, nil
 }
@@ -209,13 +299,19 @@ func (m *Mutate) serializeNoReflect() *pb.MutateRequest {
 		}
 		i++
 	}
+	durability := pb.MutationProto_Durability(m.durability)
+	mProto := &pb.MutationProto{
+		Row:         m.key,
+		MutateType:  &m.mutationType,
+		ColumnValue: bytevalues,
+		Durability:  &durability,
+	}
+	if m.timestamp != LatestTimestamp {
+		mProto.Timestamp = &m.timestamp
+	}
 	return &pb.MutateRequest{
-		Region: m.regionSpecifier(),
-		Mutation: &pb.MutationProto{
-			Row:         m.key,
-			MutateType:  &m.mutationType,
-			ColumnValue: bytevalues,
-		},
+		Region:   m.regionSpecifier(),
+		Mutation: mProto,
 	}
 }
 
@@ -274,13 +370,19 @@ func (m *Mutate) serializeWithReflect() (*pb.MutateRequest, error) {
 		pbcolumns = append(pbcolumns, colval)
 
 	}
+	durability := pb.MutationProto_Durability(m.durability)
+	mProto := &pb.MutationProto{
+		Row:         m.key,
+		MutateType:  &m.mutationType,
+		ColumnValue: pbcolumns,
+		Durability:  &durability,
+	}
+	if m.timestamp != LatestTimestamp {
+		mProto.Timestamp = &m.timestamp
+	}
 	return &pb.MutateRequest{
-		Region: m.regionSpecifier(),
-		Mutation: &pb.MutationProto{
-			Row:         m.key,
-			MutateType:  &m.mutationType,
-			ColumnValue: pbcolumns,
-		},
+		Region:   m.regionSpecifier(),
+		Mutation: mProto,
 	}, nil
 }
 
