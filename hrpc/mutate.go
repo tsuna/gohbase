@@ -10,7 +10,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math"
 	"reflect"
 	"strings"
 	"time"
@@ -34,11 +33,6 @@ var (
 	// ErrUnsupportedInts is returned when this message is serialized and ints
 	// are unsupported on your platform (this will probably never happen)
 	ErrUnsupportedInts = errors.New("ints are unsupported on your platform")
-)
-
-const (
-	// LatestTimestamp is default value for timestamp
-	LatestTimestamp = math.MaxUint64
 )
 
 // DurabilityType is used to set durability for Durability option
@@ -115,7 +109,7 @@ func baseMutate(ctx context.Context, table, key string, values map[string]map[st
 		},
 		values:    values,
 		data:      data,
-		timestamp: LatestTimestamp,
+		timestamp: MaxTimestamp,
 	}
 	err := applyOptions(m, options...)
 	if err != nil {
@@ -306,7 +300,7 @@ func (m *Mutate) serializeNoReflect() *pb.MutateRequest {
 		ColumnValue: bytevalues,
 		Durability:  &durability,
 	}
-	if m.timestamp != LatestTimestamp {
+	if m.timestamp != MaxTimestamp {
 		mProto.Timestamp = &m.timestamp
 	}
 	return &pb.MutateRequest{
@@ -377,7 +371,7 @@ func (m *Mutate) serializeWithReflect() (*pb.MutateRequest, error) {
 		ColumnValue: pbcolumns,
 		Durability:  &durability,
 	}
-	if m.timestamp != LatestTimestamp {
+	if m.timestamp != MaxTimestamp {
 		mProto.Timestamp = &m.timestamp
 	}
 	return &pb.MutateRequest{

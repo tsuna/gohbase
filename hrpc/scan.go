@@ -6,10 +6,21 @@
 package hrpc
 
 import (
+	"math"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
 	"golang.org/x/net/context"
+)
+
+const (
+	// DefaultMaxVersions defualt value for maximum versions to return for scan queries
+	DefaultMaxVersions uint32 = 1
+	// MinTimestamp default value for minimum timestamp for scan queries
+	MinTimestamp uint64 = 0
+	// MaxTimestamp default value for maximum timestamp for scan queries
+	MaxTimestamp = math.MaxUint64
 )
 
 // Scan represents a scanner on an HBase table.
@@ -24,25 +35,40 @@ type Scan struct {
 	startRow []byte
 	stopRow  []byte
 
-	scannerID *uint64
+	fromTimestamp uint64
+	toTimestamp   uint64
+
+	maxVersions uint32
+
+	scannerID uint64
 
 	filters filter.Filter
 }
 
-// NewScan creates a scanner for the given table.
-func NewScan(ctx context.Context, table []byte, options ...func(Call) error) (*Scan, error) {
-	scan := &Scan{
+// baseScan returns a Scan struct with default values set.
+func baseScan(ctx context.Context, table []byte,
+	options ...func(Call) error) (*Scan, error) {
+	s := &Scan{
 		base: base{
 			table: table,
 			ctx:   ctx,
 		},
-		closeScanner: false,
+		fromTimestamp: MinTimestamp,
+		toTimestamp:   MaxTimestamp,
+		maxVersions:   DefaultMaxVersions,
+		scannerID:     math.MaxUint64,
 	}
-	err := applyOptions(scan, options...)
+	err := applyOptions(s, options...)
 	if err != nil {
 		return nil, err
 	}
-	return scan, nil
+
+	return s, nil
+}
+
+// NewScan creates a scanner for the given table.
+func NewScan(ctx context.Context, table []byte, options ...func(Call) error) (*Scan, error) {
+	return baseScan(ctx, table, options...)
 }
 
 // NewScanRange creates a scanner for the given table and key range.
@@ -50,20 +76,12 @@ func NewScan(ctx context.Context, table []byte, options ...func(Call) error) (*S
 // included in the range.
 func NewScanRange(ctx context.Context, table, startRow, stopRow []byte,
 	options ...func(Call) error) (*Scan, error) {
-	scan := &Scan{
-		base: base{
-			table: table,
-			key:   stopRow,
-			ctx:   ctx,
-		},
-		closeScanner: false,
-		startRow:     startRow,
-		stopRow:      stopRow,
-	}
-	err := applyOptions(scan, options...)
+	scan, err := baseScan(ctx, table, options...)
 	if err != nil {
 		return nil, err
 	}
+	scan.startRow = startRow
+	scan.stopRow = stopRow
 	return scan, nil
 }
 
@@ -85,15 +103,9 @@ func NewScanRangeStr(ctx context.Context, table, startRow, stopRow string,
 // are not expected to deal with scanner IDs.
 func NewScanFromID(ctx context.Context, table []byte,
 	scannerID uint64, startRow []byte) *Scan {
-	return &Scan{
-		base: base{
-			table: []byte(table),
-			key:   []byte(startRow),
-			ctx:   ctx,
-		},
-		scannerID:    &scannerID,
-		closeScanner: false,
-	}
+	scan, _ := baseScan(ctx, table)
+	scan.scannerID = scannerID
+	return scan
 }
 
 // NewCloseFromID creates a new Scan request that will close the scanner for
@@ -101,15 +113,10 @@ func NewScanFromID(ctx context.Context, table []byte,
 // to deal with scanner IDs.
 func NewCloseFromID(ctx context.Context, table []byte,
 	scannerID uint64, startRow []byte) *Scan {
-	return &Scan{
-		base: base{
-			table: []byte(table),
-			key:   []byte(startRow),
-			ctx:   ctx,
-		},
-		scannerID:    &scannerID,
-		closeScanner: true,
-	}
+	scan, _ := baseScan(ctx, table)
+	scan.scannerID = scannerID
+	scan.closeScanner = true
+	return scan
 }
 
 // GetName returns the name of this RPC call.
@@ -144,6 +151,16 @@ func (s *Scan) GetFilter() filter.Filter {
 	return s.filters
 }
 
+// GetTimeRange returns the to and from timestamps set on this scanner.
+func (s *Scan) GetTimeRange() (uint64, uint64) {
+	return s.fromTimestamp, s.toTimestamp
+}
+
+// GetMaxVersions returns the max versions set on this scanner.
+func (s *Scan) GetMaxVersions() uint32 {
+	return s.maxVersions
+}
+
 // Serialize converts this Scan into a serialized protobuf message ready
 // to be sent to an HBase node.
 func (s *Scan) Serialize() ([]byte, error) {
@@ -152,21 +169,32 @@ func (s *Scan) Serialize() ([]byte, error) {
 		CloseScanner: &s.closeScanner,
 		NumberOfRows: proto.Uint32(20), //TODO: make this configurable
 	}
-	if s.scannerID == nil {
-		scan.Scan = &pb.Scan{
-			Column:   familiesToColumn(s.families),
-			StartRow: s.startRow,
-			StopRow:  s.stopRow,
+	if s.scannerID != math.MaxUint64 {
+		scan.ScannerId = &s.scannerID
+		return proto.Marshal(scan)
+	}
+	scan.Scan = &pb.Scan{
+		Column:    familiesToColumn(s.families),
+		StartRow:  s.startRow,
+		StopRow:   s.stopRow,
+		TimeRange: &pb.TimeRange{},
+	}
+	if s.maxVersions != DefaultMaxVersions {
+		scan.Scan.MaxVersions = &s.maxVersions
+	}
+	if s.fromTimestamp != MinTimestamp {
+		scan.Scan.TimeRange.From = &s.fromTimestamp
+	}
+	if s.toTimestamp != MaxTimestamp {
+		scan.Scan.TimeRange.To = &s.toTimestamp
+	}
+
+	if s.filters != nil {
+		pbFilter, err := s.filters.ConstructPBFilter()
+		if err != nil {
+			return nil, err
 		}
-		if s.filters != nil {
-			pbFilter, err := s.filters.ConstructPBFilter()
-			if err != nil {
-				return nil, err
-			}
-			scan.Scan.Filter = pbFilter
-		}
-	} else {
-		scan.ScannerId = s.scannerID
+		scan.Scan.Filter = pbFilter
 	}
 	return proto.Marshal(scan)
 }

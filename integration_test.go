@@ -410,10 +410,7 @@ func TestPutTimestamp(t *testing.T) {
 	c := gohbase.NewClient(*host)
 	var putTs uint64 = 50
 	timestamp := time.Unix(0, int64(putTs*1e6))
-	putRequest, err := hrpc.NewPutStr(context.Background(), table, key,
-		map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte("1")}},
-		hrpc.Timestamp(timestamp))
-	_, err = c.Put(putRequest)
+	err := insertKeyValue(c, key, "cf", []byte("1"), hrpc.Timestamp(timestamp))
 	if err != nil {
 		t.Fatalf("Put failed: %s", err)
 	}
@@ -435,10 +432,7 @@ func TestDeleteTimestamp(t *testing.T) {
 	c := gohbase.NewClient(*host)
 	var putTs uint64 = 50
 	timestamp := time.Unix(0, int64(putTs*1e6))
-	putRequest, err := hrpc.NewPutStr(context.Background(), table, key,
-		map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte("1")}},
-		hrpc.Timestamp(timestamp))
-	_, err = c.Put(putRequest)
+	err := insertKeyValue(c, key, "cf", []byte("1"), hrpc.Timestamp(timestamp))
 	if err != nil {
 		t.Fatalf("Put failed: %s", err)
 	}
@@ -457,6 +451,147 @@ func TestDeleteTimestamp(t *testing.T) {
 	}
 	if len(rsp.Cells) != 0 {
 		t.Errorf("Timestamp wasn't deleted, get result length: %d", len(rsp.Cells))
+	}
+}
+
+func TestGetTimeRangeVersions(t *testing.T) {
+	key := "TestGetTimeRangeVersions"
+	c := gohbase.NewClient(*host)
+	err := insertKeyValue(c, key, "cf", []byte("1"), hrpc.Timestamp(time.Unix(0, 50*1e6)))
+	if err != nil {
+		t.Fatalf("Put failed: %s", err)
+	}
+	err = insertKeyValue(c, key, "cf", []byte("1"), hrpc.Timestamp(time.Unix(0, 51*1e6)))
+	if err != nil {
+		t.Fatalf("Put failed: %s", err)
+	}
+	err = insertKeyValue(c, key, "cf", []byte("1"), hrpc.Timestamp(time.Unix(0, 49*1e6)))
+	if err != nil {
+		t.Fatalf("Put failed: %s", err)
+	}
+
+	var maxVersions uint32 = 2
+	get, err := hrpc.NewGetStr(context.Background(), table, key,
+		hrpc.Families(map[string][]string{"cf": nil}), hrpc.TimeRange(time.Unix(0, 0),
+			time.Unix(0, 51*1e6)), hrpc.MaxVersions(maxVersions))
+	rsp, err := c.Get(get)
+	if err != nil {
+		t.Fatalf("Get failed: %s", err)
+	}
+	if uint32(len(rsp.Cells)) != maxVersions {
+		t.Fatalf("Expected versions: %d, Got versions: %d", maxVersions, len(rsp.Cells))
+	}
+	getTs1 := *rsp.Cells[0].Timestamp
+	if getTs1 != 50 {
+		t.Errorf("Timestamps are not the same. Expected Time: %v, Got Time: %v",
+			50, getTs1)
+	}
+	getTs2 := *rsp.Cells[1].Timestamp
+	if getTs2 != 49 {
+		t.Errorf("Timestamps are not the same. Expected Time: %v, Got Time: %v",
+			49, getTs2)
+	}
+
+	// get with no versions set
+	get, err = hrpc.NewGetStr(context.Background(), table, key,
+		hrpc.Families(map[string][]string{"cf": nil}), hrpc.TimeRange(time.Unix(0, 0),
+			time.Unix(0, 51*1e6)))
+	rsp, err = c.Get(get)
+	if err != nil {
+		t.Fatalf("Get failed: %s", err)
+	}
+	if uint32(len(rsp.Cells)) != 1 {
+		t.Fatalf("Expected versions: %d, Got versions: %d", 1, len(rsp.Cells))
+	}
+	getTs1 = *rsp.Cells[0].Timestamp
+	if getTs1 != 50 {
+		t.Errorf("Timestamps are not the same. Expected Time: %v, Got Time: %v",
+			50, getTs1)
+	}
+}
+
+func TestScanTimeRangeVersions(t *testing.T) {
+	key := "TestScanTimeRangeVersions"
+	c := gohbase.NewClient(*host)
+	err := insertKeyValue(c, key+"1", "cf", []byte("1"), hrpc.Timestamp(time.Unix(0, 50*1e6)))
+	if err != nil {
+		t.Fatalf("Put failed: %s", err)
+	}
+	err = insertKeyValue(c, key+"1", "cf", []byte("1"), hrpc.Timestamp(time.Unix(0, 51*1e6)))
+	if err != nil {
+		t.Fatalf("Put failed: %s", err)
+	}
+	err = insertKeyValue(c, key+"2", "cf", []byte("1"), hrpc.Timestamp(time.Unix(0, 51*1e6)))
+	if err != nil {
+		t.Fatalf("Put failed: %s", err)
+	}
+	err = insertKeyValue(c, key+"2", "cf", []byte("1"), hrpc.Timestamp(time.Unix(0, 52*1e6)))
+	if err != nil {
+		t.Fatalf("Put failed: %s", err)
+	}
+
+	var maxVersions uint32 = 2
+	scan, err := hrpc.NewScanRangeStr(context.Background(), table,
+		"TestScanTimeRangeVersions1", "TestScanTimeRangeVersions3",
+		hrpc.Families(map[string][]string{"cf": nil}), hrpc.TimeRange(time.Unix(0, 50*1e6),
+			time.Unix(0, 53*1e6)), hrpc.MaxVersions(maxVersions))
+	if err != nil {
+		t.Fatalf("Scan req failed: %s", err)
+	}
+	rsp, err := c.Scan(scan)
+	if err != nil {
+		t.Fatalf("Scan failed: %s", err)
+	}
+	if len(rsp) != 2 {
+		t.Fatalf("Expected rows: %d, Got rows: %d", maxVersions, len(rsp))
+	}
+	if uint32(len(rsp[0].Cells)) != maxVersions {
+		t.Fatalf("Expected versions: %d, Got versions: %d", maxVersions, len(rsp[0].Cells))
+	}
+	scan1 := *rsp[0].Cells[0]
+	if string(scan1.Row) != "TestScanTimeRangeVersions1" && *scan1.Timestamp != 51 {
+		t.Errorf("Timestamps are not the same. Expected Time: %v, Got Time: %v",
+			51, *scan1.Timestamp)
+	}
+	scan2 := *rsp[0].Cells[1]
+	if string(scan2.Row) != "TestScanTimeRangeVersions1" && *scan2.Timestamp != 50 {
+		t.Errorf("Timestamps are not the same. Expected Time: %v, Got Time: %v",
+			50, *scan2.Timestamp)
+	}
+	if uint32(len(rsp[1].Cells)) != maxVersions {
+		t.Fatalf("Expected versions: %d, Got versions: %d", maxVersions, len(rsp[1].Cells))
+	}
+	scan3 := *rsp[1].Cells[0]
+	if string(scan3.Row) != "TestScanTimeRangeVersions2" && *scan3.Timestamp != 52 {
+		t.Errorf("Timestamps are not the same. Expected Time: %v, Got Time: %v",
+			52, *scan3.Timestamp)
+	}
+	scan4 := *rsp[1].Cells[1]
+	if string(scan4.Row) != "TestScanTimeRangeVersions2" && *scan4.Timestamp != 51 {
+		t.Errorf("Timestamps are not the same. Expected Time: %v, Got Time: %v",
+			51, *scan4.Timestamp)
+	}
+
+	// scan with no versions set
+	scan, err = hrpc.NewScanRangeStr(context.Background(), table,
+		"TestScanTimeRangeVersions1", "TestScanTimeRangeVersions3",
+		hrpc.Families(map[string][]string{"cf": nil}), hrpc.TimeRange(time.Unix(0, 50*1e6),
+			time.Unix(0, 53*1e6)))
+	if err != nil {
+		t.Fatalf("Scan req failed: %s", err)
+	}
+	rsp, err = c.Scan(scan)
+	if err != nil {
+		t.Fatalf("Scan failed: %s", err)
+	}
+	if len(rsp) != 2 {
+		t.Fatalf("Expected rows: %d, Got rows: %d", 2, len(rsp))
+	}
+	if len(rsp[0].Cells) != 1 {
+		t.Fatalf("Expected versions: %d, Got versions: %d", 2, len(rsp[0].Cells))
+	}
+	if len(rsp[1].Cells) != 1 {
+		t.Fatalf("Expected versions: %d, Got versions: %d", 2, len(rsp[0].Cells))
 	}
 }
 
@@ -752,10 +887,11 @@ func performNPuts(keyPrefix string, num_ops int) error {
 }
 
 // Helper function. Given a client, key, columnFamily, value inserts into the table under column 'a'
-func insertKeyValue(c gohbase.Client, key, columnFamily string, value []byte) error {
+func insertKeyValue(c gohbase.Client, key, columnFamily string, value []byte,
+	options ...func(hrpc.Call) error) error {
 	values := map[string]map[string][]byte{columnFamily: map[string][]byte{}}
 	values[columnFamily]["a"] = value
-	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values)
+	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values, options...)
 	_, err = c.Put(putRequest)
 	return err
 }

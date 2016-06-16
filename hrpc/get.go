@@ -26,24 +26,38 @@ type Get struct {
 	// table or not.
 	existsOnly bool
 
+	fromTimestamp uint64
+	toTimestamp   uint64
+
+	maxVersions uint32
+
 	filters filter.Filter
 }
 
-// NewGet creates a new Get request for the given table and row key.
-func NewGet(ctx context.Context, table, key []byte,
+// baseGet returns a Get struct with default values set.
+func baseGet(ctx context.Context, table []byte, key []byte,
 	options ...func(Call) error) (*Get, error) {
 	g := &Get{
 		base: base{
-			table: table,
 			key:   key,
+			table: table,
 			ctx:   ctx,
 		},
+		fromTimestamp: MinTimestamp,
+		toTimestamp:   MaxTimestamp,
+		maxVersions:   DefaultMaxVersions,
 	}
 	err := applyOptions(g, options...)
 	if err != nil {
 		return nil, err
 	}
 	return g, nil
+}
+
+// NewGet creates a new Get request for the given table and row key.
+func NewGet(ctx context.Context, table, key []byte,
+	options ...func(Call) error) (*Get, error) {
+	return baseGet(ctx, table, key, options...)
 }
 
 // NewGetStr creates a new Get request for the given table and row key.
@@ -56,18 +70,11 @@ func NewGetStr(ctx context.Context, table, key string,
 // immediately less than the given key, in the given table.
 func NewGetBefore(ctx context.Context, table, key []byte,
 	options ...func(Call) error) (*Get, error) {
-	g := &Get{
-		base: base{
-			table: table,
-			key:   key,
-			ctx:   ctx,
-		},
-		closestBefore: true,
-	}
-	err := applyOptions(g, options...)
+	g, err := baseGet(ctx, table, key, options...)
 	if err != nil {
 		return nil, err
 	}
+	g.closestBefore = true
 	return g, nil
 }
 
@@ -112,9 +119,19 @@ func (g *Get) Serialize() ([]byte, error) {
 	get := &pb.GetRequest{
 		Region: g.regionSpecifier(),
 		Get: &pb.Get{
-			Row:    g.key,
-			Column: familiesToColumn(g.families),
+			Row:       g.key,
+			Column:    familiesToColumn(g.families),
+			TimeRange: &pb.TimeRange{},
 		},
+	}
+	if g.maxVersions != DefaultMaxVersions {
+		get.Get.MaxVersions = &g.maxVersions
+	}
+	if g.fromTimestamp != MinTimestamp {
+		get.Get.TimeRange.From = &g.fromTimestamp
+	}
+	if g.toTimestamp != MaxTimestamp {
+		get.Get.TimeRange.To = &g.toTimestamp
 	}
 	if g.closestBefore {
 		get.Get.ClosestRowBefore = proto.Bool(true)

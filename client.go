@@ -305,6 +305,8 @@ func (c *client) Scan(s *hrpc.Scan) ([]*hrpc.Result, error) {
 	filters := s.GetFilter()
 	startRow := s.GetStartRow()
 	stopRow := s.GetStopRow()
+	fromTs, toTs := s.GetTimeRange()
+	maxVerions := s.GetMaxVersions()
 	for {
 		// Make a new Scan RPC for this region
 		if rpc != nil {
@@ -313,8 +315,11 @@ func (c *client) Scan(s *hrpc.Scan) ([]*hrpc.Result, error) {
 			startRow = rpc.GetRegionStop()
 		}
 
+		// TODO: would be nicer to clone it in some way
 		rpc, err := hrpc.NewScanRange(ctx, table, startRow, stopRow,
-			hrpc.Families(families), hrpc.Filters(filters))
+			hrpc.Families(families), hrpc.Filters(filters),
+			hrpc.TimeRangeUint64(fromTs, toTs),
+			hrpc.MaxVersions(maxVerions))
 		if err != nil {
 			return nil, err
 		}
