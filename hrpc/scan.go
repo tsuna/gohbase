@@ -21,6 +21,8 @@ const (
 	MinTimestamp uint64 = 0
 	// MaxTimestamp default value for maximum timestamp for scan queries
 	MaxTimestamp = math.MaxUint64
+	// DefaultNumberOfRows is default maximum number of rows fetched by scanner
+	DefaultNumberOfRows = 128
 )
 
 // Scan represents a scanner on an HBase table.
@@ -42,6 +44,8 @@ type Scan struct {
 
 	scannerID uint64
 
+	numberOfRows uint32
+
 	filters filter.Filter
 }
 
@@ -57,6 +61,7 @@ func baseScan(ctx context.Context, table []byte,
 		toTimestamp:   MaxTimestamp,
 		maxVersions:   DefaultMaxVersions,
 		scannerID:     math.MaxUint64,
+		numberOfRows:  DefaultNumberOfRows,
 	}
 	err := applyOptions(s, options...)
 	if err != nil {
@@ -161,13 +166,19 @@ func (s *Scan) GetMaxVersions() uint32 {
 	return s.maxVersions
 }
 
+// GetNumberOfRows returns maximum number of rows that could be fetched
+// by this scanner.
+func (s *Scan) GetNumberOfRows() uint32 {
+	return s.numberOfRows
+}
+
 // Serialize converts this Scan into a serialized protobuf message ready
 // to be sent to an HBase node.
 func (s *Scan) Serialize() ([]byte, error) {
 	scan := &pb.ScanRequest{
 		Region:       s.regionSpecifier(),
 		CloseScanner: &s.closeScanner,
-		NumberOfRows: proto.Uint32(20), //TODO: make this configurable
+		NumberOfRows: &s.numberOfRows,
 	}
 	if s.scannerID != math.MaxUint64 {
 		scan.ScannerId = &s.scannerID
