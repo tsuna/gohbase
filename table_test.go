@@ -26,16 +26,17 @@ var infoFamily = map[string][]string{
 	"info": nil,
 }
 
+var cFamilies = map[string]map[string]string{
+	"cf":  nil,
+	"cf2": nil,
+}
+
 func TestCreateTable(t *testing.T) {
 	testTableName := "test1_" + getTimestampString()
 	t.Log("testTableName=" + testTableName)
 
 	ac := gohbase.NewAdminClient(*host)
-	crt, err := hrpc.NewCreateTable(context.Background(), []byte(testTableName),
-		[]string{"cf", "cf2"})
-	if err != nil {
-		t.Errorf("NewCreateTable returned an error: %s", err)
-	}
+	crt := hrpc.NewCreateTable(context.Background(), []byte(testTableName), cFamilies)
 
 	if err := ac.CreateTable(crt); err != nil {
 		t.Errorf("CreateTable returned an error: %v", err)
@@ -64,19 +65,14 @@ func TestDisableDeleteTable(t *testing.T) {
 	t.Log("testTableName=" + testTableName)
 	ac := gohbase.NewAdminClient(*host)
 
-	crt, err := hrpc.NewCreateTable(context.Background(), []byte(testTableName),
-		[]string{"cf", "cf2"})
-	if err != nil {
-		t.Errorf("NewCreateTable returned an error: %s", err)
-	}
-
+	crt := hrpc.NewCreateTable(context.Background(), []byte(testTableName), cFamilies)
 	if err := ac.CreateTable(crt); err != nil {
 		t.Errorf("CreateTable returned an error: %v", err)
 	}
 
 	// disable
 	dit := hrpc.NewDisableTable(context.Background(), []byte(testTableName))
-	err = ac.DisableTable(dit)
+	err := ac.DisableTable(dit)
 	if err != nil {
 		t.Errorf("DisableTable returned an error: %v", err)
 	}
@@ -111,19 +107,14 @@ func TestEnableTable(t *testing.T) {
 	t.Log("testTableName=" + testTableName)
 	ac := gohbase.NewAdminClient(*host)
 
-	crt, err := hrpc.NewCreateTable(context.Background(), []byte(testTableName),
-		[]string{"cf", "cf2"})
-	if err != nil {
-		t.Errorf("NewCreateTable returned an error: %s", err)
-	}
-
+	crt := hrpc.NewCreateTable(context.Background(), []byte(testTableName), cFamilies)
 	if err := ac.CreateTable(crt); err != nil {
 		t.Errorf("CreateTable returned an error: %v", err)
 	}
 
 	// disable
 	dit := hrpc.NewDisableTable(context.Background(), []byte(testTableName))
-	err = ac.DisableTable(dit)
+	err := ac.DisableTable(dit)
 	if err != nil {
 		t.Errorf("DisableTable returned an error: %v", err)
 	}
