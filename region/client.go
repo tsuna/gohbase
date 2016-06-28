@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -351,12 +352,9 @@ func (c *Client) write(buf []byte) error {
 
 // Tries to read enough data to fully fill up the given buffer.
 func (c *Client) readFully(buf []byte) error {
-	// TODO: Handle short reads.
-	n, err := c.conn.Read(buf)
+	_, err := io.ReadFull(c.conn, buf)
 	if err != nil {
 		return fmt.Errorf("Failed to read from the RS: %s", err)
-	} else if n != len(buf) {
-		return fmt.Errorf("Failed to read everything from the RS: %s", err)
 	}
 	return nil
 }
