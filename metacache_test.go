@@ -222,12 +222,12 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 
 		expectedNames := make(regionNames, len(tt.expected))
 		for i, r := range tt.expected {
-			expectedNames[i] = r.GetName()
+			expectedNames[i] = r.Name()
 		}
 		os := client.regions.getOverlaps(tt.newRegion)
 		osNames := make(regionNames, len(os))
 		for i, o := range os {
-			osNames[i] = o.GetName()
+			osNames[i] = o.Name()
 		}
 		sort.Sort(expectedNames)
 		sort.Sort(osNames)

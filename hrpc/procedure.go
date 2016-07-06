@@ -31,8 +31,8 @@ func NewGetProcedureState(ctx context.Context, procID uint64) *GetProcedureState
 	}
 }
 
-// GetName returns the name of this RPC call.
-func (ps *GetProcedureState) GetName() string {
+// Name returns the name of this RPC call.
+func (ps *GetProcedureState) Name() string {
 	return "getProcedureResult"
 }
 

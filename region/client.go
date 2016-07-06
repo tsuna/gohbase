@@ -206,7 +206,7 @@ func (c *client) processRpcs() {
 			// request. The function that placed the RPC in our queue should
 			// stop waiting for a result and return an error.
 			select {
-			case _, ok := <-rpc.GetContext().Done():
+			case _, ok := <-rpc.Context().Done():
 				if !ok {
 					continue
 				}
@@ -226,7 +226,7 @@ func (c *client) processRpcs() {
 					c.errorEncountered()
 					return
 				}
-				rpc.GetResultChan() <- hrpc.RPCResult{Error: err}
+				rpc.ResultChan() <- hrpc.RPCResult{Error: err}
 			}
 		}
 	}
@@ -307,7 +307,7 @@ func (c *client) receiveRpcs() {
 				err = RetryableError{err}
 			}
 		}
-		rpc.GetResultChan() <- hrpc.RPCResult{Msg: rpcResp, Error: err}
+		rpc.ResultChan() <- hrpc.RPCResult{Msg: rpcResp, Error: err}
 
 		c.sentRPCsMutex.Lock()
 		delete(c.sentRPCs, *resp.CallId)
@@ -319,14 +319,14 @@ func (c *client) errorEncountered() {
 	c.writeMutex.Lock()
 	res := hrpc.RPCResult{Error: UnrecoverableError{c.getSendErr()}}
 	for _, rpc := range c.rpcs {
-		rpc.GetResultChan() <- res
+		rpc.ResultChan() <- res
 	}
 	c.rpcs = nil
 	c.writeMutex.Unlock()
 
 	c.sentRPCsMutex.Lock()
 	for _, rpc := range c.sentRPCs {
-		rpc.GetResultChan() <- res
+		rpc.ResultChan() <- res
 	}
 	c.sentRPCs = nil
 	c.sentRPCsMutex.Unlock()
@@ -409,7 +409,7 @@ func (c *client) sendRPC(rpc hrpc.Call) error {
 	c.id++
 	reqheader := &pb.RequestHeader{
 		CallId:       &c.id,
-		MethodName:   proto.String(rpc.GetName()),
+		MethodName:   proto.String(rpc.Name()),
 		RequestParam: proto.Bool(true),
 	}
 

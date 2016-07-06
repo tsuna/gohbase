@@ -28,8 +28,8 @@ func NewEnableTable(ctx context.Context, table []byte) *EnableTable {
 	return et
 }
 
-// GetName returns the name of this RPC call.
-func (et *EnableTable) GetName() string {
+// Name returns the name of this RPC call.
+func (et *EnableTable) Name() string {
 	return "EnableTable"
 }
 

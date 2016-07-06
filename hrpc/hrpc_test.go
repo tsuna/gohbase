@@ -56,11 +56,11 @@ func TestNewGet(t *testing.T) {
 
 func confirmGetAttributes(g *hrpc.Get, ctx context.Context, table, key []byte,
 	fam map[string][]string, filter1 filter.Filter) bool {
-	if g.GetContext() != ctx ||
+	if g.Context() != ctx ||
 		!bytes.Equal(g.Table(), table) ||
 		!bytes.Equal(g.Key(), key) ||
-		!reflect.DeepEqual(g.GetFamilies(), fam) ||
-		reflect.TypeOf(g.GetFilter()) != reflect.TypeOf(filter1) {
+		!reflect.DeepEqual(g.Families(), fam) ||
+		reflect.TypeOf(g.Filter()) != reflect.TypeOf(filter1) {
 		return false
 	}
 	return true
@@ -125,12 +125,12 @@ func TestTimeRangeError(t *testing.T) {
 
 func confirmScanAttributes(s *hrpc.Scan, ctx context.Context, table, start, stop []byte,
 	fam map[string][]string, filter1 filter.Filter) bool {
-	if s.GetContext() != ctx ||
+	if s.Context() != ctx ||
 		!bytes.Equal(s.Table(), table) ||
-		!bytes.Equal(s.GetStartRow(), start) ||
-		!bytes.Equal(s.GetStopRow(), stop) ||
-		!reflect.DeepEqual(s.GetFamilies(), fam) ||
-		reflect.TypeOf(s.GetFilter()) != reflect.TypeOf(filter1) {
+		!bytes.Equal(s.StartRow(), start) ||
+		!bytes.Equal(s.StopRow(), stop) ||
+		!reflect.DeepEqual(s.Families(), fam) ||
+		reflect.TypeOf(s.Filter()) != reflect.TypeOf(filter1) {
 		return false
 	}
 	return true

@@ -28,8 +28,8 @@ func NewDeleteTable(ctx context.Context, table []byte) *DeleteTable {
 	return dt
 }
 
-// GetName returns the name of this RPC call.
-func (dt *DeleteTable) GetName() string {
+// Name returns the name of this RPC call.
+func (dt *DeleteTable) Name() string {
 	return "DeleteTable"
 }
 

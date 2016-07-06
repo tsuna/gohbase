@@ -36,11 +36,11 @@ func TestInfoFromMeta(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to parse cell: %s", err)
 	}
-	if !bytes.Equal(info.GetName(), regionName) {
-		t.Errorf("Unexpected regionName name: %q", info.GetName())
+	if !bytes.Equal(info.Name(), regionName) {
+		t.Errorf("Unexpected regionName name: %q", info.Name())
 	}
-	if len(info.GetStopKey()) != 0 {
-		t.Errorf("Expected empty StopKey but got %q", info.GetStopKey())
+	if len(info.StopKey()) != 0 {
+		t.Errorf("Expected empty StopKey but got %q", info.StopKey())
 	}
 
 	expected := `*region.info{Table: "table", Name: "table,foo,` +

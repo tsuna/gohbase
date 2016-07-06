@@ -69,10 +69,10 @@ func TestRegionDiscovery(t *testing.T) {
 		nil,
 		nil,
 	)
-	if !bytes.Equal(reg.GetTable(), expected.GetTable()) ||
-		!bytes.Equal(reg.GetName(), expected.GetName()) ||
-		!bytes.Equal(reg.GetStartKey(), expected.GetStartKey()) ||
-		!bytes.Equal(reg.GetStopKey(), expected.GetStopKey()) {
+	if !bytes.Equal(reg.Table(), expected.Table()) ||
+		!bytes.Equal(reg.Name(), expected.Name()) ||
+		!bytes.Equal(reg.StartKey(), expected.StartKey()) ||
+		!bytes.Equal(reg.StopKey(), expected.StopKey()) {
 		t.Errorf("Found region %#v \nbut expected %#v", reg, expected)
 	}
 

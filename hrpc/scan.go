@@ -124,51 +124,51 @@ func NewCloseFromID(ctx context.Context, table []byte,
 	return scan
 }
 
-// GetName returns the name of this RPC call.
-func (s *Scan) GetName() string {
+// Name returns the name of this RPC call.
+func (s *Scan) Name() string {
 	return "Scan"
 }
 
-// GetStopRow returns the end key (exclusive) of this scanner.
-func (s *Scan) GetStopRow() []byte {
+// StopRow returns the end key (exclusive) of this scanner.
+func (s *Scan) StopRow() []byte {
 	return s.stopRow
 }
 
-// GetStartRow returns the start key (inclusive) of this scanner.
-func (s *Scan) GetStartRow() []byte {
+// StartRow returns the start key (inclusive) of this scanner.
+func (s *Scan) StartRow() []byte {
 	return s.startRow
 }
 
-// GetFamilies returns the set families covered by this scanner.
+// Families returns the set families covered by this scanner.
 // If no families are specified then all the families are scanned.
-func (s *Scan) GetFamilies() map[string][]string {
+func (s *Scan) Families() map[string][]string {
 	return s.families
 }
 
-// GetRegionStop returns the stop key of the region currently being scanned.
+// RegionStop returns the stop key of the region currently being scanned.
 // This is an internal method, end users are not expected to use it.
-func (s *Scan) GetRegionStop() []byte {
-	return s.region.GetStopKey()
+func (s *Scan) RegionStop() []byte {
+	return s.region.StopKey()
 }
 
-// GetFilter returns the filter set on this scanner.
-func (s *Scan) GetFilter() filter.Filter {
+// Filter returns the filter set on this scanner.
+func (s *Scan) Filter() filter.Filter {
 	return s.filters
 }
 
-// GetTimeRange returns the to and from timestamps set on this scanner.
-func (s *Scan) GetTimeRange() (uint64, uint64) {
+// TimeRange returns the to and from timestamps set on this scanner.
+func (s *Scan) TimeRange() (uint64, uint64) {
 	return s.fromTimestamp, s.toTimestamp
 }
 
-// GetMaxVersions returns the max versions set on this scanner.
-func (s *Scan) GetMaxVersions() uint32 {
+// MaxVersions returns the max versions set on this scanner.
+func (s *Scan) MaxVersions() uint32 {
 	return s.maxVersions
 }
 
-// GetNumberOfRows returns maximum number of rows that could be fetched
+// NumberOfRows returns maximum number of rows that could be fetched
 // by this scanner.
-func (s *Scan) GetNumberOfRows() uint32 {
+func (s *Scan) NumberOfRows() uint32 {
 	return s.numberOfRows
 }
 

@@ -28,8 +28,8 @@ func NewDisableTable(ctx context.Context, table []byte) *DisableTable {
 	return dt
 }
 
-// GetName returns the name of this RPC call.
-func (dt *DisableTable) GetName() string {
+// Name returns the name of this RPC call.
+func (dt *DisableTable) Name() string {
 	return "DisableTable"
 }
 

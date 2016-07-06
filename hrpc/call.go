@@ -21,16 +21,16 @@ import (
 // RegionInfo represents HBase region.
 type RegionInfo interface {
 	IsUnavailable() bool
-	GetAvailabilityChan() <-chan struct{}
+	AvailabilityChan() <-chan struct{}
 	MarkUnavailable() bool
 	MarkAvailable()
 	String() string
-	GetName() []byte
-	GetStartKey() []byte
-	GetStopKey() []byte
-	GetTable() []byte
+	Name() []byte
+	StartKey() []byte
+	StopKey() []byte
+	Table() []byte
 	SetClient(RegionClient)
-	GetClient() RegionClient
+	Client() RegionClient
 }
 
 // RegionClient represents HBase region client.
@@ -44,20 +44,18 @@ type RegionClient interface {
 // Call represents an HBase RPC call.
 type Call interface {
 	Table() []byte
-
+	Name() string
 	Key() []byte
-
-	GetRegion() RegionInfo
+	Region() RegionInfo
 	SetRegion(region RegionInfo)
-	GetName() string
 	Serialize() ([]byte, error)
 	// Returns a newly created (default-state) protobuf in which to store the
 	// response of this call.
 	NewResponse() proto.Message
 
-	GetResultChan() chan RPCResult
+	ResultChan() chan RPCResult
 
-	GetContext() context.Context
+	Context() context.Context
 
 	SetFamilies(fam map[string][]string) error
 	SetFilter(ft filter.Filter) error
@@ -85,11 +83,11 @@ type base struct {
 	ctx context.Context
 }
 
-func (b *base) GetContext() context.Context {
+func (b *base) Context() context.Context {
 	return b.ctx
 }
 
-func (b *base) GetRegion() RegionInfo {
+func (b *base) Region() RegionInfo {
 	return b.region
 }
 
@@ -101,7 +99,7 @@ func (b *base) regionSpecifier() *pb.RegionSpecifier {
 	regionType := pb.RegionSpecifier_REGION_NAME
 	return &pb.RegionSpecifier{
 		Type:  &regionType,
-		Value: []byte(b.region.GetName()),
+		Value: []byte(b.region.Name()),
 	}
 }
 
@@ -123,7 +121,7 @@ func (b *base) Key() []byte {
 	return b.key
 }
 
-func (b *base) GetResultChan() chan RPCResult {
+func (b *base) ResultChan() chan RPCResult {
 	b.resultchLock.Lock()
 	if b.resultch == nil {
 		// Buffered channels, so that if a writer thread sends a message (or

@@ -57,8 +57,8 @@ func NewCreateTable(ctx context.Context, table []byte,
 	return ct
 }
 
-// GetName returns the name of this RPC call.
-func (ct *CreateTable) GetName() string {
+// Name returns the name of this RPC call.
+func (ct *CreateTable) Name() string {
 	return "CreateTable"
 }
 

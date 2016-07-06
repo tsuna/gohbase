@@ -244,8 +244,8 @@ func NewIncStrRef(ctx context.Context, table, key string, data interface{},
 	return m, nil
 }
 
-// GetName returns the name of this RPC call.
-func (m *Mutate) GetName() string {
+// Name returns the name of this RPC call.
+func (m *Mutate) Name() string {
 	return "Mutate"
 }
 

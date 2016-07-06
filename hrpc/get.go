@@ -78,18 +78,18 @@ func NewGetBefore(ctx context.Context, table, key []byte,
 	return g, nil
 }
 
-// GetName returns the name of this RPC call.
-func (g *Get) GetName() string {
+// Name returns the name of this RPC call.
+func (g *Get) Name() string {
 	return "Get"
 }
 
-// GetFilter returns the filter of this Get request.
-func (g *Get) GetFilter() filter.Filter {
+// Filter returns the filter of this Get request.
+func (g *Get) Filter() filter.Filter {
 	return g.filters
 }
 
-// GetFamilies returns the families to retrieve with this Get request.
-func (g *Get) GetFamilies() map[string][]string {
+// Families returns the families to retrieve with this Get request.
+func (g *Get) Families() map[string][]string {
 	return g.families
 }
 

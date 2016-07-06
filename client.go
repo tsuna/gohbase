@@ -87,7 +87,7 @@ func (rcc *clientRegionCache) del(r hrpc.RegionInfo) {
 	rcc.m.Lock()
 	defer rcc.m.Unlock()
 
-	c := r.GetClient()
+	c := r.Client()
 	if c != nil {
 		r.SetClient(nil)
 
@@ -108,7 +108,7 @@ func (rcc *clientRegionCache) clientDown(reg hrpc.RegionInfo) []hrpc.RegionInfo 
 	defer rcc.m.Unlock()
 
 	var downregions []hrpc.RegionInfo
-	c := reg.GetClient()
+	c := reg.Client()
 	for _, sharedReg := range rcc.regions[c] {
 		succ := sharedReg.MarkUnavailable()
 		sharedReg.SetClient(nil)
@@ -165,9 +165,9 @@ func (krc *keyRegionCache) get(key []byte) ([]byte, hrpc.RegionInfo) {
 }
 
 func isRegionOverlap(regA, regB hrpc.RegionInfo) bool {
-	return bytes.Equal(regA.GetTable(), regB.GetTable()) &&
-		bytes.Compare(regA.GetStartKey(), regB.GetStopKey()) < 0 &&
-		bytes.Compare(regA.GetStopKey(), regB.GetStartKey()) > 0
+	return bytes.Equal(regA.Table(), regB.Table()) &&
+		bytes.Compare(regA.StartKey(), regB.StopKey()) < 0 &&
+		bytes.Compare(regA.StopKey(), regB.StartKey()) > 0
 }
 
 func (krc *keyRegionCache) getOverlaps(reg hrpc.RegionInfo) []hrpc.RegionInfo {
@@ -181,7 +181,7 @@ func (krc *keyRegionCache) getOverlaps(reg hrpc.RegionInfo) []hrpc.RegionInfo {
 		return overlaps
 	}
 
-	enum, ok := krc.regions.Seek(reg.GetName())
+	enum, ok := krc.regions.Seek(reg.Name())
 	if !ok {
 		// need to check if there are overlaps before what we found
 		_, _, err = enum.Prev()
@@ -226,10 +226,10 @@ func (krc *keyRegionCache) put(reg hrpc.RegionInfo) []hrpc.RegionInfo {
 	// Remove all the entries that are overlap with the range of the new region.
 	os := krc.getOverlaps(reg)
 	for _, o := range os {
-		krc.regions.Delete(o.GetName())
+		krc.regions.Delete(o.Name())
 	}
 
-	krc.regions.Put(reg.GetName(), func(interface{}, bool) (interface{}, bool) {
+	krc.regions.Put(reg.Name(), func(interface{}, bool) (interface{}, bool) {
 		return reg, true
 	})
 	return os
@@ -361,21 +361,21 @@ func (c *client) Scan(s *hrpc.Scan) ([]*hrpc.Result, error) {
 	var results []*pb.Result
 	var scanres *pb.ScanResponse
 	var rpc *hrpc.Scan
-	ctx := s.GetContext()
+	ctx := s.Context()
 	table := s.Table()
-	families := s.GetFamilies()
-	filters := s.GetFilter()
-	startRow := s.GetStartRow()
-	stopRow := s.GetStopRow()
-	fromTs, toTs := s.GetTimeRange()
-	maxVerions := s.GetMaxVersions()
-	numberOfRows := s.GetNumberOfRows()
+	families := s.Families()
+	filters := s.Filter()
+	startRow := s.StartRow()
+	stopRow := s.StopRow()
+	fromTs, toTs := s.TimeRange()
+	maxVerions := s.MaxVersions()
+	numberOfRows := s.NumberOfRows()
 	for {
 		// Make a new Scan RPC for this region
 		if rpc != nil {
 			// If it's not the first region, we want to start at whatever the
 			// last region's StopKey was
-			startRow = rpc.GetRegionStop()
+			startRow = rpc.RegionStop()
 		}
 
 		// TODO: would be nicer to clone it in some way
@@ -421,9 +421,9 @@ func (c *client) Scan(s *hrpc.Scan) ([]*hrpc.Result, error) {
 		// greater than or equal to the stop_key of this scanner provided
 		// that (2) we're not trying to scan until the end of the table).
 		// (1)
-		if len(rpc.GetRegionStop()) == 0 ||
+		if len(rpc.RegionStop()) == 0 ||
 			// (2)                (3)
-			len(stopRow) != 0 && bytes.Compare(stopRow, rpc.GetRegionStop()) <= 0 {
+			len(stopRow) != 0 && bytes.Compare(stopRow, rpc.RegionStop()) <= 0 {
 			// Do we want to be returning a slice of Result objects or should we just
 			// put all the Cells into the same Result object?
 			localResults := make([]*hrpc.Result, len(results))
@@ -557,7 +557,7 @@ func (c *client) CreateTable(t *hrpc.CreateTable) error {
 		return fmt.Errorf("sendRPC returned not a CreateTableResponse")
 	}
 
-	return c.checkProcedureWithBackoff(t.GetContext(), r.GetProcId())
+	return c.checkProcedureWithBackoff(t.Context(), r.GetProcId())
 }
 
 func (c *client) DeleteTable(t *hrpc.DeleteTable) error {
@@ -571,7 +571,7 @@ func (c *client) DeleteTable(t *hrpc.DeleteTable) error {
 		return fmt.Errorf("sendRPC returned not a DeleteTableResponse")
 	}
 
-	return c.checkProcedureWithBackoff(t.GetContext(), r.GetProcId())
+	return c.checkProcedureWithBackoff(t.Context(), r.GetProcId())
 }
 
 func (c *client) EnableTable(t *hrpc.EnableTable) error {
@@ -585,7 +585,7 @@ func (c *client) EnableTable(t *hrpc.EnableTable) error {
 		return fmt.Errorf("sendRPC returned not a EnableTableResponse")
 	}
 
-	return c.checkProcedureWithBackoff(t.GetContext(), r.GetProcId())
+	return c.checkProcedureWithBackoff(t.Context(), r.GetProcId())
 }
 
 func (c *client) DisableTable(t *hrpc.DisableTable) error {
@@ -599,7 +599,7 @@ func (c *client) DisableTable(t *hrpc.DisableTable) error {
 		return fmt.Errorf("sendRPC returned not a DisableTableResponse")
 	}
 
-	return c.checkProcedureWithBackoff(t.GetContext(), r.GetProcId())
+	return c.checkProcedureWithBackoff(t.Context(), r.GetProcId())
 }
 
 // Could be removed in favour of above
@@ -628,7 +628,7 @@ func (c *client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 }
 
 func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Message, error) {
-	client := reg.GetClient()
+	client := reg.Client()
 	// On the first sendRPC to the meta or admin regions, a goroutine must be
 	// manually kicked off for the meta or admin region client
 	if reg == c.adminRegionInfo && client == nil && !c.adminRegionInfo.IsUnavailable() ||
@@ -669,8 +669,8 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 	// Wait for the response
 	var res hrpc.RPCResult
 	select {
-	case res = <-rpc.GetResultChan():
-	case <-rpc.GetContext().Done():
+	case res = <-rpc.ResultChan():
+	case <-rpc.Context().Done():
 		return nil, ErrDeadline
 	}
 
@@ -723,7 +723,7 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 }
 
 func (c *client) waitOnRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Message, error) {
-	ch := reg.GetAvailabilityChan()
+	ch := reg.AvailabilityChan()
 	if ch == nil {
 		// WTF, this region is available? Maybe it was marked as such
 		// since waitOnRegion was called.
@@ -734,7 +734,7 @@ func (c *client) waitOnRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Message
 	select {
 	case <-ch:
 		return c.sendRPC(rpc)
-	case <-rpc.GetContext().Done():
+	case <-rpc.Context().Done():
 		return nil, ErrDeadline
 	}
 }
@@ -744,7 +744,7 @@ func (c *client) findRegionForRPC(rpc hrpc.Call) (proto.Message, error) {
 	// must be looked up in the meta table
 
 	backoff := backoffStart
-	ctx := rpc.GetContext()
+	ctx := rpc.Context()
 	for {
 		// Look up the region in the meta table
 		reg, host, port, err := c.locateRegion(ctx, rpc.Table(), rpc.Key())
@@ -780,7 +780,6 @@ func (c *client) findRegionForRPC(rpc hrpc.Call) (proto.Message, error) {
 		for _, r := range removed {
 			c.clients.del(r)
 		}
-
 		c.regionsLock.Unlock()
 
 		// Start a goroutine to connect to the region
@@ -801,14 +800,14 @@ func (c *client) getRegionFromCache(table, key []byte) hrpc.RegionInfo {
 	}
 	regionName := createRegionSearchKey(table, key)
 	_, region := c.regions.get(regionName)
-	if region == nil || !bytes.Equal(table, region.GetTable()) {
+	if region == nil || !bytes.Equal(table, region.Table()) {
 		return nil
 	}
 
-	if len(region.GetStopKey()) != 0 &&
+	if len(region.StopKey()) != 0 &&
 		// If the stop key is an empty byte array, it means this region is the
 		// last region for this table and this key ought to be in that region.
-		bytes.Compare(key, region.GetStopKey()) >= 0 {
+		bytes.Compare(key, region.StopKey()) >= 0 {
 		return nil
 	}
 
@@ -842,12 +841,12 @@ func (c *client) locateRegion(ctx context.Context,
 	resp, err := c.sendRPC(rpc)
 
 	if err != nil {
-		ch := c.metaRegionInfo.GetAvailabilityChan()
+		ch := c.metaRegionInfo.AvailabilityChan()
 		if ch != nil {
 			select {
 			case <-ch:
 				return c.locateRegion(ctx, table, key)
-			case <-rpc.GetContext().Done():
+			case <-rpc.Context().Done():
 				return nil, "", 0, ErrDeadline
 			}
 		} else {
@@ -864,12 +863,12 @@ func (c *client) locateRegion(ctx context.Context,
 	if err != nil {
 		return nil, "", 0, err
 	}
-	if !bytes.Equal(table, reg.GetTable()) {
+	if !bytes.Equal(table, reg.Table()) {
 		// This would indicate a bug in HBase.
 		return nil, "", 0, fmt.Errorf("WTF: Meta returned an entry for the wrong table!"+
 			"  Looked up table=%q key=%q got region=%s", table, key, reg)
-	} else if len(reg.GetStopKey()) != 0 &&
-		bytes.Compare(key, reg.GetStopKey()) >= 0 {
+	} else if len(reg.StopKey()) != 0 &&
+		bytes.Compare(key, reg.StopKey()) >= 0 {
 		// This would indicate a hole in the meta table.
 		return nil, "", 0, fmt.Errorf("WTF: Meta returned an entry for the wrong region!"+
 			"  Looked up table=%q key=%q got region=%s", table, key, reg)
@@ -940,7 +939,7 @@ func (c *client) establishRegion(originalReg hrpc.RegionInfo, host string, port 
 		}
 		if err != nil {
 			if err == TableNotFound {
-				c.regions.del(originalReg.GetName())
+				c.regions.del(originalReg.Name())
 				originalReg.MarkAvailable()
 				return
 			}
@@ -957,8 +956,8 @@ func (c *client) establishRegion(originalReg hrpc.RegionInfo, host string, port 
 		} else if reg == c.metaRegionInfo {
 			host, port, err = c.zkLookup(ctx, zk.Meta)
 		} else {
-			reg, host, port, err = c.locateRegion(ctx, originalReg.GetTable(),
-				originalReg.GetStartKey())
+			reg, host, port, err = c.locateRegion(ctx, originalReg.Table(),
+				originalReg.StartKey())
 		}
 	}
 }
