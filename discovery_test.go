@@ -63,12 +63,12 @@ func TestRegionDiscovery(t *testing.T) {
 	if reg == nil {
 		t.Fatal("Region not found even though we injected it in the cache.")
 	}
-	expected := &region.Info{
-		Table:    []byte("test"),
-		Name:     []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-		StartKey: []byte(""),
-		StopKey:  []byte(""),
-	}
+	expected := region.NewInfo(
+		[]byte("test"),
+		[]byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		nil,
+		nil,
+	)
 	if !bytes.Equal(reg.GetTable(), expected.GetTable()) ||
 		!bytes.Equal(reg.GetName(), expected.GetName()) ||
 		!bytes.Equal(reg.GetStartKey(), expected.GetStartKey()) ||

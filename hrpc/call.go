@@ -26,10 +26,10 @@ type RegionInfo interface {
 	MarkAvailable()
 	String() string
 	GetName() []byte
-	GetStopKey() []byte
 	GetStartKey() []byte
+	GetStopKey() []byte
 	GetTable() []byte
-	SetClient(client RegionClient)
+	SetClient(RegionClient)
 	GetClient() RegionClient
 }
 
@@ -38,7 +38,7 @@ type RegionClient interface {
 	Close()
 	Host() string
 	Port() uint16
-	QueueRPC(rpc Call) error
+	QueueRPC(Call) error
 }
 
 // Call represents an HBase RPC call.

@@ -18,8 +18,8 @@ import (
 	"github.com/tsuna/gohbase/pb"
 )
 
-// Info describes a region.
-type Info struct {
+// info describes a region.
+type info struct {
 	// Table name.
 	Table []byte
 
@@ -47,9 +47,19 @@ type Info struct {
 	available chan struct{}
 }
 
+// NewInfo creates a new region info
+func NewInfo(table, name, startKey, stopKey []byte) hrpc.RegionInfo {
+	return &info{
+		Table:    table,
+		Name:     name,
+		StartKey: startKey,
+		StopKey:  stopKey,
+	}
+}
+
 // infoFromCell parses a KeyValue from the meta table and creates the
 // corresponding Info object.
-func infoFromCell(cell *pb.Cell) (*Info, error) {
+func infoFromCell(cell *pb.Cell) (hrpc.RegionInfo, error) {
 	value := cell.Value
 	if len(value) == 0 {
 		return nil, fmt.Errorf("empty value in %q", cell)
@@ -67,7 +77,7 @@ func infoFromCell(cell *pb.Cell) (*Info, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode %q: %s", cell, err)
 	}
-	return &Info{
+	return &info{
 		Table:    regInfo.TableName.Qualifier,
 		Name:     cell.Row,
 		StartKey: regInfo.StartKey,
@@ -77,10 +87,8 @@ func infoFromCell(cell *pb.Cell) (*Info, error) {
 
 // ParseRegionInfo parses the contents of a row from the meta table.
 // It's guaranteed to return a region info and a host/port OR return an error.
-func ParseRegionInfo(metaRow *pb.GetResponse) (
-	*Info, string, uint16, error) {
-
-	var reg *Info
+func ParseRegionInfo(metaRow *pb.GetResponse) (hrpc.RegionInfo, string, uint16, error) {
+	var reg hrpc.RegionInfo
 	var host string
 	var port uint16
 
@@ -132,7 +140,7 @@ func ParseRegionInfo(metaRow *pb.GetResponse) (
 }
 
 // IsUnavailable returns true if this region has been marked as unavailable.
-func (i *Info) IsUnavailable() bool {
+func (i *info) IsUnavailable() bool {
 	i.m.Lock()
 	res := i.available != nil
 	i.m.Unlock()
@@ -142,7 +150,7 @@ func (i *Info) IsUnavailable() bool {
 // GetAvailabilityChan returns a channel that can be used to wait on for
 // notification that a connection to this region has been reestablished.
 // If this region is not marked as unavailable, nil will be returned.
-func (i *Info) GetAvailabilityChan() <-chan struct{} {
+func (i *info) GetAvailabilityChan() <-chan struct{} {
 	i.m.Lock()
 	ch := i.available
 	i.m.Unlock()
@@ -152,7 +160,7 @@ func (i *Info) GetAvailabilityChan() <-chan struct{} {
 // MarkUnavailable will mark this region as unavailable, by creating the struct
 // returned by GetAvailabilityChan. If this region was marked as available
 // before this, true will be returned.
-func (i *Info) MarkUnavailable() bool {
+func (i *info) MarkUnavailable() bool {
 	created := false
 	i.m.Lock()
 	if i.available == nil {
@@ -165,7 +173,7 @@ func (i *Info) MarkUnavailable() bool {
 
 // MarkAvailable will mark this region as available again, by closing the struct
 // returned by GetAvailabilityChan
-func (i *Info) MarkAvailable() {
+func (i *info) MarkAvailable() {
 	i.m.Lock()
 	ch := i.available
 	i.available = nil
@@ -173,33 +181,33 @@ func (i *Info) MarkAvailable() {
 	i.m.Unlock()
 }
 
-func (i *Info) String() string {
-	return fmt.Sprintf("*region.Info{Table: %q, Name: %q, StopKey: %q}",
+func (i *info) String() string {
+	return fmt.Sprintf("*region.info{Table: %q, Name: %q, StopKey: %q}",
 		i.Table, i.Name, i.StopKey)
 }
 
 // GetName returns region name
-func (i *Info) GetName() []byte {
+func (i *info) GetName() []byte {
 	return i.Name
 }
 
 // GetStopKey return region stop key
-func (i *Info) GetStopKey() []byte {
+func (i *info) GetStopKey() []byte {
 	return i.StopKey
 }
 
 // GetStartKey return region start key
-func (i *Info) GetStartKey() []byte {
+func (i *info) GetStartKey() []byte {
 	return i.StartKey
 }
 
 // GetTable returns region table
-func (i *Info) GetTable() []byte {
+func (i *info) GetTable() []byte {
 	return i.Table
 }
 
 // GetClient returns region client
-func (i *Info) GetClient() hrpc.RegionClient {
+func (i *info) GetClient() hrpc.RegionClient {
 	i.m.Lock()
 	c := i.Client
 	i.m.Unlock()
@@ -207,7 +215,7 @@ func (i *Info) GetClient() hrpc.RegionClient {
 }
 
 // SetClient sets region client
-func (i *Info) SetClient(c hrpc.RegionClient) {
+func (i *info) SetClient(c hrpc.RegionClient) {
 	i.m.Lock()
 	i.Client = c
 	i.m.Unlock()

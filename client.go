@@ -58,7 +58,7 @@ const (
 type Option func(*client)
 
 type newRegResult struct {
-	Client *region.Client
+	Client hrpc.RegionClient
 	Err    error
 }
 
@@ -314,12 +314,16 @@ func newClient(zkquorum string, options ...Option) *client {
 		zkquorum:      zkquorum,
 		rpcQueueSize:  100,
 		flushInterval: 20 * time.Millisecond,
-		metaRegionInfo: &region.Info{
-			Table:   []byte("hbase:meta"),
-			Name:    []byte("hbase:meta,,1"),
-			StopKey: []byte{},
-		},
-		adminRegionInfo: &region.Info{},
+		metaRegionInfo: region.NewInfo(
+			[]byte("hbase:meta"),
+			[]byte("hbase:meta,,1"),
+			nil,
+			nil),
+		adminRegionInfo: region.NewInfo(
+			nil,
+			nil,
+			nil,
+			nil),
 	}
 	for _, option := range options {
 		option(c)

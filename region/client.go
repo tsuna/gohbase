@@ -74,8 +74,8 @@ func (e RetryableError) Error() string {
 	return e.error.Error()
 }
 
-// Client manages a connection to a RegionServer.
-type Client struct {
+// client manages a connection to a RegionServer.
+type client struct {
 	id uint32
 
 	conn net.Conn
@@ -112,14 +112,14 @@ type Client struct {
 
 // NewClient creates a new RegionClient.
 func NewClient(host string, port uint16, ctype ClientType,
-	queueSize int, flushInterval time.Duration) (*Client, error) {
+	queueSize int, flushInterval time.Duration) (hrpc.RegionClient, error) {
 	addr := fmt.Sprintf("%s:%d", host, port)
 	conn, err := net.Dial("tcp", addr) // TODO: DialTimeout
 	if err != nil {
 		return nil,
 			fmt.Errorf("failed to connect to the RegionServer at %s: %s", addr, err)
 	}
-	c := &Client{
+	c := &client{
 		conn:          conn,
 		host:          host,
 		port:          port,
@@ -142,35 +142,35 @@ func NewClient(host string, port uint16, ctype ClientType,
 // Close asks this region.Client to close its connection to the RegionServer.
 // All queued and outstanding RPCs, if any, will be failed as if a connection
 // error had happened.
-func (c *Client) Close() {
+func (c *client) Close() {
 	c.setSendErr(errors.New("shutting down"))
 	c.errorEncountered()
 }
 
 // Host returns the host that this client talks to
-func (c *Client) Host() string {
+func (c *client) Host() string {
 	return c.host
 }
 
 // Port returns the port that this client talks over
-func (c *Client) Port() uint16 {
+func (c *client) Port() uint16 {
 	return c.port
 }
 
-func (c *Client) getSendErr() error {
+func (c *client) getSendErr() error {
 	c.sendErrLock.Lock()
 	err := c.sendErr
 	c.sendErrLock.Unlock()
 	return err
 }
 
-func (c *Client) setSendErr(err error) {
+func (c *client) setSendErr(err error) {
 	c.sendErrLock.Lock()
 	c.sendErr = err
 	c.sendErrLock.Unlock()
 }
 
-func (c *Client) processRpcs() {
+func (c *client) processRpcs() {
 	for {
 		if c.getSendErr() != nil {
 			return
@@ -232,7 +232,7 @@ func (c *Client) processRpcs() {
 	}
 }
 
-func (c *Client) receiveRpcs() {
+func (c *client) receiveRpcs() {
 	var sz [4]byte
 	for {
 		err := c.readFully(sz[:])
@@ -315,7 +315,7 @@ func (c *Client) receiveRpcs() {
 	}
 }
 
-func (c *Client) errorEncountered() {
+func (c *client) errorEncountered() {
 	c.writeMutex.Lock()
 	res := hrpc.RPCResult{Error: UnrecoverableError{c.getSendErr()}}
 	for _, rpc := range c.rpcs {
@@ -335,7 +335,7 @@ func (c *Client) errorEncountered() {
 }
 
 // Sends the given buffer to the RegionServer.
-func (c *Client) write(buf []byte) error {
+func (c *client) write(buf []byte) error {
 	n, err := c.conn.Write(buf)
 
 	if err != nil {
@@ -351,7 +351,7 @@ func (c *Client) write(buf []byte) error {
 }
 
 // Tries to read enough data to fully fill up the given buffer.
-func (c *Client) readFully(buf []byte) error {
+func (c *client) readFully(buf []byte) error {
 	_, err := io.ReadFull(c.conn, buf)
 	if err != nil {
 		return fmt.Errorf("Failed to read from the RS: %s", err)
@@ -360,7 +360,7 @@ func (c *Client) readFully(buf []byte) error {
 }
 
 // Sends the "hello" message needed when opening a new connection.
-func (c *Client) sendHello(ctype ClientType) error {
+func (c *client) sendHello(ctype ClientType) error {
 	connHeader := &pb.ConnectionHeader{
 		UserInfo: &pb.UserInformation{
 			EffectiveUser: proto.String("gopher"),
@@ -385,7 +385,7 @@ func (c *Client) sendHello(ctype ClientType) error {
 
 // QueueRPC will add an rpc call to the queue for processing by the writer
 // goroutine
-func (c *Client) QueueRPC(rpc hrpc.Call) error {
+func (c *client) QueueRPC(rpc hrpc.Call) error {
 	sendErr := c.getSendErr()
 	if sendErr != nil {
 		return sendErr
@@ -404,7 +404,7 @@ func (c *Client) QueueRPC(rpc hrpc.Call) error {
 
 // sendRPC sends an RPC out to the wire.
 // Returns the response (for now, as the call is synchronous).
-func (c *Client) sendRPC(rpc hrpc.Call) error {
+func (c *client) sendRPC(rpc hrpc.Call) error {
 	// Header.
 	c.id++
 	reqheader := &pb.RequestHeader{

@@ -24,13 +24,13 @@ func TestMetaCache(t *testing.T) {
 	}
 
 	// Inject an entry in the cache.  This entry covers the entire key range.
-	wholeTable := &region.Info{
-		Table:    []byte("test"),
-		Name:     []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-		StartKey: []byte(""),
-		StopKey:  []byte(""),
-	}
-	regClient := &region.Client{}
+	wholeTable := region.NewInfo(
+		[]byte("test"),
+		[]byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		nil,
+		nil,
+	)
+	regClient, _ := region.NewClient("", 0, region.RegionClient, 0, 0)
 	client.regions.put(wholeTable)
 	client.clients.put(wholeTable, regClient)
 
@@ -47,36 +47,36 @@ func TestMetaCache(t *testing.T) {
 	client = newClient("~invalid.quorum~")
 
 	// Inject 3 entries in the cache.
-	region1 := &region.Info{
-		Table:    []byte("test"),
-		Name:     []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-		StartKey: []byte(""),
-		StopKey:  []byte("foo"),
-	}
+	region1 := region.NewInfo(
+		[]byte("test"),
+		[]byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		[]byte(""),
+		[]byte("foo"),
+	)
 	client.regions.put(region1)
 	client.clients.put(region1, regClient)
 
-	region2 := &region.Info{
-		Table:    []byte("test"),
-		Name:     []byte("test,foo,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-		StartKey: []byte("foo"),
-		StopKey:  []byte("gohbase"),
-	}
+	region2 := region.NewInfo(
+		[]byte("test"),
+		[]byte("test,foo,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		[]byte("foo"),
+		[]byte("gohbase"),
+	)
 	client.regions.put(region2)
 	client.clients.put(region2, regClient)
 
-	region3 := &region.Info{
-		Table:    []byte("test"),
-		Name:     []byte("test,gohbase,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-		StartKey: []byte("gohbase"),
-		StopKey:  []byte(""),
-	}
+	region3 := region.NewInfo(
+		[]byte("test"),
+		[]byte("test,gohbase,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		[]byte("gohbase"),
+		[]byte(""),
+	)
 	client.regions.put(region3)
 	client.clients.put(region3, regClient)
 
 	testcases := []struct {
 		key string
-		reg *region.Info
+		reg hrpc.RegionInfo
 	}{
 		{key: "theKey", reg: region3},
 		{key: "", reg: region1},
@@ -94,11 +94,12 @@ func TestMetaCache(t *testing.T) {
 	}
 
 	// Change the last region (maybe it got split).
-	region3 = &region.Info{
-		Table:   []byte("test"),
-		Name:    []byte("test,gohbase,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-		StopKey: []byte("zab"),
-	}
+	region3 = region.NewInfo(
+		[]byte("test"),
+		[]byte("test,gohbase,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		nil,
+		[]byte("zab"),
+	)
 	client.regions.put(region3)
 	client.clients.put(region3, regClient)
 
@@ -119,33 +120,33 @@ func (a regionNames) Less(i, j int) bool { return bytes.Compare(a[i], a[j]) < 0 
 func (a regionNames) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 func TestMetaCacheGetOverlaps(t *testing.T) {
-	region1 := &region.Info{
-		Table:    []byte("test"),
-		Name:     []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-		StartKey: []byte(""),
-		StopKey:  []byte("foo"),
-	}
+	region1 := region.NewInfo(
+		[]byte("test"),
+		[]byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		[]byte(""),
+		[]byte("foo"),
+	)
 
-	regionA := &region.Info{
-		Table:    []byte("hello"),
-		Name:     []byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-		StartKey: []byte(""),
-		StopKey:  []byte("foo"),
-	}
+	regionA := region.NewInfo(
+		[]byte("hello"),
+		[]byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		[]byte(""),
+		[]byte("foo"),
+	)
 
-	regionB := &region.Info{
-		Table:    []byte("hello"),
-		Name:     []byte("hello,foo,987654321042.56f833d5569a27c7a43fbf547b4924a4."),
-		StartKey: []byte("foo"),
-		StopKey:  []byte("fox"),
-	}
+	regionB := region.NewInfo(
+		[]byte("hello"),
+		[]byte("hello,foo,987654321042.56f833d5569a27c7a43fbf547b4924a4."),
+		[]byte("foo"),
+		[]byte("fox"),
+	)
 
-	regionC := &region.Info{
-		Table:    []byte("hello"),
-		Name:     []byte("hello,fox,987654321042.56f833d5569a27c7a43fbf547b4924a4."),
-		StartKey: []byte("fox"),
-		StopKey:  []byte("yolo"),
-	}
+	regionC := region.NewInfo(
+		[]byte("hello"),
+		[]byte("hello,fox,987654321042.56f833d5569a27c7a43fbf547b4924a4."),
+		[]byte("fox"),
+		[]byte("yolo"),
+	)
 
 	regionTests := []struct {
 		cachedRegions []hrpc.RegionInfo
@@ -156,52 +157,52 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 		{[]hrpc.RegionInfo{region1}, region1, []hrpc.RegionInfo{region1}}, // with itself
 		{ // different table
 			[]hrpc.RegionInfo{region1},
-			&region.Info{
-				Table:    []byte("hello"),
-				Name:     []byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-				StartKey: []byte(""),
-				StopKey:  []byte("fake"),
-			},
+			region.NewInfo(
+				[]byte("hello"),
+				[]byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+				[]byte(""),
+				[]byte("fake"),
+			),
 			[]hrpc.RegionInfo{},
 		},
 		{ // overlaps with both
 			[]hrpc.RegionInfo{regionA, regionB},
-			&region.Info{
-				Table:    []byte("hello"),
-				Name:     []byte("hello,bar,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-				StartKey: []byte("bar"),
-				StopKey:  []byte("fop"),
-			},
+			region.NewInfo(
+				[]byte("hello"),
+				[]byte("hello,bar,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+				[]byte("bar"),
+				[]byte("fop"),
+			),
 			[]hrpc.RegionInfo{regionA, regionB},
 		},
 		{ // overlaps with both, key start == old one
 			[]hrpc.RegionInfo{regionA, regionB},
-			&region.Info{
-				Table:    []byte("hello"),
-				Name:     []byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-				StartKey: []byte(""),
-				StopKey:  []byte("yolo"),
-			},
+			region.NewInfo(
+				[]byte("hello"),
+				[]byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+				[]byte(""),
+				[]byte("yolo"),
+			),
 			[]hrpc.RegionInfo{regionA, regionB},
 		},
 		{ // overlaps with second
 			[]hrpc.RegionInfo{regionA, regionB},
-			&region.Info{
-				Table:    []byte("hello"),
-				Name:     []byte("hello,fop,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-				StartKey: []byte("fop"),
-				StopKey:  []byte("yolo"),
-			},
+			region.NewInfo(
+				[]byte("hello"),
+				[]byte("hello,fop,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+				[]byte("fop"),
+				[]byte("yolo"),
+			),
 			[]hrpc.RegionInfo{regionB},
 		},
 		{ // overlaps with first, new key start == old one
 			[]hrpc.RegionInfo{regionA, regionB},
-			&region.Info{
-				Table:    []byte("hello"),
-				Name:     []byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-				StartKey: []byte(""),
-				StopKey:  []byte("abc"),
-			},
+			region.NewInfo(
+				[]byte("hello"),
+				[]byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+				[]byte(""),
+				[]byte("abc"),
+			),
 			[]hrpc.RegionInfo{regionA},
 		},
 		{ // doesn't overlap, is between existing
