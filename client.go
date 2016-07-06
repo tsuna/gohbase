@@ -103,10 +103,20 @@ func (rcc *clientRegionCache) del(r hrpc.RegionInfo) {
 	}
 }
 
+func (rcc *clientRegionCache) closeAll() {
+	rcc.m.Lock()
+	for client, regions := range rcc.regions {
+		for _, region := range regions {
+			region.MarkUnavailable()
+			region.SetClient(nil)
+		}
+		client.Close()
+	}
+	rcc.m.Unlock()
+}
+
 func (rcc *clientRegionCache) clientDown(reg hrpc.RegionInfo) []hrpc.RegionInfo {
 	rcc.m.Lock()
-	defer rcc.m.Unlock()
-
 	var downregions []hrpc.RegionInfo
 	c := reg.Client()
 	for _, sharedReg := range rcc.regions[c] {
@@ -117,6 +127,7 @@ func (rcc *clientRegionCache) clientDown(reg hrpc.RegionInfo) []hrpc.RegionInfo 
 		}
 	}
 	delete(rcc.regions, c)
+	rcc.m.Unlock()
 	return downregions
 }
 
@@ -282,6 +293,7 @@ type Client interface {
 	Increment(i *hrpc.Mutate) (int64, error)
 	CheckAndPut(p *hrpc.Mutate, family string, qualifier string,
 		expectedValue []byte) (bool, error)
+	Close()
 }
 
 // AdminClient to perform admistrative operations with HMaster
@@ -358,6 +370,18 @@ func (c *client) CheckTable(ctx context.Context, table string) error {
 		_, err = c.SendRPC(getStr)
 	}
 	return err
+}
+
+// Close closes connections to hbase master and regionservers
+func (c *client) Close() {
+	// TODO: do we need a lock for metaRegionInfo and adminRegionInfo
+	if mc := c.metaRegionInfo.Client(); mc != nil {
+		mc.Close()
+	}
+	if ac := c.adminRegionInfo.Client(); ac != nil {
+		ac.Close()
+	}
+	c.clients.closeAll()
 }
 
 // Scan retrieves the values specified in families from the given range.
