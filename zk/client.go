@@ -19,6 +19,16 @@ import (
 	"github.com/tsuna/gohbase/pb"
 )
 
+type logger struct{}
+
+func (l *logger) Printf(format string, args ...interface{}) {
+	log.Debugf(format, args...)
+}
+
+func init() {
+	zk.DefaultLogger = &logger{}
+}
+
 // ResourceName is a type alias that is used to represent different resources
 // in ZooKeeper
 type ResourceName string
