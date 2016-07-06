@@ -70,7 +70,7 @@ type clientRegionCache struct {
 	regions map[hrpc.RegionClient][]hrpc.RegionInfo
 }
 
-func (rcc *clientRegionCache) put(r hrpc.RegionInfo, c hrpc.RegionClient) {
+func (rcc *clientRegionCache) put(c hrpc.RegionClient, r hrpc.RegionInfo) {
 	rcc.m.Lock()
 	defer rcc.m.Unlock()
 
@@ -896,7 +896,7 @@ func (c *client) establishRegion(originalReg hrpc.RegionInfo, host string, port 
 					// There's already a client, add it to the
 					// region and mark it as available.
 					reg.SetClient(client)
-					c.clients.put(reg, client)
+					c.clients.put(client, reg)
 					originalReg.MarkAvailable()
 					return
 				}
@@ -920,7 +920,7 @@ func (c *client) establishRegion(originalReg hrpc.RegionInfo, host string, port 
 						// put will set region client so that as soon as we add
 						// it to the key->region mapping, concurrent readers are
 						// able to find the client
-						c.clients.put(reg, res.Client)
+						c.clients.put(res.Client, reg)
 						if reg != originalReg {
 							removed := c.regions.put(reg)
 							for _, r := range removed {

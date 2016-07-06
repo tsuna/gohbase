@@ -32,7 +32,7 @@ func TestMetaCache(t *testing.T) {
 	)
 	regClient, _ := region.NewClient("", 0, region.RegionClient, 0, 0)
 	client.regions.put(wholeTable)
-	client.clients.put(wholeTable, regClient)
+	client.clients.put(regClient, wholeTable)
 
 	reg = client.getRegionFromCache([]byte("test"), []byte("theKey"))
 	if !reflect.DeepEqual(reg, wholeTable) {
@@ -54,7 +54,7 @@ func TestMetaCache(t *testing.T) {
 		[]byte("foo"),
 	)
 	client.regions.put(region1)
-	client.clients.put(region1, regClient)
+	client.clients.put(regClient, region1)
 
 	region2 := region.NewInfo(
 		[]byte("test"),
@@ -63,7 +63,7 @@ func TestMetaCache(t *testing.T) {
 		[]byte("gohbase"),
 	)
 	client.regions.put(region2)
-	client.clients.put(region2, regClient)
+	client.clients.put(regClient, region2)
 
 	region3 := region.NewInfo(
 		[]byte("test"),
@@ -72,7 +72,7 @@ func TestMetaCache(t *testing.T) {
 		[]byte(""),
 	)
 	client.regions.put(region3)
-	client.clients.put(region3, regClient)
+	client.clients.put(regClient, region3)
 
 	testcases := []struct {
 		key string
@@ -101,7 +101,7 @@ func TestMetaCache(t *testing.T) {
 		[]byte("zab"),
 	)
 	client.regions.put(region3)
-	client.clients.put(region3, regClient)
+	client.clients.put(regClient, region3)
 
 	reg = client.getRegionFromCache([]byte("test"), []byte("theKey"))
 	if !reflect.DeepEqual(reg, region3) {
