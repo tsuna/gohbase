@@ -20,25 +20,17 @@ import (
 
 // info describes a region.
 type info struct {
-	// Table name.
-	Table []byte
-
-	// Name.
-	Name []byte
-
-	// StartKey
-	StartKey []byte
-
-	// StopKey.
-	StopKey []byte
+	table    []byte
+	name     []byte
+	startKey []byte
+	stopKey  []byte
 
 	// The attributes before this mutex are supposed to be immutable.
 	// The attributes defined below can be changed and accesses must
 	// be protected with this mutex.
 	m sync.Mutex
 
-	// Client.
-	Client hrpc.RegionClient
+	client hrpc.RegionClient
 
 	// Once a region becomes unreachable, this channel is created, and any
 	// functions that wish to be notified when the region becomes available
@@ -50,10 +42,10 @@ type info struct {
 // NewInfo creates a new region info
 func NewInfo(table, name, startKey, stopKey []byte) hrpc.RegionInfo {
 	return &info{
-		Table:    table,
-		Name:     name,
-		StartKey: startKey,
-		StopKey:  stopKey,
+		table:    table,
+		name:     name,
+		startKey: startKey,
+		stopKey:  stopKey,
 	}
 }
 
@@ -78,10 +70,10 @@ func infoFromCell(cell *pb.Cell) (hrpc.RegionInfo, error) {
 		return nil, fmt.Errorf("failed to decode %q: %s", cell, err)
 	}
 	return &info{
-		Table:    regInfo.TableName.Qualifier,
-		Name:     cell.Row,
-		StartKey: regInfo.StartKey,
-		StopKey:  regInfo.EndKey,
+		table:    regInfo.TableName.Qualifier,
+		name:     cell.Row,
+		startKey: regInfo.StartKey,
+		stopKey:  regInfo.EndKey,
 	}, nil
 }
 
@@ -183,33 +175,33 @@ func (i *info) MarkAvailable() {
 
 func (i *info) String() string {
 	return fmt.Sprintf("*region.info{Table: %q, Name: %q, StopKey: %q}",
-		i.Table, i.Name, i.StopKey)
+		i.table, i.name, i.stopKey)
 }
 
 // GetName returns region name
 func (i *info) GetName() []byte {
-	return i.Name
+	return i.name
 }
 
 // GetStopKey return region stop key
 func (i *info) GetStopKey() []byte {
-	return i.StopKey
+	return i.stopKey
 }
 
 // GetStartKey return region start key
 func (i *info) GetStartKey() []byte {
-	return i.StartKey
+	return i.startKey
 }
 
 // GetTable returns region table
 func (i *info) GetTable() []byte {
-	return i.Table
+	return i.table
 }
 
 // GetClient returns region client
 func (i *info) GetClient() hrpc.RegionClient {
 	i.m.Lock()
-	c := i.Client
+	c := i.client
 	i.m.Unlock()
 	return c
 }
@@ -217,7 +209,7 @@ func (i *info) GetClient() hrpc.RegionClient {
 // SetClient sets region client
 func (i *info) SetClient(c hrpc.RegionClient) {
 	i.m.Lock()
-	i.Client = c
+	i.client = c
 	i.m.Unlock()
 }
 
