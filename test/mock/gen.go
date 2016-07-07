@@ -8,6 +8,8 @@ package mock
 // To run this command, gomock and mockgen need to be installed, by running
 //    go get github.com/golang/mock/gomock
 //    go get github.com/golang/mock/mockgen
-// then run go generate to auto-generate mock_client.
+// then run 'go generate' to auto-generate mock_client.
 
-//go:generate mockgen -package=mock -source=../../client.go -destination=client.go
+//go:generate mockgen -destination=client.go -source=../../client.go -package=mock
+//go:generate mockgen -destination=readerwritercloser.go -package=mock io ReadWriteCloser
+//go:generate mockgen -destination=call.go -package=mock github.com/tsuna/gohbase/hrpc Call

@@ -27,11 +27,14 @@ type ClientType string
 var (
 	// ErrShortWrite is used when the writer thread only succeeds in writing
 	// part of its buffer to the socket, and not all of the buffer was sent
-	ErrShortWrite = errors.New("short write occurred while writing to socket")
+	ErrShortWrite = errors.New("Short write occurred while writing to socket")
 
 	// ErrMissingCallID is used when HBase sends us a response message for a
 	// request that we didn't send
-	ErrMissingCallID = errors.New("HBase responded to a nonsensical call ID")
+	ErrMissingCallID = errors.New("Got a response with a nonsensical call ID")
+
+	// ErrClientClosed is returned to rpcs when Close() is called
+	ErrClientClosed = errors.New("Client closed")
 
 	// javaRetryableExceptions is a map where all Java exceptions that signify
 	// the RPC should be sent again are listed (as keys). If a Java exception
@@ -76,9 +79,7 @@ func (e RetryableError) Error() string {
 
 // client manages a connection to a RegionServer.
 type client struct {
-	id uint32
-
-	conn net.Conn
+	conn io.ReadWriteCloser
 
 	// Hostname or IP address of the RegionServer.
 	host string
@@ -86,28 +87,25 @@ type client struct {
 	// Port of the RegionServer.
 	port uint16
 
-	// writeMutex is used to prevent multiple threads from writing to the
-	// socket at the same time.
-	writeMutex *sync.Mutex
+	// err is set once a write or read fails.
+	err  error
+	errM sync.RWMutex // protects err
 
-	// sendErr is set once a write fails.
-	sendErr     error
-	sendErrLock sync.Mutex
+	rpcs chan hrpc.Call
+	done chan struct{}
 
-	rpcs []hrpc.Call
-
-	// Once the rpcs list has grown to a large enough size, this channel is
-	// written to to notify the writer thread that it should stop sleeping and
-	// process the list
-	process chan struct{}
-
-	// sentRPCs contains the mapping of sent call IDs to RPC calls, so that when
+	// sent contains the mapping of sent call IDs to RPC calls, so that when
 	// a response is received it can be tied to the correct RPC
-	sentRPCs      map[uint32]hrpc.Call
-	sentRPCsMutex *sync.Mutex
+	sent  map[uint32]hrpc.Call
+	sentM sync.Mutex // protects sent
 
 	rpcQueueSize  int
 	flushInterval time.Duration
+}
+
+type call struct {
+	id uint32
+	hrpc.Call
 }
 
 // NewClient creates a new RegionClient.
@@ -120,31 +118,43 @@ func NewClient(host string, port uint16, ctype ClientType,
 			fmt.Errorf("failed to connect to the RegionServer at %s: %s", addr, err)
 	}
 	c := &client{
-		conn:          conn,
 		host:          host,
 		port:          port,
-		writeMutex:    &sync.Mutex{},
-		process:       make(chan struct{}),
-		sentRPCsMutex: &sync.Mutex{},
-		sentRPCs:      make(map[uint32]hrpc.Call),
+		conn:          conn,
+		rpcs:          make(chan hrpc.Call, queueSize),
+		done:          make(chan struct{}),
+		sent:          make(map[uint32]hrpc.Call),
 		rpcQueueSize:  queueSize,
 		flushInterval: flushInterval,
 	}
-	err = c.sendHello(ctype)
-	if err != nil {
+
+	if err := c.sendHello(ctype); err != nil {
 		return nil, err
 	}
-	go c.processRpcs() // Writer goroutine
-	go c.receiveRpcs() // Reader goroutine
+	go c.processRPCs() // Writer goroutine
+	go c.receiveRPCs() // Reader goroutine
 	return c, nil
+}
+
+// QueueRPC will add an rpc call to the queue for processing by the writer
+// goroutine
+func (c *client) QueueRPC(rpc hrpc.Call) error {
+	c.errM.RLock()
+	err := c.err
+	if err != nil {
+		c.errM.RUnlock()
+		return err
+	}
+	c.rpcs <- rpc
+	c.errM.RUnlock()
+	return nil
 }
 
 // Close asks this region.Client to close its connection to the RegionServer.
 // All queued and outstanding RPCs, if any, will be failed as if a connection
 // error had happened.
 func (c *client) Close() {
-	c.setSendErr(errors.New("shutting down"))
-	c.errorEncountered()
+	c.fail(errors.New("Client closed"))
 }
 
 // Host returns the host that this client talks to
@@ -157,187 +167,166 @@ func (c *client) Port() uint16 {
 	return c.port
 }
 
-func (c *client) getSendErr() error {
-	c.sendErrLock.Lock()
-	err := c.sendErr
-	c.sendErrLock.Unlock()
-	return err
+func (c *client) fail(err error) {
+	c.errM.Lock()
+	if c.err != nil {
+		c.errM.Unlock()
+		return
+	}
+	err = fmt.Errorf("Region client (%s:%d) error: %s", c.host, c.port, err)
+	c.err = err
+	c.errM.Unlock()
+	log.Errorln(err)
+
+	// tell goroutines to stop
+	close(c.done)
+	// close rpcs channel for consistency and to ensure nobody sends to
+	// it by mistake
+	close(c.rpcs)
+	// we close connection to the regionserver,
+	// to let it know that we can't receive anymore
+	c.conn.Close()
+
+	// fail queued rpcs
+	var sent map[uint32]hrpc.Call
+	c.sentM.Lock()
+	sent = c.sent
+	c.sent = make(map[uint32]hrpc.Call)
+	c.sentM.Unlock()
+	// send error to rpcs
+	res := hrpc.RPCResult{Error: err}
+	for _, rpc := range sent {
+		rpc.ResultChan() <- res
+	}
 }
 
-func (c *client) setSendErr(err error) {
-	c.sendErrLock.Lock()
-	c.sendErr = err
-	c.sendErrLock.Unlock()
-}
-
-func (c *client) processRpcs() {
+func (c *client) processRPCs() {
+	batch := make([]*call, 0, c.rpcQueueSize)
+	ticker := time.NewTicker(c.flushInterval)
+	var currID uint32
+	defer ticker.Stop()
 	for {
-		if c.getSendErr() != nil {
-			return
-		}
-
 		select {
-		case <-time.After(c.flushInterval):
-			select {
-			case <-c.process:
-			// If we got a message on c.process at the same time as our
-			// timeout elapsed, we'll non-deterministically land in either
-			// cases of this outer select.  Here we double-check whether
-			// something was written onto c.process, in which case we don't
-			// grab the lock (see comment below in the other case).
-			default:
-				c.writeMutex.Lock()
+		case <-c.done:
+			return
+		case <-ticker.C:
+			go c.sendBatch(batch)
+			batch = make([]*call, 0, c.rpcQueueSize)
+		case rpc, ok := <-c.rpcs:
+			if !ok {
+				return
 			}
-		case <-c.process:
-			// We don't acquire the lock here, because the thread that sent
-			// something on the process channel will have locked the mutex,
-			// and will not release it so as to transfer ownership
+			currID++
+			// track the rpc
+			c.sentM.Lock()
+			c.sent[currID] = rpc
+			c.sentM.Unlock()
+			// associate with id and append
+			batch = append(batch, &call{
+				id:   currID,
+				Call: rpc,
+			})
+			if len(batch) == c.rpcQueueSize {
+				go c.sendBatch(batch)
+				batch = make([]*call, 0, c.rpcQueueSize)
+			}
 		}
+	}
+}
 
-		rpcs := make([]hrpc.Call, len(c.rpcs))
-		for i, rpc := range c.rpcs {
-			rpcs[i] = rpc
-		}
-		c.rpcs = nil
-		c.writeMutex.Unlock()
-
-		for i, rpc := range rpcs {
+func (c *client) sendBatch(rpcs []*call) {
+	for _, rpc := range rpcs {
+		select {
+		case <-c.done:
+			return
+		case _, ok := <-rpc.Context().Done():
 			// If the deadline has been exceeded, don't bother sending the
 			// request. The function that placed the RPC in our queue should
 			// stop waiting for a result and return an error.
-			select {
-			case _, ok := <-rpc.Context().Done():
-				if !ok {
-					continue
-				}
-			default:
+			if !ok {
+				continue
 			}
-
-			err := c.sendRPC(rpc)
-			if err != nil {
-				_, ok := err.(UnrecoverableError)
-				if ok {
-					c.setSendErr(err)
-
-					c.writeMutex.Lock()
-					c.rpcs = append(c.rpcs, rpcs[i:]...)
-					c.writeMutex.Unlock()
-
-					c.errorEncountered()
-					return
-				}
-				rpc.ResultChan() <- hrpc.RPCResult{Error: err}
+		default:
+			err := c.send(rpc)
+			if _, ok := err.(UnrecoverableError); ok {
+				c.fail(err)
+				return
 			}
 		}
 	}
 }
 
-func (c *client) receiveRpcs() {
-	var sz [4]byte
+func (c *client) receiveRPCs() {
 	for {
-		err := c.readFully(sz[:])
-		if err != nil {
-			c.setSendErr(err)
-			c.errorEncountered()
+		select {
+		case <-c.done:
 			return
+		default:
+			if err := c.receive(); err != nil {
+				c.fail(err)
+				return
+			}
 		}
+	}
+}
 
-		buf := make([]byte, binary.BigEndian.Uint32(sz[:]))
-		err = c.readFully(buf)
-		if err != nil {
-			c.setSendErr(err)
-			c.errorEncountered()
-			return
-		}
+func (c *client) receive() error {
+	var sz [4]byte
+	err := c.readFully(sz[:])
+	if err != nil {
+		return err
+	}
 
-		resp := &pb.ResponseHeader{}
-		respLen, nb := proto.DecodeVarint(buf)
+	buf := make([]byte, binary.BigEndian.Uint32(sz[:]))
+	err = c.readFully(buf)
+	if err != nil {
+		return err
+	}
+
+	resp := &pb.ResponseHeader{}
+	respLen, nb := proto.DecodeVarint(buf)
+	buf = buf[nb:]
+	err = proto.UnmarshalMerge(buf[:respLen], resp)
+	buf = buf[respLen:]
+	if err != nil {
+		// Failed to deserialize the response header
+		return err
+	}
+	if resp.CallId == nil {
+		// Response doesn't have a call ID
+		return ErrMissingCallID
+	}
+
+	c.sentM.Lock()
+	rpc, ok := c.sent[*resp.CallId]
+	if !ok {
+		c.sentM.Unlock()
+		return fmt.Errorf("Got a response with an unexpected call ID: %d", *resp.CallId)
+	}
+	delete(c.sent, *resp.CallId)
+	c.sentM.Unlock()
+
+	var rpcResp proto.Message
+	if resp.Exception == nil {
+		respLen, nb = proto.DecodeVarint(buf)
 		buf = buf[nb:]
-		err = proto.UnmarshalMerge(buf[:respLen], resp)
-		buf = buf[respLen:]
-		if err != nil {
-			// Failed to deserialize the response header
-			c.setSendErr(err)
-			c.errorEncountered()
-			return
+		rpcResp = rpc.NewResponse()
+		err = proto.UnmarshalMerge(buf, rpcResp)
+	} else {
+		javaClass := *resp.Exception.ExceptionClassName
+		err = fmt.Errorf("HBase Java exception %s: \n%s", javaClass, *resp.Exception.StackTrace)
+		if _, ok := javaRetryableExceptions[javaClass]; ok {
+			// This is a recoverable error. The client should retry.
+			err = RetryableError{err}
 		}
-		if resp.CallId == nil {
-			// Response doesn't have a call ID
-			log.Error("Response doesn't have a call ID!")
-			c.setSendErr(ErrMissingCallID)
-			c.errorEncountered()
-			return
-		}
-
-		c.sentRPCsMutex.Lock()
-		rpc, ok := c.sentRPCs[*resp.CallId]
-		c.sentRPCsMutex.Unlock()
-
-		if !ok {
-			log.WithFields(log.Fields{
-				"CallId": *resp.CallId,
-			}).Error("Received a response with an unexpected call ID")
-
-			log.Error("Waiting for responses to the following calls:")
-			c.sentRPCsMutex.Lock()
-			for id, call := range c.sentRPCs {
-				log.Errorf("\t\t%d: %v", id, call)
-			}
-			c.sentRPCsMutex.Unlock()
-
-			c.setSendErr(fmt.Errorf("HBase sent a response with an unexpected call ID: %d",
-				resp.CallId))
-			c.errorEncountered()
-			return
-		}
-
-		var rpcResp proto.Message
-		if resp.Exception == nil {
-			respLen, nb = proto.DecodeVarint(buf)
-			buf = buf[nb:]
-			rpcResp = rpc.NewResponse()
-			err = proto.UnmarshalMerge(buf, rpcResp)
-			buf = buf[respLen:]
-		} else {
-			javaClass := *resp.Exception.ExceptionClassName
-			err = fmt.Errorf("HBase Java exception %s: \n%s", javaClass,
-				*resp.Exception.StackTrace)
-			if _, ok := javaRetryableExceptions[javaClass]; ok {
-				// This is a recoverable error. The client should retry.
-				err = RetryableError{err}
-			}
-		}
-		rpc.ResultChan() <- hrpc.RPCResult{Msg: rpcResp, Error: err}
-
-		c.sentRPCsMutex.Lock()
-		delete(c.sentRPCs, *resp.CallId)
-		c.sentRPCsMutex.Unlock()
 	}
+	rpc.ResultChan() <- hrpc.RPCResult{Msg: rpcResp, Error: err}
+	return nil
 }
 
-func (c *client) errorEncountered() {
-	c.writeMutex.Lock()
-	res := hrpc.RPCResult{Error: UnrecoverableError{c.getSendErr()}}
-	for _, rpc := range c.rpcs {
-		rpc.ResultChan() <- res
-	}
-	c.rpcs = nil
-	c.writeMutex.Unlock()
-
-	c.sentRPCsMutex.Lock()
-	for _, rpc := range c.sentRPCs {
-		rpc.ResultChan() <- res
-	}
-	c.sentRPCs = nil
-	c.sentRPCsMutex.Unlock()
-
-	c.conn.Close()
-}
-
-// Sends the given buffer to the RegionServer.
+// write sends the given buffer to the RegionServer.
 func (c *client) write(buf []byte) error {
 	n, err := c.conn.Write(buf)
-
 	if err != nil {
 		// There was an error while writing
 		return err
@@ -359,7 +348,7 @@ func (c *client) readFully(buf []byte) error {
 	return nil
 }
 
-// Sends the "hello" message needed when opening a new connection.
+// sendHello sends the "hello" message needed when opening a new connection.
 func (c *client) sendHello(ctype ClientType) error {
 	connHeader := &pb.ConnectionHeader{
 		UserInfo: &pb.UserInformation{
@@ -370,7 +359,7 @@ func (c *client) sendHello(ctype ClientType) error {
 	}
 	data, err := proto.Marshal(connHeader)
 	if err != nil {
-		return fmt.Errorf("failed to marshal connection header: %s", err)
+		return fmt.Errorf("Failed to marshal connection header: %s", err)
 	}
 
 	const header = "HBas\x00\x50" // \x50 = Simple Auth.
@@ -379,36 +368,14 @@ func (c *client) sendHello(ctype ClientType) error {
 	buf = buf[:len(header)+4]
 	binary.BigEndian.PutUint32(buf[6:], uint32(len(data)))
 	buf = append(buf, data...)
-
 	return c.write(buf)
 }
 
-// QueueRPC will add an rpc call to the queue for processing by the writer
-// goroutine
-func (c *client) QueueRPC(rpc hrpc.Call) error {
-	sendErr := c.getSendErr()
-	if sendErr != nil {
-		return sendErr
-	}
-	c.writeMutex.Lock()
-	c.rpcs = append(c.rpcs, rpc)
-	if len(c.rpcs) > c.rpcQueueSize {
-		c.process <- struct{}{}
-		// We don't release the lock here, because we want to transfer ownership
-		// of the lock to the goroutine that processes the RPCs
-	} else {
-		c.writeMutex.Unlock()
-	}
-	return nil
-}
-
-// sendRPC sends an RPC out to the wire.
+// send sends an RPC out to the wire.
 // Returns the response (for now, as the call is synchronous).
-func (c *client) sendRPC(rpc hrpc.Call) error {
-	// Header.
-	c.id++
+func (c *client) send(rpc *call) error {
 	reqheader := &pb.RequestHeader{
-		CallId:       &c.id,
+		CallId:       &rpc.id,
 		MethodName:   proto.String(rpc.Name()),
 		RequestParam: proto.Bool(true),
 	}
@@ -431,14 +398,9 @@ func (c *client) sendRPC(rpc hrpc.Call) error {
 	buf = append(buf, payloadLen...)
 	buf = append(buf, payload...)
 
-	c.sentRPCsMutex.Lock()
-	c.sentRPCs[c.id] = rpc
-	c.sentRPCsMutex.Unlock()
-
 	err = c.write(buf)
 	if err != nil {
 		return UnrecoverableError{err}
 	}
-
 	return nil
 }
