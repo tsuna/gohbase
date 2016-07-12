@@ -45,16 +45,31 @@ const (
 	Master = ResourceName("/hbase/master")
 )
 
-// LocateResource returns the location of the specified resource.
-func LocateResource(zkquorum string, resource ResourceName) (string, uint16, error) {
-	zks := strings.Split(zkquorum, ",")
-	zkconn, _, err := zk.Connect(zks, time.Duration(sessionTimeout)*time.Second)
-	if err != nil {
-		return "", 0,
-			fmt.Errorf("Error connecting to ZooKeeper at %v: %s", zks, err)
+// Client is an interface of client that retrieves meta infomation from zookeeper
+type Client interface {
+	LocateResource(ResourceName) (string, uint16, error)
+}
+
+type client struct {
+	zks []string
+}
+
+// NewClient establishes connection to zookeeper and returns the client
+func NewClient(zkquorum string) Client {
+	return &client{
+		zks: strings.Split(zkquorum, ","),
 	}
-	defer zkconn.Close()
-	buf, _, err := zkconn.Get(string(resource))
+}
+
+// LocateResource returns the location of the specified resource.
+func (c *client) LocateResource(resource ResourceName) (string, uint16, error) {
+	conn, _, err := zk.Connect(c.zks, time.Duration(sessionTimeout)*time.Second)
+	if err != nil {
+		return "", 0, fmt.Errorf("Error connecting to ZooKeeper at %v: %s", c.zks, err)
+	}
+	defer conn.Close()
+
+	buf, _, err := conn.Get(string(resource))
 	if err != nil {
 		return "", 0,
 			fmt.Errorf("Failed to read the %s znode: %s", resource, err)

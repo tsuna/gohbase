@@ -264,6 +264,9 @@ type client struct {
 	// The maximum size of the RPC queue in the region client
 	rpcQueueSize int
 
+	// zkClient is zookeeper for retrieving meta and admin information
+	zkClient zk.Client
+
 	// The timeout before flushing the RPC queue in the region client
 	flushInterval time.Duration
 }
@@ -324,6 +327,7 @@ func newClient(zkquorum string, options ...Option) *client {
 			nil,
 			nil,
 			nil),
+		zkClient: zk.NewClient(zkquorum),
 	}
 	for _, option := range options {
 		option(c)
@@ -1013,7 +1017,7 @@ func (c *client) zkLookup(ctx context.Context, res zk.ResourceName) (string, uin
 
 // Synchronously looks up the meta region or HMaster in ZooKeeper.
 func (c *client) zkLookupSync(res zk.ResourceName, reschan chan<- zkResult) {
-	host, port, err := zk.LocateResource(c.zkquorum, res)
+	host, port, err := c.zkClient.LocateResource(res)
 	// This is guaranteed to never block as the channel is always buffered.
 	reschan <- zkResult{host, port, err}
 }
