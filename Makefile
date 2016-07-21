@@ -34,13 +34,13 @@ coverage: coverdata
 
 fmtcheck:
 	errors=`gofmt -l .`; if test -n "$$errors"; then echo Check these files for style errors:; echo "$$errors"; exit 1; fi
-	find . -name '*.go' ! -path "./pb/*" -exec ./check_line_len.awk {} +
+	find . -name '*.go' ! -path "./pb/*" ! -path "./test/mock/*" -exec ./check_line_len.awk {} +
 
 vet:
 	$(GO) vet ./...
 
 lint:
-	find ./* -type d ! -name pb | xargs -L 1 $(GOLINT) &>lint; :
+	find ./* -type d ! -name pb ! -name mock | xargs -L 1 $(GOLINT) &>lint; :
 	if test -s lint; then echo Check these packages for golint:; cat lint; rm lint; exit 1; else rm lint; fi
 # The above is ugly, but unfortunately golint doesn't exit 1 when it finds
 # lint.  See https://github.com/golang/lint/issues/65
