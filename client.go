@@ -982,13 +982,15 @@ func sleepAndIncreaseBackoff(ctx context.Context, backoff time.Duration) (time.D
 
 func newRegionClient(ctx context.Context, ret chan newRegResult, clientType region.ClientType,
 	host string, port uint16, queueSize int, queueTimeout time.Duration) {
-	c, e := region.NewClient(host, port, clientType, queueSize, queueTimeout)
+	c, err := region.NewClient(host, port, clientType, queueSize, queueTimeout)
 	select {
-	case ret <- newRegResult{c, e}:
+	case ret <- newRegResult{c, err}:
 		// Hooray!
 	case <-ctx.Done():
 		// We timed out, too bad, nobody expects this client anymore, ditch it.
-		c.Close()
+		if err == nil {
+			c.Close()
+		}
 	}
 }
 
