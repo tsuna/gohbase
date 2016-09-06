@@ -19,6 +19,7 @@ import (
 	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/internal/pb"
 	"golang.org/x/net/context"
+	"encoding/json"
 )
 
 var (
@@ -518,13 +519,19 @@ func valueToBytes(val reflect.Value) ([]byte, error) {
 	case reflect.String:
 		return []byte(val.String()), nil
 
+	case reflect.Struct:
+		data, err := json.Marshal(val.Interface())
+		return data, err
+
+	case reflect.Map:
+		data, err := json.Marshal(val.Interface())
+		return data, err
+
 		// Unhandled types, left here for easy reference
 		//case reflect.Invalid:
 		//case reflect.Chan:
 		//case reflect.Func:
 		//case reflect.Interface:
-		//case reflect.Struct:
-		//case reflect.Map:
 		//case reflect.Uintptr:
 		//case reflect.UnsafePointer:
 	}
