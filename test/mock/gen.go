@@ -5,4 +5,9 @@
 
 package mock
 
+// To run this command, gomock and mockgen need to be installed, by running
+//    go get github.com/golang/mock/gomock
+//    go get github.com/golang/mock/mockgen
+// then run go generate to auto-generate mock_client.
+
 //go:generate mockgen -package=mock -source=../../client.go -destination=client.go
