@@ -648,12 +648,15 @@ func (c *client) SendRPC(rpc hrpc.Call) (*hrpc.Result, error) {
 
 func (c *client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 	// Check the cache for a region that can handle this request
+	var err error
 	reg := c.getRegionFromCache(rpc.Table(), rpc.Key())
-	if reg != nil {
-		return c.sendRPCToRegion(rpc, reg)
-	} else {
-		return c.findRegionForRPC(rpc)
+	if reg == nil {
+		reg, err = c.findRegion(rpc.Context(), rpc.Table(), rpc.Key())
+		if err != nil {
+			return nil, err
+		}
 	}
+	return c.sendRPCToRegion(rpc, reg)
 }
 
 func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Message, error) {
@@ -768,56 +771,59 @@ func (c *client) waitOnRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Message
 	}
 }
 
-func (c *client) findRegionForRPC(rpc hrpc.Call) (proto.Message, error) {
+func (c *client) findRegion(ctx context.Context, table, key []byte) (hrpc.RegionInfo, error) {
 	// The region was not in the cache, it
 	// must be looked up in the meta table
-
+	var reg hrpc.RegionInfo
+	var host string
+	var port uint16
+	var err error
 	backoff := backoffStart
-	ctx := rpc.Context()
 	for {
-		// Look up the region in the meta table
-		reg, host, port, err := c.locateRegion(ctx, rpc.Table(), rpc.Key())
-
+		// Look up the region in the meta table.
+		// If it takes longer than regionLookupTimeout, fail so that we can sleep
+		locateCtx, cancel := context.WithTimeout(ctx, regionLookupTimeout)
+		reg, host, port, err = c.locateRegion(locateCtx, table, key)
+		cancel()
+		if err == nil {
+			break
+		}
+		if err == TableNotFound {
+			return nil, err
+		}
+		// There was an error with the meta table. Let's sleep for some
+		// backoff amount and retry.
+		backoff, err = sleepAndIncreaseBackoff(ctx, backoff)
 		if err != nil {
-			if err == TableNotFound {
-				return nil, err
-			}
-			// There was an error with the meta table. Let's sleep for some
-			// backoff amount and retry.
-			backoff, err = sleepAndIncreaseBackoff(ctx, backoff)
-			if err != nil {
-				return nil, err
-			}
-			continue
+			return nil, err
 		}
-
-		// Check that the region wasn't added to
-		// the cache while we were looking it up.
-		c.regionsLock.Lock()
-
-		if existing := c.getRegionFromCache(rpc.Table(), rpc.Key()); existing != nil {
-			// The region was added to the cache while we were looking it
-			// up. Send the RPC to the region that was in the cache.
-			c.regionsLock.Unlock()
-			return c.sendRPCToRegion(rpc, existing)
-		}
-
-		// The region wasn't added to the cache while we were looking it
-		// up. Mark this one as unavailable and add it to the cache.
-		reg.MarkUnavailable()
-		removed := c.regions.put(reg)
-		for _, r := range removed {
-			c.clients.del(r)
-		}
-		c.regionsLock.Unlock()
-
-		// Start a goroutine to connect to the region
-		go c.establishRegion(reg, host, port)
-
-		// Wait for the new region to become
-		// available, and then send the RPC
-		return c.waitOnRegion(rpc, reg)
 	}
+	// Check that the region wasn't added to
+	// the cache while we were looking it up.
+	c.regionsLock.Lock()
+
+	if existing := c.getRegionFromCache(table, key); existing != nil {
+		// The region was added to the cache while we were looking it
+		// up. Send the RPC to the region that was in the cache.
+		c.regionsLock.Unlock()
+		return existing, nil
+	}
+
+	// The region wasn't added to the cache while we were looking it
+	// up. Mark this one as unavailable and add it to the cache.
+	reg.MarkUnavailable()
+	removed := c.regions.put(reg)
+	for _, r := range removed {
+		c.clients.del(r)
+	}
+	c.regionsLock.Unlock()
+
+	// Start a goroutine to connect to the region
+	go c.establishRegion(reg, host, port)
+
+	// Wait for the new region to become
+	// available, and then send the RPC
+	return reg, nil
 }
 
 // Searches in the regions cache for the region hosting the given row.
