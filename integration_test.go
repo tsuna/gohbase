@@ -356,9 +356,6 @@ func TestMultiplePutsGetsParallel(t *testing.T) {
 	headers := map[string][]string{"cf": nil}
 	c := gohbase.NewClient(*host)
 	defer c.Close()
-	// TODO: Currently have to CheckTable before initiating the N requests
-	// 	 otherwise we face runaway client generation - one for each request.
-	c.CheckTable(context.Background(), table)
 	var wg sync.WaitGroup
 	for i := 0; i < num_ops; i++ {
 		wg.Add(1)
@@ -683,10 +680,6 @@ func TestIncrementParallel(t *testing.T) {
 	defer c.Close()
 	key := "row102.5"
 
-	// TODO: Currently have to CheckTable before initiating N requests
-	// 	otherwise we face runaway client generation - one for each request.
-	c.CheckTable(context.Background(), table)
-
 	numParallel := 10
 
 	// test incerement
@@ -786,9 +779,6 @@ func TestCheckAndPutParallel(t *testing.T) {
 	defer c.Close()
 
 	keyPrefix := "row100.5"
-	// TODO: Currently have to CheckTable before initiating the requests
-	// 	otherwise we face runaway client generation - one for each request.
-	c.CheckTable(context.Background(), table)
 
 	values := map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte("1")}}
 	capTestFunc := func(p *hrpc.Mutate, ch chan bool) {

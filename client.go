@@ -285,7 +285,6 @@ type client struct {
 
 // Client a regular HBase client
 type Client interface {
-	CheckTable(ctx context.Context, table string) error
 	Scan(s *hrpc.Scan) ([]*hrpc.Result, error)
 	Get(g *hrpc.Get) (*hrpc.Result, error)
 	Put(p *hrpc.Mutate) (*hrpc.Result, error)
@@ -362,15 +361,6 @@ func FlushInterval(interval time.Duration) Option {
 	return func(c *client) {
 		c.flushInterval = interval
 	}
-}
-
-// CheckTable returns an error if the given table name doesn't exist.
-func (c *client) CheckTable(ctx context.Context, table string) error {
-	getStr, err := hrpc.NewGetStr(ctx, table, "theKey")
-	if err == nil {
-		_, err = c.SendRPC(getStr)
-	}
-	return err
 }
 
 // Close closes connections to hbase master and regionservers
@@ -629,21 +619,6 @@ func (c *client) DisableTable(t *hrpc.DisableTable) error {
 	}
 
 	return c.checkProcedureWithBackoff(t.Context(), r.GetProcId())
-}
-
-// Could be removed in favour of above
-func (c *client) SendRPC(rpc hrpc.Call) (*hrpc.Result, error) {
-	pbmsg, err := c.sendRPC(rpc)
-
-	var rsp *hrpc.Result
-	switch r := pbmsg.(type) {
-	case *pb.GetResponse:
-		rsp = hrpc.ToLocalResult(r.Result)
-	case *pb.MutateResponse:
-		rsp = hrpc.ToLocalResult(r.Result)
-	}
-
-	return rsp, err
 }
 
 func (c *client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
