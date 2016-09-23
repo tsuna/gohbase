@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"sync"
 	"time"
 
@@ -106,34 +105,6 @@ type client struct {
 type call struct {
 	id uint32
 	hrpc.Call
-}
-
-// NewClient creates a new RegionClient.
-func NewClient(host string, port uint16, ctype ClientType,
-	queueSize int, flushInterval time.Duration) (hrpc.RegionClient, error) {
-	addr := fmt.Sprintf("%s:%d", host, port)
-	conn, err := net.Dial("tcp", addr) // TODO: DialTimeout
-	if err != nil {
-		return nil,
-			fmt.Errorf("failed to connect to the RegionServer at %s: %s", addr, err)
-	}
-	c := &client{
-		host:          host,
-		port:          port,
-		conn:          conn,
-		rpcs:          make(chan hrpc.Call, queueSize),
-		done:          make(chan struct{}),
-		sent:          make(map[uint32]hrpc.Call),
-		rpcQueueSize:  queueSize,
-		flushInterval: flushInterval,
-	}
-
-	if err := c.sendHello(ctype); err != nil {
-		return nil, err
-	}
-	go c.processRPCs() // Writer goroutine
-	go c.receiveRPCs() // Reader goroutine
-	return c, nil
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer

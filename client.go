@@ -57,11 +57,6 @@ const (
 
 type Option func(*client)
 
-type newRegResult struct {
-	Client hrpc.RegionClient
-	Err    error
-}
-
 // client -> region cache. Used to quickly look up all the
 // regioninfos that map to a specific client
 type clientRegionCache struct {
@@ -937,38 +932,30 @@ func (c *client) establishRegion(originalReg hrpc.RegionInfo, host string, port 
 			}
 			// Make this channel buffered so that if we time out we don't
 			// block the newRegion goroutine forever.
-			ch := make(chan newRegResult, 1)
 			var clientType region.ClientType
 			if c.clientType == standardClient {
 				clientType = region.RegionClient
 			} else {
 				clientType = region.MasterClient
 			}
-			go newRegionClient(ctx, ch, clientType, host, port, c.rpcQueueSize, c.flushInterval)
-
-			select {
-			case res := <-ch:
-				if res.Err == nil {
-					reg.SetClient(res.Client)
-					if c.clientType != adminClient && reg != c.metaRegionInfo {
-						// put will set region client so that as soon as we add
-						// it to the key->region mapping, concurrent readers are
-						// able to find the client
-						c.clients.put(res.Client, reg)
-						if reg != originalReg {
-							removed := c.regions.put(reg)
-							for _, r := range removed {
-								c.clients.del(r)
-							}
+			client, err := region.NewClient(ctx, host, port, clientType,
+				c.rpcQueueSize, c.flushInterval)
+			if err == nil {
+				reg.SetClient(client)
+				if c.clientType != adminClient && reg != c.metaRegionInfo {
+					// put will set region client so that as soon as we add
+					// it to the key->region mapping, concurrent readers are
+					// able to find the client
+					c.clients.put(client, reg)
+					if reg != originalReg {
+						removed := c.regions.put(reg)
+						for _, r := range removed {
+							c.clients.del(r)
 						}
 					}
-					originalReg.MarkAvailable()
-					return
-				} else {
-					err = res.Err
 				}
-			case <-ctx.Done():
-				err = ErrDeadline
+				originalReg.MarkAvailable()
+				return
 			}
 		}
 		if err != nil {
@@ -1007,20 +994,6 @@ func sleepAndIncreaseBackoff(ctx context.Context, backoff time.Duration) (time.D
 		return backoff * 2, nil
 	} else {
 		return backoff + 5000*time.Millisecond, nil
-	}
-}
-
-func newRegionClient(ctx context.Context, ret chan newRegResult, clientType region.ClientType,
-	host string, port uint16, queueSize int, queueTimeout time.Duration) {
-	c, err := region.NewClient(host, port, clientType, queueSize, queueTimeout)
-	select {
-	case ret <- newRegResult{c, err}:
-		// Hooray!
-	case <-ctx.Done():
-		// We timed out, too bad, nobody expects this client anymore, ditch it.
-		if err == nil {
-			c.Close()
-		}
 	}
 }
 

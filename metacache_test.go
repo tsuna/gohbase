@@ -13,6 +13,7 @@ import (
 
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/region"
+	"golang.org/x/net/context"
 )
 
 func TestMetaCache(t *testing.T) {
@@ -30,7 +31,7 @@ func TestMetaCache(t *testing.T) {
 		nil,
 		nil,
 	)
-	regClient, _ := region.NewClient("", 0, region.RegionClient, 0, 0)
+	regClient, _ := region.NewClient(context.Background(), "", 0, region.RegionClient, 0, 0)
 	client.regions.put(wholeTable)
 	client.clients.put(regClient, wholeTable)
 
