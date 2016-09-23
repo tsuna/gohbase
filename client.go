@@ -690,18 +690,17 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 		if reg.MarkUnavailable() {
 			go c.reestablishRegion(reg)
 		}
-		if reg != c.metaRegionInfo && reg != c.adminRegionInfo {
-			// The client won't be in the cache if this is the
-			// meta or admin region
+		if reg != c.adminRegionInfo {
+			// The client won't be in the clients cache if this is the admin region
 			c.clients.del(reg)
 		}
 		return c.waitOnRegion(rpc, reg)
 	case region.UnrecoverableError:
 		// If it was an unrecoverable error, the region client is
 		// considered dead.
-		if reg == c.metaRegionInfo || reg == c.adminRegionInfo {
-			// If this is the admin client or the meta table, mark the
-			// region as unavailable and start up a goroutine to
+		if reg == c.adminRegionInfo {
+			// If this is the admin client, mark the region
+			// as unavailable and start up a goroutine to
 			// reconnect if it wasn't already marked as such.
 			if reg.MarkUnavailable() {
 				go c.reestablishRegion(reg)
@@ -952,7 +951,7 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 			// set region client so that as soon as we mark it available,
 			// concurrent readers are able to find the client
 			reg.SetClient(client)
-			if reg != c.metaRegionInfo && reg != c.adminRegionInfo {
+			if c.clientType != adminClient {
 				c.clients.put(client, reg)
 			}
 			reg.MarkAvailable()
@@ -973,7 +972,7 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 
 func (c *client) establishRegionClient(reg hrpc.RegionInfo,
 	host string, port uint16) (hrpc.RegionClient, error) {
-	if reg != c.metaRegionInfo && reg != c.adminRegionInfo {
+	if c.clientType != adminClient {
 		// if rpc is not for hbasemaster, check if client for regionserver
 		// already exists
 		if client := c.clients.checkForClient(host, port); client != nil {
