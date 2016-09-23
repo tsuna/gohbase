@@ -745,7 +745,7 @@ func (c *client) findRegion(ctx context.Context, table, key []byte) (hrpc.Region
 		// Look up the region in the meta table.
 		// If it takes longer than regionLookupTimeout, fail so that we can sleep
 		locateCtx, cancel := context.WithTimeout(ctx, regionLookupTimeout)
-		reg, host, port, err = c.locateRegion(locateCtx, table, key)
+		reg, host, port, err = c.metaLookup(locateCtx, table, key)
 		cancel()
 		if err == nil {
 			break
@@ -825,8 +825,8 @@ func createRegionSearchKey(table, key []byte) []byte {
 	return metaKey
 }
 
-// Locates the region in which the given row key for the given table is.
-func (c *client) locateRegion(ctx context.Context,
+// metaLookup checks meta table for the region in which the given row key for the given table is.
+func (c *client) metaLookup(ctx context.Context,
 	table, key []byte) (hrpc.RegionInfo, string, uint16, error) {
 
 	metaKey := createRegionSearchKey(table, key)
@@ -834,29 +834,16 @@ func (c *client) locateRegion(ctx context.Context,
 	if err != nil {
 		return nil, "", 0, err
 	}
-	rpc.SetRegion(c.metaRegionInfo)
-	resp, err := c.sendRPC(rpc)
 
+	resp, err := c.Get(rpc)
 	if err != nil {
-		ch := c.metaRegionInfo.AvailabilityChan()
-		if ch != nil {
-			select {
-			case <-ch:
-				return c.locateRegion(ctx, table, key)
-			case <-rpc.Context().Done():
-				return nil, "", 0, ErrDeadline
-			}
-		} else {
-			return nil, "", 0, err
-		}
+		return nil, "", 0, err
 	}
-
-	metaRow := resp.(*pb.GetResponse)
-	if metaRow.Result == nil {
+	if len(resp.Cells) == 0 {
 		return nil, "", 0, TableNotFound
 	}
 
-	reg, host, port, err := region.ParseRegionInfo(metaRow)
+	reg, host, port, err := region.ParseRegionInfo(resp)
 	if err != nil {
 		return nil, "", 0, err
 	}
@@ -945,7 +932,7 @@ func (c *client) establishRegion(originalReg hrpc.RegionInfo, host string, port 
 		} else if reg == c.metaRegionInfo {
 			host, port, err = c.zkLookup(ctx, zk.Meta)
 		} else {
-			reg, host, port, err = c.locateRegion(ctx, originalReg.Table(),
+			reg, host, port, err = c.metaLookup(ctx, originalReg.Table(),
 				originalReg.StartKey())
 		}
 	}

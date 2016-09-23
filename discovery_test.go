@@ -9,7 +9,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/tsuna/gohbase/pb"
+	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/region"
 )
 
@@ -24,34 +24,33 @@ func TestRegionDiscovery(t *testing.T) {
 	// Inject a "test" table with a single region that covers the entire key
 	// space (both the start and stop keys are empty).
 	family := []byte("info")
-	metaRow := &pb.GetResponse{
-		Result: &pb.Result{Cell: []*pb.Cell{
-			&pb.Cell{
-				Row:       []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-				Family:    family,
-				Qualifier: []byte("regioninfo"),
-				Value: []byte("PBUF\b\xc4\xcd\xe9\x99\xe0)\x12\x0f\n\adefault\x12\x04test" +
-					"\x1a\x00\"\x00(\x000\x008\x00"),
-			},
-			&pb.Cell{
-				Row:       []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-				Family:    family,
-				Qualifier: []byte("seqnumDuringOpen"),
-				Value:     []byte("\x00\x00\x00\x00\x00\x00\x00\x02"),
-			},
-			&pb.Cell{
-				Row:       []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-				Family:    family,
-				Qualifier: []byte("server"),
-				Value:     []byte("localhost:50966"),
-			},
-			&pb.Cell{
-				Row:       []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-				Family:    family,
-				Qualifier: []byte("serverstartcode"),
-				Value:     []byte("\x00\x00\x01N\x02\x92R\xb1"),
-			},
-		}}}
+	metaRow := &hrpc.Result{Cells: []*hrpc.Cell{
+		&hrpc.Cell{
+			Row:       []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+			Family:    family,
+			Qualifier: []byte("regioninfo"),
+			Value: []byte("PBUF\b\xc4\xcd\xe9\x99\xe0)\x12\x0f\n\adefault\x12\x04test" +
+				"\x1a\x00\"\x00(\x000\x008\x00"),
+		},
+		&hrpc.Cell{
+			Row:       []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+			Family:    family,
+			Qualifier: []byte("seqnumDuringOpen"),
+			Value:     []byte("\x00\x00\x00\x00\x00\x00\x00\x02"),
+		},
+		&hrpc.Cell{
+			Row:       []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+			Family:    family,
+			Qualifier: []byte("server"),
+			Value:     []byte("localhost:50966"),
+		},
+		&hrpc.Cell{
+			Row:       []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+			Family:    family,
+			Qualifier: []byte("serverstartcode"),
+			Value:     []byte("\x00\x00\x01N\x02\x92R\xb1"),
+		},
+	}}
 
 	reg, _, _, err := region.ParseRegionInfo(metaRow)
 	if err != nil {

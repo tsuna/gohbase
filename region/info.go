@@ -51,7 +51,7 @@ func NewInfo(table, name, startKey, stopKey []byte) hrpc.RegionInfo {
 
 // infoFromCell parses a KeyValue from the meta table and creates the
 // corresponding Info object.
-func infoFromCell(cell *pb.Cell) (hrpc.RegionInfo, error) {
+func infoFromCell(cell *hrpc.Cell) (hrpc.RegionInfo, error) {
 	value := cell.Value
 	if len(value) == 0 {
 		return nil, fmt.Errorf("empty value in %q", cell)
@@ -79,12 +79,12 @@ func infoFromCell(cell *pb.Cell) (hrpc.RegionInfo, error) {
 
 // ParseRegionInfo parses the contents of a row from the meta table.
 // It's guaranteed to return a region info and a host/port OR return an error.
-func ParseRegionInfo(metaRow *pb.GetResponse) (hrpc.RegionInfo, string, uint16, error) {
+func ParseRegionInfo(metaRow *hrpc.Result) (hrpc.RegionInfo, string, uint16, error) {
 	var reg hrpc.RegionInfo
 	var host string
 	var port uint16
 
-	for _, cell := range metaRow.Result.Cell {
+	for _, cell := range metaRow.Cells {
 		switch string(cell.Qualifier) {
 		case "regioninfo":
 			var err error
@@ -120,11 +120,11 @@ func ParseRegionInfo(metaRow *pb.GetResponse) (hrpc.RegionInfo, string, uint16, 
 	if reg == nil {
 		// There was no region in the row in meta, this is really not
 		// expected.
-		err := fmt.Errorf("Meta seems to be broken, there was no region in %s",
+		err := fmt.Errorf("Meta seems to be broken, there was no region in %v",
 			metaRow)
 		return nil, "", 0, err
 	} else if port == 0 { // Either both `host' and `port' are set, or both aren't.
-		return nil, "", 0, fmt.Errorf("Meta doesn't have a server location in %s",
+		return nil, "", 0, fmt.Errorf("Meta doesn't have a server location in %v",
 			metaRow)
 	}
 

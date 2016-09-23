@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 )
 
@@ -20,7 +21,7 @@ func TestInfoFromMeta(t *testing.T) {
 	regionName := []byte("table,foo,1431921690563.53e41f94d5c3087af0d13259b8c4186d.")
 	buf := []byte("PBUF\010\303\217\274\251\326)\022\020\n\007default" +
 		"\022\005table\032\000\"\000(\0000\0008\000")
-	cell := &pb.Cell{
+	cell := &hrpc.Cell{
 		Row:       regionName,
 		Family:    []byte("info"),
 		Qualifier: []byte("regioninfo"),
