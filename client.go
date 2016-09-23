@@ -973,24 +973,21 @@ type zkResult struct {
 	err  error
 }
 
-// Asynchronously looks up the meta region or HMaster in ZooKeeper.
-func (c *client) zkLookup(ctx context.Context, res zk.ResourceName) (string, uint16, error) {
+// zkLookup asynchronously looks up the meta region or HMaster in ZooKeeper.
+func (c *client) zkLookup(ctx context.Context, resource zk.ResourceName) (string, uint16, error) {
 	// We make this a buffered channel so that if we stop waiting due to a
 	// timeout, we won't block the zkLookupSync() that we start in a
 	// separate goroutine.
 	reschan := make(chan zkResult, 1)
-	go c.zkLookupSync(res, reschan)
+	go func() {
+		host, port, err := c.zkClient.LocateResource(resource)
+		// This is guaranteed to never block as the channel is always buffered.
+		reschan <- zkResult{host, port, err}
+	}()
 	select {
 	case res := <-reschan:
 		return res.host, res.port, res.err
 	case <-ctx.Done():
 		return "", 0, ErrDeadline
 	}
-}
-
-// Synchronously looks up the meta region or HMaster in ZooKeeper.
-func (c *client) zkLookupSync(res zk.ResourceName, reschan chan<- zkResult) {
-	host, port, err := c.zkClient.LocateResource(res)
-	// This is guaranteed to never block as the channel is always buffered.
-	reschan <- zkResult{host, port, err}
 }
