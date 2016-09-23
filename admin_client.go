@@ -9,7 +9,7 @@ import (
 	"fmt"
 
 	"github.com/tsuna/gohbase/hrpc"
-	"github.com/tsuna/gohbase/pb"
+	"github.com/tsuna/gohbase/internal/pb"
 )
 
 // AdminClient to perform admistrative operations with HMaster

@@ -15,7 +15,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
-	"github.com/tsuna/gohbase/pb"
+	"github.com/tsuna/gohbase/internal/pb"
 )
 
 // info describes a region.

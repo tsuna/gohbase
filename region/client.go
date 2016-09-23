@@ -17,7 +17,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
-	"github.com/tsuna/gohbase/pb"
+	"github.com/tsuna/gohbase/internal/pb"
 )
 
 // ClientType is a type alias to represent the type of this region client

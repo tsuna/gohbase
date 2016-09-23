@@ -16,7 +16,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/samuel/go-zookeeper/zk"
-	"github.com/tsuna/gohbase/pb"
+	"github.com/tsuna/gohbase/internal/pb"
 )
 
 type logger struct{}

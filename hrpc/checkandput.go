@@ -10,7 +10,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/filter"
-	"github.com/tsuna/gohbase/pb"
+	"github.com/tsuna/gohbase/internal/pb"
 )
 
 // CheckAndPut performs a provided Put operation if the value specified
