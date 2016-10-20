@@ -35,7 +35,9 @@ type ResourceName string
 
 const (
 	sessionTimeout = 30
+)
 
+var (
 	// Meta is a ResourceName that indicates that the location of the Meta
 	// table is what will be fetched
 	Meta = ResourceName("/hbase/meta-region-server")
@@ -45,7 +47,7 @@ const (
 	Master = ResourceName("/hbase/master")
 )
 
-// Client is an interface of client that retrieves meta infomation from zookeeper
+// Client is an interface of client that retrieves meta information from zookeeper
 type Client interface {
 	LocateResource(ResourceName) (string, uint16, error)
 }

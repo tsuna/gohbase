@@ -57,6 +57,13 @@ const (
 
 type Option func(*client)
 
+func SetZnodeParentOption(znodeParent string) Option {
+	return func(*client) {
+		zk.Meta = zk.ResourceName(znodeParent + "/meta-region-server")
+		zk.Master = zk.ResourceName(znodeParent + "/master")
+	}
+}
+
 type newRegResult struct {
 	Client hrpc.RegionClient
 	Err    error
