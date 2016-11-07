@@ -331,7 +331,7 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 				originalReg.Table(), originalReg.StartKey())
 			if err == TableNotFound {
 				// region doesn't exist, delete it from caches
-				c.regions.del(originalReg.StartKey())
+				c.regions.del(originalReg.Name())
 				c.clients.del(originalReg)
 				originalReg.MarkAvailable()
 				return
@@ -344,7 +344,7 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 				// and add this one unless someone else has already done so
 				c.regionsLock.Lock()
 				// delete original since we have a new one
-				c.regions.del(originalReg.StartKey())
+				c.regions.del(originalReg.Name())
 
 				// Check that the region wasn't added to
 				// the cache while we were looking it up.
