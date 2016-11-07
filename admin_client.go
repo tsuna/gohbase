@@ -10,6 +10,7 @@ import (
 
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/internal/pb"
+	"golang.org/x/net/context"
 )
 
 // AdminClient to perform admistrative operations with HMaster
@@ -81,4 +82,31 @@ func (c *client) DisableTable(t *hrpc.DisableTable) error {
 	}
 
 	return c.checkProcedureWithBackoff(t.Context(), r.GetProcId())
+}
+
+func (c *client) checkProcedureWithBackoff(ctx context.Context, procID uint64) error {
+	backoff := backoffStart
+	for {
+		pbmsg, err := c.sendRPC(hrpc.NewGetProcedureState(ctx, procID))
+		if err != nil {
+			return err
+		}
+
+		statusRes, ok := pbmsg.(*pb.GetProcedureResultResponse)
+		if !ok {
+			return fmt.Errorf("sendRPC returned not a GetProcedureResultResponse")
+		}
+
+		switch statusRes.GetState() {
+		case pb.GetProcedureResultResponse_NOT_FOUND:
+			return fmt.Errorf("Procedure not found")
+		case pb.GetProcedureResultResponse_FINISHED:
+			return nil
+		default:
+			backoff, err = sleepAndIncreaseBackoff(ctx, backoff)
+			if err != nil {
+				return err
+			}
+		}
+	}
 }

@@ -18,7 +18,6 @@ import (
 	"github.com/tsuna/gohbase/internal/pb"
 	"github.com/tsuna/gohbase/internal/zk"
 	"github.com/tsuna/gohbase/region"
-	"golang.org/x/net/context"
 )
 
 const (
@@ -291,35 +290,4 @@ func (c *client) CheckAndPut(p *hrpc.Mutate, family string,
 	}
 
 	return r.GetProcessed(), nil
-}
-
-func (c *client) checkProcedureWithBackoff(pContext context.Context, procID uint64) error {
-	backoff := backoffStart
-	ctx, cancel := context.WithTimeout(pContext, 30*time.Second)
-	defer cancel()
-
-	for {
-		req := hrpc.NewGetProcedureState(ctx, procID)
-		pbmsg, err := c.sendRPC(req)
-		if err != nil {
-			return err
-		}
-
-		statusRes, ok := pbmsg.(*pb.GetProcedureResultResponse)
-		if !ok {
-			return fmt.Errorf("sendRPC returned not a GetProcedureResultResponse")
-		}
-
-		switch statusRes.GetState() {
-		case pb.GetProcedureResultResponse_NOT_FOUND:
-			return fmt.Errorf("Procedure not found")
-		case pb.GetProcedureResultResponse_FINISHED:
-			return nil
-		default:
-			backoff, err = sleepAndIncreaseBackoff(ctx, backoff)
-			if err != nil {
-				return err
-			}
-		}
-	}
 }
