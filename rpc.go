@@ -31,6 +31,9 @@ var (
 	// ErrDeadline is returned when the deadline of a request has been exceeded
 	ErrDeadline = errors.New("deadline exceeded")
 
+	// ErrRegionUnavailable is returned when sending rpc to a region that is unavailable
+	ErrRegionUnavailable = errors.New("region unavailable")
+
 	// TableNotFound is returned when attempting to access a table that
 	// doesn't exist on this cluster.
 	TableNotFound = errors.New("table not found")
@@ -49,29 +52,46 @@ func (c *client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 	// Check the cache for a region that can handle this request
 	var err error
 
-	// block in case someone is updating regions.
-	// for example someone is replacing a region with a new one,
-	// we want to wait for that to finish so that we don't do
-	// unnecessary region lookups in case that's our region.
-	// TODO: is this bad?? We will unnecessarily slow down rpcs that have
-	// regions in cache every time we add a new region,
-	// so maybe it's fine to fail and take longer here
-	c.regionsLock.Lock()
-	reg := c.getRegionFromCache(rpc.Table(), rpc.Key())
-	c.regionsLock.Unlock()
-	if reg == nil {
-		reg, err = c.findRegion(rpc.Context(), rpc.Table(), rpc.Key())
-		if err != nil {
-			return nil, err
+	for {
+		// block in case someone is updating regions.
+		// for example someone is replacing a region with a new one,
+		// we want to wait for that to finish so that we don't do
+		// unnecessary region lookups in case that's our region.
+		// TODO: is this bad?? We will unnecessarily slow down rpcs that have
+		// regions in cache every time we add a new region,
+		// so maybe it's fine to fail and take longer here
+		c.regionsLock.Lock()
+		reg := c.getRegionFromCache(rpc.Table(), rpc.Key())
+		c.regionsLock.Unlock()
+		if reg == nil {
+			reg, err = c.findRegion(rpc.Context(), rpc.Table(), rpc.Key())
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		msg, err := c.sendRPCToRegion(rpc, reg)
+		switch err {
+		case ErrRegionUnavailable:
+			if ch := reg.AvailabilityChan(); ch != nil {
+				// The region is unavailable. Wait for it to become available,
+				// a new region or for the deadline to be exceeded.
+				select {
+				case <-rpc.Context().Done():
+					return nil, ErrDeadline
+				case <-ch:
+				}
+			}
+		default:
+			return msg, err
 		}
 	}
-	return c.sendRPCToRegion(rpc, reg)
 }
 
 func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Message, error) {
-	// check if the region is marked as available
+
 	if reg.IsUnavailable() {
-		return c.waitOnRegion(rpc, reg)
+		return nil, ErrRegionUnavailable
 	}
 
 	rpc.SetRegion(reg)
@@ -91,8 +111,7 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 			// unavailable, start a goroutine to reestablish a connection
 			go c.reestablishRegion(reg)
 		}
-		// Block until the region becomes available.
-		return c.waitOnRegion(rpc, reg)
+		return nil, ErrRegionUnavailable
 	}
 
 	// Wait for the response
@@ -118,7 +137,7 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 			// The client won't be in the clients cache if this is the admin region
 			c.clients.del(reg)
 		}
-		return c.waitOnRegion(rpc, reg)
+		return nil, ErrRegionUnavailable
 	case region.UnrecoverableError:
 		// If it was an unrecoverable error, the region client is
 		// considered dead.
@@ -141,28 +160,11 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 
 		// Fall through to the case of the region being unavailable,
 		// which will result in blocking until it's available again.
-		return c.waitOnRegion(rpc, reg)
+		return nil, ErrRegionUnavailable
 	default:
 		// RPC was successfully sent, or an unknown type of error
 		// occurred. In either case, return the results.
 		return res.Msg, res.Error
-	}
-}
-
-func (c *client) waitOnRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Message, error) {
-	ch := reg.AvailabilityChan()
-	if ch == nil {
-		// WTF, this region is available? Maybe it was marked as such
-		// since waitOnRegion was called.
-		return c.sendRPC(rpc)
-	}
-	// The region is unavailable. Wait for it to become available,
-	// or for the deadline to be exceeded.
-	select {
-	case <-ch:
-		return c.sendRPC(rpc)
-	case <-rpc.Context().Done():
-		return nil, ErrDeadline
 	}
 }
 
