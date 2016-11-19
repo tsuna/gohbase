@@ -8,8 +8,11 @@ package gohbase
 import (
 	"fmt"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/internal/pb"
+	"github.com/tsuna/gohbase/internal/zk"
+	"github.com/tsuna/gohbase/region"
 	"golang.org/x/net/context"
 )
 
@@ -23,8 +26,24 @@ type AdminClient interface {
 
 // NewAdminClient creates an admin HBase client.
 func NewAdminClient(zkquorum string, options ...Option) AdminClient {
-	c := newClient(zkquorum, options...)
-	c.clientType = adminClient
+	return newAdminClient(zkquorum, options...)
+}
+
+func newAdminClient(zkquorum string, options ...Option) AdminClient {
+	log.WithFields(log.Fields{
+		"Host": zkquorum,
+	}).Debug("Creating new admin client.")
+	c := &client{
+		clientType:    adminClient,
+		rpcQueueSize:  defaultRPCQueueSize,
+		flushInterval: defaultFlushInterval,
+		// empty region in order to be able to set client to it
+		adminRegionInfo: region.NewInfo(nil, nil, nil, nil),
+		zkClient:        zk.NewClient(zkquorum),
+	}
+	for _, option := range options {
+		option(c)
+	}
 	return c
 }
 

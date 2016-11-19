@@ -23,6 +23,8 @@ import (
 const (
 	standardClient = iota
 	adminClient
+	defaultRPCQueueSize  = 100
+	defaultFlushInterval = 20 * time.Millisecond
 )
 
 // Client a regular HBase client
@@ -82,16 +84,11 @@ func newClient(zkquorum string, options ...Option) *client {
 		clients: clientRegionCache{
 			regions: make(map[hrpc.RegionClient][]hrpc.RegionInfo),
 		},
-		rpcQueueSize:  100,
-		flushInterval: 20 * time.Millisecond,
+		rpcQueueSize:  defaultRPCQueueSize,
+		flushInterval: defaultFlushInterval,
 		metaRegionInfo: region.NewInfo(
 			[]byte("hbase:meta"),
 			[]byte("hbase:meta,,1"),
-			nil,
-			nil),
-		adminRegionInfo: region.NewInfo(
-			nil,
-			nil,
 			nil,
 			nil),
 		zkClient: zk.NewClient(zkquorum),
@@ -121,11 +118,14 @@ func FlushInterval(interval time.Duration) Option {
 // Close closes connections to hbase master and regionservers
 func (c *client) Close() {
 	// TODO: do we need a lock for metaRegionInfo and adminRegionInfo
-	if mc := c.metaRegionInfo.Client(); mc != nil {
-		mc.Close()
-	}
-	if ac := c.adminRegionInfo.Client(); ac != nil {
-		ac.Close()
+	if c.clientType == adminClient {
+		if ac := c.adminRegionInfo.Client(); ac != nil {
+			ac.Close()
+		}
+	} else {
+		if mc := c.metaRegionInfo.Client(); mc != nil {
+			mc.Close()
+		}
 	}
 	c.clients.closeAll()
 }
