@@ -89,7 +89,6 @@ func (c *client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 }
 
 func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Message, error) {
-
 	if reg.IsUnavailable() {
 		return nil, ErrRegionUnavailable
 	}
@@ -97,13 +96,8 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 	rpc.SetRegion(reg)
 
 	// Queue the RPC to be sent to the region
-	var err error
-	if client := reg.Client(); client != nil {
-		err = client.QueueRPC(rpc)
-	} else {
-		err = errors.New("no client for this region")
-	}
-	if err != nil {
+	client := reg.Client()
+	if client == nil {
 		// There was an error queueing the RPC.
 		// Mark the region as unavailable.
 		if reg.MarkUnavailable() {
@@ -113,6 +107,8 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 		}
 		return nil, ErrRegionUnavailable
 	}
+
+	client.QueueRPC(rpc)
 
 	// Wait for the response
 	var res hrpc.RPCResult

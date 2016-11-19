@@ -113,7 +113,7 @@ func TestFail(t *testing.T) {
 		rpcs: make(chan hrpc.Call),
 		sent: make(map[uint32]hrpc.Call),
 	}
-	expectedErr := errors.New("Region client (:0) error: oooups")
+	expectedErr := errors.New("oooups")
 
 	//  populate sent map, and test if it sends response err for everything
 	var i uint32
@@ -146,7 +146,7 @@ func TestFail(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func() {
-			c.fail(errors.New("oooups"))
+			c.fail(expectedErr)
 			wg.Done()
 		}()
 	}
@@ -163,7 +163,10 @@ func TestFail(t *testing.T) {
 	select {
 	case <-time.After(2 * time.Second):
 		t.Errorf("done hasn't been closed")
-	case <-c.done:
+	case _, more := <-c.done:
+		if more {
+			t.Error("expected done to be closed")
+		}
 	}
 
 	// check if rpcs channel is closed
@@ -171,10 +174,12 @@ func TestFail(t *testing.T) {
 	select {
 	case <-time.After(2 * time.Second):
 		t.Errorf("rpcs hasn't been closed")
-	case <-c.rpcs:
+	case _, more := <-c.rpcs:
+		if more {
+			t.Error("expected rpcs to be closed")
+		}
 	}
 
-	// check that the error has been set
 	if diff := test.Diff(expectedErr, c.err); diff != "" {
 		t.Errorf("Expected: %#v\nReceived: %#v\nDiff:%s",
 			expectedErr, c.err, diff)
@@ -242,10 +247,7 @@ func TestQueueRPC(t *testing.T) {
 	// queue calls in parallel
 	for _, call := range calls {
 		go func(call hrpc.Call) {
-			err := c.QueueRPC(call)
-			if err != nil {
-				t.Errorf("Didn't expect an error: %s", err)
-			}
+			c.QueueRPC(call)
 		}(call)
 	}
 
@@ -261,18 +263,29 @@ func TestQueueRPC(t *testing.T) {
 	case <-done:
 	}
 
+	var wg sync.WaitGroup
 	// now we fail the regionserver, and try to queue stuff
 	mockConn.EXPECT().Close().Times(1)
 	c.fail(errors.New("ooups"))
 	for i := 0; i < 100; i++ {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
+			result := make(chan hrpc.RPCResult, 1)
 			mockCall := mock.NewMockCall(ctrl)
-			err := c.QueueRPC(mockCall)
-			expErr := errors.New("Region client (:0) error: ooups")
-			if diff := test.Diff(expErr, err); diff != "" {
-				t.Errorf("Expected: %#v\nReceived: %#v\nDiff:%s",
-					expErr, err, diff)
+			mockCall.EXPECT().ResultChan().Return(result).Times(1)
+			c.QueueRPC(mockCall)
+			r := <-result
+			err, ok := r.Error.(UnrecoverableError)
+			if !ok {
+				t.Errorf("Expected UnrecoverableError error")
+				return
+			}
+			if diff := test.Diff(ErrClientDead.error, err.error); diff != "" {
+				t.Errorf("Expected: %s\nReceived: %s\nDiff:%s",
+					ErrClientDead.error, err.error, diff)
 			}
 		}()
 	}
+	wg.Wait()
 }

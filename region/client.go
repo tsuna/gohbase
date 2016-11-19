@@ -32,8 +32,9 @@ var (
 	// request that we didn't send
 	ErrMissingCallID = errors.New("Got a response with a nonsensical call ID")
 
-	// ErrClientClosed is returned to rpcs when Close() is called
-	ErrClientClosed = errors.New("Client closed")
+	// ErrClientDead is returned to rpcs when Close() is called or when client
+	// died because of failed send or receive
+	ErrClientDead = UnrecoverableError{errors.New("Client is dead")}
 
 	// javaRetryableExceptions is a map where all Java exceptions that signify
 	// the RPC should be sent again are listed (as keys). If a Java exception
@@ -109,23 +110,21 @@ type call struct {
 
 // QueueRPC will add an rpc call to the queue for processing by the writer
 // goroutine
-func (c *client) QueueRPC(rpc hrpc.Call) error {
+func (c *client) QueueRPC(rpc hrpc.Call) {
 	c.errM.RLock()
-	err := c.err
-	if err != nil {
-		c.errM.RUnlock()
-		return err
+	if c.err != nil {
+		rpc.ResultChan() <- hrpc.RPCResult{Error: ErrClientDead}
+	} else {
+		c.rpcs <- rpc
 	}
-	c.rpcs <- rpc
 	c.errM.RUnlock()
-	return nil
 }
 
 // Close asks this region.Client to close its connection to the RegionServer.
 // All queued and outstanding RPCs, if any, will be failed as if a connection
 // error had happened.
 func (c *client) Close() {
-	c.fail(errors.New("Client closed"))
+	c.fail(ErrClientDead)
 }
 
 // Host returns the host that this client talks to
@@ -144,15 +143,13 @@ func (c *client) fail(err error) {
 		c.errM.Unlock()
 		return
 	}
-	err = fmt.Errorf("Region client (%s:%d) error: %s", c.host, c.port, err)
 	c.err = err
 	c.errM.Unlock()
-	log.Errorln(err)
+	log.Errorf("Region client (%s:%d) error: %s", c.host, c.port, err)
 
 	// tell goroutines to stop
 	close(c.done)
-	// close rpcs channel for consistency and to ensure nobody sends to
-	// it by mistake
+	// stop processing queued rpcs
 	close(c.rpcs)
 	// we close connection to the regionserver,
 	// to let it know that we can't receive anymore
@@ -178,8 +175,6 @@ func (c *client) processRPCs() {
 	defer ticker.Stop()
 	for {
 		select {
-		case <-c.done:
-			return
 		case <-ticker.C:
 			go c.sendBatch(batch)
 			batch = make([]*call, 0, c.rpcQueueSize)
@@ -209,19 +204,25 @@ func (c *client) sendBatch(rpcs []*call) {
 	for _, rpc := range rpcs {
 		select {
 		case <-c.done:
+			// An unrecoverable error has occured,
+			// region client has been stopped,
+			// don't send rpcs
 			return
-		case _, ok := <-rpc.Context().Done():
+		case <-rpc.Context().Done():
 			// If the deadline has been exceeded, don't bother sending the
 			// request. The function that placed the RPC in our queue should
 			// stop waiting for a result and return an error.
-			if !ok {
-				continue
-			}
 		default:
 			err := c.send(rpc)
 			if _, ok := err.(UnrecoverableError); ok {
 				c.fail(err)
 				return
+			} else if err != nil {
+				// Unexpected error, return to caller
+				c.sentM.Lock()
+				delete(c.sent, rpc.id)
+				c.sentM.Unlock()
+				rpc.ResultChan() <- hrpc.RPCResult{Error: err}
 			}
 		}
 	}
@@ -233,9 +234,13 @@ func (c *client) receiveRPCs() {
 		case <-c.done:
 			return
 		default:
-			if err := c.receive(); err != nil {
+			err := c.receive()
+			if _, ok := err.(UnrecoverableError); ok {
 				c.fail(err)
 				return
+			} else if err != nil {
+				log.Errorf("Region client (%s:%d) error: Failed receiving rpc response: %s",
+					c.host, c.port, err)
 			}
 		}
 	}
@@ -245,13 +250,13 @@ func (c *client) receive() error {
 	var sz [4]byte
 	err := c.readFully(sz[:])
 	if err != nil {
-		return err
+		return UnrecoverableError{err}
 	}
 
 	buf := make([]byte, binary.BigEndian.Uint32(sz[:]))
 	err = c.readFully(buf)
 	if err != nil {
-		return err
+		return UnrecoverableError{err}
 	}
 
 	resp := &pb.ResponseHeader{}
@@ -260,8 +265,7 @@ func (c *client) receive() error {
 	err = proto.UnmarshalMerge(buf[:respLen], resp)
 	buf = buf[respLen:]
 	if err != nil {
-		// Failed to deserialize the response header
-		return err
+		return fmt.Errorf("Failed to deserialize the response header: %s", err)
 	}
 	if resp.CallId == nil {
 		// Response doesn't have a call ID
@@ -277,6 +281,7 @@ func (c *client) receive() error {
 	delete(c.sent, *resp.CallId)
 	c.sentM.Unlock()
 
+	// Here we know for sure that we got a response for rpc we asked
 	var rpcResp proto.Message
 	if resp.Exception == nil {
 		respLen, nb = proto.DecodeVarint(buf)
@@ -314,7 +319,7 @@ func (c *client) write(buf []byte) error {
 func (c *client) readFully(buf []byte) error {
 	_, err := io.ReadFull(c.conn, buf)
 	if err != nil {
-		return fmt.Errorf("Failed to read from the RS: %s", err)
+		return fmt.Errorf("Failed to read: %s", err)
 	}
 	return nil
 }
