@@ -44,8 +44,6 @@ type Option func(*client)
 type client struct {
 	clientType int
 
-	zkquorum string
-
 	regions keyRegionCache
 
 	// TODO: document what this protects.
@@ -84,7 +82,6 @@ func newClient(zkquorum string, options ...Option) *client {
 		clients: clientRegionCache{
 			regions: make(map[hrpc.RegionClient][]hrpc.RegionInfo),
 		},
-		zkquorum:      zkquorum,
 		rpcQueueSize:  100,
 		flushInterval: 20 * time.Millisecond,
 		metaRegionInfo: region.NewInfo(
