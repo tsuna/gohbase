@@ -408,3 +408,43 @@ func TestUnrecoverableErrorRead(t *testing.T) {
 			expErr, err.error, diff)
 	}
 }
+
+func TestUnexpectedSendError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	queueSize := 1
+	flushInterval := 10 * time.Millisecond
+	mockConn := mock.NewMockReadWriteCloser(ctrl)
+	c := &client{
+		conn:          mockConn,
+		rpcs:          make(chan hrpc.Call, queueSize),
+		done:          make(chan struct{}),
+		sent:          make(map[uint32]hrpc.Call),
+		rpcQueueSize:  queueSize,
+		flushInterval: flushInterval,
+	}
+	go c.processRPCs()
+	// define rpcs behaviour
+	mockCall := mock.NewMockCall(ctrl)
+	mockCall.EXPECT().Name().Return("lol").Times(1)
+	err := errors.New("Serialize error")
+	mockCall.EXPECT().Serialize().Return(nil, err).Times(1)
+	mockCall.EXPECT().Context().Return(context.Background()).Times(1)
+	result := make(chan hrpc.RPCResult, 1)
+	mockCall.EXPECT().ResultChan().Return(result).Times(1)
+
+	c.QueueRPC(mockCall)
+	r := <-result
+	err = fmt.Errorf("Failed to serialize RPC: %v", err)
+	if diff := test.Diff(err, r.Error); diff != "" {
+		t.Errorf("Expected: %s\nReceived: %s\nDiff:%s",
+			err, r.Error, diff)
+	}
+	if len(c.sent) != 0 {
+		t.Errorf("Expected all awaiting rpcs to be processed, %d left", len(c.sent))
+	}
+	// stop the go routine
+	mockConn.EXPECT().Close()
+	c.Close()
+}
