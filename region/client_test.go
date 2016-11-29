@@ -115,29 +115,6 @@ func TestFail(t *testing.T) {
 	}
 	expectedErr := errors.New("oooups")
 
-	//  populate sent map, and test if it sends response err for everything
-	var i uint32
-	var wgResults sync.WaitGroup
-	for i = 0; i < 100; i++ {
-		mockCall := mock.NewMockCall(ctrl)
-		ch := make(chan hrpc.RPCResult)
-		mockCall.EXPECT().ResultChan().Return(ch).Times(1)
-		c.sent[i] = mockCall
-		wgResults.Add(1)
-		go func() {
-			select {
-			case <-time.After(2 * time.Second):
-				t.Errorf("result hasn't been received")
-			case r := <-ch:
-				if diff := test.Diff(expectedErr, r.Error); diff != "" {
-					t.Errorf("Expected: %#v\nReceived: %#v\nDiff:%s",
-						expectedErr, r.Error, diff)
-				}
-			}
-			wgResults.Done()
-		}()
-	}
-
 	// check that connection Close is called only once
 	mockConn.EXPECT().Close().Times(1)
 
@@ -151,12 +128,6 @@ func TestFail(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-
-	wgResults.Wait()
-	// check if map is empty
-	if len(c.sent) != 0 {
-		t.Errorf("Sent map length is %d, expected 0", len(c.sent))
-	}
 
 	// check if done channel is closed to notify goroutines to stop
 	// if close(c.done) is called more than once, it would panic
@@ -206,6 +177,57 @@ func newRPCMatcher(payload string) gomock.Matcher {
 	return rpcMatcher{payload: payload}
 }
 
+func TestBufferedRPCsFail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	queueSize := 100
+	flushInterval := 1000 * time.Second
+	mockConn := mock.NewMockReadWriteCloser(ctrl)
+	mockConn.EXPECT().Close().Times(1)
+	c := &client{
+		conn:          mockConn,
+		rpcs:          make(chan hrpc.Call, queueSize),
+		done:          make(chan struct{}),
+		sent:          make(map[uint32]hrpc.Call),
+		rpcQueueSize:  queueSize,
+		flushInterval: flushInterval,
+	}
+
+	// define rpcs behaviour
+	var wgWrites sync.WaitGroup
+	// we send less calls then queueSize so that sendBatch isn't triggered
+	calls := make([]hrpc.Call, queueSize-1)
+	for i := range calls {
+		wgWrites.Add(1)
+		mockCall := mock.NewMockCall(ctrl)
+		mockCall.EXPECT().ResultChan().Return(make(chan hrpc.RPCResult, 1)).Times(1)
+		calls[i] = mockCall
+	}
+
+	// queue calls
+	for _, call := range calls {
+		c.QueueRPC(call)
+	}
+	// process rpcs and close client in the middle of it to make sure that
+	// all queued up rpcs are processed eventually
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		c.processRPCs()
+		wg.Done()
+	}()
+	c.Close()
+	wg.Wait()
+	if len(c.rpcs) != 0 {
+		t.Errorf("Expected all buffered rpcs to be processed, %d left", len(c.rpcs))
+	}
+
+	if len(c.sent) != 0 {
+		t.Errorf("Expected all awaiting rpcs to be processed, %d left", len(c.sent))
+	}
+}
+
 func TestQueueRPC(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -221,7 +243,12 @@ func TestQueueRPC(t *testing.T) {
 		rpcQueueSize:  queueSize,
 		flushInterval: flushInterval,
 	}
-	go c.processRPCs() // Writer goroutine
+	var wgProcessRPCs sync.WaitGroup
+	wgProcessRPCs.Add(1)
+	go func() {
+		c.processRPCs() // Writer goroutine
+		wgProcessRPCs.Done()
+	}()
 
 	// define rpcs behaviour
 	var wgWrites sync.WaitGroup
@@ -288,4 +315,5 @@ func TestQueueRPC(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+	wgProcessRPCs.Wait()
 }

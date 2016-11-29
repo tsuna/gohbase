@@ -154,15 +154,19 @@ func (c *client) fail(err error) {
 	// we close connection to the regionserver,
 	// to let it know that we can't receive anymore
 	c.conn.Close()
+}
 
-	// fail queued rpcs
+func (c *client) failAwaitingRPCs() {
+	c.errM.Lock()
+	res := hrpc.RPCResult{Error: c.err}
+	c.errM.Unlock()
+	// channel is closed, clean up awaiting rpcs
 	var sent map[uint32]hrpc.Call
 	c.sentM.Lock()
 	sent = c.sent
 	c.sent = make(map[uint32]hrpc.Call)
 	c.sentM.Unlock()
-	// send error to rpcs
-	res := hrpc.RPCResult{Error: err}
+	// send error to awaiting rpcs
 	for _, rpc := range sent {
 		rpc.ResultChan() <- res
 	}
@@ -180,6 +184,11 @@ func (c *client) processRPCs() {
 			batch = make([]*call, 0, c.rpcQueueSize)
 		case rpc, ok := <-c.rpcs:
 			if !ok {
+				// the channel is now closed because
+				// an error happened and we recorded
+				// all of the buffered rpcs,
+				// now we can fail them
+				c.failAwaitingRPCs()
 				return
 			}
 			currID++
@@ -193,7 +202,11 @@ func (c *client) processRPCs() {
 				Call: rpc,
 			})
 			if len(batch) == c.rpcQueueSize {
+				// TODO: is it bad if we block here instead?
+				// it would cause QueueRPC to block until this is
+				// processed in case c.rpc channel is full (which is what we want?)
 				go c.sendBatch(batch)
+				// TODO: optimize memory usage, reuse batch slice
 				batch = make([]*call, 0, c.rpcQueueSize)
 			}
 		}
