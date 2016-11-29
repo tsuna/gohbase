@@ -317,3 +317,94 @@ func TestQueueRPC(t *testing.T) {
 	wg.Wait()
 	wgProcessRPCs.Wait()
 }
+
+func TestUnrecoverableErrorWrite(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	queueSize := 1
+	flushInterval := 10 * time.Millisecond
+	mockConn := mock.NewMockReadWriteCloser(ctrl)
+	c := &client{
+		conn:          mockConn,
+		rpcs:          make(chan hrpc.Call, queueSize),
+		done:          make(chan struct{}),
+		sent:          make(map[uint32]hrpc.Call),
+		rpcQueueSize:  queueSize,
+		flushInterval: flushInterval,
+	}
+	// define rpcs behaviour
+	mockCall := mock.NewMockCall(ctrl)
+	mockCall.EXPECT().Name().Return("lol").Times(1)
+	payload := "rpc"
+	mockCall.EXPECT().Serialize().Return([]byte(payload), nil).Times(1)
+	mockCall.EXPECT().Context().Return(context.Background()).Times(1)
+	result := make(chan hrpc.RPCResult, 1)
+	mockCall.EXPECT().ResultChan().Return(result).Times(1)
+	// we expect that it eventually writes to connection
+	expErr := errors.New("Write failure")
+	mockConn.EXPECT().Write(newRPCMatcher(payload)).Times(1).Return(0, expErr)
+	mockConn.EXPECT().Close()
+
+	c.QueueRPC(mockCall)
+	c.processRPCs()
+	r := <-result
+	err, ok := r.Error.(UnrecoverableError)
+	if !ok {
+		t.Errorf("Expected UnrecoverableError error")
+	}
+	if diff := test.Diff(expErr, err.error); diff != "" {
+		t.Errorf("Expected: %s\nReceived: %s\nDiff:%s",
+			expErr, err.error, diff)
+	}
+	if len(c.sent) != 0 {
+		t.Errorf("Expected all awaiting rpcs to be processed, %d left", len(c.sent))
+	}
+}
+
+func TestUnrecoverableErrorRead(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	queueSize := 1
+	flushInterval := 10 * time.Millisecond
+	mockConn := mock.NewMockReadWriteCloser(ctrl)
+	c := &client{
+		conn:          mockConn,
+		rpcs:          make(chan hrpc.Call, queueSize),
+		done:          make(chan struct{}),
+		sent:          make(map[uint32]hrpc.Call),
+		rpcQueueSize:  queueSize,
+		flushInterval: flushInterval,
+	}
+	// define rpcs behavior
+	mockCall := mock.NewMockCall(ctrl)
+	result := make(chan hrpc.RPCResult, 1)
+	mockCall.EXPECT().ResultChan().Return(result).Times(1)
+	mockConn.EXPECT().Read([]byte{0, 0, 0, 0}).Return(0, errors.New("Read failure"))
+	mockConn.EXPECT().Close()
+
+	// pretend we already unqueued and sent the rpc
+	c.sent[1] = mockCall
+	// now try receiving result, should call fail
+	c.receiveRPCs()
+	_, more := <-c.done
+	if more {
+		t.Error("expected done to be closed")
+	}
+	// finish reading from c.rpc to clean up the c.sent map
+	c.processRPCs()
+	if len(c.sent) != 0 {
+		t.Errorf("Expected all awaiting rpcs to be processed, %d left", len(c.sent))
+	}
+	r := <-result
+	err, ok := r.Error.(UnrecoverableError)
+	if !ok {
+		t.Errorf("Expected UnrecoverableError error")
+	}
+	expErr := errors.New("Failed to read: Read failure")
+	if diff := test.Diff(expErr, err.error); diff != "" {
+		t.Errorf("Expected: %s\nReceived: %s\nDiff:%s",
+			expErr, err.error, diff)
+	}
+}
