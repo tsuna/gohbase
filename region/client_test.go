@@ -20,8 +20,6 @@ import (
 	"golang.org/x/net/context"
 )
 
-var ctrl *gomock.Controller
-
 func TestErrors(t *testing.T) {
 	ue := UnrecoverableError{fmt.Errorf("oops")}
 	if ue.Error() != "oops" {
@@ -447,4 +445,54 @@ func TestUnexpectedSendError(t *testing.T) {
 	// stop the go routine
 	mockConn.EXPECT().Close()
 	c.Close()
+}
+
+func TestSendBatch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	queueSize := 1
+	flushInterval := 10 * time.Millisecond
+	mockConn := mock.NewMockReadWriteCloser(ctrl)
+	c := &client{
+		conn:          mockConn,
+		rpcs:          make(chan hrpc.Call, queueSize),
+		done:          make(chan struct{}),
+		sent:          make(map[uint32]hrpc.Call),
+		rpcQueueSize:  queueSize,
+		flushInterval: flushInterval,
+	}
+	mockConn.EXPECT().Close()
+
+	batch := make([]*call, 9)
+	ctx := context.Background()
+	canceledCtx, cancel := context.WithCancel(ctx)
+	cancel()
+	for i := range batch {
+		mockCall := mock.NewMockCall(ctrl)
+		if i < 3 {
+			// we expect that these rpc are going to be ignored
+			mockCall.EXPECT().Context().Return(canceledCtx).Times(1)
+		} else if i < 6 {
+			// we expect rpcs 3-5 to be written
+			mockCall.EXPECT().Name().Return("lol").Times(1)
+			payload := fmt.Sprintf("rpc_%d", i)
+			mockCall.EXPECT().Serialize().Return([]byte(payload), nil).Times(1)
+			mockCall.EXPECT().Context().Return(ctx).Times(1)
+			// we expect that it eventually writes to connection
+			i := i
+			mockConn.EXPECT().Write(newRPCMatcher(payload)).Times(1).Return(
+				15+len(payload), nil).Do(func(buf []byte) {
+				if i == 5 {
+					// we close on 6th rpc to check if sendBatch stop appropriately
+					c.Close()
+				}
+			})
+		} else if i == 6 {
+			// last loop before return
+			mockCall.EXPECT().Context().Return(ctx).Times(1)
+		}
+		// we expect the rest to be not even processed
+		batch[i] = &call{id: uint32(i), Call: mockCall}
+	}
+	c.sendBatch(batch)
 }
