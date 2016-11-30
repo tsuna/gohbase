@@ -16,8 +16,8 @@ import (
 	"github.com/cznic/b"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/internal/pb"
-	"github.com/tsuna/gohbase/internal/zk"
 	"github.com/tsuna/gohbase/region"
+	"github.com/tsuna/gohbase/zk"
 )
 
 const (

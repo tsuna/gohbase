@@ -13,3 +13,4 @@ package mock
 //go:generate mockgen -destination=client.go -source=../../client.go -package=mock
 //go:generate mockgen -destination=readerwritercloser.go -package=mock io ReadWriteCloser
 //go:generate mockgen -destination=call.go -package=mock github.com/tsuna/gohbase/hrpc Call
+//go:generate mockgen -destination=zk/client.go -package=mock github.com/tsuna/gohbase/zk Client

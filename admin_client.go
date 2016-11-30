@@ -11,8 +11,8 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/internal/pb"
-	"github.com/tsuna/gohbase/internal/zk"
 	"github.com/tsuna/gohbase/region"
+	"github.com/tsuna/gohbase/zk"
 	"golang.org/x/net/context"
 )
 

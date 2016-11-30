@@ -23,7 +23,7 @@ COVER_MODE := count
 coverdata:
 	echo 'mode: $(COVER_MODE)' >coverage.out
 	for dir in $(COVER_PKGS); do \
-	  $(GO) test -covermode=$(COVER_MODE) -coverprofile=cov.out-t $$dir || exit; \
+	  $(GO) test -covermode=$(COVER_MODE) -tags=testing -coverprofile=cov.out-t $$dir || exit; \
 	  tail -n +2 cov.out-t >> coverage.out && \
 	  rm cov.out-t; \
 	done;
@@ -40,13 +40,13 @@ vet:
 	$(GO) vet ./...
 
 lint:
-	find ./* -type d ! -name pb ! -name mock | xargs -L 1 $(GOLINT) &>lint; :
+	find ./* -type d ! -name pb ! -name mock ! -path "./test/mock/*" | xargs -L 1 $(GOLINT) &>lint; :
 	if test -s lint; then echo Check these packages for golint:; cat lint; rm lint; exit 1; else rm lint; fi
 # The above is ugly, but unfortunately golint doesn't exit 1 when it finds
 # lint.  See https://github.com/golang/lint/issues/65
 
 test:
-	$(GO) test $(GOTEST_FLAGS) -race -timeout=$(TEST_TIMEOUT) ./...
+	$(GO) test $(GOTEST_FLAGS) -race -timeout=$(TEST_TIMEOUT) -tags=testing ./...
 
 integration:
 	$(GO) test $(GOTEST_FLAGS) -race -timeout=$(INTEGRATION_TIMEOUT) -tags=integration
