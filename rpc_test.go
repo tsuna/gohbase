@@ -9,6 +9,7 @@ package gohbase
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/aristanetworks/goarista/test"
@@ -208,5 +209,57 @@ func TestReestablishRegionSplit(t *testing.T) {
 
 	if origlReg.Client() != nil {
 		t.Error("Expected original region to have no client")
+	}
+}
+
+func TestEstablishClientConcurrent(t *testing.T) {
+	// test that the same client isn't added when establishing it concurrently
+	// if there's a race, this test will only fail sometimes
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	// we expect to ask zookeeper for where metaregion is
+	c := newMockClient(mockZk.NewMockClient(ctrl))
+	// pre-create fake regions to establish
+	numRegions := 1000
+	regions := make([]hrpc.RegionInfo, numRegions)
+	for i := range regions {
+		r := region.NewInfo(
+			[]byte("test"),
+			[]byte(fmt.Sprintf("test,%d,1234567890042.yoloyoloyoloyoloyoloyoloyoloyolo.", i)),
+			nil, nil)
+		r.MarkUnavailable()
+		regions[i] = r
+	}
+
+	// all of the regions have the same region client
+	var wg sync.WaitGroup
+	for _, r := range regions {
+		r := r
+		wg.Add(1)
+		go func() {
+			c.establishRegion(r, "regionserver", 1)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	if len(c.clients.regions) != 1 {
+		t.Fatalf("Expected to have only 1 client in cache, got %d", len(c.clients.regions))
+	}
+
+	for rc, rs := range c.clients.regions {
+		if len(rs) != numRegions {
+			t.Errorf("Expected to have %d regions, got %d", numRegions, len(rs))
+		}
+		// check that all regions have the same client set and are available
+		for _, r := range regions {
+			if r.Client() != rc {
+				t.Errorf("Region %q has unexpected client %s:%d",
+					r.Name(), r.Client().Host(), r.Client().Port())
+			}
+			if r.IsUnavailable() {
+				t.Errorf("Expected region %s to be available", r.Name())
+			}
+		}
 	}
 }

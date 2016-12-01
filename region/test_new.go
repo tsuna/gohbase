@@ -9,7 +9,6 @@ package region
 
 import (
 	"bytes"
-	"fmt"
 	"time"
 
 	"github.com/tsuna/gohbase/hrpc"
@@ -20,29 +19,6 @@ import (
 type testClient struct {
 	host string
 	port uint16
-}
-
-var clients = map[string]*testClient{
-	"masterserver:1": &testClient{
-		host: "masterserver",
-		port: 1,
-	},
-	"regionserver:1": &testClient{
-		host: "regionserver",
-		port: 1,
-	},
-	"regionserver:2": &testClient{
-		host: "regionserver",
-		port: 2,
-	},
-	"regionserver:4": &testClient{
-		host: "regionserver",
-		port: 3,
-	},
-	"regionserver:5": &testClient{
-		host: "regionserver",
-		port: 4,
-	},
 }
 
 var metaRow = &pb.Result{Cell: []*pb.Cell{
@@ -132,11 +108,10 @@ var test1SplitB = &pb.Result{Cell: []*pb.Cell{
 // NewClient creates a new test region client.
 func NewClient(ctx context.Context, host string, port uint16, ctype ClientType,
 	queueSize int, flushInterval time.Duration) (hrpc.RegionClient, error) {
-	addr := fmt.Sprintf("%s:%d", host, port)
-	if c, ok := clients[addr]; ok {
-		return c, nil
-	}
-	return nil, fmt.Errorf("No client for %q", addr)
+	return &testClient{
+		host: host,
+		port: port,
+	}, nil
 }
 
 func (c *testClient) Host() string {

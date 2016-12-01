@@ -11,9 +11,10 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/region"
-	"golang.org/x/net/context"
+	mockRegion "github.com/tsuna/gohbase/test/mock/region"
 )
 
 func TestMetaCache(t *testing.T) {
@@ -31,7 +32,12 @@ func TestMetaCache(t *testing.T) {
 		nil,
 		nil,
 	)
-	regClient, _ := region.NewClient(context.Background(), "", 0, region.RegionClient, 0, 0)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	regClient := mockRegion.NewMockRegionClient(ctrl)
+	regClient.EXPECT().Host().Return("regionserver").AnyTimes()
+	regClient.EXPECT().Port().Return(uint16(1)).AnyTimes()
+
 	client.regions.put(wholeTable)
 	client.clients.put(regClient, wholeTable)
 
@@ -284,5 +290,57 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 				expectedNames, osNames)
 		}
 	}
+}
 
+func TestClientCachePut(t *testing.T) {
+	client := newClient("~invalid.quorum~")
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	regClient := mockRegion.NewMockRegionClient(ctrl)
+	regClient.EXPECT().Host().Return("regionserver").AnyTimes()
+	regClient.EXPECT().Port().Return(uint16(1)).AnyTimes()
+
+	existing := client.clients.put(regClient, region.NewInfo(
+		[]byte("test"),
+		[]byte("test,,1234567890042.yoloyoloyoloyoloyoloyoloyoloyolo."),
+		nil, nil))
+
+	if existing != regClient {
+		t.Errorf("Unexpected regClient from put: %v", existing)
+	}
+
+	if len(client.clients.regions) != 1 {
+		t.Errorf("Expected 1 client in cache, got %d", len(client.clients.regions))
+	}
+
+	if len(client.clients.regions[regClient]) != 1 {
+		t.Errorf("Expected 1 region for client in cache, got %d",
+			len(client.clients.regions[regClient]))
+	}
+
+	// try putting client with the same host port
+	regClient2 := mockRegion.NewMockRegionClient(ctrl)
+	regClient2.EXPECT().Host().Return("regionserver").AnyTimes()
+	regClient2.EXPECT().Port().Return(uint16(1)).AnyTimes()
+
+	// but put a different region
+	existing = client.clients.put(regClient, region.NewInfo(
+		[]byte("yolo"),
+		[]byte("yolo,,1234567890042.yoloyoloyoloyoloyoloyoloyoloyolo."),
+		nil, nil))
+
+	if existing != regClient {
+		t.Errorf("Unexpected regClient from put: %v", existing)
+	}
+
+	// nothing should have changed in clients cache
+	if len(client.clients.regions) != 1 {
+		t.Errorf("Expected 1 client in cache, got %d", len(client.clients.regions))
+	}
+
+	if len(client.clients.regions[regClient]) != 2 {
+		t.Errorf("Expected 2 regions for client in cache, got %d",
+			len(client.clients.regions[regClient]))
+	}
 }

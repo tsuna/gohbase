@@ -369,14 +369,16 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 
 		// connect to the region's regionserver
 		if client, err := c.establishRegionClient(reg, host, port); err == nil {
+			if c.clientType != adminClient {
+				if existing := c.clients.put(client, reg); existing != client {
+					// a client for this regionserver is already in cache, discard this one.
+					client.Close()
+					client = existing
+				}
+			}
 			// set region client so that as soon as we mark it available,
 			// concurrent readers are able to find the client
 			reg.SetClient(client)
-			if c.clientType != adminClient {
-				// TODO: put should be idempotent, putting a client with the same
-				// host and port should be ignored and the client should be closed.
-				c.clients.put(client, reg)
-			}
 			reg.MarkAvailable()
 			return
 		}

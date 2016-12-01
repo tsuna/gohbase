@@ -22,16 +22,30 @@ type clientRegionCache struct {
 	regions map[hrpc.RegionClient][]hrpc.RegionInfo
 }
 
-func (rcc *clientRegionCache) put(c hrpc.RegionClient, r hrpc.RegionInfo) {
+// put caches client and associates a region with it. Returns a client that is in cache.
+// TODO: obvious place for optimization (use map with address as key to lookup exisiting clients)
+func (rcc *clientRegionCache) put(c hrpc.RegionClient, r hrpc.RegionInfo) hrpc.RegionClient {
 	rcc.m.Lock()
 	defer rcc.m.Unlock()
-	lst := rcc.regions[c]
-	for _, existing := range lst {
-		if existing == r {
-			return
+	for existingClient, regions := range rcc.regions {
+		// check if client already exists, checking by host and port
+		// because concurrent callers might try to put the same client
+		if c.Host() == existingClient.Host() && c.Port() == existingClient.Port() {
+			// check client already knows about the region, checking
+			// by pointer is enough because we make sure that there are
+			// no regions with the same name around
+			for _, existingRegion := range regions {
+				if existingRegion == r {
+					return existingClient
+				}
+			}
+			rcc.regions[existingClient] = append(regions, r)
+			return existingClient
 		}
 	}
-	rcc.regions[c] = append(lst, r)
+	// no such client yet
+	rcc.regions[c] = []hrpc.RegionInfo{r}
+	return c
 }
 
 func (rcc *clientRegionCache) del(r hrpc.RegionInfo) {
@@ -88,6 +102,7 @@ func (rcc *clientRegionCache) clientDown(reg hrpc.RegionInfo) []hrpc.RegionInfo 
 	return downregions
 }
 
+// TODO: obvious place for optimization (use map with address as key to lookup exisiting clients)
 func (rcc *clientRegionCache) checkForClient(host string, port uint16) hrpc.RegionClient {
 	rcc.m.Lock()
 	defer rcc.m.Unlock()
