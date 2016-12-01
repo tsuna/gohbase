@@ -149,6 +149,13 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 		[]byte("yolo"),
 	)
 
+	regionWhole := region.NewInfo(
+		[]byte("hello"),
+		[]byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		nil,
+		nil,
+	)
+
 	regionTests := []struct {
 		cachedRegions []hrpc.RegionInfo
 		newRegion     hrpc.RegionInfo
@@ -210,6 +217,46 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 			[]hrpc.RegionInfo{regionA, regionC},
 			regionB,
 			[]hrpc.RegionInfo{},
+		},
+		{ // without bounds in cache, replaced by region with both bounds
+			[]hrpc.RegionInfo{regionWhole},
+			regionB,
+			[]hrpc.RegionInfo{regionWhole},
+		},
+		{ // without bounds in cache, replaced by the empty stop key only
+			[]hrpc.RegionInfo{regionWhole},
+			region.NewInfo(
+				[]byte("hello"),
+				[]byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+				[]byte("yolo"),
+				nil,
+			),
+			[]hrpc.RegionInfo{regionWhole},
+		},
+		{ // without bounds in cache, replaced by the empty start key only
+			[]hrpc.RegionInfo{regionWhole},
+			region.NewInfo(
+				[]byte("hello"),
+				[]byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+				nil,
+				[]byte("yolo"),
+			),
+			[]hrpc.RegionInfo{regionWhole},
+		},
+		{ // regions with bounds in cache, replaced by without bounds
+			[]hrpc.RegionInfo{regionB, regionC},
+			regionWhole,
+			[]hrpc.RegionInfo{regionB, regionC},
+		},
+		{ // without bounds in cache, replaced by without bounds
+			[]hrpc.RegionInfo{regionWhole},
+			region.NewInfo(
+				[]byte("hello"),
+				[]byte("hello,,1234567890042.yoloyoloyoloyoloyoloyoloyoloyolo."),
+				nil,
+				nil,
+			),
+			[]hrpc.RegionInfo{regionWhole},
 		},
 	}
 

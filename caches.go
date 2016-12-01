@@ -134,9 +134,10 @@ func (krc *keyRegionCache) get(key []byte) ([]byte, hrpc.RegionInfo) {
 }
 
 func isRegionOverlap(regA, regB hrpc.RegionInfo) bool {
+	// if region's stop key is empty, it's assumed to be the greatest key
 	return bytes.Equal(regA.Table(), regB.Table()) &&
-		bytes.Compare(regA.StartKey(), regB.StopKey()) < 0 &&
-		bytes.Compare(regA.StopKey(), regB.StartKey()) > 0
+		(len(regB.StopKey()) == 0 || bytes.Compare(regA.StartKey(), regB.StopKey()) < 0) &&
+		(len(regA.StopKey()) == 0 || bytes.Compare(regA.StopKey(), regB.StartKey()) > 0)
 }
 
 func (krc *keyRegionCache) getOverlaps(reg hrpc.RegionInfo) []hrpc.RegionInfo {
