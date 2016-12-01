@@ -106,7 +106,107 @@ func TestSendRPCSanity(t *testing.T) {
 	}
 
 	if c.regions.regions.Len() != 1 {
-		// expecting only one region because meta isn't in cache, it's hardcoded
+		// expecting only one region because meta isn't in cache, it's hard-coded
 		t.Errorf("Expected 1 regions in cache, got %d", c.regions.regions.Len())
+	}
+}
+
+func TestReestablishRegionSplit(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	// we expect to ask zookeeper for where metaregion is
+	c := newMockClient(mockZk.NewMockClient(ctrl))
+
+	// inject a fake regionserver client and fake region into cache
+	origlReg := region.NewInfo(
+		[]byte("test1"),
+		[]byte("test1,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		nil,
+		nil,
+	)
+	rc1, err := region.NewClient(context.Background(), "regionserver", 1, region.RegionClient, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// pretend regionserver:1 has meta table
+	c.metaRegionInfo.SetClient(rc1)
+	// "test1" is at the moment at regionserver:1
+	origlReg.SetClient(rc1)
+	// marking unavailable to simulate error
+	origlReg.MarkUnavailable()
+	c.regions.put(origlReg)
+	c.clients.put(rc1, origlReg)
+	c.clients.put(rc1, c.metaRegionInfo)
+
+	c.reestablishRegion(origlReg)
+
+	if len(c.clients.regions) != 1 {
+		t.Errorf("Expected 1 client in cache, got %d", len(c.clients.regions))
+	}
+
+	expRegs := map[string]struct{}{
+		"hbase:meta,,1":                                          struct{}{},
+		"test1,,1480547738107.825c5c7e480c76b73d6d2bad5d3f7bb8.": struct{}{},
+	}
+
+	// make sure those are the right clients
+	for rc, rs := range c.clients.regions {
+		cAddr := fmt.Sprintf("%s:%d", rc.Host(), rc.Port())
+		if cAddr != "regionserver:1" {
+			t.Errorf("Got unexpected client %s:%d in cache", rc.Host(), rc.Port())
+			break
+		}
+
+		// check that we have correct regions in the client
+		gotRegs := map[string]struct{}{}
+		for _, r := range rs {
+			gotRegs[string(r.Name())] = struct{}{}
+			// check that regions have correct client
+			if r.Client() != rc1 {
+				t.Errorf("Invalid bidirectional mapping: forward=%s:%d, backward=%s:%d",
+					r.Client().Host(), r.Client().Port(), rc1.Host(), rc1.Port())
+			}
+		}
+		if diff := test.Diff(expRegs, gotRegs); diff != "" {
+			t.Errorf("Expected: %#v\nReceived: %#v\nDiff:%s",
+				expRegs, gotRegs, diff)
+		}
+
+		// check that we still have the same client that we injected
+		if rc != rc1 {
+			t.Errorf("Invalid bidirectional mapping: forward=%s:%d, backward=%s:%d",
+				rc.Host(), rc.Port(), rc1.Host(), rc1.Port())
+		}
+	}
+
+	if c.regions.regions.Len() != 1 {
+		// expecting only one region because meta isn't in cache, it's hard-coded
+		t.Errorf("Expected 1 regions in cache, got %d", c.regions.regions.Len())
+	}
+
+	// check the we have correct region in regions cache
+	newRegIntf, ok := c.regions.regions.Get(
+		[]byte("test1,,1480547738107.825c5c7e480c76b73d6d2bad5d3f7bb8."))
+	if !ok {
+		t.Error("Expected region is not in the cache")
+	}
+
+	// check new region is available
+	newReg, ok := newRegIntf.(hrpc.RegionInfo)
+	if !ok {
+		t.Error("Expected hrpc.RegionInfo")
+	}
+	if newReg.IsUnavailable() {
+		t.Error("Expected new region to be available")
+	}
+
+	// check old region is available and it's client is empty since we
+	// need to release all the waiting callers
+	if origlReg.IsUnavailable() {
+		t.Error("Expected original region to be available")
+	}
+
+	if origlReg.Client() != nil {
+		t.Error("Expected original region to have no client")
 	}
 }

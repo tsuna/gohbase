@@ -329,7 +329,7 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 				originalReg.Table(), originalReg.StartKey())
 			if err == TableNotFound {
 				// region doesn't exist, delete it from caches
-				c.regions.del(originalReg.StartKey())
+				c.regions.del(originalReg)
 				c.clients.del(originalReg)
 				originalReg.MarkAvailable()
 				return
@@ -337,31 +337,30 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 				log.Fatalf("Unknow error occured when looking up region: %v", err)
 			}
 
-			if bytes.Compare(reg.Name(), originalReg.Name()) != 0 {
-				// there's a new region, we should remove the old one
-				// and add this one unless someone else has already done so
+			if !bytes.Equal(reg.Name(), originalReg.Name()) {
+				// put new region and remove overlapping ones,
+				// will remove the original region as well
+				// TODO: if merge happened, and someone already put new region
+				// into cache while we were looking it up, it will be replaced
+				// with the same one here: should happen very rarely.
+				reg.MarkUnavailable()
 				c.regionsLock.Lock()
-				// delete original since we have a new one
-				c.regions.del(originalReg.StartKey())
-
-				// Check that the region wasn't added to
-				// the cache while we were looking it up.
-				// For example if region merge happened and some dude
-				// was looking up the region before the original and found the
-				// same one as we are and could have added it to the cache
-				if r := c.checkAndPutRegion(reg.Table(), reg.StartKey(), reg); reg != r {
-					// looks like someone already found this region already,
-					// it's their responsibility to reestablish it
-					c.regionsLock.Unlock()
-					// let rpcs know that they can retry
-					originalReg.MarkAvailable()
-					return
+				removed := c.regions.put(reg)
+				for _, r := range removed {
+					c.clients.del(r)
 				}
 				c.regionsLock.Unlock()
-
 				// let rpcs know that they can retry and either get the newly
 				// added region from cache or lookup the one they need
 				originalReg.MarkAvailable()
+
+				if len(removed) > 1 {
+					log.Printf(
+						"Region merge happened. New region in cache: %s", reg.Name())
+				} else if len(removed) == 1 && bytes.Equal(removed[0].Name(), reg.Name()) {
+					log.Printf(
+						"Region merge happened. Replaced same region in cache: %s", reg.Name())
+				}
 			} else {
 				// same region, discard the looked up one
 				reg = originalReg
@@ -374,6 +373,8 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 			// concurrent readers are able to find the client
 			reg.SetClient(client)
 			if c.clientType != adminClient {
+				// TODO: put should be idempotent, putting a client with the same
+				// host and port should be ignored and the client should be closed.
 				c.clients.put(client, reg)
 			}
 			reg.MarkAvailable()

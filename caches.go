@@ -25,7 +25,6 @@ type clientRegionCache struct {
 func (rcc *clientRegionCache) put(c hrpc.RegionClient, r hrpc.RegionInfo) {
 	rcc.m.Lock()
 	defer rcc.m.Unlock()
-
 	lst := rcc.regions[c]
 	for _, existing := range lst {
 		if existing == r {
@@ -205,9 +204,9 @@ func (krc *keyRegionCache) put(reg hrpc.RegionInfo) []hrpc.RegionInfo {
 	return os
 }
 
-func (krc *keyRegionCache) del(key []byte) bool {
+func (krc *keyRegionCache) del(reg hrpc.RegionInfo) bool {
 	krc.m.Lock()
-	success := krc.regions.Delete(key)
+	success := krc.regions.Delete(reg.Name())
 	krc.m.Unlock()
 	return success
 }

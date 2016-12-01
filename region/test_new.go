@@ -73,6 +73,62 @@ var metaRow = &pb.Result{Cell: []*pb.Cell{
 	},
 }}
 
+var test1SplitA = &pb.Result{Cell: []*pb.Cell{
+	&pb.Cell{
+		Row:       []byte("test1,,1480547738107.825c5c7e480c76b73d6d2bad5d3f7bb8."),
+		Family:    []byte("info"),
+		Qualifier: []byte("regioninfo"),
+		Value: []byte("PBUF\b\xfbÖ\xbc\x8b+\x12\x10\n\adefault\x12\x05" +
+			"test1\x1a\x00\"\x03baz(\x000\x008\x00"),
+	},
+	&pb.Cell{
+		Row:       []byte("test1,,1480547738107.825c5c7e480c76b73d6d2bad5d3f7bb8."),
+		Family:    []byte("info"),
+		Qualifier: []byte("seqnumDuringOpen"),
+		Value:     []byte("\x00\x00\x00\x00\x00\x00\x00\v"),
+	},
+	&pb.Cell{
+		Row:       []byte("test1,,1480547738107.825c5c7e480c76b73d6d2bad5d3f7bb8."),
+		Family:    []byte("info"),
+		Qualifier: []byte("server"),
+		Value:     []byte("regionserver:1"),
+	},
+	&pb.Cell{
+		Row:       []byte("test1,,1480547738107.825c5c7e480c76b73d6d2bad5d3f7bb8."),
+		Family:    []byte("info"),
+		Qualifier: []byte("serverstartcode"),
+		Value:     []byte("\x00\x00\x01X\xb6\x83^3"),
+	},
+}}
+
+var test1SplitB = &pb.Result{Cell: []*pb.Cell{
+	&pb.Cell{
+		Row:       []byte("test1,baz,1480547738107.3f2483f5618e1b791f58f83a8ebba6a9."),
+		Family:    []byte("info"),
+		Qualifier: []byte("regioninfo"),
+		Value: []byte("PBUF\b\xfbÖ\xbc\x8b+\x12\x10\n\adefault\x12\x05" +
+			"test1\x1a\x03baz\"\x00(\x000\x008\x00"),
+	},
+	&pb.Cell{
+		Row:       []byte("test1,baz,1480547738107.3f2483f5618e1b791f58f83a8ebba6a9."),
+		Family:    []byte("info"),
+		Qualifier: []byte("seqnumDuringOpen"),
+		Value:     []byte("\x00\x00\x00\x00\x00\x00\x00\f"),
+	},
+	&pb.Cell{
+		Row:       []byte("test1,baz,1480547738107.3f2483f5618e1b791f58f83a8ebba6a9."),
+		Family:    []byte("info"),
+		Qualifier: []byte("server"),
+		Value:     []byte("regionserver:3"),
+	},
+	&pb.Cell{
+		Row:       []byte("test1,baz,1480547738107.3f2483f5618e1b791f58f83a8ebba6a9."),
+		Family:    []byte("info"),
+		Qualifier: []byte("serverstartcode"),
+		Value:     []byte("\x00\x00\x01X\xb6\x83^3"),
+	},
+}}
+
 // NewClient creates a new test region client.
 func NewClient(ctx context.Context, host string, port uint16, ctype ClientType,
 	queueSize int, flushInterval time.Duration) (hrpc.RegionClient, error) {
@@ -92,8 +148,13 @@ func (c *testClient) Port() uint16 {
 }
 
 func (c *testClient) QueueRPC(call hrpc.Call) {
-	if bytes.Equal(call.Table(), []byte("hbase:meta")) {
-		call.ResultChan() <- hrpc.RPCResult{&pb.GetResponse{Result: metaRow}, nil}
+	if !bytes.Equal(call.Table(), []byte("hbase:meta")) {
+		return
+	}
+	if bytes.HasPrefix(call.Key(), []byte("test,")) {
+		call.ResultChan() <- hrpc.RPCResult{Msg: &pb.GetResponse{Result: metaRow}}
+	} else if bytes.HasPrefix(call.Key(), []byte("test1,,")) {
+		call.ResultChan() <- hrpc.RPCResult{Msg: &pb.GetResponse{Result: test1SplitA}}
 	}
 }
 
