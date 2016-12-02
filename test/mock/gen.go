@@ -10,7 +10,8 @@ package mock
 //    go get github.com/golang/mock/mockgen
 // then run 'go generate' to auto-generate mock_client.
 
-//go:generate mockgen -destination=client.go -source=../../client.go -package=mock
+//go:generate mockgen -destination=client.go -package=mock github.com/tsuna/gohbase Client
+//go:generate mockgen -destination=adming_client.go -package=mock github.com/tsuna/gohbase AdminClient
 //go:generate mockgen -destination=readerwritercloser.go -package=mock io ReadWriteCloser
 //go:generate mockgen -destination=call.go -package=mock github.com/tsuna/gohbase/hrpc Call
 //go:generate mockgen -destination=zk/client.go -package=mock github.com/tsuna/gohbase/zk Client
