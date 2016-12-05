@@ -33,16 +33,21 @@ func init() {
 // in ZooKeeper
 type ResourceName string
 
+// Prepend creates a new ResourceName with prefix prepended to the former ResourceName.
+func (r ResourceName) Prepend(prefix string) ResourceName {
+	return ResourceName(prefix + string(r))
+}
+
 const (
 	sessionTimeout = 30
 
 	// Meta is a ResourceName that indicates that the location of the Meta
 	// table is what will be fetched
-	Meta = ResourceName("/hbase/meta-region-server")
+	Meta = ResourceName("/meta-region-server")
 
 	// Master is a ResourceName that indicates that the location of the Master
 	// server is what will be fetched
-	Master = ResourceName("/hbase/master")
+	Master = ResourceName("/master")
 )
 
 // Client is an interface of client that retrieves meta infomation from zookeeper
