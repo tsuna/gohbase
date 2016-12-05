@@ -111,13 +111,11 @@ type call struct {
 // QueueRPC will add an rpc call to the queue for processing by the writer
 // goroutine
 func (c *client) QueueRPC(rpc hrpc.Call) {
-	c.errM.RLock()
-	if c.err != nil {
+	select {
+	case <-c.done:
 		rpc.ResultChan() <- hrpc.RPCResult{Error: ErrClientDead}
-	} else {
-		c.rpcs <- rpc
+	case c.rpcs <- rpc:
 	}
-	c.errM.RUnlock()
 }
 
 // Close asks this region.Client to close its connection to the RegionServer.
@@ -147,10 +145,12 @@ func (c *client) fail(err error) {
 	c.errM.Unlock()
 	log.Errorf("Region client (%s:%d) error: %s", c.host, c.port, err)
 
+	// we don't close c.rpcs channel to make it block in select of QueueRPC
+	// and avoid dealing with synchronization of closing it while someone
+	// might be sending to it. Go's GC will take care of it.
+
 	// tell goroutines to stop
 	close(c.done)
-	// stop processing queued rpcs
-	close(c.rpcs)
 	// we close connection to the regionserver,
 	// to let it know that we can't receive anymore
 	c.conn.Close()
@@ -161,9 +161,8 @@ func (c *client) failAwaitingRPCs() {
 	res := hrpc.RPCResult{Error: c.err}
 	c.errM.Unlock()
 	// channel is closed, clean up awaiting rpcs
-	var sent map[uint32]hrpc.Call
 	c.sentM.Lock()
-	sent = c.sent
+	sent := c.sent
 	c.sent = make(map[uint32]hrpc.Call)
 	c.sentM.Unlock()
 	// send error to awaiting rpcs
@@ -179,18 +178,19 @@ func (c *client) processRPCs() {
 	defer ticker.Stop()
 	for {
 		select {
+		case <-c.done:
+			// we cleanup awaiting rpcs here because otherwise we might
+			// end up with unprocessed: Since go's select is randomized,
+			// in case c.rpcs <- rpc in QeueueRPC is chosen over <-c.done,
+			// here rpc := <-c.rpcs can still be chosen over <-c.done as
+			// well resulting in an extra rpc we need to fail after an
+			// error has been set
+			c.failAwaitingRPCs()
+			return
 		case <-ticker.C:
 			go c.sendBatch(batch)
 			batch = make([]*call, 0, c.rpcQueueSize)
-		case rpc, ok := <-c.rpcs:
-			if !ok {
-				// the channel is now closed because
-				// an error happened and we recorded
-				// all of the buffered rpcs,
-				// now we can fail them
-				c.failAwaitingRPCs()
-				return
-			}
+		case rpc := <-c.rpcs:
 			currID++
 			// track the rpc
 			c.sentM.Lock()
@@ -202,9 +202,6 @@ func (c *client) processRPCs() {
 				Call: rpc,
 			})
 			if len(batch) == c.rpcQueueSize {
-				// TODO: is it bad if we block here instead?
-				// it would cause QueueRPC to block until this is
-				// processed in case c.rpc channel is full (which is what we want?)
 				go c.sendBatch(batch)
 				// TODO: optimize memory usage, reuse batch slice
 				batch = make([]*call, 0, c.rpcQueueSize)
