@@ -167,7 +167,7 @@ func TimeRangeUint64(from, to uint64) func(Call) error {
 		}
 		switch c := g.(type) {
 		default:
-			return errors.New("TimeRange option can only be used with Get or Scan queries.")
+			return errors.New("'TimeRange' option can only be used with Get or Scan queries")
 		case *Get:
 			c.fromTimestamp = from
 			c.toTimestamp = to
@@ -185,7 +185,7 @@ func MaxVersions(versions uint32) func(Call) error {
 	return func(g Call) error {
 		switch c := g.(type) {
 		default:
-			return errors.New("MaxVersions option can only be used with Get or Scan queries.")
+			return errors.New("'MaxVersions' option can only be used with Get or Scan queries")
 		case *Get:
 			c.maxVersions = versions
 		case *Scan:
@@ -201,7 +201,7 @@ func NumberOfRows(n uint32) func(Call) error {
 	return func(g Call) error {
 		scan, ok := g.(*Scan)
 		if !ok {
-			return errors.New("NumberOfRows option can only be used with Scan queries.")
+			return errors.New("'NumberOfRows' option can only be used with Scan queries")
 		}
 		scan.numberOfRows = n
 		return nil

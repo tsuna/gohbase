@@ -19,11 +19,11 @@ type tableOp struct {
 // SetFilter always returns an error.
 func (to *tableOp) SetFilter(filter.Filter) error {
 	// Doesn't make sense on this kind of RPC.
-	return errors.New("Cannot set filter on admin operations.")
+	return errors.New("cannot call 'SetFilter' on admin operations")
 }
 
 // SetFamilies always returns an error.
 func (to *tableOp) SetFamilies(map[string][]string) error {
 	// Doesn't make sense on this kind of RPC.
-	return errors.New("Cannot set families on admin operations.")
+	return errors.New("cannot 'SetFamilies' on admin operations")
 }

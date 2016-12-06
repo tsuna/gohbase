@@ -131,7 +131,7 @@ func TestCompare(t *testing.T) {
 
 func TestCompareBogusName(t *testing.T) {
 	defer func() {
-		expected := `No comma found in "bogus" after offset 5`
+		expected := `no comma found in "bogus" after offset 5`
 		v := recover()
 		if v == nil {
 			t.Errorf("Should have panic'ed")

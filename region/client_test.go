@@ -379,7 +379,7 @@ func TestUnrecoverableErrorRead(t *testing.T) {
 	mockCall := mock.NewMockCall(ctrl)
 	result := make(chan hrpc.RPCResult, 1)
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
-	mockConn.EXPECT().Read([]byte{0, 0, 0, 0}).Return(0, errors.New("Read failure"))
+	mockConn.EXPECT().Read([]byte{0, 0, 0, 0}).Return(0, errors.New("read failure"))
 	mockConn.EXPECT().Close()
 
 	// pretend we already unqueued and sent the rpc
@@ -400,7 +400,7 @@ func TestUnrecoverableErrorRead(t *testing.T) {
 	if !ok {
 		t.Errorf("Expected UnrecoverableError error")
 	}
-	expErr := errors.New("Failed to read: Read failure")
+	expErr := errors.New("failed to read: read failure")
 	if diff := test.Diff(expErr, err.error); diff != "" {
 		t.Errorf("Expected: %s\nReceived: %s\nDiff:%s",
 			expErr, err.error, diff)
@@ -434,7 +434,7 @@ func TestUnexpectedSendError(t *testing.T) {
 
 	c.QueueRPC(mockCall)
 	r := <-result
-	err = fmt.Errorf("Failed to serialize RPC: %v", err)
+	err = fmt.Errorf("failed to serialize RPC: %v", err)
 	if diff := test.Diff(err, r.Error); diff != "" {
 		t.Errorf("Expected: %s\nReceived: %s\nDiff:%s",
 			err, r.Error, diff)

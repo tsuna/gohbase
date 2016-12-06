@@ -120,11 +120,11 @@ func ParseRegionInfo(metaRow *hrpc.Result) (hrpc.RegionInfo, string, uint16, err
 	if reg == nil {
 		// There was no region in the row in meta, this is really not
 		// expected.
-		err := fmt.Errorf("Meta seems to be broken, there was no region in %v",
+		err := fmt.Errorf("meta seems to be broken, there was no region in %v",
 			metaRow)
 		return nil, "", 0, err
 	} else if port == 0 { // Either both `host' and `port' are set, or both aren't.
-		return nil, "", 0, fmt.Errorf("Meta doesn't have a server location in %v",
+		return nil, "", 0, fmt.Errorf("meta doesn't have a server location in %v",
 			metaRow)
 	}
 
@@ -308,5 +308,5 @@ func findCommaFromEnd(b []byte, offset int) int {
 			return i
 		}
 	}
-	panic(fmt.Errorf("No comma found in %q after offset %d", b, offset))
+	panic(fmt.Errorf("no comma found in %q after offset %d", b, offset))
 }

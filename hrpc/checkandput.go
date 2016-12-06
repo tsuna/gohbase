@@ -29,7 +29,7 @@ type CheckAndPut struct {
 func NewCheckAndPut(put *Mutate, family string,
 	qualifier string, expectedValue []byte) (*CheckAndPut, error) {
 	if put.mutationType != pb.MutationProto_PUT {
-		return nil, fmt.Errorf("CheckAndPut only takes Put request")
+		return nil, fmt.Errorf("'CheckAndPut' only takes 'Put' request")
 	}
 
 	return &CheckAndPut{
@@ -55,7 +55,7 @@ func (cas *CheckAndPut) Serialize() ([]byte, error) {
 	// The edit.
 	mutateRequest, err := cas.serializeToProto()
 	if err != nil {
-		return nil, fmt.Errorf("Error serializing request: %s", err)
+		return nil, fmt.Errorf("error serializing request: %s", err)
 	}
 
 	compareType := pb.CompareType_EQUAL

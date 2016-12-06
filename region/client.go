@@ -26,15 +26,15 @@ type ClientType string
 var (
 	// ErrShortWrite is used when the writer thread only succeeds in writing
 	// part of its buffer to the socket, and not all of the buffer was sent
-	ErrShortWrite = errors.New("Short write occurred while writing to socket")
+	ErrShortWrite = errors.New("short write occurred while writing to socket")
 
 	// ErrMissingCallID is used when HBase sends us a response message for a
 	// request that we didn't send
-	ErrMissingCallID = errors.New("Got a response with a nonsensical call ID")
+	ErrMissingCallID = errors.New("got a response with a nonsensical call ID")
 
 	// ErrClientDead is returned to rpcs when Close() is called or when client
 	// died because of failed send or receive
-	ErrClientDead = UnrecoverableError{errors.New("Client is dead")}
+	ErrClientDead = UnrecoverableError{errors.New("client is dead")}
 
 	// javaRetryableExceptions is a map where all Java exceptions that signify
 	// the RPC should be sent again are listed (as keys). If a Java exception
@@ -278,7 +278,7 @@ func (c *client) receive() error {
 	err = proto.UnmarshalMerge(buf[:respLen], resp)
 	buf = buf[respLen:]
 	if err != nil {
-		return fmt.Errorf("Failed to deserialize the response header: %s", err)
+		return fmt.Errorf("failed to deserialize the response header: %s", err)
 	}
 	if resp.CallId == nil {
 		// Response doesn't have a call ID
@@ -289,7 +289,7 @@ func (c *client) receive() error {
 	rpc, ok := c.sent[*resp.CallId]
 	if !ok {
 		c.sentM.Unlock()
-		return fmt.Errorf("Got a response with an unexpected call ID: %d", *resp.CallId)
+		return fmt.Errorf("got a response with an unexpected call ID: %d", *resp.CallId)
 	}
 	delete(c.sent, *resp.CallId)
 	c.sentM.Unlock()
@@ -332,7 +332,7 @@ func (c *client) write(buf []byte) error {
 func (c *client) readFully(buf []byte) error {
 	_, err := io.ReadFull(c.conn, buf)
 	if err != nil {
-		return fmt.Errorf("Failed to read: %s", err)
+		return fmt.Errorf("failed to read: %s", err)
 	}
 	return nil
 }
@@ -348,7 +348,7 @@ func (c *client) sendHello(ctype ClientType) error {
 	}
 	data, err := proto.Marshal(connHeader)
 	if err != nil {
-		return fmt.Errorf("Failed to marshal connection header: %s", err)
+		return fmt.Errorf("failed to marshal connection header: %s", err)
 	}
 
 	const header = "HBas\x00\x50" // \x50 = Simple Auth.
@@ -371,13 +371,13 @@ func (c *client) send(rpc *call) error {
 
 	payload, err := rpc.Serialize()
 	if err != nil {
-		return fmt.Errorf("Failed to serialize RPC: %s", err)
+		return fmt.Errorf("failed to serialize RPC: %s", err)
 	}
 	payloadLen := proto.EncodeVarint(uint64(len(payload)))
 
 	headerData, err := proto.Marshal(reqheader)
 	if err != nil {
-		return fmt.Errorf("Failed to marshal Get request: %s", err)
+		return fmt.Errorf("failed to marshal Get request: %s", err)
 	}
 
 	buf := make([]byte, 5, 4+1+len(headerData)+len(payloadLen)+len(payload))

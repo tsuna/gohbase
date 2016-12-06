@@ -76,7 +76,7 @@ func Timestamp(ts time.Time) func(Call) error {
 	return func(o Call) error {
 		m, ok := o.(*Mutate)
 		if !ok {
-			return errors.New("Timestamp option can only be used with mutation queries.")
+			return errors.New("'Timestamp' option can only be used with mutation queries")
 		}
 		m.timestamp = uint64(ts.UnixNano() / 1e6)
 		return nil
@@ -88,10 +88,10 @@ func Durability(d DurabilityType) func(Call) error {
 	return func(o Call) error {
 		m, ok := o.(*Mutate)
 		if !ok {
-			return errors.New("Durability option can only be used with mutation queries.")
+			return errors.New("'Durability' option can only be used with mutation queries")
 		}
 		if d < UseDefault || d > FsyncWal {
-			return errors.New("Invalid durability value.")
+			return errors.New("invalid durability value")
 		}
 		m.durability = d
 		return nil
@@ -254,7 +254,7 @@ func (m *Mutate) Name() string {
 func (m *Mutate) Serialize() ([]byte, error) {
 	mutateRequest, err := m.serializeToProto()
 	if err != nil {
-		return nil, fmt.Errorf("Error serializing request: %s", err)
+		return nil, fmt.Errorf("error serializing request: %s", err)
 	}
 	return proto.Marshal(mutateRequest)
 }
@@ -333,7 +333,7 @@ func (m *Mutate) serializeWithReflect() (*pb.MutateRequest, error) {
 		cnames := strings.SplitN(tagval, ":", 2)
 		if len(cnames) != 2 {
 			// If the tag doesn't contain a colon, it's set improperly
-			return nil, fmt.Errorf("Invalid column family and column qualifier: \"%s\"", cnames)
+			return nil, fmt.Errorf("invalid column family and column qualifier: \"%s\"", cnames)
 		}
 		cfamily := cnames[0]
 		cqualifier := cnames[1]
@@ -502,7 +502,7 @@ func valueToBytes(val reflect.Value) ([]byte, error) {
 		if kind == reflect.Array || kind == reflect.Slice || kind == reflect.String {
 			// We won't be able to deserialize this later into the correct types, since
 			// arrays/slices/strings don't have a defined size.
-			return nil, fmt.Errorf("Slices and arrays of type %s is unsupported",
+			return nil, fmt.Errorf("slices and arrays of type %s is unsupported",
 				val.Index(0).Type().Name())
 		}
 		var allbytes []byte
@@ -528,7 +528,7 @@ func valueToBytes(val reflect.Value) ([]byte, error) {
 		//case reflect.Uintptr:
 		//case reflect.UnsafePointer:
 	}
-	return nil, fmt.Errorf("Unsupported type %s, %d", val.Type().Name(), val.Kind())
+	return nil, fmt.Errorf("unsupported type %s, %d", val.Type().Name(), val.Kind())
 }
 
 func copyOf(memory []byte) []byte {
@@ -551,12 +551,12 @@ func (m *Mutate) NewResponse() proto.Message {
 // Exists solely so Mutate can implement the Call interface.
 func (m *Mutate) SetFilter(ft filter.Filter) error {
 	// Not allowed. Throw an error
-	return errors.New("Cannot set filter on mutate operation.")
+	return errors.New("cannot call 'SetFilter' on mutate operation")
 }
 
 // SetFamilies always returns an error when used on Mutate objects. Do not use.
 // Exists solely so Mutate can implement the Call interface.
 func (m *Mutate) SetFamilies(fam map[string][]string) error {
 	// Not allowed. Throw an error
-	return errors.New("Cannot set families on mutate operation.")
+	return errors.New("cannot call 'SetFamilies' on mutate operation")
 }

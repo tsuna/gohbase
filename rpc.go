@@ -302,12 +302,12 @@ func (c *client) metaLookup(ctx context.Context,
 	}
 	if !bytes.Equal(table, reg.Table()) {
 		// This would indicate a bug in HBase.
-		return nil, "", 0, fmt.Errorf("WTF: Meta returned an entry for the wrong table!"+
+		return nil, "", 0, fmt.Errorf("wtf: meta returned an entry for the wrong table!"+
 			"  Looked up table=%q key=%q got region=%s", table, key, reg)
 	} else if len(reg.StopKey()) != 0 &&
 		bytes.Compare(key, reg.StopKey()) >= 0 {
 		// This would indicate a hole in the meta table.
-		return nil, "", 0, fmt.Errorf("WTF: Meta returned an entry for the wrong region!"+
+		return nil, "", 0, fmt.Errorf("wtf: meta returned an entry for the wrong region!"+
 			"  Looked up table=%q key=%q got region=%s", table, key, reg)
 	}
 	return reg, host, port, nil
@@ -390,7 +390,7 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 		// This will be hit if there was an error connecting to the region
 		backoff, err = sleepAndIncreaseBackoff(context.Background(), backoff)
 		if err != nil {
-			log.Fatalf("This error should never happen: %v", err)
+			log.Fatalf("this error should never happen: %v", err)
 		}
 	}
 }

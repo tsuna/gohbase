@@ -54,11 +54,11 @@ func (ps *GetProcedureState) NewResponse() proto.Message {
 // SetFilter always returns an error.
 func (ps *GetProcedureState) SetFilter(filter.Filter) error {
 	// Doesn't make sense on this kind of RPC.
-	return errors.New("Cannot set filter on admin operations.")
+	return errors.New("cannot set filter on admin operations")
 }
 
 // SetFamilies always returns an error.
 func (ps *GetProcedureState) SetFamilies(map[string][]string) error {
 	// Doesn't make sense on this kind of RPC.
-	return errors.New("Cannot set families on admin operations.")
+	return errors.New("cannot set families on admin operations")
 }

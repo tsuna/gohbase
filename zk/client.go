@@ -65,30 +65,30 @@ func NewClient(zkquorum string) Client {
 func (c *client) LocateResource(resource ResourceName) (string, uint16, error) {
 	conn, _, err := zk.Connect(c.zks, time.Duration(sessionTimeout)*time.Second)
 	if err != nil {
-		return "", 0, fmt.Errorf("Error connecting to ZooKeeper at %v: %s", c.zks, err)
+		return "", 0, fmt.Errorf("error connecting to ZooKeeper at %v: %s", c.zks, err)
 	}
 	defer conn.Close()
 
 	buf, _, err := conn.Get(string(resource))
 	if err != nil {
 		return "", 0,
-			fmt.Errorf("Failed to read the %s znode: %s", resource, err)
+			fmt.Errorf("failed to read the %s znode: %s", resource, err)
 	}
 	if len(buf) == 0 {
 		log.Fatalf("%s was empty!", resource)
 	} else if buf[0] != 0xFF {
 		return "", 0,
-			fmt.Errorf("The first byte of %s was 0x%x, not 0xFF", resource, buf[0])
+			fmt.Errorf("the first byte of %s was 0x%x, not 0xFF", resource, buf[0])
 	}
 	metadataLen := binary.BigEndian.Uint32(buf[1:])
 	if metadataLen < 1 || metadataLen > 65000 {
-		return "", 0, fmt.Errorf("Invalid metadata length for %s: %d", resource, metadataLen)
+		return "", 0, fmt.Errorf("invalid metadata length for %s: %d", resource, metadataLen)
 	}
 	buf = buf[1+4+metadataLen:]
 	magic := binary.BigEndian.Uint32(buf)
 	const pbufMagic = 1346524486 // 4 bytes: "PBUF"
 	if magic != pbufMagic {
-		return "", 0, fmt.Errorf("Invalid magic number for %s: %d", resource, magic)
+		return "", 0, fmt.Errorf("invalid magic number for %s: %d", resource, magic)
 	}
 	buf = buf[4:]
 	var server *pb.ServerName
@@ -97,7 +97,7 @@ func (c *client) LocateResource(resource ResourceName) (string, uint16, error) {
 		err = proto.UnmarshalMerge(buf, meta)
 		if err != nil {
 			return "", 0,
-				fmt.Errorf("Failed to deserialize the MetaRegionServer entry from ZK: %s", err)
+				fmt.Errorf("failed to deserialize the MetaRegionServer entry from ZK: %s", err)
 		}
 		server = meta.Server
 	} else {
@@ -105,7 +105,7 @@ func (c *client) LocateResource(resource ResourceName) (string, uint16, error) {
 		err = proto.UnmarshalMerge(buf, master)
 		if err != nil {
 			return "", 0,
-				fmt.Errorf("Failed to deserialize the Master entry from ZK: %s", err)
+				fmt.Errorf("failed to deserialize the Master entry from ZK: %s", err)
 		}
 		server = master.Master
 	}

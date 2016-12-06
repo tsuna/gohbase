@@ -118,7 +118,7 @@ func (c *client) checkProcedureWithBackoff(ctx context.Context, procID uint64) e
 
 		switch statusRes.GetState() {
 		case pb.GetProcedureResultResponse_NOT_FOUND:
-			return fmt.Errorf("Procedure not found")
+			return fmt.Errorf("procedure not found")
 		case pb.GetProcedureResultResponse_FINISHED:
 			return nil
 		default:

@@ -242,7 +242,7 @@ func (c *client) Increment(i *hrpc.Mutate) (int64, error) {
 	}
 
 	if len(r.Cells) != 1 {
-		return 0, fmt.Errorf("Increment returned %d cells, but we expected exactly one.",
+		return 0, fmt.Errorf("increment returned %d cells, but we expected exactly one",
 			len(r.Cells))
 	}
 
@@ -282,7 +282,7 @@ func (c *client) CheckAndPut(p *hrpc.Mutate, family string,
 	}
 
 	if r.Processed == nil {
-		return false, fmt.Errorf("Protobuf in the response didn't contain the field "+
+		return false, fmt.Errorf("protobuf in the response didn't contain the field "+
 			"indicating whether the CheckAndPut was successful or not: %s", r)
 	}
 

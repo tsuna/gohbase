@@ -148,7 +148,7 @@ func (f *List) AddFilters(filters ...Filter) {
 // ConstructPBFilter is TODO
 func (f *List) ConstructPBFilter() (*pb.Filter, error) {
 	if !ListOperator(*f.Operator).isValid() {
-		return nil, errors.New("Invalid operator specified.")
+		return nil, errors.New("invalid operator specified")
 	}
 
 	serializedFilter, err := proto.Marshal((*pb.FilterList)(f))
@@ -640,7 +640,7 @@ func NewSingleColumnValueFilter(columnFamily, columnQualifier []byte, compareOp 
 // ConstructPB is TODO
 func (f *SingleColumnValueFilter) ConstructPB() (*pb.SingleColumnValueFilter, error) {
 	if !CompareType(*f.CompareOp).isValid() {
-		return nil, errors.New("Invalid compare operation specified.")
+		return nil, errors.New("invalid compare operation specified")
 	}
 
 	return (*pb.SingleColumnValueFilter)(f), nil
