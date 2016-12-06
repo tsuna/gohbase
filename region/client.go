@@ -112,6 +112,8 @@ type call struct {
 // goroutine
 func (c *client) QueueRPC(rpc hrpc.Call) {
 	select {
+	case <-rpc.Context().Done():
+		// rpc timed out before being processed
 	case <-c.done:
 		rpc.ResultChan() <- hrpc.RPCResult{Error: ErrClientDead}
 	case c.rpcs <- rpc:
@@ -188,7 +190,7 @@ func (c *client) processRPCs() {
 			c.failAwaitingRPCs()
 			return
 		case <-ticker.C:
-			go c.sendBatch(batch)
+			c.sendBatch(batch)
 			batch = make([]*call, 0, c.rpcQueueSize)
 		case rpc := <-c.rpcs:
 			currID++
@@ -202,7 +204,7 @@ func (c *client) processRPCs() {
 				Call: rpc,
 			})
 			if len(batch) == c.rpcQueueSize {
-				go c.sendBatch(batch)
+				c.sendBatch(batch)
 				// TODO: optimize memory usage, reuse batch slice
 				batch = make([]*call, 0, c.rpcQueueSize)
 			}
