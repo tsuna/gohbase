@@ -190,8 +190,7 @@ func (c *client) processRPCs() {
 			c.failAwaitingRPCs()
 			return
 		case <-ticker.C:
-			c.sendBatch(batch)
-			batch = make([]*call, 0, c.rpcQueueSize)
+			batch = c.sendBatch(batch)
 		case rpc := <-c.rpcs:
 			currID++
 			// track the rpc
@@ -204,22 +203,20 @@ func (c *client) processRPCs() {
 				Call: rpc,
 			})
 			if len(batch) == c.rpcQueueSize {
-				c.sendBatch(batch)
-				// TODO: optimize memory usage, reuse batch slice
-				batch = make([]*call, 0, c.rpcQueueSize)
+				batch = c.sendBatch(batch)
 			}
 		}
 	}
 }
 
-func (c *client) sendBatch(rpcs []*call) {
-	for _, rpc := range rpcs {
+func (c *client) sendBatch(rpcs []*call) []*call {
+	for i, rpc := range rpcs {
 		select {
 		case <-c.done:
 			// An unrecoverable error has occured,
 			// region client has been stopped,
 			// don't send rpcs
-			return
+			return rpcs
 		case <-rpc.Context().Done():
 			// If the deadline has been exceeded, don't bother sending the
 			// request. The function that placed the RPC in our queue should
@@ -228,7 +225,7 @@ func (c *client) sendBatch(rpcs []*call) {
 			err := c.send(rpc)
 			if _, ok := err.(UnrecoverableError); ok {
 				c.fail(err)
-				return
+				return rpcs
 			} else if err != nil {
 				// Unexpected error, return to caller
 				c.sentM.Lock()
@@ -237,7 +234,11 @@ func (c *client) sendBatch(rpcs []*call) {
 				rpc.ResultChan() <- hrpc.RPCResult{Error: err}
 			}
 		}
+		// set to nil so that GC isn't blocked to clean up rpc
+		rpcs[i] = nil
 	}
+	// reset size, but preserve capacity to reuse the slice
+	return rpcs[:0]
 }
 
 func (c *client) receiveRPCs() {

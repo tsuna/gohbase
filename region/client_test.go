@@ -595,3 +595,44 @@ func TestRPCContext(t *testing.T) {
 	c.Close()
 	wgProcessRPCs.Wait()
 }
+
+func BenchmarkSendBatchMemory(b *testing.B) {
+	b.Skip("need to comment out short write detection")
+
+	ctrl := gomock.NewController(b)
+	defer ctrl.Finish()
+	mockConn := mock.NewMockReadWriteCloser(ctrl)
+	c := &client{
+		conn: mockConn,
+		rpcs: make(chan hrpc.Call),
+		done: make(chan struct{}),
+		sent: make(map[uint32]hrpc.Call),
+		// queue size is 1 so that all QueueRPC calls trigger sendBatch,
+		// and buffer slice reset
+		rpcQueueSize:  1,
+		flushInterval: 1000 * time.Second,
+	}
+
+	var wgWrites sync.WaitGroup
+	ctx := context.Background()
+	mockCall := mock.NewMockCall(ctrl)
+	mockCall.EXPECT().Name().Return("lol").AnyTimes()
+	mockCall.EXPECT().Serialize().Return([]byte("rpc"), nil).AnyTimes()
+	mockCall.EXPECT().Context().Return(ctx).AnyTimes()
+	// for this benchmark to work, need to comment out section of in c.write()
+	// that detect short writes
+	mockConn.EXPECT().Write(gomock.Any()).AnyTimes().Return(0, nil).Do(func(buf []byte) {
+		wgWrites.Done()
+	})
+
+	go c.processRPCs()
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		for i := 0; i < 100; i++ {
+			wgWrites.Add(1)
+			c.QueueRPC(mockCall)
+		}
+		wgWrites.Wait()
+	}
+	// we don't care about cleaning up
+}
