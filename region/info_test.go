@@ -44,8 +44,8 @@ func TestInfoFromMeta(t *testing.T) {
 		t.Errorf("Expected empty StopKey but got %q", info.StopKey())
 	}
 
-	expected := `*region.info{Table: "table", Name: "table,foo,` +
-		`1431921690563.53e41f94d5c3087af0d13259b8c4186d.", StopKey: ""}`
+	expected := `RegionInfo{Name: table,foo,` +
+		`1431921690563.53e41f94d5c3087af0d13259b8c4186d., Table: table, StartKey: , StopKey: }`
 	if s := info.String(); s != expected {
 		t.Errorf("Unexpected string representation.\nExpected: %q\n  Actual: %q", expected, s)
 	}

@@ -203,6 +203,8 @@ func (krc *keyRegionCache) put(reg hrpc.RegionInfo) []hrpc.RegionInfo {
 	os := krc.getOverlaps(reg)
 	for _, o := range os {
 		krc.regions.Delete(o.Name())
+		// let region establishers know that they can give up
+		o.MarkDead()
 	}
 
 	krc.regions.Put(reg.Name(), func(interface{}, bool) (interface{}, bool) {
@@ -215,5 +217,7 @@ func (krc *keyRegionCache) del(reg hrpc.RegionInfo) bool {
 	krc.m.Lock()
 	success := krc.regions.Delete(reg.Name())
 	krc.m.Unlock()
+	// let region establishers know that they can give up
+	reg.MarkDead()
 	return success
 }

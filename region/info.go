@@ -16,6 +16,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/internal/pb"
+	"golang.org/x/net/context"
 )
 
 // info describes a region.
@@ -24,6 +25,8 @@ type info struct {
 	name     []byte
 	startKey []byte
 	stopKey  []byte
+	ctx      context.Context
+	cancel   context.CancelFunc
 
 	// The attributes before this mutex are supposed to be immutable.
 	// The attributes defined below can be changed and accesses must
@@ -41,7 +44,10 @@ type info struct {
 
 // NewInfo creates a new region info
 func NewInfo(table, name, startKey, stopKey []byte) hrpc.RegionInfo {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &info{
+		ctx:      ctx,
+		cancel:   cancel,
 		table:    table,
 		name:     name,
 		startKey: startKey,
@@ -69,12 +75,12 @@ func infoFromCell(cell *hrpc.Cell) (hrpc.RegionInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode %q: %s", cell, err)
 	}
-	return &info{
-		table:    regInfo.TableName.Qualifier,
-		name:     cell.Row,
-		startKey: regInfo.StartKey,
-		stopKey:  regInfo.EndKey,
-	}, nil
+	return NewInfo(
+		regInfo.TableName.Qualifier,
+		cell.Row,
+		regInfo.StartKey,
+		regInfo.EndKey,
+	), nil
 }
 
 // ParseRegionInfo parses the contents of a row from the meta table.
@@ -173,9 +179,20 @@ func (i *info) MarkAvailable() {
 	i.m.Unlock()
 }
 
+// MarkDead will mark this region as not useful anymore to notify everyone
+// who's trying to use it that there's no point
+func (i *info) MarkDead() {
+	i.cancel()
+}
+
+// Context to check if the region is dead
+func (i *info) Context() context.Context {
+	return i.ctx
+}
+
 func (i *info) String() string {
-	return fmt.Sprintf("*region.info{Table: %q, Name: %q, StopKey: %q}",
-		i.table, i.name, i.stopKey)
+	return fmt.Sprintf("RegionInfo{Name: %s, Table: %s, StartKey: %s, StopKey: %s}",
+		i.name, i.table, i.startKey, i.stopKey)
 }
 
 // Name returns region name

@@ -515,7 +515,9 @@ func TestFlushInterval(t *testing.T) {
 
 	ctx := context.Background()
 	var wgWrites sync.WaitGroup
-	for i := 0; i < 100; i++ {
+	numCalls := 100
+	calls := make([]hrpc.Call, numCalls)
+	for i := range calls {
 		wgWrites.Add(1)
 		mockCall := mock.NewMockCall(ctrl)
 		mockCall.EXPECT().Name().Return("lol").Times(1)
@@ -527,6 +529,9 @@ func TestFlushInterval(t *testing.T) {
 			15+len(payload), nil).Do(func(buf []byte) {
 			wgWrites.Done()
 		})
+		calls[i] = mockCall
+	}
+	for _, mockCall := range calls {
 		c.QueueRPC(mockCall)
 	}
 

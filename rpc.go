@@ -9,9 +9,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/region"
@@ -328,16 +328,32 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 			// need to look up region and address of the regionserver
 			originalReg := reg
 			// lookup region forever until we get it or we learn that it doesn't exist
-			reg, host, port, err = c.lookupRegion(context.Background(),
+			reg, host, port, err = c.lookupRegion(reg.Context(),
 				originalReg.Table(), originalReg.StartKey())
 			if err == TableNotFound {
 				// region doesn't exist, delete it from caches
 				c.regions.del(originalReg)
 				c.clients.del(originalReg)
 				originalReg.MarkAvailable()
+
+				log.WithFields(log.Fields{
+					"region": originalReg.String(),
+					"err":    err,
+				}).Info("region does not exist anymore")
+				return
+			} else if err == ErrDeadline {
+				// region is dead
+				originalReg.MarkAvailable()
+				log.WithFields(log.Fields{
+					"region": originalReg.String(),
+					"err":    err,
+				}).Info("region became dead while I was trying to reestablish it")
 				return
 			} else if err != nil {
-				log.Fatalf("Unknow error occured when looking up region: %v", err)
+				log.WithFields(log.Fields{
+					"region": originalReg.String(),
+					"err":    err,
+				}).Fatal("unknown error occured when looking up region")
 			}
 
 			if !bytes.Equal(reg.Name(), originalReg.Name()) {
@@ -384,6 +400,10 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 			reg.SetClient(client)
 			reg.MarkAvailable()
 			return
+		} else if err == context.Canceled {
+			// region is dead
+			reg.MarkAvailable()
+			return
 		}
 
 		// reset address because we weren't able to connect to it,
@@ -391,9 +411,11 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 		host, port = "", 0
 
 		// This will be hit if there was an error connecting to the region
-		backoff, err = sleepAndIncreaseBackoff(context.Background(), backoff)
+		backoff, err = sleepAndIncreaseBackoff(reg.Context(), backoff)
 		if err != nil {
-			log.Fatalf("this error should never happen: %v", err)
+			// region is dead
+			reg.MarkAvailable()
+			return
 		}
 	}
 }
@@ -429,7 +451,7 @@ func (c *client) establishRegionClient(reg hrpc.RegionInfo,
 	} else {
 		clientType = region.MasterClient
 	}
-	clientCtx, cancel := context.WithTimeout(context.Background(), regionLookupTimeout)
+	clientCtx, cancel := context.WithTimeout(reg.Context(), regionLookupTimeout)
 	defer cancel()
 	return region.NewClient(clientCtx, host, port, clientType,
 		c.rpcQueueSize, c.flushInterval)

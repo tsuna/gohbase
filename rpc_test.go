@@ -325,3 +325,53 @@ func TestSendRPCtoRegionClientDown(t *testing.T) {
 		t.Error("rc2 is not in clients cache")
 	}
 }
+
+func TestReestablishDeadRegion(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	// setting zookeeper client to nil because we don't
+	// expect for it to be called
+	c := newMockClient(nil)
+	rc1, err := region.NewClient(context.Background(), "regionserver", 0, region.RegionClient, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// here we assume that this region was removed from
+	// regions cache and thereby is considered dead
+	reg := region.NewInfo(
+		[]byte("test"),
+		[]byte("test,,1234567890042.yoloyoloyoloyoloyoloyoloyoloyolo."),
+		nil, nil)
+	reg.MarkDead()
+
+	// pretend regionserver:1 has meta table
+	c.metaRegionInfo.SetClient(rc1)
+	c.clients.put(rc1, c.metaRegionInfo)
+	c.clients.put(rc1, reg)
+
+	reg.MarkUnavailable()
+
+	// pretend that there's a race condition right after we removed region
+	// from regions cache a client dies that we haven't removed from
+	// clients cache yet
+	c.reestablishRegion(reg) // should exit TODO: check fast
+
+	// should not put anything in cache, we specifically get a region with new name
+	if c.regions.regions.Len() != 0 {
+		t.Errorf("Expected to have no region in cache, got %d", c.regions.regions.Len())
+	}
+
+	// should not establish any clients
+	if len(c.clients.regions) != 1 {
+		t.Errorf("Expected to have 1 client in cache, got %d", len(c.clients.regions))
+	}
+
+	if reg.Client() != nil {
+		t.Error("Expected to have no client established")
+	}
+
+	// should have reg as available
+	if reg.IsUnavailable() {
+		t.Error("Expected region to be available")
+	}
+}

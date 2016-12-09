@@ -123,6 +123,12 @@ func (c *testClient) Port() uint16 {
 }
 
 func (c *testClient) QueueRPC(call hrpc.Call) {
+	// ignore timed out rpcs to mock the region client
+	select {
+	case <-call.Context().Done():
+		return
+	default:
+	}
 	if !bytes.Equal(call.Table(), []byte("hbase:meta")) {
 		return
 	}

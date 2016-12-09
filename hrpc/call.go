@@ -25,6 +25,8 @@ type RegionInfo interface {
 	AvailabilityChan() <-chan struct{}
 	MarkUnavailable() bool
 	MarkAvailable()
+	MarkDead()
+	Context() context.Context
 	String() string
 	Name() []byte
 	StartKey() []byte
