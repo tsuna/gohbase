@@ -35,6 +35,7 @@ func newMockClient(zkClient zk.Client) *client {
 		rpcQueueSize:  defaultRPCQueueSize,
 		flushInterval: defaultFlushInterval,
 		metaRegionInfo: region.NewInfo(
+			0,
 			[]byte("hbase:meta"),
 			[]byte("hbase:meta,,1"),
 			nil,
@@ -121,6 +122,7 @@ func TestReestablishRegionSplit(t *testing.T) {
 
 	// inject a fake regionserver client and fake region into cache
 	origlReg := region.NewInfo(
+		0,
 		[]byte("test1"),
 		[]byte("test1,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		nil,
@@ -225,6 +227,7 @@ func TestEstablishClientConcurrent(t *testing.T) {
 	regions := make([]hrpc.RegionInfo, numRegions)
 	for i := range regions {
 		r := region.NewInfo(
+			0,
 			[]byte("test"),
 			[]byte(fmt.Sprintf("test,%d,1234567890042.yoloyoloyoloyoloyoloyoloyoloyolo.", i)),
 			nil, nil)
@@ -274,6 +277,7 @@ func TestSendRPCtoRegionClientDown(t *testing.T) {
 
 	// create region with mock clien
 	origlReg := region.NewInfo(
+		0,
 		[]byte("test1"),
 		[]byte("test1,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		nil,
@@ -339,6 +343,7 @@ func TestReestablishDeadRegion(t *testing.T) {
 	// here we assume that this region was removed from
 	// regions cache and thereby is considered dead
 	reg := region.NewInfo(
+		0,
 		[]byte("test"),
 		[]byte("test,,1234567890042.yoloyoloyoloyoloyoloyoloyoloyolo."),
 		nil, nil)

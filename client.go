@@ -83,6 +83,7 @@ func newClient(zkquorum string, options ...Option) *client {
 		rpcQueueSize:  defaultRPCQueueSize,
 		flushInterval: defaultFlushInterval,
 		metaRegionInfo: region.NewInfo(
+			0,
 			[]byte("hbase:meta"),
 			[]byte("hbase:meta,,1"),
 			nil,

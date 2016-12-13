@@ -21,6 +21,7 @@ import (
 
 // info describes a region.
 type info struct {
+	id       uint64 // A timestamp when the region is created
 	table    []byte
 	name     []byte
 	startKey []byte
@@ -43,9 +44,10 @@ type info struct {
 }
 
 // NewInfo creates a new region info
-func NewInfo(table, name, startKey, stopKey []byte) hrpc.RegionInfo {
+func NewInfo(id uint64, table, name, startKey, stopKey []byte) hrpc.RegionInfo {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &info{
+		id:       id,
 		ctx:      ctx,
 		cancel:   cancel,
 		table:    table,
@@ -76,6 +78,7 @@ func infoFromCell(cell *hrpc.Cell) (hrpc.RegionInfo, error) {
 		return nil, fmt.Errorf("failed to decode %q: %s", cell, err)
 	}
 	return NewInfo(
+		*regInfo.RegionId,
 		regInfo.TableName.Qualifier,
 		cell.Row,
 		regInfo.StartKey,
@@ -191,8 +194,13 @@ func (i *info) Context() context.Context {
 }
 
 func (i *info) String() string {
-	return fmt.Sprintf("RegionInfo{Name: %s, Table: %s, StartKey: %s, StopKey: %s}",
-		i.name, i.table, i.startKey, i.stopKey)
+	return fmt.Sprintf("RegionInfo{Name: %s, ID: %d, Table: %s, StartKey: %s, StopKey: %s}",
+		i.name, i.id, i.table, i.startKey, i.stopKey)
+}
+
+// ID returns region's age
+func (i *info) ID() uint64 {
+	return i.id
 }
 
 // Name returns region name

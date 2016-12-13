@@ -63,6 +63,7 @@ func TestRegionDiscovery(t *testing.T) {
 		t.Fatal("Region not found even though we injected it in the cache.")
 	}
 	expected := region.NewInfo(
+		0,
 		[]byte("test"),
 		[]byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		nil,

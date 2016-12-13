@@ -27,6 +27,7 @@ func TestMetaCache(t *testing.T) {
 
 	// Inject an entry in the cache.  This entry covers the entire key range.
 	wholeTable := region.NewInfo(
+		0,
 		[]byte("test"),
 		[]byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		nil,
@@ -55,6 +56,7 @@ func TestMetaCache(t *testing.T) {
 
 	// Inject 3 entries in the cache.
 	region1 := region.NewInfo(
+		0,
 		[]byte("test"),
 		[]byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		[]byte(""),
@@ -68,6 +70,7 @@ func TestMetaCache(t *testing.T) {
 	client.clients.put(regClient, region1)
 
 	region2 := region.NewInfo(
+		0,
 		[]byte("test"),
 		[]byte("test,foo,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		[]byte("foo"),
@@ -81,6 +84,7 @@ func TestMetaCache(t *testing.T) {
 	client.clients.put(regClient, region2)
 
 	region3 := region.NewInfo(
+		0,
 		[]byte("test"),
 		[]byte("test,gohbase,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		[]byte("gohbase"),
@@ -114,6 +118,7 @@ func TestMetaCache(t *testing.T) {
 
 	// Change the last region (maybe it got split).
 	region4 := region.NewInfo(
+		0,
 		[]byte("test"),
 		[]byte("test,gohbase,1234567890042.swagswagswagswagswagswagswagswag."),
 		nil,
@@ -137,6 +142,7 @@ func TestMetaCache(t *testing.T) {
 
 	// attempt putting a region with same name
 	region5 := region.NewInfo(
+		0,
 		[]byte("test"),
 		[]byte("test,gohbase,1234567890042.swagswagswagswagswagswagswagswag."),
 		nil,
@@ -157,6 +163,7 @@ func (a regionNames) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 func TestMetaCacheGetOverlaps(t *testing.T) {
 	region1 := region.NewInfo(
+		0,
 		[]byte("test"),
 		[]byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		[]byte(""),
@@ -164,6 +171,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 	)
 
 	regionA := region.NewInfo(
+		0,
 		[]byte("hello"),
 		[]byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		[]byte(""),
@@ -171,6 +179,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 	)
 
 	regionB := region.NewInfo(
+		0,
 		[]byte("hello"),
 		[]byte("hello,foo,987654321042.56f833d5569a27c7a43fbf547b4924a4."),
 		[]byte("foo"),
@@ -178,6 +187,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 	)
 
 	regionC := region.NewInfo(
+		0,
 		[]byte("hello"),
 		[]byte("hello,fox,987654321042.56f833d5569a27c7a43fbf547b4924a4."),
 		[]byte("fox"),
@@ -185,6 +195,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 	)
 
 	regionWhole := region.NewInfo(
+		0,
 		[]byte("hello"),
 		[]byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		nil,
@@ -201,6 +212,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 		{ // different table
 			[]hrpc.RegionInfo{region1},
 			region.NewInfo(
+				0,
 				[]byte("hello"),
 				[]byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 				[]byte(""),
@@ -211,6 +223,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 		{ // overlaps with both
 			[]hrpc.RegionInfo{regionA, regionB},
 			region.NewInfo(
+				0,
 				[]byte("hello"),
 				[]byte("hello,bar,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 				[]byte("bar"),
@@ -221,6 +234,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 		{ // overlaps with both, key start == old one
 			[]hrpc.RegionInfo{regionA, regionB},
 			region.NewInfo(
+				0,
 				[]byte("hello"),
 				[]byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 				[]byte(""),
@@ -231,6 +245,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 		{ // overlaps with second
 			[]hrpc.RegionInfo{regionA, regionB},
 			region.NewInfo(
+				0,
 				[]byte("hello"),
 				[]byte("hello,fop,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 				[]byte("fop"),
@@ -241,6 +256,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 		{ // overlaps with first, new key start == old one
 			[]hrpc.RegionInfo{regionA, regionB},
 			region.NewInfo(
+				0,
 				[]byte("hello"),
 				[]byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 				[]byte(""),
@@ -261,6 +277,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 		{ // without bounds in cache, replaced by the empty stop key only
 			[]hrpc.RegionInfo{regionWhole},
 			region.NewInfo(
+				0,
 				[]byte("hello"),
 				[]byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 				[]byte("yolo"),
@@ -271,6 +288,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 		{ // without bounds in cache, replaced by the empty start key only
 			[]hrpc.RegionInfo{regionWhole},
 			region.NewInfo(
+				0,
 				[]byte("hello"),
 				[]byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 				nil,
@@ -286,6 +304,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 		{ // without bounds in cache, replaced by without bounds
 			[]hrpc.RegionInfo{regionWhole},
 			region.NewInfo(
+				0,
 				[]byte("hello"),
 				[]byte("hello,,1234567890042.yoloyoloyoloyoloyoloyoloyoloyolo."),
 				nil,
@@ -331,6 +350,7 @@ func TestClientCachePut(t *testing.T) {
 	regClient.EXPECT().Port().Return(uint16(1)).AnyTimes()
 
 	existing := client.clients.put(regClient, region.NewInfo(
+		0,
 		[]byte("test"),
 		[]byte("test,,1234567890042.yoloyoloyoloyoloyoloyoloyoloyolo."),
 		nil, nil))
@@ -355,6 +375,7 @@ func TestClientCachePut(t *testing.T) {
 
 	// but put a different region
 	existing = client.clients.put(regClient, region.NewInfo(
+		0,
 		[]byte("yolo"),
 		[]byte("yolo,,1234567890042.yoloyoloyoloyoloyoloyoloyoloyolo."),
 		nil, nil))

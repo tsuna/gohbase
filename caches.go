@@ -209,6 +209,7 @@ func (krc *keyRegionCache) put(reg hrpc.RegionInfo) (hrpc.RegionInfo, []hrpc.Reg
 			regInCache = v.(hrpc.RegionInfo)
 			return nil, false
 		}
+		// TODO: check that the regions we are replacing are in fact older
 		// find all entries that are overlapping with the range of the new region.
 		overlaps = krc.getOverlaps(reg)
 		return reg, true

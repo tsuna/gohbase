@@ -28,6 +28,7 @@ type RegionInfo interface {
 	MarkDead()
 	Context() context.Context
 	String() string
+	ID() uint64
 	Name() []byte
 	StartKey() []byte
 	StopKey() []byte
