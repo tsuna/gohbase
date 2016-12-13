@@ -57,9 +57,6 @@ func (c *client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 		// for example someone is replacing a region with a new one,
 		// we want to wait for that to finish so that we don't do
 		// unnecessary region lookups in case that's our region.
-		// TODO: is this bad?? We will unnecessarily slow down rpcs that have
-		// regions in cache every time we add a new region,
-		// so maybe it's fine to fail and take longer here
 		c.regionsLock.Lock()
 		reg := c.getRegionFromCache(rpc.Table(), rpc.Key())
 		c.regionsLock.Unlock()
@@ -167,22 +164,6 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 	}
 }
 
-// checkAndPutRegion checks cache for table and key and if no region exists,
-// marks passed region unavailable and adds it to cache.
-// This method is not concurrency safe, requires regionsLock.
-func (c *client) checkAndPutRegion(table, key []byte, region hrpc.RegionInfo) hrpc.RegionInfo {
-	if existing := c.getRegionFromCache(table, key); existing != nil {
-		return existing
-	}
-
-	region.MarkUnavailable()
-	removed := c.regions.put(region)
-	for _, r := range removed {
-		c.clients.del(r)
-	}
-	return region
-}
-
 func (c *client) lookupRegion(ctx context.Context,
 	table, key []byte) (hrpc.RegionInfo, string, uint16, error) {
 	var reg hrpc.RegionInfo
@@ -210,6 +191,9 @@ func (c *client) lookupRegion(ctx context.Context,
 		}
 		if err == nil {
 			return reg, host, port, nil
+		} else {
+			log.Printf("Error looking up region for table=%q key=%q: %v",
+				table, key, err)
 		}
 		// This will be hit if there was an error locating the region
 		backoff, err = sleepAndIncreaseBackoff(ctx, backoff)
@@ -227,14 +211,22 @@ func (c *client) findRegion(ctx context.Context, table, key []byte) (hrpc.Region
 		return nil, err
 	}
 
-	// Check that the region wasn't added to
-	// the cache while we were looking it up.
-	c.regionsLock.Lock()
-	if r := c.checkAndPutRegion(table, key, reg); reg != r {
+	reg.MarkUnavailable()
+	if reg != c.metaRegionInfo && reg != c.adminRegionInfo {
+		// Check that the region wasn't added to
+		// the cache while we were looking it up.
+		c.regionsLock.Lock()
+		if inCache, removed := c.regions.put(reg); inCache != reg {
+			c.regionsLock.Unlock()
+			return inCache, nil
+		} else {
+			// remove clients
+			for _, r := range removed {
+				c.clients.del(r)
+			}
+		}
 		c.regionsLock.Unlock()
-		return r, nil
 	}
-	c.regionsLock.Unlock()
 
 	// Start a goroutine to connect to the region
 	go c.establishRegion(reg, host, port)
@@ -355,16 +347,18 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 					"err":    err,
 				}).Fatal("unknown error occured when looking up region")
 			}
-
 			if !bytes.Equal(reg.Name(), originalReg.Name()) {
-				// put new region and remove overlapping ones,
-				// will remove the original region as well
-				// TODO: if merge happened, and someone already put new region
-				// into cache while we were looking it up, it will be replaced
-				// with the same one here: should happen very rarely.
+				// put new region and remove overlapping ones.
+				// Should remove the original region as well.
 				reg.MarkUnavailable()
 				c.regionsLock.Lock()
-				removed := c.regions.put(reg)
+				inCache, removed := c.regions.put(reg)
+				if reg != inCache {
+					// someone already added this region before us. Can happen
+					// in a very rare case during a region merge.
+					originalReg.MarkAvailable()
+					return
+				}
 				for _, r := range removed {
 					c.clients.del(r)
 				}
@@ -372,14 +366,6 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 				// let rpcs know that they can retry and either get the newly
 				// added region from cache or lookup the one they need
 				originalReg.MarkAvailable()
-
-				if len(removed) > 1 {
-					log.Printf(
-						"Region merge happened. New region in cache: %s", reg.Name())
-				} else if len(removed) == 1 && bytes.Equal(removed[0].Name(), reg.Name()) {
-					log.Printf(
-						"Region merge happened. Replaced same region in cache: %s", reg.Name())
-				}
 			} else {
 				// same region, discard the looked up one
 				reg = originalReg

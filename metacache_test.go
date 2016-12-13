@@ -22,7 +22,7 @@ func TestMetaCache(t *testing.T) {
 
 	reg := client.getRegionFromCache([]byte("test"), []byte("theKey"))
 	if reg != nil {
-		t.Errorf("Found region %#v even though the cache was empty?!", reg)
+		t.Errorf("Found region %v even though the cache was empty?!", reg)
 	}
 
 	// Inject an entry in the cache.  This entry covers the entire key range.
@@ -43,11 +43,11 @@ func TestMetaCache(t *testing.T) {
 
 	reg = client.getRegionFromCache([]byte("test"), []byte("theKey"))
 	if !reflect.DeepEqual(reg, wholeTable) {
-		t.Errorf("Found region %#v but expected %#v", reg, wholeTable)
+		t.Errorf("Found region %v but expected %v", reg, wholeTable)
 	}
 	reg = client.getRegionFromCache([]byte("test"), []byte("")) // edge case.
 	if !reflect.DeepEqual(reg, wholeTable) {
-		t.Errorf("Found region %#v but expected %#v", reg, wholeTable)
+		t.Errorf("Found region %v but expected %v", reg, wholeTable)
 	}
 
 	// Clear our client.
@@ -60,7 +60,11 @@ func TestMetaCache(t *testing.T) {
 		[]byte(""),
 		[]byte("foo"),
 	)
-	client.regions.put(region1)
+	if reg, os := client.regions.put(region1); reg != region1 {
+		t.Errorf("Expected to put new region into cache, got: %v", reg)
+	} else if len(os) != 0 {
+		t.Errorf("Didn't expect any overlaps, got: %v", os)
+	}
 	client.clients.put(regClient, region1)
 
 	region2 := region.NewInfo(
@@ -69,7 +73,11 @@ func TestMetaCache(t *testing.T) {
 		[]byte("foo"),
 		[]byte("gohbase"),
 	)
-	client.regions.put(region2)
+	if reg, os := client.regions.put(region2); reg != region2 {
+		t.Errorf("Expected to put new region into cache, got: %v", reg)
+	} else if len(os) != 0 {
+		t.Errorf("Didn't expect any overlaps, got: %v", os)
+	}
 	client.clients.put(regClient, region2)
 
 	region3 := region.NewInfo(
@@ -78,7 +86,11 @@ func TestMetaCache(t *testing.T) {
 		[]byte("gohbase"),
 		[]byte(""),
 	)
-	client.regions.put(region3)
+	if reg, os := client.regions.put(region3); reg != region3 {
+		t.Errorf("Expected to put new region into cache, got: %v", reg)
+	} else if len(os) != 0 {
+		t.Errorf("Didn't expect any overlaps, got: %v", os)
+	}
 	client.clients.put(regClient, region3)
 
 	testcases := []struct {
@@ -96,27 +108,44 @@ func TestMetaCache(t *testing.T) {
 	for i, testcase := range testcases {
 		reg = client.getRegionFromCache([]byte("test"), []byte(testcase.key))
 		if !reflect.DeepEqual(reg, testcase.reg) {
-			t.Errorf("[#%d] Found region %#v but expected %#v", i, reg, testcase.reg)
+			t.Errorf("[#%d] Found region %v but expected %v", i, reg, testcase.reg)
 		}
 	}
 
 	// Change the last region (maybe it got split).
-	region3 = region.NewInfo(
+	region4 := region.NewInfo(
 		[]byte("test"),
-		[]byte("test,gohbase,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		[]byte("test,gohbase,1234567890042.swagswagswagswagswagswagswagswag."),
 		nil,
 		[]byte("zab"),
 	)
-	client.regions.put(region3)
-	client.clients.put(regClient, region3)
+	if reg, os := client.regions.put(region4); reg != region4 {
+		t.Errorf("Expected to put new region into cache, got: %v", reg)
+	} else if len(os) != 1 || os[0] != region3 {
+		t.Errorf("Expected overlap with region3, got: %v", os)
+	}
+	client.clients.put(regClient, region4)
 
 	reg = client.getRegionFromCache([]byte("test"), []byte("theKey"))
-	if !reflect.DeepEqual(reg, region3) {
-		t.Errorf("Found region %#v but expected %#v", reg, region3)
+	if !reflect.DeepEqual(reg, region4) {
+		t.Errorf("Found region %v but expected %v", reg, region4)
 	}
 	reg = client.getRegionFromCache([]byte("test"), []byte("zoo"))
 	if reg != nil {
-		t.Errorf("Shouldn't have found any region yet found %#v", reg)
+		t.Errorf("Shouldn't have found any region yet found %v", reg)
+	}
+
+	// attempt putting a region with same name
+	region5 := region.NewInfo(
+		[]byte("test"),
+		[]byte("test,gohbase,1234567890042.swagswagswagswagswagswagswagswag."),
+		nil,
+		[]byte("zab"),
+	)
+	if reg, os := client.regions.put(region5); reg != region4 {
+		t.Errorf("Expected to not replace a region in cache, got: %v", reg)
+	} else if len(os) != 0 {
+		t.Errorf("Didn't expect any overlaps, got: %v", os)
 	}
 }
 
