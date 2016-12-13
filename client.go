@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"sync"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -47,9 +46,6 @@ type client struct {
 	clientType int
 
 	regions keyRegionCache
-
-	// TODO: document what this protects.
-	regionsLock sync.Mutex
 
 	// Maps a hrpc.RegionInfo to the *region.Client that we think currently
 	// serves it.

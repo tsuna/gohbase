@@ -57,9 +57,7 @@ func (c *client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 		// for example someone is replacing a region with a new one,
 		// we want to wait for that to finish so that we don't do
 		// unnecessary region lookups in case that's our region.
-		c.regionsLock.Lock()
 		reg := c.getRegionFromCache(rpc.Table(), rpc.Key())
-		c.regionsLock.Unlock()
 		if reg == nil {
 			reg, err = c.findRegion(rpc.Context(), rpc.Table(), rpc.Key())
 			if err != nil {
@@ -215,9 +213,7 @@ func (c *client) findRegion(ctx context.Context, table, key []byte) (hrpc.Region
 	if reg != c.metaRegionInfo && reg != c.adminRegionInfo {
 		// Check that the region wasn't added to
 		// the cache while we were looking it up.
-		c.regionsLock.Lock()
 		if inCache, removed := c.regions.put(reg); inCache != reg {
-			c.regionsLock.Unlock()
 			return inCache, nil
 		} else {
 			// remove clients
@@ -225,7 +221,6 @@ func (c *client) findRegion(ctx context.Context, table, key []byte) (hrpc.Region
 				c.clients.del(r)
 			}
 		}
-		c.regionsLock.Unlock()
 	}
 
 	// Start a goroutine to connect to the region
@@ -351,7 +346,6 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 				// put new region and remove overlapping ones.
 				// Should remove the original region as well.
 				reg.MarkUnavailable()
-				c.regionsLock.Lock()
 				inCache, removed := c.regions.put(reg)
 				if reg != inCache {
 					// someone already added this region before us. Can happen
@@ -362,7 +356,6 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 				for _, r := range removed {
 					c.clients.del(r)
 				}
-				c.regionsLock.Unlock()
 				// let rpcs know that they can retry and either get the newly
 				// added region from cache or lookup the one they need
 				originalReg.MarkAvailable()
