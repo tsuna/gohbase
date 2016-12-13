@@ -196,33 +196,49 @@ func (krc *keyRegionCache) getOverlaps(reg hrpc.RegionInfo) []hrpc.RegionInfo {
 }
 
 // put looks up if there's already region with this name in regions cache
-// and if there's, returns it. Otherwise, it puts the region and removes all of
-// the overlaps. Returns the region in cache and a slice of removed overlapping regions.
-func (krc *keyRegionCache) put(reg hrpc.RegionInfo) (hrpc.RegionInfo, []hrpc.RegionInfo) {
-	var overlaps []hrpc.RegionInfo
-	regInCache := reg
-
+// and if there's, returns it in overlaps and doesn't modify the cache.
+// Otherwise, it puts the region and removes all overlaps in case all of
+// them are older. Returns a slice of overlapping regions and whether
+// passed region was put in the cache.
+func (krc *keyRegionCache) put(reg hrpc.RegionInfo) (overlaps []hrpc.RegionInfo, replaced bool) {
 	krc.m.Lock()
 	krc.regions.Put(reg.Name(), func(v interface{}, exists bool) (interface{}, bool) {
 		if exists {
-			// region is already in cache
-			regInCache = v.(hrpc.RegionInfo)
+			// region is already in cache,
+			// note: regions with the same name have the same age
+			overlaps = []hrpc.RegionInfo{v.(hrpc.RegionInfo)}
 			return nil, false
 		}
-		// TODO: check that the regions we are replacing are in fact older
 		// find all entries that are overlapping with the range of the new region.
 		overlaps = krc.getOverlaps(reg)
+		for _, o := range overlaps {
+			if o.ID() > reg.ID() {
+				// overlapping region is younger,
+				// don't replace any regions
+				// TODO: figure out if there can a case where we might
+				// have both older and younger overlapping regions, for
+				// now we only replace if all overlaps are older
+				return nil, false
+			}
+		}
+		// all overlaps are older, put the new region
+		replaced = true
 		return reg, true
 	})
+	if !replaced {
+		krc.m.Unlock()
+		return
+	}
 	// delete overlapping regions
+	// TODO: in case overlaps are always either younger or older,
+	// we can just greedily remove them in Put function
 	for _, o := range overlaps {
 		krc.regions.Delete(o.Name())
 		// let region establishers know that they can give up
 		o.MarkDead()
 	}
 	krc.m.Unlock()
-
-	return regInCache, overlaps
+	return
 }
 
 func (krc *keyRegionCache) del(reg hrpc.RegionInfo) bool {

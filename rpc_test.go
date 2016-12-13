@@ -80,7 +80,7 @@ func TestSendRPCSanity(t *testing.T) {
 	// addr -> region name
 	expClients := map[string]string{
 		"regionserver:1": "hbase:meta,,1",
-		"regionserver:2": "test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4.",
+		"regionserver:2": "test,,1434573235908.56f833d5569a27c7a43fbf547b4924a4.",
 	}
 
 	// make sure those are the right clients
@@ -124,7 +124,7 @@ func TestReestablishRegionSplit(t *testing.T) {
 	origlReg := region.NewInfo(
 		0,
 		[]byte("test1"),
-		[]byte("test1,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		[]byte("test1,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."),
 		nil,
 		nil,
 	)
@@ -229,7 +229,7 @@ func TestEstablishClientConcurrent(t *testing.T) {
 		r := region.NewInfo(
 			0,
 			[]byte("test"),
-			[]byte(fmt.Sprintf("test,%d,1234567890042.yoloyoloyoloyoloyoloyoloyoloyolo.", i)),
+			[]byte(fmt.Sprintf("test,%d,1434573235908.yoloyoloyoloyoloyoloyoloyoloyolo.", i)),
 			nil, nil)
 		r.MarkUnavailable()
 		regions[i] = r
@@ -345,11 +345,11 @@ func TestReestablishDeadRegion(t *testing.T) {
 	reg := region.NewInfo(
 		0,
 		[]byte("test"),
-		[]byte("test,,1234567890042.yoloyoloyoloyoloyoloyoloyoloyolo."),
+		[]byte("test,,1434573235908.yoloyoloyoloyoloyoloyoloyoloyolo."),
 		nil, nil)
 	reg.MarkDead()
 
-	// pretend regionserver:1 has meta table
+	// pretend regionserver:0 has meta table
 	c.metaRegionInfo.SetClient(rc1)
 	c.clients.put(rc1, c.metaRegionInfo)
 	c.clients.put(rc1, reg)
@@ -378,5 +378,117 @@ func TestReestablishDeadRegion(t *testing.T) {
 	// should have reg as available
 	if reg.IsUnavailable() {
 		t.Error("Expected region to be available")
+	}
+}
+
+func TestFindRegion(t *testing.T) {
+	tcases := []struct {
+		before    []hrpc.RegionInfo
+		after     []string
+		establish bool
+		regName   string
+		err       error
+	}{
+		{ // nothing in cache
+			before:    nil,
+			after:     []string{"test,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."},
+			establish: true,
+			regName:   "test,,1434573235908.56f833d5569a27c7a43fbf547b4924a4.",
+		},
+		{ // older region in cache
+			before: []hrpc.RegionInfo{
+				region.NewInfo(
+					1, []byte("test"),
+					[]byte("test,,1.yoloyoloyoloyoloyoloyoloyoloyolo."),
+					nil, nil),
+			},
+			after:     []string{"test,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."},
+			establish: true,
+			regName:   "test,,1434573235908.56f833d5569a27c7a43fbf547b4924a4.",
+		},
+		{ // younger region in cache
+			before: []hrpc.RegionInfo{
+				region.NewInfo(
+					9999999999999, []byte("test"),
+					[]byte("test,,9999999999999.yoloyoloyoloyoloyoloyoloyoloyolo."),
+					nil, nil),
+			},
+			after:     []string{"test,,9999999999999.yoloyoloyoloyoloyoloyoloyoloyolo."},
+			establish: false,
+			regName:   "test,,9999999999999.yoloyoloyoloyoloyoloyoloyoloyolo.",
+		},
+		{ // overlapping younger region in cache, passed key is not in that region
+			before: []hrpc.RegionInfo{
+				region.NewInfo(
+					9999999999999, []byte("test"),
+					[]byte("test,,9999999999999.yoloyoloyoloyoloyoloyoloyoloyolo."),
+					nil, []byte("foo")),
+			},
+			after:     []string{"test,,9999999999999.yoloyoloyoloyoloyoloyoloyoloyolo."},
+			establish: false,
+			err:       ErrRegionUnavailable,
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	// setting zookeeper client to nil because we don't
+	// expect for it to be called
+	c := newMockClient(nil)
+	rc, err := region.NewClient(context.Background(), "regionserver", 0, region.RegionClient, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// pretend regionserver:0 has meta table
+	c.metaRegionInfo.SetClient(rc)
+	c.clients.put(rc, c.metaRegionInfo)
+
+	ctx := context.Background()
+	testTable := []byte("test")
+	testKey := []byte("yolo")
+	for i, tcase := range tcases {
+		c.regions.regions.Clear()
+		// set up initial cache
+		for _, region := range tcase.before {
+			c.regions.put(region)
+		}
+
+		reg, err := c.findRegion(ctx, testTable, testKey)
+		if err != tcase.err {
+			t.Errorf("Test %d: Expected error %v, got %v", i, tcase.err, err)
+		}
+		if len(tcase.regName) == 0 {
+			if reg != nil {
+				t.Errorf("Test %d: Expected nil region, got %v", i, reg)
+			}
+		} else if string(reg.Name()) != tcase.regName {
+			t.Errorf("Test %d: Expected region with name %q, got region %v",
+				i, tcase.regName, reg)
+		}
+
+		// check cache
+		if len(tcase.after) != c.regions.regions.Len() {
+			t.Errorf("Test %d: Expected to have %d regions in cache, got %d",
+				i, len(tcase.after), c.regions.regions.Len())
+		}
+		for _, rn := range tcase.after {
+			if _, ok := c.regions.regions.Get([]byte(rn)); !ok {
+				t.Errorf("Test %d: Expected region %q to be in regions cache", i, rn)
+			}
+		}
+		// check client was looked up
+		if tcase.establish {
+			ch := reg.AvailabilityChan()
+			<-ch
+			rc2 := reg.Client()
+			if rc2 == nil {
+				t.Errorf("Test %d: Expected region %q to establish a client", i, reg.Name())
+				continue
+			}
+			rsAddr := fmt.Sprintf("%s:%d", rc2.Host(), rc2.Port())
+			if rsAddr != "regionserver:2" {
+				t.Errorf("Test %d: Expected regionserver:2, got %q", i, rsAddr)
+			}
+		}
 	}
 }

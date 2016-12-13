@@ -11,6 +11,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/aristanetworks/goarista/test"
 	"github.com/golang/mock/gomock"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/region"
@@ -62,8 +63,8 @@ func TestMetaCache(t *testing.T) {
 		[]byte(""),
 		[]byte("foo"),
 	)
-	if reg, os := client.regions.put(region1); reg != region1 {
-		t.Errorf("Expected to put new region into cache, got: %v", reg)
+	if os, replaced := client.regions.put(region1); !replaced {
+		t.Errorf("Expected to put new region into cache, got: %v", os)
 	} else if len(os) != 0 {
 		t.Errorf("Didn't expect any overlaps, got: %v", os)
 	}
@@ -76,8 +77,8 @@ func TestMetaCache(t *testing.T) {
 		[]byte("foo"),
 		[]byte("gohbase"),
 	)
-	if reg, os := client.regions.put(region2); reg != region2 {
-		t.Errorf("Expected to put new region into cache, got: %v", reg)
+	if os, replaced := client.regions.put(region2); !replaced {
+		t.Errorf("Expected to put new region into cache, got: %v", os)
 	} else if len(os) != 0 {
 		t.Errorf("Didn't expect any overlaps, got: %v", os)
 	}
@@ -90,8 +91,8 @@ func TestMetaCache(t *testing.T) {
 		[]byte("gohbase"),
 		[]byte(""),
 	)
-	if reg, os := client.regions.put(region3); reg != region3 {
-		t.Errorf("Expected to put new region into cache, got: %v", reg)
+	if os, replaced := client.regions.put(region3); !replaced {
+		t.Errorf("Expected to put new region into cache, got: %v", os)
 	} else if len(os) != 0 {
 		t.Errorf("Didn't expect any overlaps, got: %v", os)
 	}
@@ -124,10 +125,10 @@ func TestMetaCache(t *testing.T) {
 		nil,
 		[]byte("zab"),
 	)
-	if reg, os := client.regions.put(region4); reg != region4 {
-		t.Errorf("Expected to put new region into cache, got: %v", reg)
+	if os, replaced := client.regions.put(region4); !replaced {
+		t.Errorf("Expected to put new region into cache, got: %v", os)
 	} else if len(os) != 1 || os[0] != region3 {
-		t.Errorf("Expected overlap with region3, got: %v", os)
+		t.Errorf("Expected overlaps, got: %v", os)
 	}
 	client.clients.put(regClient, region4)
 
@@ -148,10 +149,105 @@ func TestMetaCache(t *testing.T) {
 		nil,
 		[]byte("zab"),
 	)
-	if reg, os := client.regions.put(region5); reg != region4 {
-		t.Errorf("Expected to not replace a region in cache, got: %v", reg)
-	} else if len(os) != 0 {
-		t.Errorf("Didn't expect any overlaps, got: %v", os)
+	if os, replaced := client.regions.put(region5); replaced {
+		t.Errorf("Expected to not replace a region in cache, got: %v", os)
+	} else if len(os) != 1 || os[0] != region4 {
+		t.Errorf("Expected overlaps, got: %v", os)
+	}
+}
+
+func TestRegionCacheAge(t *testing.T) {
+	tcases := []struct {
+		cachedRegions []hrpc.RegionInfo
+		newRegion     hrpc.RegionInfo
+		replaced      bool
+	}{
+		{ // all older
+			cachedRegions: []hrpc.RegionInfo{
+				region.NewInfo(
+					1, []byte("hello"),
+					[]byte("hello,,1.yoloyoloyoloyoloyoloyoloyoloyolo."),
+					[]byte(""), []byte("foo"),
+				),
+				region.NewInfo(
+					1, []byte("hello"),
+					[]byte("hello,foo,1.swagswagswagswagswagswagswagswag."),
+					[]byte("foo"), []byte(""),
+				)},
+			newRegion: region.NewInfo(
+				2, []byte("hello"),
+				[]byte("hello,,2.meowmemowmeowmemowmeowmemowmeow."),
+				[]byte(""), []byte(""),
+			),
+			replaced: true,
+		},
+		{ // all younger
+			cachedRegions: []hrpc.RegionInfo{
+				region.NewInfo(
+					2, []byte("hello"),
+					[]byte("hello,,2.yoloyoloyoloyoloyoloyoloyoloyolo."),
+					[]byte(""), []byte("foo"),
+				),
+				region.NewInfo(
+					2, []byte("hello"),
+					[]byte("hello,foo,2.swagswagswagswagswagswagswagswag."),
+					[]byte("foo"), []byte(""),
+				)},
+			newRegion: region.NewInfo(
+				1, []byte("hello"),
+				[]byte("hello,,1.meowmemowmeowmemowmeowmemowmeow."),
+				[]byte(""), []byte(""),
+			),
+			replaced: false,
+		},
+		{ // one younger, one older
+			cachedRegions: []hrpc.RegionInfo{
+				region.NewInfo(
+					1, []byte("hello"),
+					[]byte("hello,,1.yoloyoloyoloyoloyoloyoloyoloyolo."),
+					[]byte(""), []byte("foo"),
+				),
+				region.NewInfo(
+					3, []byte("hello"),
+					[]byte("hello,foo,3.swagswagswagswagswagswagswagswag."),
+					[]byte("foo"), []byte(""),
+				)},
+			newRegion: region.NewInfo(
+				2, []byte("hello"),
+				[]byte("hello,,1.meowmemowmeowmemowmeowmemowmeow."),
+				[]byte(""), []byte(""),
+			),
+			replaced: false,
+		},
+	}
+
+	client := newClient("~invalid.quorum~")
+	for i, tcase := range tcases {
+		client.regions.regions.Clear()
+		// set up initial cache
+		for _, region := range tcase.cachedRegions {
+			client.regions.put(region)
+		}
+
+		overlaps, replaced := client.regions.put(tcase.newRegion)
+		if replaced != tcase.replaced {
+			t.Errorf("Test %d: Expected %v, got %v", i, tcase.replaced, replaced)
+		}
+
+		expectedNames := make(regionNames, len(tcase.cachedRegions))
+		for i, r := range tcase.cachedRegions {
+			expectedNames[i] = r.Name()
+		}
+		osNames := make(regionNames, len(overlaps))
+		for i, o := range overlaps {
+			osNames[i] = o.Name()
+		}
+
+		// check overlaps are correct
+		if diff := test.Diff(expectedNames, osNames); diff != "" {
+			t.Errorf("Test %d: Expected: %v\nReceived: %v\nDiff:%s",
+				i, expectedNames, osNames, diff)
+		}
 	}
 }
 

@@ -23,26 +23,26 @@ type testClient struct {
 
 var metaRow = &pb.Result{Cell: []*pb.Cell{
 	&pb.Cell{
-		Row:       []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		Row:       []byte("test,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."),
 		Family:    []byte("info"),
 		Qualifier: []byte("regioninfo"),
 		Value: []byte("PBUF\b\xc4\xcd\xe9\x99\xe0)\x12\x0f\n\adefault\x12\x04test" +
 			"\x1a\x00\"\x00(\x000\x008\x00"),
 	},
 	&pb.Cell{
-		Row:       []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		Row:       []byte("test,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."),
 		Family:    []byte("info"),
 		Qualifier: []byte("seqnumDuringOpen"),
 		Value:     []byte("\x00\x00\x00\x00\x00\x00\x00\x02"),
 	},
 	&pb.Cell{
-		Row:       []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		Row:       []byte("test,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."),
 		Family:    []byte("info"),
 		Qualifier: []byte("server"),
 		Value:     []byte("regionserver:2"),
 	},
 	&pb.Cell{
-		Row:       []byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		Row:       []byte("test,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."),
 		Family:    []byte("info"),
 		Qualifier: []byte("serverstartcode"),
 		Value:     []byte("\x00\x00\x01N\x02\x92R\xb1"),

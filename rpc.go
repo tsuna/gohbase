@@ -60,7 +60,9 @@ func (c *client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
 		reg := c.getRegionFromCache(rpc.Table(), rpc.Key())
 		if reg == nil {
 			reg, err = c.findRegion(rpc.Context(), rpc.Table(), rpc.Key())
-			if err != nil {
+			if err == ErrRegionUnavailable {
+				continue
+			} else if err != nil {
 				return nil, err
 			}
 		}
@@ -213,13 +215,26 @@ func (c *client) findRegion(ctx context.Context, table, key []byte) (hrpc.Region
 	if reg != c.metaRegionInfo && reg != c.adminRegionInfo {
 		// Check that the region wasn't added to
 		// the cache while we were looking it up.
-		if inCache, removed := c.regions.put(reg); inCache != reg {
-			return inCache, nil
-		} else {
-			// remove clients
-			for _, r := range removed {
-				c.clients.del(r)
+		overlaps, replaced := c.regions.put(reg)
+		if !replaced {
+			// the same or younger regions are already in cache,
+			// iterate over overlaps to find the one that's right for our key
+			for _, r := range overlaps {
+				// overlaps are always the same table and in order,
+				// just compare stop keys
+				if bytes.Compare(key, r.StopKey()) < 0 || len(r.StopKey()) == 0 {
+					return r, nil
+				}
 			}
+			// our key is not in overlaps, this can happen in case there
+			// was a split, but somehow we got a pre-split region
+			// and splitA retion is already in cache and our key
+			// is in splitB, so we need to retry.
+			return nil, ErrRegionUnavailable
+		}
+		// otherwise, new region in cache, delete overlaps from client's cache
+		for _, r := range overlaps {
+			c.clients.del(r)
 		}
 	}
 
@@ -346,14 +361,14 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 				// put new region and remove overlapping ones.
 				// Should remove the original region as well.
 				reg.MarkUnavailable()
-				inCache, removed := c.regions.put(reg)
-				if reg != inCache {
-					// someone already added this region before us. Can happen
-					// in a very rare case during a region merge.
+				overlaps, replaced := c.regions.put(reg)
+				if !replaced {
+					// a region that is the same or younger is already in cache
 					originalReg.MarkAvailable()
 					return
 				}
-				for _, r := range removed {
+				// otherwise delete the overlapped regions in cache
+				for _, r := range overlaps {
 					c.clients.del(r)
 				}
 				// let rpcs know that they can retry and either get the newly
