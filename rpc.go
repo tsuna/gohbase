@@ -146,7 +146,7 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 			// sharing this region's client as unavailable, and start
 			// a goroutine to reconnect for each of them.
 			downregions := c.clients.clientDown(client)
-			for _, downreg := range downregions {
+			for downreg := range downregions {
 				if downreg.MarkUnavailable() {
 					downreg.SetClient(nil)
 					go c.reestablishRegion(downreg)

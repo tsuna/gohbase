@@ -19,7 +19,7 @@ import (
 type clientRegionCache struct {
 	m sync.Mutex
 
-	regions map[hrpc.RegionClient][]hrpc.RegionInfo
+	regions map[hrpc.RegionClient]map[hrpc.RegionInfo]struct{}
 }
 
 // put caches client and associates a region with it. Returns a client that is in cache.
@@ -34,17 +34,14 @@ func (rcc *clientRegionCache) put(c hrpc.RegionClient, r hrpc.RegionInfo) hrpc.R
 			// check client already knows about the region, checking
 			// by pointer is enough because we make sure that there are
 			// no regions with the same name around
-			for _, existingRegion := range regions {
-				if existingRegion == r {
-					return existingClient
-				}
+			if _, ok := regions[r]; !ok {
+				regions[r] = struct{}{}
 			}
-			rcc.regions[existingClient] = append(regions, r)
 			return existingClient
 		}
 	}
 	// no such client yet
-	rcc.regions[c] = []hrpc.RegionInfo{r}
+	rcc.regions[c] = map[hrpc.RegionInfo]struct{}{r: struct{}{}}
 	return c
 }
 
@@ -54,21 +51,13 @@ func (rcc *clientRegionCache) del(r hrpc.RegionInfo) {
 	if c != nil {
 		r.SetClient(nil)
 
-		rs := rcc.regions[c]
-		var index int
-		for i, reg := range rs {
-			if reg == r {
-				index = i
-			}
-		}
-		rs = append(rs[:index], rs[index+1:]...)
+		regions := rcc.regions[c]
+		delete(regions, r)
 
-		if len(rs) == 0 {
+		if len(regions) == 0 {
 			// close region client if noone is using it
 			delete(rcc.regions, c)
 			c.Close()
-		} else {
-			rcc.regions[c] = rs
 		}
 	}
 	rcc.m.Unlock()
@@ -77,7 +66,7 @@ func (rcc *clientRegionCache) del(r hrpc.RegionInfo) {
 func (rcc *clientRegionCache) closeAll() {
 	rcc.m.Lock()
 	for client, regions := range rcc.regions {
-		for _, region := range regions {
+		for region := range regions {
 			region.MarkUnavailable()
 			region.SetClient(nil)
 		}
@@ -86,7 +75,7 @@ func (rcc *clientRegionCache) closeAll() {
 	rcc.m.Unlock()
 }
 
-func (rcc *clientRegionCache) clientDown(c hrpc.RegionClient) []hrpc.RegionInfo {
+func (rcc *clientRegionCache) clientDown(c hrpc.RegionClient) map[hrpc.RegionInfo]struct{} {
 	rcc.m.Lock()
 	downregions := rcc.regions[c]
 	delete(rcc.regions, c)

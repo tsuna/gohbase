@@ -30,7 +30,7 @@ func newMockClient(zkClient zk.Client) *client {
 		clientType: standardClient,
 		regions:    keyRegionCache{regions: b.TreeNew(region.CompareGeneric)},
 		clients: clientRegionCache{
-			regions: make(map[hrpc.RegionClient][]hrpc.RegionInfo),
+			regions: make(map[hrpc.RegionClient]map[hrpc.RegionInfo]struct{}),
 		},
 		rpcQueueSize:  defaultRPCQueueSize,
 		flushInterval: defaultFlushInterval,
@@ -84,27 +84,29 @@ func TestSendRPCSanity(t *testing.T) {
 	}
 
 	// make sure those are the right clients
-	for c, r := range c.clients.regions {
+	for c, rs := range c.clients.regions {
 		cAddr := fmt.Sprintf("%s:%d", c.Host(), c.Port())
 		name, ok := expClients[cAddr]
 		if !ok {
 			t.Errorf("Got unexpected client %s:%d in cache", c.Host(), c.Port())
 			continue
 		}
-		if len(r) != 1 {
+		if len(rs) != 1 {
 			t.Errorf("Expected to have only 1 region in cache for client %s:%d",
 				c.Host(), c.Port())
 			continue
 		}
-		if string(r[0].Name()) != name {
-			t.Errorf("Unexpected name of region %q for client %s:%d, expected %q",
-				r[0].Name(), c.Host(), c.Port(), name)
-		}
-		// check bidirectional mapping, they have to be the same objects
-		rc := r[0].Client()
-		if c != rc {
-			t.Errorf("Invalid bidirectional mapping: forward=%s:%d, backward=%s:%d",
-				c.Host(), c.Port(), rc.Host(), rc.Port())
+		for r := range rs {
+			if string(r.Name()) != name {
+				t.Errorf("Unexpected name of region %q for client %s:%d, expected %q",
+					r.Name(), c.Host(), c.Port(), name)
+			}
+			// check bidirectional mapping, they have to be the same objects
+			rc := r.Client()
+			if c != rc {
+				t.Errorf("Invalid bidirectional mapping: forward=%s:%d, backward=%s:%d",
+					c.Host(), c.Port(), rc.Host(), rc.Port())
+			}
 		}
 	}
 
@@ -163,7 +165,7 @@ func TestReestablishRegionSplit(t *testing.T) {
 
 		// check that we have correct regions in the client
 		gotRegs := map[string]struct{}{}
-		for _, r := range rs {
+		for r := range rs {
 			gotRegs[string(r.Name())] = struct{}{}
 			// check that regions have correct client
 			if r.Client() != rc1 {
@@ -382,6 +384,8 @@ func TestReestablishDeadRegion(t *testing.T) {
 }
 
 func TestFindRegion(t *testing.T) {
+	// TODO: check regions are deleted from client's cache
+	// when regions are replaced
 	tcases := []struct {
 		before    []hrpc.RegionInfo
 		after     []string
