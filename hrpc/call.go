@@ -8,6 +8,7 @@ package hrpc
 import (
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 	"unsafe"
@@ -187,8 +188,14 @@ func MaxVersions(versions uint32) func(Call) error {
 		default:
 			return errors.New("'MaxVersions' option can only be used with Get or Scan queries")
 		case *Get:
+			if versions > math.MaxInt32 {
+				return errors.New("'MaxVersions' exceeds supported number of versions")
+			}
 			c.maxVersions = versions
 		case *Scan:
+			if versions > math.MaxInt32 {
+				return errors.New("'MaxVersions' exceeds supported number of versions")
+			}
 			c.maxVersions = versions
 		}
 		return nil

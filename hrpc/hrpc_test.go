@@ -7,6 +7,7 @@ package hrpc_test
 
 import (
 	"bytes"
+	"math"
 	"reflect"
 	"testing"
 	"time"
@@ -51,7 +52,15 @@ func TestNewGet(t *testing.T) {
 	if err != nil || !confirmGetAttributes(get, ctx, tableb, keyb, fam, filter1) {
 		t.Errorf("Get6 didn't set attributes correctly.")
 	}
-
+	get, err = hrpc.NewGet(ctx, tableb, keyb, hrpc.MaxVersions(math.MaxInt32))
+	if err != nil {
+		t.Errorf("Get7 didn't set attributes correctly.")
+	}
+	get, err = hrpc.NewGet(ctx, tableb, keyb, hrpc.MaxVersions(math.MaxInt32+1))
+	errStr := "'MaxVersions' exceeds supported number of versions"
+	if err != nil && errStr != err.Error() || err == nil {
+		t.Errorf("Get8 Expected: %#v\nReceived: %#v", errStr, err)
+	}
 }
 
 func confirmGetAttributes(g *hrpc.Get, ctx context.Context, table, key []byte,
