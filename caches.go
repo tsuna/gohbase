@@ -55,20 +55,26 @@ func (rcc *clientRegionCache) del(r hrpc.RegionInfo) {
 		r.SetClient(nil)
 
 		rs := rcc.regions[c]
-		var index int
+		index := -1
 		for i, reg := range rs {
 			if reg == r {
 				index = i
+				break
 			}
 		}
-		rs = append(rs[:index], rs[index+1:]...)
 
-		if len(rs) == 0 {
-			// close region client if noone is using it
-			delete(rcc.regions, c)
-			c.Close()
-		} else {
-			rcc.regions[c] = rs
+		if index >= 0 {
+			n := len(rs) - 1
+			if n == 0 {
+				// close region client if noone is using it
+				delete(rcc.regions, c)
+				c.Close()
+			} else {
+				// replace with the last element, then lop of last entry
+				rs[index] = rs[n]
+				rs = rs[:n]
+				rcc.regions[c] = rs
+			}
 		}
 	}
 	rcc.m.Unlock()
