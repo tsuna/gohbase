@@ -38,11 +38,16 @@ const (
 
 	// Meta is a ResourceName that indicates that the location of the Meta
 	// table is what will be fetched
-	Meta = ResourceName("/hbase/meta-region-server")
+	MetaPath = "/meta-region-server"
 
 	// Master is a ResourceName that indicates that the location of the Master
 	// server is what will be fetched
-	Master = ResourceName("/hbase/master")
+	MasterPath = "/master"
+
+	DefaultRoot = "/hbase"
+
+	Master = ResourceName(DefaultRoot + MasterPath)
+	Meta = ResourceName(DefaultRoot + MetaPath)
 )
 
 // Client is an interface of client that retrieves meta infomation from zookeeper
@@ -92,7 +97,7 @@ func (c *client) LocateResource(resource ResourceName) (string, uint16, error) {
 	}
 	buf = buf[4:]
 	var server *pb.ServerName
-	if resource == Meta {
+	if strings.HasSuffix(string(resource), MetaPath) {
 		meta := &pb.MetaRegionServer{}
 		err = proto.UnmarshalMerge(buf, meta)
 		if err != nil {

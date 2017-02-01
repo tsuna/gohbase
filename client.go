@@ -67,6 +67,10 @@ type client struct {
 
 	// The timeout before flushing the RPC queue in the region client
 	flushInterval time.Duration
+
+	// Master and Meta resource names
+	master zk.ResourceName
+	meta   zk.ResourceName
 }
 
 // NewClient creates a new HBase client.
@@ -92,6 +96,8 @@ func newClient(zkquorum string, options ...Option) *client {
 			nil,
 			nil),
 		zkClient: zk.NewClient(zkquorum),
+		master: zk.Master,
+		meta: zk.Meta,
 	}
 	for _, option := range options {
 		option(c)
@@ -112,6 +118,15 @@ func RpcQueueSize(size int) Option {
 func FlushInterval(interval time.Duration) Option {
 	return func(c *client) {
 		c.flushInterval = interval
+	}
+}
+
+// ZKPath will return an option that will set the ZooKeeper resources to
+// reference for the HBase master and meta region server
+func ZKPath(zkRootPath string) Option {
+	return func(c *client) {
+		c.master = (zk.ResourceName)(zkRootPath + zk.MasterPath)
+		c.meta = (zk.ResourceName)(zkRootPath + zk.MetaPath)
 	}
 }
 

@@ -341,7 +341,7 @@ func (c *client) readFully(buf []byte) error {
 func (c *client) sendHello(ctype ClientType) error {
 	connHeader := &pb.ConnectionHeader{
 		UserInfo: &pb.UserInformation{
-			EffectiveUser: proto.String("gopher"),
+			EffectiveUser: proto.String("root"),
 		},
 		ServiceName: proto.String(string(ctype)),
 		//CellBlockCodecClass: "org.apache.hadoop.hbase.codec.KeyValueCodec",

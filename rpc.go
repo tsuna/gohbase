@@ -191,11 +191,11 @@ func (c *client) lookupRegion(ctx context.Context,
 		// If it takes longer than regionLookupTimeout, fail so that we can sleep
 		lookupCtx, cancel := context.WithTimeout(ctx, regionLookupTimeout)
 		if c.clientType == adminClient {
-			host, port, err = c.zkLookup(lookupCtx, zk.Master)
+			host, port, err = c.zkLookup(lookupCtx, c.master)
 			cancel()
 			reg = c.adminRegionInfo
 		} else if bytes.Compare(table, c.metaRegionInfo.Table()) == 0 {
-			host, port, err = c.zkLookup(lookupCtx, zk.Meta)
+			host, port, err = c.zkLookup(lookupCtx, c.meta)
 			cancel()
 			reg = c.metaRegionInfo
 		} else {
