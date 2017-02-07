@@ -19,6 +19,7 @@ import (
 	"github.com/tsuna/gohbase/internal/pb"
 	"github.com/tsuna/gohbase/region"
 	"github.com/tsuna/gohbase/test/mock"
+	mockRegion "github.com/tsuna/gohbase/test/mock/region"
 	mockZk "github.com/tsuna/gohbase/test/mock/zk"
 	"github.com/tsuna/gohbase/zk"
 	"golang.org/x/net/context"
@@ -261,5 +262,66 @@ func TestEstablishClientConcurrent(t *testing.T) {
 				t.Errorf("Expected region %s to be available", r.Name())
 			}
 		}
+	}
+}
+
+func TestSendRPCtoRegionClientDown(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// we don't exepct any calls to zookeeper
+	c := newMockClient(nil)
+
+	// create region with mock clien
+	origlReg := region.NewInfo(
+		[]byte("test1"),
+		[]byte("test1,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		nil,
+		nil,
+	)
+	rc := mockRegion.NewMockRegionClient(ctrl)
+	origlReg.SetClient(rc)
+	c.regions.put(origlReg)
+	c.clients.put(rc, origlReg)
+
+	mockCall := mock.NewMockCall(ctrl)
+	mockCall.EXPECT().SetRegion(origlReg).Times(1)
+	mockCall.EXPECT().Context().Return(context.Background())
+	result := make(chan hrpc.RPCResult, 1)
+	mockCall.EXPECT().ResultChan().Return(result).Times(1)
+
+	rc2 := mockRegion.NewMockRegionClient(ctrl)
+	rc.EXPECT().QueueRPC(mockCall).Times(1).Do(func(rpc hrpc.Call) {
+		// remove old client from clients cache
+		c.clients.clientDown(rc)
+		// replace client in region with new client
+		// this simulate other rpc toggling client reestablishment
+		c.regions.put(origlReg)
+		c.clients.put(rc2, origlReg)
+		origlReg.SetClient(rc2)
+
+		// return UnrecoverableError from QueueRPC, to emulate dead client
+		result <- hrpc.RPCResult{Error: region.UnrecoverableError{}}
+	})
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		_, err := c.sendRPCToRegion(mockCall, origlReg)
+		if err != ErrRegionUnavailable {
+			t.Errorf("Got unexpected error: %v", err)
+		}
+		wg.Done()
+	}()
+
+	wg.Wait()
+
+	// check that we did not down new client
+	if len(c.clients.regions) != 1 {
+		t.Errorf("There are %d cached clients", len(c.clients.regions))
+	}
+	_, ok := c.clients.regions[rc2]
+	if !ok {
+		t.Error("rc2 is not in clients cache")
 	}
 }

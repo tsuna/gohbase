@@ -86,17 +86,9 @@ func (rcc *clientRegionCache) closeAll() {
 	rcc.m.Unlock()
 }
 
-func (rcc *clientRegionCache) clientDown(reg hrpc.RegionInfo) []hrpc.RegionInfo {
+func (rcc *clientRegionCache) clientDown(c hrpc.RegionClient) []hrpc.RegionInfo {
 	rcc.m.Lock()
-	var downregions []hrpc.RegionInfo
-	c := reg.Client()
-	for _, sharedReg := range rcc.regions[c] {
-		succ := sharedReg.MarkUnavailable()
-		sharedReg.SetClient(nil)
-		if succ {
-			downregions = append(downregions, sharedReg)
-		}
-	}
+	downregions := rcc.regions[c]
 	delete(rcc.regions, c)
 	rcc.m.Unlock()
 	return downregions
