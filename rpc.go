@@ -89,7 +89,6 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 	if reg.IsUnavailable() {
 		return nil, ErrRegionUnavailable
 	}
-
 	rpc.SetRegion(reg)
 
 	// Queue the RPC to be sent to the region
@@ -124,11 +123,10 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 		// the client), and start a goroutine to reestablish
 		// it.
 		if reg.MarkUnavailable() {
+			if reg != c.adminRegionInfo {
+				c.clients.del(reg)
+			}
 			go c.reestablishRegion(reg)
-		}
-		if reg != c.adminRegionInfo {
-			// The client won't be in the clients cache if this is the admin region
-			c.clients.del(reg)
 		}
 		return nil, ErrRegionUnavailable
 	case region.UnrecoverableError:
@@ -192,8 +190,12 @@ func (c *client) lookupRegion(ctx context.Context,
 		if err == nil {
 			return reg, host, port, nil
 		} else {
-			log.Printf("Error looking up region for table=%q key=%q: %v",
-				table, key, err)
+			log.WithFields(log.Fields{
+				"table":   string(table),
+				"key":     string(key),
+				"backoff": backoff,
+				"err":     err,
+			}).Error("failed looking up region")
 		}
 		// This will be hit if there was an error locating the region
 		backoff, err = sleepAndIncreaseBackoff(ctx, backoff)

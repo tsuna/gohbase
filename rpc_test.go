@@ -496,3 +496,69 @@ func TestFindRegion(t *testing.T) {
 		}
 	}
 }
+
+func TestConcurrentRetryableError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	zkc := mockZk.NewMockClient(ctrl)
+	// keep failing on zookeeper lookup
+	zkc.EXPECT().LocateResource(gomock.Any()).Return("", uint16(0), ErrDeadline).AnyTimes()
+	c := newMockClient(zkc)
+	// create region with mock clien
+	origlReg := region.NewInfo(
+		0,
+		[]byte("test1"),
+		[]byte("test1,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		nil,
+		nil,
+	)
+	// fake region to make sure we don't close the client
+	whateverRegion := region.NewInfo(
+		0,
+		[]byte("test2"),
+		[]byte("test2,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+		nil,
+		nil,
+	)
+	rc := mockRegion.NewMockRegionClient(ctrl)
+	rc.EXPECT().Host().Return("host").AnyTimes()
+	rc.EXPECT().Port().Return(uint16(1234)).AnyTimes()
+	origlReg.SetClient(rc)
+	whateverRegion.SetClient(rc)
+	c.regions.put(origlReg)
+	c.regions.put(whateverRegion)
+	c.clients.put(rc, origlReg)
+	c.clients.put(rc, whateverRegion)
+
+	numCalls := 100
+	rc.EXPECT().QueueRPC(gomock.Any()).MinTimes(1)
+
+	calls := make([]hrpc.Call, numCalls)
+	for i := range calls {
+		mockCall := mock.NewMockCall(ctrl)
+		mockCall.EXPECT().SetRegion(origlReg).AnyTimes()
+		mockCall.EXPECT().Context().Return(context.Background()).AnyTimes()
+		result := make(chan hrpc.RPCResult, 1)
+		result <- hrpc.RPCResult{Error: region.RetryableError{}}
+		mockCall.EXPECT().ResultChan().Return(result).AnyTimes()
+		calls[i] = mockCall
+	}
+
+	var wg sync.WaitGroup
+	for _, mockCall := range calls {
+		wg.Add(1)
+		go func(mockCall hrpc.Call) {
+			_, err := c.sendRPCToRegion(mockCall, origlReg)
+			if err != ErrRegionUnavailable {
+				t.Errorf("Got unexpected error: %v", err)
+			}
+			wg.Done()
+		}(mockCall)
+	}
+	wg.Wait()
+	origlReg.MarkDead()
+	if ch := origlReg.AvailabilityChan(); ch != nil {
+		<-ch
+	}
+}
