@@ -64,3 +64,13 @@ func (_m *MockRegionClient) QueueRPC(_param0 hrpc.Call) {
 func (_mr *_MockRegionClientRecorder) QueueRPC(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "QueueRPC", arg0)
 }
+
+func (_m *MockRegionClient) String() string {
+	ret := _m.ctrl.Call(_m, "String")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+func (_mr *_MockRegionClientRecorder) String() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "String")
+}

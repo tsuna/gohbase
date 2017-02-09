@@ -9,6 +9,7 @@ package region
 
 import (
 	"bytes"
+	"fmt"
 	"time"
 
 	"github.com/tsuna/gohbase/hrpc"
@@ -120,6 +121,10 @@ func (c *testClient) Host() string {
 
 func (c *testClient) Port() uint16 {
 	return c.port
+}
+
+func (c *testClient) String() string {
+	return fmt.Sprintf("RegionClient{Host: %s, Port %d}", c.host, c.port)
 }
 
 func (c *testClient) QueueRPC(call hrpc.Call) {

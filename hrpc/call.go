@@ -43,6 +43,7 @@ type RegionClient interface {
 	Host() string
 	Port() uint16
 	QueueRPC(Call)
+	String() string
 }
 
 // Call represents an HBase RPC call.

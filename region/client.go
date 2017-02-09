@@ -137,6 +137,11 @@ func (c *client) Port() uint16 {
 	return c.port
 }
 
+// String returns a string represintation of the current region client
+func (c *client) String() string {
+	return fmt.Sprintf("RegionClient{Host: %s, Port: %d}", c.host, c.port)
+}
+
 func (c *client) fail(err error) {
 	c.errM.Lock()
 	if c.err != nil {
@@ -145,7 +150,11 @@ func (c *client) fail(err error) {
 	}
 	c.err = err
 	c.errM.Unlock()
-	log.Errorf("Region client (%s:%d) error: %s", c.host, c.port, err)
+
+	log.WithFields(log.Fields{
+		"client": c,
+		"err":    err,
+	}).Error("error occured, closing region client")
 
 	// we don't close c.rpcs channel to make it block in select of QueueRPC
 	// and avoid dealing with synchronization of closing it while someone
@@ -167,6 +176,13 @@ func (c *client) failAwaitingRPCs() {
 	sent := c.sent
 	c.sent = make(map[uint32]hrpc.Call)
 	c.sentM.Unlock()
+
+	log.WithFields(log.Fields{
+		"client": c,
+		"err":    res.Error,
+		"count":  len(sent),
+	}).Debug("failing awaiting RPCs")
+
 	// send error to awaiting rpcs
 	for _, rpc := range sent {
 		rpc.ResultChan() <- res
@@ -252,8 +268,10 @@ func (c *client) receiveRPCs() {
 				c.fail(err)
 				return
 			} else if err != nil {
-				log.Errorf("Region client (%s:%d) error: Failed receiving rpc response: %s",
-					c.host, c.port, err)
+				log.WithFields(log.Fields{
+					"client": c,
+					"err":    err,
+				}).Errorf("error receiving rpc response")
 			}
 		}
 	}
