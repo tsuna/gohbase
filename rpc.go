@@ -173,21 +173,43 @@ func (c *client) lookupRegion(ctx context.Context,
 		// If it takes longer than regionLookupTimeout, fail so that we can sleep
 		lookupCtx, cancel := context.WithTimeout(ctx, regionLookupTimeout)
 		if c.clientType == adminClient {
+			log.WithField("resource", zk.Master).Debug("looking up master")
+
 			host, port, err = c.zkLookup(lookupCtx, zk.Master)
 			cancel()
 			reg = c.adminRegionInfo
 		} else if bytes.Compare(table, c.metaRegionInfo.Table()) == 0 {
+			log.WithField("resource", zk.Meta).Debug("looking up region server of hbase:meta")
+
 			host, port, err = c.zkLookup(lookupCtx, zk.Meta)
 			cancel()
 			reg = c.metaRegionInfo
 		} else {
+			log.WithFields(log.Fields{
+				"table": string(table),
+				"key":   string(key),
+			}).Debug("looking up region")
+
 			reg, host, port, err = c.metaLookup(lookupCtx, table, key)
 			cancel()
 			if err == TableNotFound {
+				log.WithFields(log.Fields{
+					"table": string(table),
+					"key":   string(key),
+					"err":   err,
+				}).Debug("hbase:meta does not know about this table/key")
 				return nil, "", 0, err
 			}
 		}
 		if err == nil {
+			log.WithFields(log.Fields{
+				"table":  string(table),
+				"key":    string(key),
+				"region": reg,
+				"host":   host,
+				"port":   port,
+			}).Debug("looked up a region")
+
 			return reg, host, port, nil
 		} else {
 			log.WithFields(log.Fields{
