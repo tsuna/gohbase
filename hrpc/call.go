@@ -208,11 +208,15 @@ func MaxVersions(versions uint32) func(Call) error {
 
 // NumberOfRows is used as a parameter for request creation.
 // Adds NumberOfRows constraint to a request.
+// Should be > 0, avoid extremely low values such as 1.
 func NumberOfRows(n uint32) func(Call) error {
 	return func(g Call) error {
 		scan, ok := g.(*Scan)
 		if !ok {
 			return errors.New("'NumberOfRows' option can only be used with Scan queries")
+		}
+		if n == 0 {
+			return errors.New("'NumberOfRows' option must be greater than 0")
 		}
 		scan.numberOfRows = n
 		return nil

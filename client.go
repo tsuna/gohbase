@@ -142,19 +142,20 @@ func (c *client) Scan(s *hrpc.Scan) ([]*hrpc.Result, error) {
 	maxVersions := s.MaxVersions()
 	numberOfRows := s.NumberOfRows()
 	for {
-		// Make a new Scan RPC for this region
 		if rpc != nil {
 			// If it's not the first region, we want to start at whatever the
 			// last region's StopKey was
 			startRow = rpc.RegionStop()
 		}
+		regionRowLimit := numberOfRows - uint32(len(results))
 
 		// TODO: would be nicer to clone it in some way
-		rpc, err := hrpc.NewScanRange(ctx, table, startRow, stopRow,
+		var err error
+		rpc, err = hrpc.NewScanRange(ctx, table, startRow, stopRow,
 			hrpc.Families(families), hrpc.Filters(filters),
 			hrpc.TimeRangeUint64(fromTs, toTs),
 			hrpc.MaxVersions(maxVersions),
-			hrpc.NumberOfRows(numberOfRows))
+			hrpc.NumberOfRows(regionRowLimit))
 		if err != nil {
 			return nil, err
 		}
@@ -163,6 +164,7 @@ func (c *client) Scan(s *hrpc.Scan) ([]*hrpc.Result, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		scanres = res.(*pb.ScanResponse)
 		results = append(results, scanres.Results...)
 
@@ -170,7 +172,7 @@ func (c *client) Scan(s *hrpc.Scan) ([]*hrpc.Result, error) {
 		// true, so we should figure out if there's a better way to know when
 		// to move on to the next region than making an extra request and
 		// seeing if there were no results
-		for len(scanres.Results) != 0 {
+		for len(scanres.Results) != 0 && uint32(len(results)) < numberOfRows {
 			rpc = hrpc.NewScanFromID(ctx, table, *scanres.ScannerId, rpc.Key())
 
 			res, err = c.sendRPC(rpc)
@@ -187,14 +189,16 @@ func (c *client) Scan(s *hrpc.Scan) ([]*hrpc.Result, error) {
 		}
 		res, err = c.sendRPC(rpc)
 
-		// Check to see if this region is the last we should scan (either
-		// because (1) it's the last region or (3) because its stop_key is
-		// greater than or equal to the stop_key of this scanner provided
-		// that (2) we're not trying to scan until the end of the table).
-		// (1)
-		if len(rpc.RegionStop()) == 0 ||
+		// Check to see if this region is the last we should scan because:
+		// (0) we got the number of rows user asked for
+		// (1) it's the last region or
+		// (3) because its stop_key is greater than or equal to the stop_key of this scanner,
+		// provided that (2) we're not trying to scan until the end of the table.
+		if uint32(len(results)) >= numberOfRows ||
+			// (1)
+			len(rpc.RegionStop()) == 0 ||
 			// (2)                (3)
-			len(stopRow) != 0 && bytes.Compare(stopRow, rpc.RegionStop()) <= 0 {
+			(len(stopRow) != 0 && bytes.Compare(stopRow, rpc.RegionStop()) <= 0) {
 			// Do we want to be returning a slice of Result objects or should we just
 			// put all the Cells into the same Result object?
 			localResults := make([]*hrpc.Result, len(results))
