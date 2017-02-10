@@ -10,6 +10,7 @@ import (
 	"io"
 	"sync"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/cznic/b"
 	"github.com/tsuna/gohbase/hrpc"
 )
@@ -26,7 +27,6 @@ type clientRegionCache struct {
 // TODO: obvious place for optimization (use map with address as key to lookup exisiting clients)
 func (rcc *clientRegionCache) put(c hrpc.RegionClient, r hrpc.RegionInfo) hrpc.RegionClient {
 	rcc.m.Lock()
-	defer rcc.m.Unlock()
 	for existingClient, regions := range rcc.regions {
 		// check if client already exists, checking by host and port
 		// because concurrent callers might try to put the same client
@@ -37,11 +37,21 @@ func (rcc *clientRegionCache) put(c hrpc.RegionClient, r hrpc.RegionInfo) hrpc.R
 			if _, ok := regions[r]; !ok {
 				regions[r] = struct{}{}
 			}
+			rcc.m.Unlock()
+
+			log.WithFields(log.Fields{
+				"existingClient": existingClient,
+				"client":         c,
+			}).Debug("region client is already in client's cache")
 			return existingClient
 		}
 	}
+
 	// no such client yet
 	rcc.regions[c] = map[hrpc.RegionInfo]struct{}{r: struct{}{}}
+	rcc.m.Unlock()
+
+	log.WithField("client", c).Info("added new region client")
 	return c
 }
 
@@ -80,6 +90,8 @@ func (rcc *clientRegionCache) clientDown(c hrpc.RegionClient) map[hrpc.RegionInf
 	downregions := rcc.regions[c]
 	delete(rcc.regions, c)
 	rcc.m.Unlock()
+
+	log.WithField("client", c).Info("removed region client")
 	return downregions
 }
 
@@ -216,6 +228,12 @@ func (krc *keyRegionCache) put(reg hrpc.RegionInfo) (overlaps []hrpc.RegionInfo,
 	})
 	if !replaced {
 		krc.m.Unlock()
+
+		log.WithFields(log.Fields{
+			"region":   reg,
+			"overlaps": overlaps,
+			"replaced": replaced,
+		}).Debug("region is already in cache")
 		return
 	}
 	// delete overlapping regions
@@ -227,6 +245,12 @@ func (krc *keyRegionCache) put(reg hrpc.RegionInfo) (overlaps []hrpc.RegionInfo,
 		o.MarkDead()
 	}
 	krc.m.Unlock()
+
+	log.WithFields(log.Fields{
+		"region":   reg,
+		"overlaps": overlaps,
+		"replaced": replaced,
+	}).Info("added new region")
 	return
 }
 
@@ -236,5 +260,9 @@ func (krc *keyRegionCache) del(reg hrpc.RegionInfo) bool {
 	krc.m.Unlock()
 	// let region establishers know that they can give up
 	reg.MarkDead()
+
+	log.WithFields(log.Fields{
+		"region": reg,
+	}).Debug("removed region")
 	return success
 }

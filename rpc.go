@@ -373,7 +373,7 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 				log.WithFields(log.Fields{
 					"region": originalReg.String(),
 					"err":    err,
-				}).Info("region became dead while I was trying to reestablish it")
+				}).Info("region became dead while establishing client for it")
 				return
 			} else if err != nil {
 				log.WithFields(log.Fields{

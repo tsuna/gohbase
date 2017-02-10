@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/tsuna/gohbase"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/test"
@@ -30,6 +31,8 @@ func TestMain(m *testing.M) {
 	if host == nil {
 		panic("Host is not set!")
 	}
+
+	log.SetLevel(log.DebugLevel)
 
 	ac := gohbase.NewAdminClient(*host)
 	err := test.CreateTable(ac, table, []string{"cf", "cf2"})

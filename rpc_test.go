@@ -286,6 +286,7 @@ func TestSendRPCtoRegionClientDown(t *testing.T) {
 		nil,
 	)
 	rc := mockRegion.NewMockRegionClient(ctrl)
+	rc.EXPECT().String().Return("mock region client").AnyTimes()
 	origlReg.SetClient(rc)
 	c.regions.put(origlReg)
 	c.clients.put(rc, origlReg)
@@ -297,6 +298,7 @@ func TestSendRPCtoRegionClientDown(t *testing.T) {
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
 
 	rc2 := mockRegion.NewMockRegionClient(ctrl)
+	rc2.EXPECT().String().Return("mock region client").AnyTimes()
 	rc.EXPECT().QueueRPC(mockCall).Times(1).Do(func(rpc hrpc.Call) {
 		// remove old client from clients cache
 		c.clients.clientDown(rc)
@@ -522,6 +524,7 @@ func TestConcurrentRetryableError(t *testing.T) {
 		nil,
 	)
 	rc := mockRegion.NewMockRegionClient(ctrl)
+	rc.EXPECT().String().Return("mock region client").AnyTimes()
 	rc.EXPECT().Host().Return("host").AnyTimes()
 	rc.EXPECT().Port().Return(uint16(1234)).AnyTimes()
 	origlReg.SetClient(rc)
