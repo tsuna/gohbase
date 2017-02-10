@@ -87,6 +87,7 @@ func NewScanRange(ctx context.Context, table, startRow, stopRow []byte,
 	}
 	scan.startRow = startRow
 	scan.stopRow = stopRow
+	scan.key = startRow
 	return scan, nil
 }
 
@@ -110,6 +111,7 @@ func NewScanFromID(ctx context.Context, table []byte,
 	scannerID uint64, startRow []byte) *Scan {
 	scan, _ := baseScan(ctx, table)
 	scan.scannerID = scannerID
+	scan.key = startRow
 	return scan
 }
 
@@ -121,6 +123,7 @@ func NewCloseFromID(ctx context.Context, table []byte,
 	scan, _ := baseScan(ctx, table)
 	scan.scannerID = scannerID
 	scan.closeScanner = true
+	scan.key = startRow
 	return scan
 }
 
