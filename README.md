@@ -60,9 +60,8 @@ scanRsp, err := client.Scan(scanRequest)
 
 ## Contributing
 
-Any help would be appreciated. Please use
-[GerritHub](https://review.gerrithub.io/#/admin/projects/tsuna/gohbase) to
-send changes for review, instead of GitHub pull requests. Please sign the
+Any help would be appreciated. Please use Github pull requests
+to send changes for review. Please sign the
 [Contributor License Agreement](https://docs.google.com/spreadsheet/viewform?formkey=dFNiOFROLXJBbFBmMkQtb1hNMWhUUnc6MQ)
 when you send your first change for review.  
 
