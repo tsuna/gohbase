@@ -490,7 +490,7 @@ func (c *client) zkLookup(ctx context.Context, resource zk.ResourceName) (string
 	// separate goroutine.
 	reschan := make(chan zkResult, 1)
 	go func() {
-		host, port, err := c.zkClient.LocateResource(resource)
+		host, port, err := c.zkClient.LocateResource(resource.Prepend(c.zkRoot))
 		// This is guaranteed to never block as the channel is always buffered.
 		reschan <- zkResult{host, port, err}
 	}()
