@@ -24,6 +24,7 @@ const (
 	adminClient
 	defaultRPCQueueSize  = 100
 	defaultFlushInterval = 20 * time.Millisecond
+	defaultZkRoot        = "/hbase"
 )
 
 // Client a regular HBase client
@@ -61,6 +62,9 @@ type client struct {
 	// zkClient is zookeeper for retrieving meta and admin information
 	zkClient zk.Client
 
+	// The root zookeeper path for Hbase. By default, this is usually "/hbase".
+	zkRoot string
+
 	// The timeout before flushing the RPC queue in the region client
 	flushInterval time.Duration
 }
@@ -88,6 +92,7 @@ func newClient(zkquorum string, options ...Option) *client {
 			[]byte("hbase:meta,,1"),
 			nil,
 			nil),
+		zkRoot:   defaultZkRoot,
 		zkClient: zk.NewClient(zkquorum),
 	}
 	for _, option := range options {
@@ -101,6 +106,13 @@ func newClient(zkquorum string, options ...Option) *client {
 func RpcQueueSize(size int) Option {
 	return func(c *client) {
 		c.rpcQueueSize = size
+	}
+}
+
+// ZookeeperRoot will return an option that will set the zookeeper root path used in a given client.
+func ZookeeperRoot(root string) Option {
+	return func(c *client) {
+		c.zkRoot = root
 	}
 }
 
