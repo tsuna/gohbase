@@ -15,6 +15,7 @@ import (
 	"time"
 	"unsafe"
 
+	"encoding/json"
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/internal/pb"
@@ -518,13 +519,14 @@ func valueToBytes(val reflect.Value) ([]byte, error) {
 	case reflect.String:
 		return []byte(val.String()), nil
 
+	case reflect.Map, reflect.Struct:
+		return json.Marshal(val.Interface())
+
 		// Unhandled types, left here for easy reference
 		//case reflect.Invalid:
 		//case reflect.Chan:
 		//case reflect.Func:
 		//case reflect.Interface:
-		//case reflect.Struct:
-		//case reflect.Map:
 		//case reflect.Uintptr:
 		//case reflect.UnsafePointer:
 	}
