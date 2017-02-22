@@ -41,6 +41,7 @@ func newAdminClient(zkquorum string, options ...Option) AdminClient {
 		adminRegionInfo: region.NewInfo(0, nil, nil, nil, nil),
 		zkClient:        zk.NewClient(zkquorum),
 		zkRoot:          defaultZkRoot,
+		effectiveUser:   defaultEffectiveUser,
 	}
 	for _, option := range options {
 		option(c)

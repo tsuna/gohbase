@@ -130,7 +130,15 @@ func TestReestablishRegionSplit(t *testing.T) {
 		nil,
 		nil,
 	)
-	rc1, err := region.NewClient(context.Background(), "regionserver", 1, region.RegionClient, 0, 0)
+	rc1, err := region.NewClient(
+		context.Background(),
+		"regionserver",
+		1,
+		region.RegionClient,
+		0,
+		0,
+		"root",
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -340,7 +348,15 @@ func TestReestablishDeadRegion(t *testing.T) {
 	// setting zookeeper client to nil because we don't
 	// expect for it to be called
 	c := newMockClient(nil)
-	rc1, err := region.NewClient(context.Background(), "regionserver", 0, region.RegionClient, 0, 0)
+	rc1, err := region.NewClient(
+		context.Background(),
+		"regionserver",
+		0,
+		region.RegionClient,
+		0,
+		0,
+		"root",
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -441,7 +457,15 @@ func TestFindRegion(t *testing.T) {
 	// setting zookeeper client to nil because we don't
 	// expect for it to be called
 	c := newMockClient(nil)
-	rc, err := region.NewClient(context.Background(), "regionserver", 0, region.RegionClient, 0, 0)
+	rc, err := region.NewClient(
+		context.Background(),
+		"regionserver",
+		0,
+		region.RegionClient,
+		0,
+		0,
+		"root",
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

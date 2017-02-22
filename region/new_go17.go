@@ -19,14 +19,13 @@ import (
 
 // NewClient creates a new RegionClient.
 func NewClient(ctx context.Context, host string, port uint16, ctype ClientType,
-	queueSize int, flushInterval time.Duration) (hrpc.RegionClient, error) {
+	queueSize int, flushInterval time.Duration, effectiveUser string) (hrpc.RegionClient, error) {
 	addr := net.JoinHostPort(host, strconv.Itoa(int(port)))
 	var d net.Dialer
 	conn, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to the RegionServer at %s: %s", addr, err)
 	}
-
 	c := &client{
 		host:          host,
 		port:          port,
@@ -36,8 +35,8 @@ func NewClient(ctx context.Context, host string, port uint16, ctype ClientType,
 		sent:          make(map[uint32]hrpc.Call),
 		rpcQueueSize:  queueSize,
 		flushInterval: flushInterval,
+		effectiveUser: effectiveUser,
 	}
-
 	// time out send hello if it take long
 	// TODO: do we even need to bother, we are going to retry anyway?
 	if deadline, ok := ctx.Deadline(); ok {
@@ -49,7 +48,6 @@ func NewClient(ctx context.Context, host string, port uint16, ctype ClientType,
 	}
 	// reset write deadline
 	conn.SetWriteDeadline(time.Time{})
-
 	go c.processRPCs() // Writer goroutine
 	go c.receiveRPCs() // Reader goroutine
 	return c, nil

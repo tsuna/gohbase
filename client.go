@@ -25,6 +25,7 @@ const (
 	defaultRPCQueueSize  = 100
 	defaultFlushInterval = 20 * time.Millisecond
 	defaultZkRoot        = "/hbase"
+	defaultEffectiveUser = "root"
 )
 
 // Client a regular HBase client
@@ -67,6 +68,9 @@ type client struct {
 
 	// The timeout before flushing the RPC queue in the region client
 	flushInterval time.Duration
+
+	// The user used when accessing regions.
+	effectiveUser string
 }
 
 // NewClient creates a new HBase client.
@@ -92,8 +96,9 @@ func newClient(zkquorum string, options ...Option) *client {
 			[]byte("hbase:meta,,1"),
 			nil,
 			nil),
-		zkRoot:   defaultZkRoot,
-		zkClient: zk.NewClient(zkquorum),
+		zkRoot:        defaultZkRoot,
+		zkClient:      zk.NewClient(zkquorum),
+		effectiveUser: defaultEffectiveUser,
 	}
 	for _, option := range options {
 		option(c)
@@ -113,6 +118,13 @@ func RpcQueueSize(size int) Option {
 func ZookeeperRoot(root string) Option {
 	return func(c *client) {
 		c.zkRoot = root
+	}
+}
+
+// EffectiveUser will return an option that will set the user used when accessing regions.
+func EffectiveUser(user string) Option {
+	return func(c *client) {
+		c.effectiveUser = user
 	}
 }
 
