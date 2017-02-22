@@ -71,12 +71,13 @@ func TestSendHello(t *testing.T) {
 	defer ctrl.Finish()
 	mockConn := mock.NewMockReadWriteCloser(ctrl)
 	c := &client{
-		conn: mockConn,
+		conn:          mockConn,
+		effectiveUser: "root",
 	}
 
 	// check if it's sending the right "hello" for RegionClient
-	mockConn.EXPECT().Write(gomock.Any()).Return(35, nil).Times(1).Do(func(buf []byte) {
-		expected := []byte("HBas\x00P\x00\x00\x00\x19\n\b\n\x06gopher\x12\rClientService")
+	mockConn.EXPECT().Write(gomock.Any()).Return(33, nil).Times(1).Do(func(buf []byte) {
+		expected := []byte("HBas\x00P\x00\x00\x00\x17\n\x06\n\x04root\x12\rClientService")
 		if diff := test.Diff(expected, buf); diff != "" {
 			t.Errorf("Type RegionClient:\n Expected: %#v\nReceived: %#v\nDiff:%s",
 				expected, buf, diff)
@@ -84,12 +85,12 @@ func TestSendHello(t *testing.T) {
 	})
 	err := c.sendHello(RegionClient)
 	if err != nil {
-		t.Errorf("Was expecting error, but got one: %#v", err)
+		t.Errorf("Wasn't expecting error, but got one: %#v", err)
 	}
 
 	// check if it sends the right "hello" for MasterClient
-	mockConn.EXPECT().Write(gomock.Any()).Return(35, nil).Times(1).Do(func(buf []byte) {
-		expected := []byte("HBas\x00P\x00\x00\x00\x19\n\b\n\x06gopher\x12\rMasterService")
+	mockConn.EXPECT().Write(gomock.Any()).Return(33, nil).Times(1).Do(func(buf []byte) {
+		expected := []byte("HBas\x00P\x00\x00\x00\x17\n\x06\n\x04root\x12\rMasterService")
 		if diff := test.Diff(expected, buf); diff != "" {
 			t.Errorf("Type MasterClient:\n Expected: %#v\nReceived: %#v\nDiff:%s",
 				expected, buf, diff)

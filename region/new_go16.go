@@ -25,7 +25,7 @@ type clientResult struct {
 
 // NewClient creates a new RegionClient.
 func NewClient(ctx context.Context, host string, port uint16, ctype ClientType,
-	queueSize int, flushInterval time.Duration) (hrpc.RegionClient, error) {
+	queueSize int, flushInterval time.Duration, effectiveUser string) (hrpc.RegionClient, error) {
 	addr := net.JoinHostPort(host, strconv.Itoa(int(port)))
 	ch := make(chan *clientResult, 1)
 	go func() {
@@ -46,8 +46,8 @@ func NewClient(ctx context.Context, host string, port uint16, ctype ClientType,
 			sent:          make(map[uint32]hrpc.Call),
 			rpcQueueSize:  queueSize,
 			flushInterval: flushInterval,
+			effectiveUser: effectiveUser,
 		}
-
 		if err := c.sendHello(ctype); err != nil {
 			conn.Close()
 			ch <- &clientResult{
@@ -57,7 +57,6 @@ func NewClient(ctx context.Context, host string, port uint16, ctype ClientType,
 		}
 		ch <- &clientResult{Client: c}
 	}()
-
 	select {
 	case res := <-ch:
 		if res.Err != nil {

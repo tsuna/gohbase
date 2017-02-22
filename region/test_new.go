@@ -108,7 +108,7 @@ var test1SplitB = &pb.Result{Cell: []*pb.Cell{
 
 // NewClient creates a new test region client.
 func NewClient(ctx context.Context, host string, port uint16, ctype ClientType,
-	queueSize int, flushInterval time.Duration) (hrpc.RegionClient, error) {
+	queueSize int, flushInterval time.Duration, effectiveUser string) (hrpc.RegionClient, error) {
 	return &testClient{
 		host: host,
 		port: port,

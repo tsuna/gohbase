@@ -472,7 +472,7 @@ func (c *client) establishRegionClient(reg hrpc.RegionInfo,
 	clientCtx, cancel := context.WithTimeout(reg.Context(), regionLookupTimeout)
 	defer cancel()
 	return region.NewClient(clientCtx, host, port, clientType,
-		c.rpcQueueSize, c.flushInterval)
+		c.rpcQueueSize, c.flushInterval, c.effectiveUser)
 }
 
 // zkResult contains the result of a ZooKeeper lookup (when we're looking for
