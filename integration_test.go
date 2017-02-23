@@ -12,6 +12,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -35,9 +36,20 @@ func TestMain(m *testing.M) {
 	log.SetLevel(log.DebugLevel)
 
 	ac := gohbase.NewAdminClient(*host)
-	err := test.CreateTable(ac, table, []string{"cf", "cf2"})
-	if err != nil {
-		panic(err)
+	var err error
+	for {
+		err = test.CreateTable(ac, table, []string{"cf", "cf2"})
+		if err != nil &&
+			(strings.Contains(err.Error(), "org.apache.hadoop.hbase.PleaseHoldException") ||
+				strings.Contains(err.Error(),
+					"org.apache.hadoop.hbase.ipc.ServerNotRunningYetException")) {
+			time.Sleep(time.Second)
+			continue
+		} else if err != nil {
+			panic(err)
+		} else {
+			break
+		}
 	}
 	res := m.Run()
 	err = test.DeleteTable(ac, table)
