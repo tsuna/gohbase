@@ -9,6 +9,7 @@ package zk
 import (
 	"encoding/binary"
 	"fmt"
+	"path"
 	"strings"
 	"time"
 
@@ -17,7 +18,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/samuel/go-zookeeper/zk"
 	"github.com/tsuna/gohbase/internal/pb"
-	"path/filepath"
 )
 
 type logger struct{}
@@ -36,7 +36,7 @@ type ResourceName string
 
 // Prepend creates a new ResourceName with prefix prepended to the former ResourceName.
 func (r ResourceName) Prepend(prefix string) ResourceName {
-	return ResourceName(filepath.Join(prefix, string(r)))
+	return ResourceName(path.Join(prefix, string(r)))
 }
 
 const (
