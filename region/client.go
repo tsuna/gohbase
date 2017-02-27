@@ -234,7 +234,7 @@ func (c *client) sendBatch(rpcs []*call) []*call {
 			// An unrecoverable error has occured,
 			// region client has been stopped,
 			// don't send rpcs
-			return rpcs
+			return nil
 		case <-rpc.Context().Done():
 			// If the deadline has been exceeded, don't bother sending the
 			// request. The function that placed the RPC in our queue should
@@ -243,7 +243,7 @@ func (c *client) sendBatch(rpcs []*call) []*call {
 			err := c.send(rpc)
 			if _, ok := err.(UnrecoverableError); ok {
 				c.fail(err)
-				return rpcs
+				return nil
 			} else if err != nil {
 				// Unexpected error, return to caller
 				c.sentM.Lock()

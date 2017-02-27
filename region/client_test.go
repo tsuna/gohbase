@@ -488,7 +488,9 @@ func TestSendBatch(t *testing.T) {
 		// we expect the rest to be not even processed
 		batch[i] = &call{id: uint32(i), Call: mockCall}
 	}
-	c.sendBatch(batch)
+	rpcs := c.sendBatch(batch)
+	// try sending batch again to make sure we reset the slice
+	c.sendBatch(rpcs)
 }
 
 func TestFlushInterval(t *testing.T) {
