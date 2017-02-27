@@ -87,11 +87,13 @@ func (rcc *clientRegionCache) closeAll() {
 
 func (rcc *clientRegionCache) clientDown(c hrpc.RegionClient) map[hrpc.RegionInfo]struct{} {
 	rcc.m.Lock()
-	downregions := rcc.regions[c]
+	downregions, ok := rcc.regions[c]
 	delete(rcc.regions, c)
 	rcc.m.Unlock()
 
-	log.WithField("client", c).Info("removed region client")
+	if ok {
+		log.WithField("client", c).Info("removed region client")
+	}
 	return downregions
 }
 
