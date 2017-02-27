@@ -130,6 +130,33 @@ func TestGetDoesntExist(t *testing.T) {
 	}
 }
 
+func TestMutateGetTableNotFound(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+
+	key := "whatever"
+	table := "NonExistentTable"
+	headers := map[string][]string{"cf": nil}
+	get, err := hrpc.NewGetStr(context.Background(),
+		table, key, hrpc.Families(headers))
+	if err != nil {
+		t.Fatal("NewGetStr returned an error: %v", err)
+	}
+	_, err = c.Get(get)
+	if err != gohbase.TableNotFound {
+		t.Errorf("Get returned unexpected error: %v", err)
+	}
+	values := map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte("1")}}
+	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values)
+	if err != nil {
+		t.Fatal("NewPutStr returned an error: %v", err)
+	}
+	_, err = c.Put(putRequest)
+	if err != gohbase.TableNotFound {
+		t.Errorf("Put returned an unexpected error: %v", err)
+	}
+}
+
 func TestGetBadColumnFamily(t *testing.T) {
 	key := "row1.625"
 	c := gohbase.NewClient(*host)
