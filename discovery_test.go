@@ -64,6 +64,7 @@ func TestRegionDiscovery(t *testing.T) {
 	}
 	expected := region.NewInfo(
 		0,
+		nil,
 		[]byte("test"),
 		[]byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		nil,

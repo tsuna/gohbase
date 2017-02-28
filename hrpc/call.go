@@ -32,6 +32,7 @@ type RegionInfo interface {
 	Name() []byte
 	StartKey() []byte
 	StopKey() []byte
+	Namespace() []byte
 	Table() []byte
 	SetClient(RegionClient)
 	Client() RegionClient

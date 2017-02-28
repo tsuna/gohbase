@@ -205,6 +205,23 @@ func TestGetMultipleCells(t *testing.T) {
 	}
 }
 
+func TestGetNonDefaultNamespace(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+
+	get, err := hrpc.NewGetStr(context.Background(), "hbase:namespace", "default")
+	if err != nil {
+		t.Fatalf("Failed to create Get request: %s", err)
+	}
+	rsp, err := c.Get(get)
+	if err != nil {
+		t.Fatalf("Get returned an error: %v", err)
+	}
+	if !bytes.Equal(rsp.Cells[0].Family, []byte("info")) {
+		t.Errorf("Got unexpected column family: %q", rsp.Cells[0].Family)
+	}
+}
+
 func TestPut(t *testing.T) {
 	key := "row2"
 	values := map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte("1")}}

@@ -36,7 +36,8 @@ func newMockClient(zkClient zk.Client) *client {
 		flushInterval: defaultFlushInterval,
 		metaRegionInfo: region.NewInfo(
 			0,
-			[]byte("hbase:meta"),
+			[]byte("hbase"),
+			[]byte("meta"),
 			[]byte("hbase:meta,,1"),
 			nil,
 			nil),
@@ -125,6 +126,7 @@ func TestReestablishRegionSplit(t *testing.T) {
 	// inject a fake regionserver client and fake region into cache
 	origlReg := region.NewInfo(
 		0,
+		nil,
 		[]byte("test1"),
 		[]byte("test1,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."),
 		nil,
@@ -238,6 +240,7 @@ func TestEstablishClientConcurrent(t *testing.T) {
 	for i := range regions {
 		r := region.NewInfo(
 			0,
+			nil,
 			[]byte("test"),
 			[]byte(fmt.Sprintf("test,%d,1434573235908.yoloyoloyoloyoloyoloyoloyoloyolo.", i)),
 			nil, nil)
@@ -288,6 +291,7 @@ func TestSendRPCtoRegionClientDown(t *testing.T) {
 	// create region with mock clien
 	origlReg := region.NewInfo(
 		0,
+		nil,
 		[]byte("test1"),
 		[]byte("test1,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		nil,
@@ -364,6 +368,7 @@ func TestReestablishDeadRegion(t *testing.T) {
 	// regions cache and thereby is considered dead
 	reg := region.NewInfo(
 		0,
+		nil,
 		[]byte("test"),
 		[]byte("test,,1434573235908.yoloyoloyoloyoloyoloyoloyoloyolo."),
 		nil, nil)
@@ -420,7 +425,7 @@ func TestFindRegion(t *testing.T) {
 		{ // older region in cache
 			before: []hrpc.RegionInfo{
 				region.NewInfo(
-					1, []byte("test"),
+					1, nil, []byte("test"),
 					[]byte("test,,1.yoloyoloyoloyoloyoloyoloyoloyolo."),
 					nil, nil),
 			},
@@ -431,7 +436,7 @@ func TestFindRegion(t *testing.T) {
 		{ // younger region in cache
 			before: []hrpc.RegionInfo{
 				region.NewInfo(
-					9999999999999, []byte("test"),
+					9999999999999, nil, []byte("test"),
 					[]byte("test,,9999999999999.yoloyoloyoloyoloyoloyoloyoloyolo."),
 					nil, nil),
 			},
@@ -442,7 +447,7 @@ func TestFindRegion(t *testing.T) {
 		{ // overlapping younger region in cache, passed key is not in that region
 			before: []hrpc.RegionInfo{
 				region.NewInfo(
-					9999999999999, []byte("test"),
+					9999999999999, nil, []byte("test"),
 					[]byte("test,,9999999999999.yoloyoloyoloyoloyoloyoloyoloyolo."),
 					nil, []byte("foo")),
 			},
@@ -534,6 +539,7 @@ func TestConcurrentRetryableError(t *testing.T) {
 	// create region with mock clien
 	origlReg := region.NewInfo(
 		0,
+		nil,
 		[]byte("test1"),
 		[]byte("test1,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		nil,
@@ -542,6 +548,7 @@ func TestConcurrentRetryableError(t *testing.T) {
 	// fake region to make sure we don't close the client
 	whateverRegion := region.NewInfo(
 		0,
+		nil,
 		[]byte("test2"),
 		[]byte("test2,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		nil,

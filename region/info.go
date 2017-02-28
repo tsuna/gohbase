@@ -19,15 +19,18 @@ import (
 	"golang.org/x/net/context"
 )
 
+var defaultNamespace = []byte("default")
+
 // info describes a region.
 type info struct {
-	id       uint64 // A timestamp when the region is created
-	table    []byte
-	name     []byte
-	startKey []byte
-	stopKey  []byte
-	ctx      context.Context
-	cancel   context.CancelFunc
+	id        uint64 // A timestamp when the region is created
+	namespace []byte
+	table     []byte
+	name      []byte
+	startKey  []byte
+	stopKey   []byte
+	ctx       context.Context
+	cancel    context.CancelFunc
 
 	// The attributes before this mutex are supposed to be immutable.
 	// The attributes defined below can be changed and accesses must
@@ -44,16 +47,17 @@ type info struct {
 }
 
 // NewInfo creates a new region info
-func NewInfo(id uint64, table, name, startKey, stopKey []byte) hrpc.RegionInfo {
+func NewInfo(id uint64, namespace, table, name, startKey, stopKey []byte) hrpc.RegionInfo {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &info{
-		id:       id,
-		ctx:      ctx,
-		cancel:   cancel,
-		table:    table,
-		name:     name,
-		startKey: startKey,
-		stopKey:  stopKey,
+		id:        id,
+		ctx:       ctx,
+		cancel:    cancel,
+		namespace: namespace,
+		table:     table,
+		name:      name,
+		startKey:  startKey,
+		stopKey:   stopKey,
 	}
 }
 
@@ -77,8 +81,15 @@ func infoFromCell(cell *hrpc.Cell) (hrpc.RegionInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode %q: %s", cell, err)
 	}
+
+	var namespace []byte
+	if !bytes.Equal(regInfo.TableName.Namespace, defaultNamespace) {
+		// if default namespace, pretend there's no namespace
+		namespace = regInfo.TableName.Namespace
+	}
 	return NewInfo(
 		*regInfo.RegionId,
+		namespace,
 		regInfo.TableName.Qualifier,
 		cell.Row,
 		regInfo.StartKey,
@@ -194,8 +205,9 @@ func (i *info) Context() context.Context {
 }
 
 func (i *info) String() string {
-	return fmt.Sprintf("RegionInfo{Name: %s, ID: %d, Table: %s, StartKey: %s, StopKey: %s}",
-		i.name, i.id, i.table, i.startKey, i.stopKey)
+	return fmt.Sprintf(
+		"RegionInfo{Name: %s, ID: %d, Namespace: %s, Table: %s, StartKey: %s, StopKey: %s}",
+		i.name, i.id, i.namespace, i.table, i.startKey, i.stopKey)
 }
 
 // ID returns region's age
@@ -216,6 +228,11 @@ func (i *info) StopKey() []byte {
 // StartKey return region start key
 func (i *info) StartKey() []byte {
 	return i.startKey
+}
+
+// Namespace returns region table
+func (i *info) Namespace() []byte {
+	return i.namespace
 }
 
 // Table returns region table

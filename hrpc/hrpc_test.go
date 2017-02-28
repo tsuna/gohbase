@@ -175,7 +175,7 @@ func BenchmarkMutateSerializeWithNestedMaps(b *testing.B) {
 		if err != nil {
 			b.Errorf("Error creating mutate: %v", err)
 		}
-		mutate.SetRegion(region.NewInfo(0, nil, nil, nil, nil))
+		mutate.SetRegion(region.NewInfo(0, nil, nil, nil, nil, nil))
 		mutate.Serialize()
 	}
 }
@@ -230,7 +230,7 @@ func BenchmarkMutateSerializeWithReflection(b *testing.B) {
 		if err != nil {
 			b.Errorf("Error creating mutate: %v", err)
 		}
-		mutate.SetRegion(region.NewInfo(0, nil, nil, nil, nil))
+		mutate.SetRegion(region.NewInfo(0, nil, nil, nil, nil, nil))
 		mutate.Serialize()
 	}
 }

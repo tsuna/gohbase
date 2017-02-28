@@ -178,7 +178,7 @@ func (c *client) lookupRegion(ctx context.Context,
 			host, port, err = c.zkLookup(lookupCtx, zk.Master)
 			cancel()
 			reg = c.adminRegionInfo
-		} else if bytes.Compare(table, c.metaRegionInfo.Table()) == 0 {
+		} else if bytes.Compare(table, metaTableName) == 0 {
 			log.WithField("resource", zk.Meta).Debug("looking up region server of hbase:meta")
 
 			host, port, err = c.zkLookup(lookupCtx, zk.Meta)
@@ -279,7 +279,7 @@ func (c *client) getRegionFromCache(table, key []byte) hrpc.RegionInfo {
 	}
 	regionName := createRegionSearchKey(table, key)
 	_, region := c.regions.get(regionName)
-	if region == nil || !bytes.Equal(table, region.Table()) {
+	if region == nil {
 		return nil
 	}
 
@@ -329,7 +329,7 @@ func (c *client) metaLookup(ctx context.Context,
 	if err != nil {
 		return nil, "", 0, err
 	}
-	if !bytes.Equal(table, reg.Table()) {
+	if !bytes.Equal(table, fullyQualifiedTable(reg)) {
 		// This would indicate a bug in HBase.
 		return nil, "", 0, fmt.Errorf("wtf: meta returned an entry for the wrong table!"+
 			"  Looked up table=%q key=%q got region=%s", table, key, reg)
@@ -340,6 +340,20 @@ func (c *client) metaLookup(ctx context.Context,
 			"  Looked up table=%q key=%q got region=%s", table, key, reg)
 	}
 	return reg, host, port, nil
+}
+
+func fullyQualifiedTable(reg hrpc.RegionInfo) []byte {
+	namespace := reg.Namespace()
+	table := reg.Table()
+	if namespace == nil {
+		return table
+	}
+	// non-default namespace table
+	fqTable := make([]byte, 0, len(namespace)+1+len(table))
+	fqTable = append(fqTable, namespace...)
+	fqTable = append(fqTable, byte(':'))
+	fqTable = append(fqTable, table...)
+	return fqTable
 }
 
 func (c *client) reestablishRegion(reg hrpc.RegionInfo) {
@@ -355,7 +369,8 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 			originalReg := reg
 			// lookup region forever until we get it or we learn that it doesn't exist
 			reg, host, port, err = c.lookupRegion(reg.Context(),
-				originalReg.Table(), originalReg.StartKey())
+				fullyQualifiedTable(originalReg),
+				originalReg.StartKey())
 			if err == TableNotFound {
 				// region doesn't exist, delete it from caches
 				c.regions.del(originalReg)

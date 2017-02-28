@@ -92,7 +92,8 @@ func newClient(zkquorum string, options ...Option) *client {
 		flushInterval: defaultFlushInterval,
 		metaRegionInfo: region.NewInfo(
 			0,
-			[]byte("hbase:meta"),
+			[]byte("hbase"),
+			[]byte("meta"),
 			[]byte("hbase:meta,,1"),
 			nil,
 			nil),

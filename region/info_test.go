@@ -45,7 +45,7 @@ func TestInfoFromMeta(t *testing.T) {
 	}
 
 	expected := "RegionInfo{Name: table,foo,1431921690563.53e41f94d5c3087af0d13259b8c4186d., " +
-		"ID: 1431921690563, Table: table, StartKey: , StopKey: }"
+		"ID: 1431921690563, Namespace: , Table: table, StartKey: , StopKey: }"
 	if s := info.String(); s != expected {
 		t.Errorf("Unexpected string representation.\nExpected: %q\n  Actual: %q", expected, s)
 	}

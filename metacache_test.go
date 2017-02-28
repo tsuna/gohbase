@@ -29,6 +29,7 @@ func TestMetaCache(t *testing.T) {
 	// Inject an entry in the cache.  This entry covers the entire key range.
 	wholeTable := region.NewInfo(
 		0,
+		nil,
 		[]byte("test"),
 		[]byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		nil,
@@ -59,6 +60,7 @@ func TestMetaCache(t *testing.T) {
 	// Inject 3 entries in the cache.
 	region1 := region.NewInfo(
 		0,
+		nil,
 		[]byte("test"),
 		[]byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		[]byte(""),
@@ -73,6 +75,7 @@ func TestMetaCache(t *testing.T) {
 
 	region2 := region.NewInfo(
 		0,
+		nil,
 		[]byte("test"),
 		[]byte("test,foo,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		[]byte("foo"),
@@ -87,6 +90,7 @@ func TestMetaCache(t *testing.T) {
 
 	region3 := region.NewInfo(
 		0,
+		nil,
 		[]byte("test"),
 		[]byte("test,gohbase,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		[]byte("gohbase"),
@@ -121,6 +125,7 @@ func TestMetaCache(t *testing.T) {
 	// Change the last region (maybe it got split).
 	region4 := region.NewInfo(
 		0,
+		nil,
 		[]byte("test"),
 		[]byte("test,gohbase,1234567890042.swagswagswagswagswagswagswagswag."),
 		nil,
@@ -145,6 +150,7 @@ func TestMetaCache(t *testing.T) {
 	// attempt putting a region with same name
 	region5 := region.NewInfo(
 		0,
+		nil,
 		[]byte("test"),
 		[]byte("test,gohbase,1234567890042.swagswagswagswagswagswagswagswag."),
 		nil,
@@ -166,17 +172,17 @@ func TestRegionCacheAge(t *testing.T) {
 		{ // all older
 			cachedRegions: []hrpc.RegionInfo{
 				region.NewInfo(
-					1, []byte("hello"),
+					1, nil, []byte("hello"),
 					[]byte("hello,,1.yoloyoloyoloyoloyoloyoloyoloyolo."),
 					[]byte(""), []byte("foo"),
 				),
 				region.NewInfo(
-					1, []byte("hello"),
+					1, nil, []byte("hello"),
 					[]byte("hello,foo,1.swagswagswagswagswagswagswagswag."),
 					[]byte("foo"), []byte(""),
 				)},
 			newRegion: region.NewInfo(
-				2, []byte("hello"),
+				2, nil, []byte("hello"),
 				[]byte("hello,,2.meowmemowmeowmemowmeowmemowmeow."),
 				[]byte(""), []byte(""),
 			),
@@ -185,17 +191,17 @@ func TestRegionCacheAge(t *testing.T) {
 		{ // all younger
 			cachedRegions: []hrpc.RegionInfo{
 				region.NewInfo(
-					2, []byte("hello"),
+					2, nil, []byte("hello"),
 					[]byte("hello,,2.yoloyoloyoloyoloyoloyoloyoloyolo."),
 					[]byte(""), []byte("foo"),
 				),
 				region.NewInfo(
-					2, []byte("hello"),
+					2, nil, []byte("hello"),
 					[]byte("hello,foo,2.swagswagswagswagswagswagswagswag."),
 					[]byte("foo"), []byte(""),
 				)},
 			newRegion: region.NewInfo(
-				1, []byte("hello"),
+				1, nil, []byte("hello"),
 				[]byte("hello,,1.meowmemowmeowmemowmeowmemowmeow."),
 				[]byte(""), []byte(""),
 			),
@@ -204,17 +210,17 @@ func TestRegionCacheAge(t *testing.T) {
 		{ // one younger, one older
 			cachedRegions: []hrpc.RegionInfo{
 				region.NewInfo(
-					1, []byte("hello"),
+					1, nil, []byte("hello"),
 					[]byte("hello,,1.yoloyoloyoloyoloyoloyoloyoloyolo."),
 					[]byte(""), []byte("foo"),
 				),
 				region.NewInfo(
-					3, []byte("hello"),
+					3, nil, []byte("hello"),
 					[]byte("hello,foo,3.swagswagswagswagswagswagswagswag."),
 					[]byte("foo"), []byte(""),
 				)},
 			newRegion: region.NewInfo(
-				2, []byte("hello"),
+				2, nil, []byte("hello"),
 				[]byte("hello,,1.meowmemowmeowmemowmeowmemowmeow."),
 				[]byte(""), []byte(""),
 			),
@@ -261,6 +267,7 @@ func (a regionNames) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func TestMetaCacheGetOverlaps(t *testing.T) {
 	region1 := region.NewInfo(
 		0,
+		nil,
 		[]byte("test"),
 		[]byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		[]byte(""),
@@ -269,6 +276,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 
 	regionA := region.NewInfo(
 		0,
+		nil,
 		[]byte("hello"),
 		[]byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		[]byte(""),
@@ -277,6 +285,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 
 	regionB := region.NewInfo(
 		0,
+		nil,
 		[]byte("hello"),
 		[]byte("hello,foo,987654321042.56f833d5569a27c7a43fbf547b4924a4."),
 		[]byte("foo"),
@@ -285,6 +294,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 
 	regionC := region.NewInfo(
 		0,
+		nil,
 		[]byte("hello"),
 		[]byte("hello,fox,987654321042.56f833d5569a27c7a43fbf547b4924a4."),
 		[]byte("fox"),
@@ -293,6 +303,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 
 	regionWhole := region.NewInfo(
 		0,
+		nil,
 		[]byte("hello"),
 		[]byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 		nil,
@@ -310,6 +321,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 			[]hrpc.RegionInfo{region1},
 			region.NewInfo(
 				0,
+				nil,
 				[]byte("hello"),
 				[]byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 				[]byte(""),
@@ -317,10 +329,32 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 			),
 			[]hrpc.RegionInfo{},
 		},
+		{ // different namespace
+			[]hrpc.RegionInfo{
+				region.NewInfo(
+					0,
+					[]byte("ns1"),
+					[]byte("test"),
+					[]byte("ns1:test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+					[]byte(""),
+					[]byte("foo"),
+				),
+			},
+			region.NewInfo(
+				0,
+				nil,
+				[]byte("test"),
+				[]byte("test,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+				[]byte(""),
+				[]byte("foo"),
+			),
+			[]hrpc.RegionInfo{},
+		},
 		{ // overlaps with both
 			[]hrpc.RegionInfo{regionA, regionB},
 			region.NewInfo(
 				0,
+				nil,
 				[]byte("hello"),
 				[]byte("hello,bar,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 				[]byte("bar"),
@@ -332,6 +366,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 			[]hrpc.RegionInfo{regionA, regionB},
 			region.NewInfo(
 				0,
+				nil,
 				[]byte("hello"),
 				[]byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 				[]byte(""),
@@ -343,6 +378,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 			[]hrpc.RegionInfo{regionA, regionB},
 			region.NewInfo(
 				0,
+				nil,
 				[]byte("hello"),
 				[]byte("hello,fop,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 				[]byte("fop"),
@@ -354,6 +390,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 			[]hrpc.RegionInfo{regionA, regionB},
 			region.NewInfo(
 				0,
+				nil,
 				[]byte("hello"),
 				[]byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 				[]byte(""),
@@ -375,6 +412,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 			[]hrpc.RegionInfo{regionWhole},
 			region.NewInfo(
 				0,
+				nil,
 				[]byte("hello"),
 				[]byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 				[]byte("yolo"),
@@ -386,6 +424,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 			[]hrpc.RegionInfo{regionWhole},
 			region.NewInfo(
 				0,
+				nil,
 				[]byte("hello"),
 				[]byte("hello,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
 				nil,
@@ -402,6 +441,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 			[]hrpc.RegionInfo{regionWhole},
 			region.NewInfo(
 				0,
+				nil,
 				[]byte("hello"),
 				[]byte("hello,,1234567890042.yoloyoloyoloyoloyoloyoloyoloyolo."),
 				nil,
@@ -449,6 +489,7 @@ func TestClientCachePut(t *testing.T) {
 
 	existing := client.clients.put(regClient, region.NewInfo(
 		0,
+		nil,
 		[]byte("test"),
 		[]byte("test,,1234567890042.yoloyoloyoloyoloyoloyoloyoloyolo."),
 		nil, nil))
@@ -475,6 +516,7 @@ func TestClientCachePut(t *testing.T) {
 	// but put a different region
 	existing = client.clients.put(regClient, region.NewInfo(
 		0,
+		nil,
 		[]byte("yolo"),
 		[]byte("yolo,,1234567890042.yoloyoloyoloyoloyoloyoloyoloyolo."),
 		nil, nil))
