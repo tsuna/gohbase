@@ -9,6 +9,8 @@ import (
 	"context"
 	"fmt"
 
+	"math"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
@@ -32,6 +34,8 @@ type Get struct {
 	toTimestamp   uint64
 
 	maxVersions uint32
+	storeLimit  uint32
+	storeOffset uint32
 
 	filters filter.Filter
 }
@@ -45,6 +49,9 @@ func baseGet(ctx context.Context, table []byte, key []byte,
 			table: table,
 			ctx:   ctx,
 		},
+		storeLimit:  math.MaxUint32,
+		storeOffset: 0,
+
 		fromTimestamp: MinTimestamp,
 		toTimestamp:   MaxTimestamp,
 		maxVersions:   DefaultMaxVersions,
@@ -125,6 +132,15 @@ func (g *Get) ToProto() (proto.Message, error) {
 			TimeRange: &pb.TimeRange{},
 		},
 	}
+
+	/* added support for limit number of cells per row */
+	if g.storeLimit != math.MaxUint32 && g.storeLimit > 0 {
+		get.Get.StoreLimit = &g.storeLimit
+	}
+	if g.storeOffset != 0 {
+		get.Get.StoreOffset = &g.storeOffset
+	}
+
 	if g.maxVersions != DefaultMaxVersions {
 		get.Get.MaxVersions = &g.maxVersions
 	}
