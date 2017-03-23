@@ -40,6 +40,9 @@ type Scan struct {
 	fromTimestamp uint64
 	toTimestamp   uint64
 
+	storeLimit  uint32
+	storeOffset uint32
+
 	maxVersions uint32
 
 	scannerID uint64
@@ -60,6 +63,8 @@ func baseScan(ctx context.Context, table []byte,
 		fromTimestamp: MinTimestamp,
 		toTimestamp:   MaxTimestamp,
 		maxVersions:   DefaultMaxVersions,
+		storeLimit:    math.MaxUint32,
+		storeOffset:   0,
 		scannerID:     math.MaxUint64,
 		numberOfRows:  DefaultNumberOfRows,
 	}
@@ -196,6 +201,15 @@ func (s *Scan) Serialize() ([]byte, error) {
 	if s.maxVersions != DefaultMaxVersions {
 		scan.Scan.MaxVersions = &s.maxVersions
 	}
+
+	/* added support for limit number of cells per row */
+	if s.storeLimit != math.MaxUint32 && s.storeLimit > 0 {
+		scan.Scan.StoreLimit = &s.storeLimit
+	}
+	if s.storeOffset != 0 {
+		scan.Scan.StoreOffset = &s.storeOffset
+	}
+
 	if s.fromTimestamp != MinTimestamp {
 		scan.Scan.TimeRange.From = &s.fromTimestamp
 	}
