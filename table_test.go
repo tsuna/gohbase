@@ -9,6 +9,7 @@ package gohbase_test
 
 import (
 	"context"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -50,11 +51,19 @@ func TestCreateTable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create Scan request: %s", err)
 	}
-	rsp, err := c.Scan(scan)
-	if err != nil {
-		t.Errorf("Scan returned an error: %v", err)
-	}
 
+	var rsp []*hrpc.Result
+	scanner := c.Scan(scan)
+	for {
+		res, err := scanner.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		rsp = append(rsp, res)
+	}
 	if len(rsp) != 1 {
 		t.Errorf("Meta returned %s rows for prefix '%s' , want 1", len(rsp), metaKey)
 	}
@@ -92,11 +101,19 @@ func TestDisableDeleteTable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create Scan request: %s", err)
 	}
-	rsp, err := c.Scan(scan)
-	if err != nil {
-		t.Errorf("Scan returned an error: %v", err)
-	}
 
+	var rsp []*hrpc.Result
+	scanner := c.Scan(scan)
+	for {
+		res, err := scanner.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		rsp = append(rsp, res)
+	}
 	if len(rsp) != 0 {
 		t.Errorf("Meta returned %s rows for prefix '%s' , want 0", len(rsp), metaKey)
 	}

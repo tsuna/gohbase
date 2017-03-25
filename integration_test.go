@@ -12,6 +12,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -608,10 +609,20 @@ func TestScanTimeRangeVersions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Scan req failed: %s", err)
 	}
-	rsp, err := c.Scan(scan)
-	if err != nil {
-		t.Fatalf("Scan failed: %s", err)
+
+	var rsp []*hrpc.Result
+	scanner := c.Scan(scan)
+	for {
+		res, err := scanner.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		rsp = append(rsp, res)
 	}
+
 	if len(rsp) != 2 {
 		t.Fatalf("Expected rows: %d, Got rows: %d", maxVersions, len(rsp))
 	}
@@ -646,13 +657,23 @@ func TestScanTimeRangeVersions(t *testing.T) {
 	scan, err = hrpc.NewScanRangeStr(context.Background(), table,
 		"TestScanTimeRangeVersions1", "TestScanTimeRangeVersions3",
 		hrpc.Families(map[string][]string{"cf": nil}), hrpc.TimeRange(time.Unix(0, 50*1e6),
-			time.Unix(0, 53*1e6)))
+			time.Unix(0, 53*1e6)),
+		hrpc.NumberOfRows(1)) // set number of rows to 1 to also check that we are doing fetches
 	if err != nil {
 		t.Fatalf("Scan req failed: %s", err)
 	}
-	rsp, err = c.Scan(scan)
-	if err != nil {
-		t.Fatalf("Scan failed: %s", err)
+
+	rsp = nil
+	scanner = c.Scan(scan)
+	for {
+		res, err := scanner.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		rsp = append(rsp, res)
 	}
 	if len(rsp) != 2 {
 		t.Fatalf("Expected rows: %d, Got rows: %d", 2, len(rsp))
@@ -662,6 +683,102 @@ func TestScanTimeRangeVersions(t *testing.T) {
 	}
 	if len(rsp[1].Cells) != 1 {
 		t.Fatalf("Expected versions: %d, Got versions: %d", 2, len(rsp[0].Cells))
+	}
+}
+
+func checkResultRow(t *testing.T, res *hrpc.Result, expectedRow string, err, expectedErr error) {
+	if err != expectedErr {
+		t.Fatalf("Expected error %v, got error %v", expectedErr, err)
+	}
+	if len(expectedRow) > 0 && res != nil && len(res.Cells) > 0 {
+		got := string(res.Cells[0].Row)
+		if got != expectedRow {
+			t.Fatalf("Expected row %s, got row %s", expectedRow, got)
+		}
+	} else if len(expectedRow) == 0 && res != nil {
+		t.Fatalf("Expected no result, got %+v", *res)
+	}
+}
+
+func TestScannerClose(t *testing.T) {
+	key := "TestScannerClose"
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+
+	err := insertKeyValue(c, key+"1", "cf", []byte("1"))
+	if err != nil {
+		t.Fatalf("Put failed: %s", err)
+	}
+	err = insertKeyValue(c, key+"2", "cf", []byte("1"))
+	if err != nil {
+		t.Fatalf("Put failed: %s", err)
+	}
+	err = insertKeyValue(c, key+"3", "cf", []byte("1"))
+	if err != nil {
+		t.Fatalf("Put failed: %s", err)
+	}
+
+	scan, err := hrpc.NewScanRangeStr(context.Background(), table,
+		key+"1", key+"4",
+		hrpc.Families(map[string][]string{"cf": nil}),
+		hrpc.NumberOfRows(1)) // fetch only one row at a time
+	if err != nil {
+		t.Fatalf("Scan req failed: %s", err)
+	}
+	scanner := c.Scan(scan)
+	res, err := scanner.Next()
+	checkResultRow(t, res, key+"1", err, nil)
+
+	res, err = scanner.Next()
+	checkResultRow(t, res, key+"2", err, nil)
+
+	scanner.Close()
+
+	// make sure we get io.EOF eventually
+	for {
+		if _, err = scanner.Next(); err == io.EOF {
+			break
+		}
+	}
+}
+
+func TestScannerContextCancel(t *testing.T) {
+	key := "TestScanner"
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+
+	err := insertKeyValue(c, key+"1", "cf", []byte("1"))
+	if err != nil {
+		t.Fatalf("Put failed: %s", err)
+	}
+	err = insertKeyValue(c, key+"2", "cf", []byte("1"))
+	if err != nil {
+		t.Fatalf("Put failed: %s", err)
+	}
+	err = insertKeyValue(c, key+"3", "cf", []byte("1"))
+	if err != nil {
+		t.Fatalf("Put failed: %s", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	scan, err := hrpc.NewScanRangeStr(ctx, table,
+		key+"1", key+"4",
+		hrpc.Families(map[string][]string{"cf": nil}),
+		hrpc.NumberOfRows(1)) // fetch only one row at a time
+	if err != nil {
+		t.Fatalf("Scan req failed: %s", err)
+	}
+	scanner := c.Scan(scan)
+	res, err := scanner.Next()
+	checkResultRow(t, res, key+"1", err, nil)
+
+	cancel()
+
+	// make sure we get io.EOF eventually
+	for {
+		if _, err = scanner.Next(); err == io.EOF {
+			break
+		}
 	}
 }
 

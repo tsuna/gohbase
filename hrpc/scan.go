@@ -25,6 +25,25 @@ const (
 	DefaultNumberOfRows = 128
 )
 
+// Scanner is used to read data sequentially from HBase.
+// Scanner will be automatically closed if there's no more data to read,
+// otherwise Close method should be called.
+type Scanner interface {
+	// Next returns a row at a time.
+	// This method is thread safe. In case of an error, only the first call to Next()
+	// will return the actual error, the subsequent calls will return io.EOF.
+	// In case a scan rpc has an expired context, io.EOF will be returned as well.
+	// Clients should check the error of the context they passed if they want to know
+	// why the scanner was actually closed.
+	Next() (*Result, error)
+
+	// Close should be called if it is desired to stop scanning before getting all of results.
+	// If you call Next() after calling Close() you might still get buffered results.
+	// Othwerwise, in case all results have been delivered or in case of an error, the Scanner
+	// will be closed automatically.
+	Close() error
+}
+
 // Scan represents a scanner on an HBase table.
 type Scan struct {
 	base
@@ -107,8 +126,7 @@ func NewScanRangeStr(ctx context.Context, table, startRow, stopRow string,
 // NewScanFromID creates a new Scan request that will return additional
 // results from the given scanner ID.  This is an internal method, users
 // are not expected to deal with scanner IDs.
-func NewScanFromID(ctx context.Context, table []byte,
-	scannerID uint64, startRow []byte) *Scan {
+func NewScanFromID(ctx context.Context, table []byte, scannerID uint64, startRow []byte) *Scan {
 	scan, _ := baseScan(ctx, table)
 	scan.scannerID = scannerID
 	scan.key = startRow
@@ -140,6 +158,11 @@ func (s *Scan) StopRow() []byte {
 // StartRow returns the start key (inclusive) of this scanner.
 func (s *Scan) StartRow() []byte {
 	return s.startRow
+}
+
+// IsClosing returns wether this scan closes scanner prematurely
+func (s *Scan) IsClosing() bool {
+	return s.closeScanner
 }
 
 // Families returns the set families covered by this scanner.

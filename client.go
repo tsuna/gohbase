@@ -6,7 +6,6 @@
 package gohbase
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"time"
@@ -31,7 +30,7 @@ const (
 
 // Client a regular HBase client
 type Client interface {
-	Scan(s *hrpc.Scan) ([]*hrpc.Result, error)
+	Scan(s *hrpc.Scan) hrpc.Scanner
 	Get(g *hrpc.Get) (*hrpc.Result, error)
 	Put(p *hrpc.Mutate) (*hrpc.Result, error)
 	Delete(d *hrpc.Mutate) (*hrpc.Result, error)
@@ -158,87 +157,8 @@ func (c *client) Close() {
 	c.clients.closeAll()
 }
 
-// Scan retrieves the values specified in families from the given range.
-func (c *client) Scan(s *hrpc.Scan) ([]*hrpc.Result, error) {
-	var results []*pb.Result
-	var scanres *pb.ScanResponse
-	var rpc *hrpc.Scan
-	ctx := s.Context()
-	table := s.Table()
-	families := s.Families()
-	filters := s.Filter()
-	startRow := s.StartRow()
-	stopRow := s.StopRow()
-	fromTs, toTs := s.TimeRange()
-	maxVersions := s.MaxVersions()
-	numberOfRows := s.NumberOfRows()
-	for {
-		if rpc != nil {
-			// If it's not the first region, we want to start at whatever the
-			// last region's StopKey was
-			startRow = rpc.RegionStop()
-		}
-		regionRowLimit := numberOfRows - uint32(len(results))
-
-		// TODO: would be nicer to clone it in some way
-		var err error
-		rpc, err = hrpc.NewScanRange(ctx, table, startRow, stopRow,
-			hrpc.Families(families), hrpc.Filters(filters),
-			hrpc.TimeRangeUint64(fromTs, toTs),
-			hrpc.MaxVersions(maxVersions),
-			hrpc.NumberOfRows(regionRowLimit))
-		if err != nil {
-			return nil, err
-		}
-
-		res, err := c.SendRPC(rpc)
-		if err != nil {
-			return nil, err
-		}
-
-		scanres = res.(*pb.ScanResponse)
-		results = append(results, scanres.Results...)
-
-		// TODO: The more_results field of the ScanResponse object was always
-		// true, so we should figure out if there's a better way to know when
-		// to move on to the next region than making an extra request and
-		// seeing if there were no results
-		for len(scanres.Results) != 0 && uint32(len(results)) < numberOfRows {
-			rpc = hrpc.NewScanFromID(ctx, table, *scanres.ScannerId, rpc.Key())
-
-			res, err = c.SendRPC(rpc)
-			if err != nil {
-				return nil, err
-			}
-			scanres = res.(*pb.ScanResponse)
-			results = append(results, scanres.Results...)
-		}
-
-		rpc = hrpc.NewCloseFromID(ctx, table, *scanres.ScannerId, rpc.Key())
-		if err != nil {
-			return nil, err
-		}
-		res, err = c.SendRPC(rpc)
-
-		// Check to see if this region is the last we should scan because:
-		// (0) we got the number of rows user asked for
-		// (1) it's the last region or
-		// (3) because its stop_key is greater than or equal to the stop_key of this scanner,
-		// provided that (2) we're not trying to scan until the end of the table.
-		if uint32(len(results)) >= numberOfRows ||
-			// (1)
-			len(rpc.RegionStop()) == 0 ||
-			// (2)                (3)
-			(len(stopRow) != 0 && bytes.Compare(stopRow, rpc.RegionStop()) <= 0) {
-			// Do we want to be returning a slice of Result objects or should we just
-			// put all the Cells into the same Result object?
-			localResults := make([]*hrpc.Result, len(results))
-			for idx, result := range results {
-				localResults[idx] = hrpc.ToLocalResult(result)
-			}
-			return localResults, nil
-		}
-	}
+func (c *client) Scan(s *hrpc.Scan) hrpc.Scanner {
+	return newScanner(c, s)
 }
 
 func (c *client) Get(g *hrpc.Get) (*hrpc.Result, error) {

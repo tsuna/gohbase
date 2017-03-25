@@ -103,11 +103,10 @@ func (_mr *_MockClientRecorder) Put(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Put", arg0)
 }
 
-func (_m *MockClient) Scan(_param0 *hrpc.Scan) ([]*hrpc.Result, error) {
+func (_m *MockClient) Scan(_param0 *hrpc.Scan) hrpc.Scanner {
 	ret := _m.ctrl.Call(_m, "Scan", _param0)
-	ret0, _ := ret[0].([]*hrpc.Result)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret0, _ := ret[0].(hrpc.Scanner)
+	return ret0
 }
 
 func (_mr *_MockClientRecorder) Scan(arg0 interface{}) *gomock.Call {
