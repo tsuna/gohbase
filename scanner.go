@@ -48,11 +48,17 @@ func newScanner(c RPCClient, rpc *hrpc.Scan) *scanner {
 }
 
 // Next returns a row at a time.
-// This method is thread safe. In case of an error, only the first call to Next()
-// will return the actual error, the subsequent calls will return io.EOF.
-// In case a scan rpc has an expired context, io.EOF will be returned as well.
-// Clients should check the error of the context they passed if they want to know
-// why the scanner was actually closed.
+// Once all rows are returned, subsequent calls will return nil and io.EOF.
+//
+// In case of an error or Close() was called, only the first call to Next() will
+// return partial result (could be not a complete row) and the actual error,
+// the subsequent calls will return nil and io.EOF.
+//
+// In case a scan rpc has an expired context, partial result and io.EOF will be
+// returned. Clients should check the error of the context they passed if they
+// want to if the scanner was closed because of the deadline.
+//
+// This method is thread safe.
 func (s *scanner) Next() (*hrpc.Result, error) {
 	s.once.Do(func() {
 		go s.f.fetch()
@@ -88,10 +94,67 @@ type fetcher struct {
 	scannerID uint64
 	// startRow is the start row in the current region
 	startRow []byte
+	// result current result we are adding partials to
+	result *hrpc.Result
+}
+
+func isStale(v *bool) bool {
+	return v != nil && *v
+}
+
+// coalese returns a complete row or nil in case more partial results
+// are expected
+func (f *fetcher) coalese(partial *hrpc.Result) *hrpc.Result {
+	if partial == nil {
+		return nil
+	}
+
+	if f.result == nil {
+		if len(partial.Cells) == 0 {
+			return nil
+		}
+		f.result = partial
+		return nil
+	}
+
+	if len(partial.Cells) > 0 && !bytes.Equal(f.result.Cells[0].Row, partial.Cells[0].Row) {
+		// new row
+		result := f.result
+		f.result = partial
+		return result
+	}
+
+	// same row, add the partial
+	f.result.Cells = append(f.result.Cells, partial.Cells...)
+	if isStale(partial.Stale) {
+		f.result.Stale = partial.Stale
+	}
+	if !f.moreResultsInRegion {
+		// no more results in this region, return whatever we have,
+		// rows cannot go across region boundaries
+		result := f.result
+		f.result = nil
+		return result
+	}
+	return nil
 }
 
 // send sends a result and error to results channel. Returns true if scanner is done.
 func (f *fetcher) send(r *hrpc.Result, err error) bool {
+	r = f.coalese(r)
+	if r == nil {
+		if err == nil {
+			// nothing to be sent yet
+			return false
+		} else {
+			// if there's an error, return whatever result we have
+			r = f.result
+		}
+	}
+	return f.trySend(r, err)
+}
+
+func (f *fetcher) trySend(r *hrpc.Result, err error) bool {
 	select {
 	case <-f.ctx.Done():
 		return true
@@ -103,27 +166,6 @@ func (f *fetcher) send(r *hrpc.Result, err error) bool {
 // fetch scans results from appropriate region, sends them to client and updates
 // the fetcher for the next scan
 func (f *fetcher) fetch() {
-	defer func() {
-		if !f.moreResultsInRegion {
-			// scanner is automatically closed by hbase
-			return
-		}
-		// if we are closing in the middle of scanning a region,
-		// send a close scanner request
-		// TODO: add a deadline
-		rpc := hrpc.NewCloseFromID(context.Background(),
-			f.region.Table(), f.scannerID, f.region.StartKey())
-		if _, err := f.SendRPC(rpc); err != nil {
-			// the best we can do in this case is log. If the request fails,
-			// the scanner lease will expired and it will be closed automatically
-			// by hbase anyway.
-			log.WithFields(log.Fields{
-				"err":       err,
-				"scannerID": f.scannerID,
-			}).Error("failed to close scanner")
-		}
-	}()
-	defer close(f.results)
 	for {
 		resp, region, err := f.next()
 		if err != nil {
@@ -132,21 +174,47 @@ func (f *fetcher) fetch() {
 				// return the error to client
 				f.send(nil, err)
 			}
-			return
+			break
 		}
 
 		f.update(resp, region)
 
 		for _, result := range resp.Results {
 			if f.send(hrpc.ToLocalResult(result), nil) {
-				return
+				break
 			}
 		}
 
 		// check whether we should close the scanner before making next request
 		if f.shouldClose() {
-			return
+			if f.result != nil {
+				// if there were results, send the last row
+				f.trySend(f.result, nil)
+			}
+			break
 		}
+	}
+
+	close(f.results)
+
+	if !f.moreResultsInRegion {
+		// scanner is automatically closed by hbase
+		return
+	}
+
+	// if we are closing in the middle of scanning a region,
+	// send a close scanner request
+	// TODO: add a deadline
+	rpc := hrpc.NewCloseFromID(context.Background(),
+		f.region.Table(), f.scannerID, f.region.StartKey())
+	if _, err := f.SendRPC(rpc); err != nil {
+		// the best we can do in this case is log. If the request fails,
+		// the scanner lease will expired and it will be closed automatically
+		// by hbase anyway.
+		log.WithFields(log.Fields{
+			"err":       err,
+			"scannerID": f.scannerID,
+		}).Error("failed to close scanner")
 	}
 }
 

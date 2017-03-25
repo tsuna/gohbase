@@ -115,7 +115,7 @@ func TestDisableDeleteTable(t *testing.T) {
 		rsp = append(rsp, res)
 	}
 	if len(rsp) != 0 {
-		t.Errorf("Meta returned %s rows for prefix '%s' , want 0", len(rsp), metaKey)
+		t.Errorf("Meta returned %d rows for prefix '%s', want 0", len(rsp), metaKey)
 	}
 }
 

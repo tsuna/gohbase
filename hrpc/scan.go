@@ -7,6 +7,7 @@ package hrpc
 
 import (
 	"context"
+	"fmt"
 	"math"
 
 	"github.com/golang/protobuf/proto"
@@ -30,11 +31,17 @@ const (
 // otherwise Close method should be called.
 type Scanner interface {
 	// Next returns a row at a time.
-	// This method is thread safe. In case of an error, only the first call to Next()
-	// will return the actual error, the subsequent calls will return io.EOF.
-	// In case a scan rpc has an expired context, io.EOF will be returned as well.
-	// Clients should check the error of the context they passed if they want to know
-	// why the scanner was actually closed.
+	// Once all rows are returned, subsequent calls will return nil and io.EOF.
+	//
+	// In case of an error or Close() was called, only the first call to Next() will
+	// return partial result (could be not a complete row) and the actual error,
+	// the subsequent calls will return nil and io.EOF.
+	//
+	// In case a scan rpc has an expired context, partial result and io.EOF will be
+	// returned. Clients should check the error of the context they passed if they
+	// want to if the scanner was closed because of the deadline.
+	//
+	// This method is thread safe.
 	Next() (*Result, error)
 
 	// Close should be called if it is desired to stop scanning before getting all of results.
@@ -145,6 +152,13 @@ func NewCloseFromID(ctx context.Context, table []byte,
 	return scan
 }
 
+func (s *Scan) String() string {
+	return fmt.Sprintf("Scan{Table=%q StartRow=%q StopRow=%q TimeRange=(%d, %d) "+
+		"MaxVersions=%d NumberOfRows=%d ScannerID=%d Close=%v}",
+		s.table, s.startRow, s.stopRow, s.fromTimestamp, s.toTimestamp,
+		s.maxVersions, s.numberOfRows, s.scannerID, s.closeScanner)
+}
+
 // Name returns the name of this RPC call.
 func (s *Scan) Name() string {
 	return "Scan"
@@ -171,12 +185,6 @@ func (s *Scan) Families() map[string][]string {
 	return s.families
 }
 
-// RegionStop returns the stop key of the region currently being scanned.
-// This is an internal method, end users are not expected to use it.
-func (s *Scan) RegionStop() []byte {
-	return s.region.StopKey()
-}
-
 // Filter returns the filter set on this scanner.
 func (s *Scan) Filter() filter.Filter {
 	return s.filters
@@ -201,10 +209,16 @@ func (s *Scan) NumberOfRows() uint32 {
 // Serialize converts this Scan into a serialized protobuf message ready
 // to be sent to an HBase node.
 func (s *Scan) Serialize() ([]byte, error) {
+	t := true
 	scan := &pb.ScanRequest{
 		Region:       s.regionSpecifier(),
 		CloseScanner: &s.closeScanner,
 		NumberOfRows: &s.numberOfRows,
+		// tell server that we can process results that are only part of a row
+		ClientHandlesPartials: &t,
+		// tell server that we "handle" heartbeats by ignoring them
+		// since we don't really time out our scans (unless context was cancelled)
+		ClientHandlesHeartbeats: &t,
 	}
 	if s.scannerID != math.MaxUint64 {
 		scan.ScannerId = &s.scannerID
