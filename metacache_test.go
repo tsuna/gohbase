@@ -7,6 +7,7 @@ package gohbase
 
 import (
 	"bytes"
+	"fmt"
 	"reflect"
 	"sort"
 	"testing"
@@ -160,6 +161,154 @@ func TestMetaCache(t *testing.T) {
 		t.Errorf("Expected to not replace a region in cache, got: %v", os)
 	} else if len(os) != 1 || os[0] != region4 {
 		t.Errorf("Expected overlaps, got: %v", os)
+	}
+}
+
+func TestMetaCacheGet(t *testing.T) {
+	tcases := []struct {
+		in             []hrpc.RegionInfo
+		table          []byte
+		key            []byte
+		outIndexFromIn int
+	}{
+		{
+			table:          []byte("yolo"),
+			key:            []byte("swag"),
+			outIndexFromIn: -1,
+		},
+		{ // the whole table
+			in: []hrpc.RegionInfo{
+				region.NewInfo(0, nil, []byte("test"),
+					[]byte("test,,1234567890042.swagswagswagswagswagswagswagswag."),
+					nil, nil),
+			},
+			table:          []byte("test"),
+			key:            []byte("swag"),
+			outIndexFromIn: 0,
+		},
+		{ // one region in cache, different table
+			in: []hrpc.RegionInfo{
+				region.NewInfo(0, nil, []byte("test"),
+					[]byte("test,,1234567890042.swagswagswagswagswagswagswagswag."),
+					nil, nil),
+			},
+			table:          []byte("yolo"),
+			key:            []byte("swag"),
+			outIndexFromIn: -1,
+		},
+		{ // key is before the first region in cache
+			in: []hrpc.RegionInfo{
+				region.NewInfo(0, nil, []byte("test"),
+					[]byte("test,foo,1234567890042.swagswagswagswagswagswagswagswag."),
+					[]byte("foo"), nil),
+			},
+			table:          []byte("test"),
+			key:            []byte("bar"),
+			outIndexFromIn: -1,
+		},
+		{ // key is between two regions in cache
+			in: []hrpc.RegionInfo{
+				region.NewInfo(0, nil, []byte("meow"),
+					[]byte("meow,bar,1234567890042.swagswagswagswagswagswagswagswag."),
+					[]byte("bar"), []byte("foo")),
+				region.NewInfo(0, nil, []byte("test"),
+					[]byte("test,foo,1234567890042.swagswagswagswagswagswagswagswag."),
+					[]byte("foo"), nil),
+			},
+			table:          []byte("meow"),
+			key:            []byte("swag"),
+			outIndexFromIn: -1,
+		},
+		{ // test with namespace region in cache
+			in: []hrpc.RegionInfo{
+				region.NewInfo(0, []byte("n1"), []byte("test"),
+					[]byte("n1:test,,1234567890042.swagswagswagswagswagswagswagswag."),
+					nil, nil),
+			},
+			table:          []byte("test"),
+			key:            []byte("swag"),
+			outIndexFromIn: -1,
+		},
+		{ // test with namespace region in cache
+			in: []hrpc.RegionInfo{
+				region.NewInfo(0, []byte("n1"), []byte("test"),
+					[]byte("n1:test,,1234567890042.swagswagswagswagswagswagswagswag."),
+					nil, nil),
+			},
+			table:          []byte("n1:test"),
+			key:            []byte("swag"),
+			outIndexFromIn: 0,
+		},
+		{ // test with default namespace in cache, but non-default key
+			in: []hrpc.RegionInfo{
+				region.NewInfo(0, nil, []byte("test"),
+					[]byte("test,,1234567890042.swagswagswagswagswagswagswagswag."),
+					nil, nil),
+			},
+			table:          []byte("n1:test"),
+			key:            []byte("swag"),
+			outIndexFromIn: -1,
+		},
+		{ // test with non-default namespace region in cache, but default key
+			in: []hrpc.RegionInfo{
+				region.NewInfo(0, []byte("n1"), []byte("test"),
+					[]byte("n1:test,,1234567890042.swagswagswagswagswagswagswagswag."),
+					nil, nil),
+			},
+			table:          []byte("test"),
+			key:            []byte("swag"),
+			outIndexFromIn: -1,
+		},
+		{ // test 3 regions
+			in: []hrpc.RegionInfo{
+				region.NewInfo(0, nil, []byte("test"),
+					[]byte("test,,1234567890042.swagswagswagswagswagswagswagswag."),
+					nil, []byte("bar")),
+				region.NewInfo(0, nil, []byte("test"),
+					[]byte("test,bar,1234567890042.swagswagswagswagswagswagswagswag."),
+					[]byte("bar"), []byte("foo")),
+				region.NewInfo(0, nil, []byte("test"),
+					[]byte("test,foo,1234567890042.swagswagswagswagswagswagswagswag."),
+					[]byte("foo"), []byte("yolo")),
+			},
+			table:          []byte("test"),
+			key:            []byte("baz"),
+			outIndexFromIn: 1,
+		},
+	}
+
+	for i, tcase := range tcases {
+		t.Run(fmt.Sprintf("Test %d", i), func(t *testing.T) {
+			client := newClient("~invalid.quorum~") // We shouldn't connect to ZK.
+
+			for _, r := range tcase.in {
+				overlaps, replaced := client.regions.put(r)
+				if len(overlaps) != 0 {
+					t.Fatalf("Didn't expect any overlaps, got %q", overlaps)
+				}
+				if !replaced {
+					t.Fatal("Didn't expect to replace anything in cache")
+				}
+			}
+
+			// lookup region in cache
+			region := client.getRegionFromCache(tcase.table, tcase.key)
+
+			if tcase.outIndexFromIn == -1 && region != nil {
+				t.Fatalf("expected to get nil region, got %v", region)
+			} else {
+				return
+			}
+
+			if len(tcase.in) == 0 && region != nil {
+				t.Fatalf("didn't expect to get anything from empty cache, got %v", region)
+			}
+
+			if tcase.in[tcase.outIndexFromIn].String() != region.String() {
+				t.Errorf("Expected %v, Got %v",
+					tcase.in[tcase.outIndexFromIn].String(), region.String())
+			}
+		})
 	}
 }
 

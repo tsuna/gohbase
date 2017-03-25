@@ -283,6 +283,12 @@ func (c *client) getRegionFromCache(table, key []byte) hrpc.RegionInfo {
 		return nil
 	}
 
+	// make sure the returned region is for the same table
+	if !bytes.Equal(fullyQualifiedTable(region), table) {
+		// not the same table, can happen if we got the last region
+		return nil
+	}
+
 	if len(region.StopKey()) != 0 &&
 		// If the stop key is an empty byte array, it means this region is the
 		// last region for this table and this key ought to be in that region.
