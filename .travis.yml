@@ -5,10 +5,10 @@ go:
 before_install:
   - go get golang.org/x/tools/cmd/cover github.com/golang/lint/golint
   - >
-    wget -nv http://apache.claz.org/hbase/1.2.4/hbase-1.2.4-bin.tar.gz &&
-    echo "26CF30B9FC01167BA98FC637E8606D5C  hbase-1.2.4-bin.tar.gz" | md5sum --strict --check - &&
-    tar zxf hbase-1.2.4-bin.tar.gz --exclude=docs &&
-    ln -s hbase-1.2.4 hbase 
+    wget -nv http://apache.claz.org/hbase/1.2.5/hbase-1.2.5-bin.tar.gz &&
+    echo "A7E5124BF082E87839DD99DE846EDB8A  hbase-1.2.5-bin.tar.gz" | md5sum --strict --check - &&
+    tar zxf hbase-1.2.5-bin.tar.gz --exclude=docs &&
+    ln -s hbase-1.2.5 hbase 
 install:
   - ./install_ci.sh
 after_success:
