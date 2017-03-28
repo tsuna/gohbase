@@ -1,14 +1,14 @@
 language: go
 go:
-  - 1.6.2
-  - 1.7.3
+  - 1.7.x
+  - 1.8.x
 before_install:
   - go get golang.org/x/tools/cmd/cover github.com/golang/lint/golint
   - >
     wget -nv http://apache.claz.org/hbase/1.2.5/hbase-1.2.5-bin.tar.gz &&
     echo "A7E5124BF082E87839DD99DE846EDB8A  hbase-1.2.5-bin.tar.gz" | md5sum --strict --check - &&
     tar zxf hbase-1.2.5-bin.tar.gz --exclude=docs &&
-    ln -s hbase-1.2.5 hbase 
+    ln -s hbase-1.2.5 hbase
 install:
   - ./install_ci.sh
 after_success:
