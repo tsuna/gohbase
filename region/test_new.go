@@ -9,12 +9,12 @@ package region
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/internal/pb"
-	"golang.org/x/net/context"
 )
 
 type testClient struct {

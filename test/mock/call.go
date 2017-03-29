@@ -4,11 +4,11 @@
 package mock
 
 import (
+	context "context"
 	gomock "github.com/golang/mock/gomock"
 	proto "github.com/golang/protobuf/proto"
 	filter "github.com/tsuna/gohbase/filter"
 	hrpc "github.com/tsuna/gohbase/hrpc"
-	context "golang.org/x/net/context"
 )
 
 // Mock of Call interface

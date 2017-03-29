@@ -6,9 +6,10 @@
 package hrpc
 
 import (
+	"context"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/internal/pb"
-	"golang.org/x/net/context"
 )
 
 // DisableTable represents a DisableTable HBase call

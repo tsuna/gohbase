@@ -8,6 +8,7 @@ package region
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"strconv"
@@ -16,7 +17,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/internal/pb"
-	"golang.org/x/net/context"
 )
 
 var defaultNamespace = []byte("default")

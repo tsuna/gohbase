@@ -6,12 +6,12 @@
 package hrpc
 
 import (
+	"context"
 	"errors"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/internal/pb"
-	"golang.org/x/net/context"
 )
 
 // GetProcedureState represents a call to HBase to check status of a procedure

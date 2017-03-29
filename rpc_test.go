@@ -8,6 +8,7 @@
 package gohbase
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -22,7 +23,6 @@ import (
 	mockRegion "github.com/tsuna/gohbase/test/mock/region"
 	mockZk "github.com/tsuna/gohbase/test/mock/zk"
 	"github.com/tsuna/gohbase/zk"
-	"golang.org/x/net/context"
 )
 
 func newMockClient(zkClient zk.Client) *client {

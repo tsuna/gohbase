@@ -8,6 +8,7 @@
 package gohbase_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -15,7 +16,6 @@ import (
 	"github.com/tsuna/gohbase"
 	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/hrpc"
-	"golang.org/x/net/context"
 )
 
 // Name of the meta region.

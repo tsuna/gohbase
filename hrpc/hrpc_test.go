@@ -7,6 +7,7 @@ package hrpc_test
 
 import (
 	"bytes"
+	"context"
 	"math"
 	"reflect"
 	"testing"
@@ -15,7 +16,6 @@ import (
 	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/region"
-	"golang.org/x/net/context"
 )
 
 func TestNewGet(t *testing.T) {

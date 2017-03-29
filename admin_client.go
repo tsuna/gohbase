@@ -6,6 +6,7 @@
 package gohbase
 
 import (
+	"context"
 	"fmt"
 
 	log "github.com/Sirupsen/logrus"
@@ -13,7 +14,6 @@ import (
 	"github.com/tsuna/gohbase/internal/pb"
 	"github.com/tsuna/gohbase/region"
 	"github.com/tsuna/gohbase/zk"
-	"golang.org/x/net/context"
 )
 
 // AdminClient to perform admistrative operations with HMaster

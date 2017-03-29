@@ -7,6 +7,7 @@ package gohbase
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -16,7 +17,6 @@ import (
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/region"
 	"github.com/tsuna/gohbase/zk"
-	"golang.org/x/net/context"
 )
 
 // Constants

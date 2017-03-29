@@ -6,13 +6,13 @@
 package test
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"strings"
 
 	"github.com/tsuna/gohbase"
 	"github.com/tsuna/gohbase/hrpc"
-	"golang.org/x/net/context"
 )
 
 // CreateTable creates the given table with the given families
