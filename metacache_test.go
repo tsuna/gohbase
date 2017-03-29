@@ -129,13 +129,13 @@ func TestMetaCache(t *testing.T) {
 		nil,
 		[]byte("test"),
 		[]byte("test,gohbase,1234567890042.swagswagswagswagswagswagswagswag."),
-		nil,
+		[]byte("gohbase"),
 		[]byte("zab"),
 	)
 	if os, replaced := client.regions.put(region4); !replaced {
 		t.Errorf("Expected to put new region into cache, got: %v", os)
 	} else if len(os) != 1 || os[0] != region3 {
-		t.Errorf("Expected overlaps, got: %v", os)
+		t.Errorf("Expected one overlap, got: %v", os)
 	}
 	client.clients.put(regClient, region4)
 
@@ -600,29 +600,29 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 		},
 	}
 
-	client := newClient("~invalid.quorum~") // fake client
 	for i, tt := range regionTests {
-		client.regions.regions.Clear()
-		// set up initial cache
-		for _, region := range tt.cachedRegions {
-			client.regions.put(region)
-		}
+		t.Run(fmt.Sprintf("Test %d", i), func(t *testing.T) {
+			client := newClient("~invalid.quorum~") // fake client
+			// set up initial cache
+			for _, region := range tt.cachedRegions {
+				client.regions.regions.Set(region.Name(), region)
+			}
 
-		expectedNames := make(regionNames, len(tt.expected))
-		for i, r := range tt.expected {
-			expectedNames[i] = r.Name()
-		}
-		os := client.regions.getOverlaps(tt.newRegion)
-		osNames := make(regionNames, len(os))
-		for i, o := range os {
-			osNames[i] = o.Name()
-		}
-		sort.Sort(expectedNames)
-		sort.Sort(osNames)
-		if !reflect.DeepEqual(expectedNames, osNames) {
-			t.Errorf("=== TestMetaCacheGetOverlaps #%d: Expected overlaps %q, found %q", i+1,
-				expectedNames, osNames)
-		}
+			expectedNames := make(regionNames, len(tt.expected))
+			for i, r := range tt.expected {
+				expectedNames[i] = r.Name()
+			}
+			os := client.regions.getOverlaps(tt.newRegion)
+			osNames := make(regionNames, len(os))
+			for i, o := range os {
+				osNames[i] = o.Name()
+			}
+			sort.Sort(expectedNames)
+			sort.Sort(osNames)
+			if !reflect.DeepEqual(expectedNames, osNames) {
+				t.Errorf("Expected overlaps %q, found %q", expectedNames, osNames)
+			}
+		})
 	}
 }
 

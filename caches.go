@@ -124,21 +124,20 @@ func (krc *keyRegionCache) get(key []byte) ([]byte, hrpc.RegionInfo) {
 	krc.m.Lock()
 
 	enum, ok := krc.regions.Seek(key)
-	k, v, err := enum.Prev()
-	if err == io.EOF && krc.regions.Len() > 0 {
-		// We're past the end of the tree. Return the last element instead.
-		// (Without this code we always get a cache miss and create a new client for each req.)
-		k, v = krc.regions.Last()
-		err = nil
-	} else if !ok {
-		k, v, err = enum.Prev()
-	}
-	enum.Close()
-	if err != nil {
+	if ok {
 		krc.m.Unlock()
+		log.Fatalf("WTF: got exact match for region search key %q", key)
 		return nil, nil
 	}
+	k, v, err := enum.Prev()
+	enum.Close()
+
 	krc.m.Unlock()
+
+	if err == io.EOF {
+		// we are the beginning of the tree
+		return nil, nil
+	}
 	return k.([]byte), v.(hrpc.RegionInfo)
 }
 
@@ -161,37 +160,49 @@ func (krc *keyRegionCache) getOverlaps(reg hrpc.RegionInfo) []hrpc.RegionInfo {
 		return overlaps
 	}
 
-	enum, ok := krc.regions.Seek(reg.Name())
-	if !ok {
-		// need to check if there are overlaps before what we found
-		_, _, err = enum.Prev()
-		if err == io.EOF {
-			// we are in the end of tree, get last entry
-			_, v = krc.regions.Last()
-			currReg := v.(hrpc.RegionInfo)
-			if isRegionOverlap(currReg, reg) {
-				return append(overlaps, currReg)
-			}
-		} else {
-			_, v, err = enum.Next()
-			if err == io.EOF {
-				// we are before the beginning of the tree now, get new enum
-				enum.Close()
-				enum, err = krc.regions.SeekFirst()
-			} else {
-				// otherwise, check for overlap before us
-				currReg := v.(hrpc.RegionInfo)
-				if isRegionOverlap(currReg, reg) {
-					overlaps = append(overlaps, currReg)
-				}
-			}
+	// check if key created from new region falls into any cached regions
+	key := createRegionSearchKey(fullyQualifiedTable(reg), reg.StartKey())
+	enum, ok := krc.regions.Seek(key)
+	if ok {
+		log.Fatalf("WTF: found a region with exact name as the search key %q", key)
+	}
+
+	// case 1: landed before the first region in cache
+	// enum.Prev() returns io.EOF
+	// enum.Next() returns io.EOF
+	// SeekFirst() + enum.Next() returns the first region, which has larger start key
+
+	// case 2: landed before the second region in cache
+	// enum.Prev() returns the first region X and moves pointer to -infinity
+	// enum.Next() returns io.EOF
+	// SeekFirst() + enum.Next() returns first region X, which has smaller start key
+
+	// case 3: landed anywhere after the second region
+	// enum.Prev() returns the region X before it landed, moves pointer to the region X - 1
+	// enum.Next() returns X - 1 and move pointer to X, which has smaller start key
+
+	enum.Prev()
+	_, _, err = enum.Next()
+	if err == io.EOF {
+		// we are in the beginning of tree, get new enum starting
+		// from first region
+		enum.Close()
+		enum, err = krc.regions.SeekFirst()
+		if err != nil {
+			log.Fatalf(
+				"error seeking first region when getting  overlaps for region %v: %v", reg, err)
 		}
 	}
 
+	_, v, err = enum.Next()
+	if isRegionOverlap(v.(hrpc.RegionInfo), reg) {
+		overlaps = append(overlaps, v.(hrpc.RegionInfo))
+	}
+	_, v, err = enum.Next()
+
 	// now append all regions that overlap until the end of the tree
 	// or until they don't overlap
-	_, v, err = enum.Next()
-	for err == nil && isRegionOverlap(v.(hrpc.RegionInfo), reg) {
+	for err != io.EOF && isRegionOverlap(v.(hrpc.RegionInfo), reg) {
 		overlaps = append(overlaps, v.(hrpc.RegionInfo))
 		_, v, err = enum.Next()
 	}
