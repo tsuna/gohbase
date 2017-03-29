@@ -18,7 +18,7 @@ import (
 // clientRegionCache is client -> region cache. Used to quickly
 // look up all the regioninfos that map to a specific client
 type clientRegionCache struct {
-	m sync.Mutex
+	m sync.RWMutex
 
 	regions map[hrpc.RegionClient]map[hrpc.RegionInfo]struct{}
 }
@@ -99,40 +99,40 @@ func (rcc *clientRegionCache) clientDown(c hrpc.RegionClient) map[hrpc.RegionInf
 
 // TODO: obvious place for optimization (use map with address as key to lookup exisiting clients)
 func (rcc *clientRegionCache) checkForClient(host string, port uint16) hrpc.RegionClient {
-	rcc.m.Lock()
-	defer rcc.m.Unlock()
+	rcc.m.RLock()
 
 	for client := range rcc.regions {
 		if client.Host() == host && client.Port() == port {
+			rcc.m.RUnlock()
 			return client
 		}
 	}
+
+	rcc.m.RUnlock()
 	return nil
 }
 
 // key -> region cache.
 type keyRegionCache struct {
-	m sync.Mutex
+	m sync.RWMutex
 
 	// Maps a []byte of a region start key to a hrpc.RegionInfo
 	regions *b.Tree
 }
 
 func (krc *keyRegionCache) get(key []byte) ([]byte, hrpc.RegionInfo) {
-	// When seeking - "The Enumerator's position is possibly after the last item in the tree"
-	// http://godoc.org/github.com/cznic/b#Tree.Set
-	krc.m.Lock()
+	krc.m.RLock()
 
 	enum, ok := krc.regions.Seek(key)
 	if ok {
-		krc.m.Unlock()
+		krc.m.RUnlock()
 		log.Fatalf("WTF: got exact match for region search key %q", key)
 		return nil, nil
 	}
 	k, v, err := enum.Prev()
 	enum.Close()
 
-	krc.m.Unlock()
+	krc.m.RUnlock()
 
 	if err == io.EOF {
 		// we are the beginning of the tree
