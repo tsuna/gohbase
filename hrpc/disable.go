@@ -9,7 +9,7 @@ import (
 	"context"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/tsuna/gohbase/internal/pb"
+	"github.com/tsuna/gohbase/pb"
 )
 
 // DisableTable represents a DisableTable HBase call

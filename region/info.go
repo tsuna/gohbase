@@ -16,7 +16,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
-	"github.com/tsuna/gohbase/internal/pb"
+	"github.com/tsuna/gohbase/pb"
 )
 
 var defaultNamespace = []byte("default")

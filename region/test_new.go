@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/tsuna/gohbase/hrpc"
-	"github.com/tsuna/gohbase/internal/pb"
+	"github.com/tsuna/gohbase/pb"
 )
 
 type testClient struct {

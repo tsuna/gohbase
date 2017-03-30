@@ -17,7 +17,7 @@ import (
 	"github.com/cznic/b"
 	"github.com/golang/mock/gomock"
 	"github.com/tsuna/gohbase/hrpc"
-	"github.com/tsuna/gohbase/internal/pb"
+	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
 	"github.com/tsuna/gohbase/test/mock"
 	mockRegion "github.com/tsuna/gohbase/test/mock/region"
