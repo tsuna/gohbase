@@ -50,7 +50,7 @@ func newAdminClient(zkquorum string, options ...Option) AdminClient {
 }
 
 func (c *client) CreateTable(t *hrpc.CreateTable) error {
-	pbmsg, err := c.sendRPC(t)
+	pbmsg, err := c.SendRPC(t)
 	if err != nil {
 		return err
 	}
@@ -64,7 +64,7 @@ func (c *client) CreateTable(t *hrpc.CreateTable) error {
 }
 
 func (c *client) DeleteTable(t *hrpc.DeleteTable) error {
-	pbmsg, err := c.sendRPC(t)
+	pbmsg, err := c.SendRPC(t)
 	if err != nil {
 		return err
 	}
@@ -78,7 +78,7 @@ func (c *client) DeleteTable(t *hrpc.DeleteTable) error {
 }
 
 func (c *client) EnableTable(t *hrpc.EnableTable) error {
-	pbmsg, err := c.sendRPC(t)
+	pbmsg, err := c.SendRPC(t)
 	if err != nil {
 		return err
 	}
@@ -92,7 +92,7 @@ func (c *client) EnableTable(t *hrpc.EnableTable) error {
 }
 
 func (c *client) DisableTable(t *hrpc.DisableTable) error {
-	pbmsg, err := c.sendRPC(t)
+	pbmsg, err := c.SendRPC(t)
 	if err != nil {
 		return err
 	}
@@ -108,7 +108,7 @@ func (c *client) DisableTable(t *hrpc.DisableTable) error {
 func (c *client) checkProcedureWithBackoff(ctx context.Context, procID uint64) error {
 	backoff := backoffStart
 	for {
-		pbmsg, err := c.sendRPC(hrpc.NewGetProcedureState(ctx, procID))
+		pbmsg, err := c.SendRPC(hrpc.NewGetProcedureState(ctx, procID))
 		if err != nil {
 			return err
 		}

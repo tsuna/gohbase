@@ -16,3 +16,4 @@ package mock
 //go:generate mockgen -destination=call.go -package=mock github.com/tsuna/gohbase/hrpc Call
 //go:generate mockgen -destination=zk/client.go -package=mock github.com/tsuna/gohbase/zk Client
 //go:generate mockgen -destination=region/client.go -package=mock github.com/tsuna/gohbase/hrpc RegionClient
+//go:generate mockgen -destination=rpcclient.go -package=mock github.com/tsuna/gohbase RPCClient

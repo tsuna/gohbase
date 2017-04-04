@@ -65,7 +65,7 @@ func TestSendRPCSanity(t *testing.T) {
 	expMsg := &pb.GetResponse{}
 	result <- hrpc.RPCResult{Msg: expMsg}
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
-	msg, err := c.sendRPC(mockCall)
+	msg, err := c.SendRPC(mockCall)
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}

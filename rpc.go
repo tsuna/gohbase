@@ -48,7 +48,7 @@ var (
 	backoffStart = 16 * time.Millisecond
 )
 
-func (c *client) sendRPC(rpc hrpc.Call) (proto.Message, error) {
+func (c *client) SendRPC(rpc hrpc.Call) (proto.Message, error) {
 	// Check the cache for a region that can handle this request
 	var err error
 

@@ -13,6 +13,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/cznic/b"
+	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
@@ -39,6 +40,11 @@ type Client interface {
 	CheckAndPut(p *hrpc.Mutate, family string, qualifier string,
 		expectedValue []byte) (bool, error)
 	Close()
+}
+
+// RPCClient is core client of gohbase. It's exposed for testing.
+type RPCClient interface {
+	SendRPC(rpc hrpc.Call) (proto.Message, error)
 }
 
 type Option func(*client)
@@ -185,7 +191,7 @@ func (c *client) Scan(s *hrpc.Scan) ([]*hrpc.Result, error) {
 			return nil, err
 		}
 
-		res, err := c.sendRPC(rpc)
+		res, err := c.SendRPC(rpc)
 		if err != nil {
 			return nil, err
 		}
@@ -200,7 +206,7 @@ func (c *client) Scan(s *hrpc.Scan) ([]*hrpc.Result, error) {
 		for len(scanres.Results) != 0 && uint32(len(results)) < numberOfRows {
 			rpc = hrpc.NewScanFromID(ctx, table, *scanres.ScannerId, rpc.Key())
 
-			res, err = c.sendRPC(rpc)
+			res, err = c.SendRPC(rpc)
 			if err != nil {
 				return nil, err
 			}
@@ -212,7 +218,7 @@ func (c *client) Scan(s *hrpc.Scan) ([]*hrpc.Result, error) {
 		if err != nil {
 			return nil, err
 		}
-		res, err = c.sendRPC(rpc)
+		res, err = c.SendRPC(rpc)
 
 		// Check to see if this region is the last we should scan because:
 		// (0) we got the number of rows user asked for
@@ -236,7 +242,7 @@ func (c *client) Scan(s *hrpc.Scan) ([]*hrpc.Result, error) {
 }
 
 func (c *client) Get(g *hrpc.Get) (*hrpc.Result, error) {
-	pbmsg, err := c.sendRPC(g)
+	pbmsg, err := c.SendRPC(g)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +283,7 @@ func (c *client) Increment(i *hrpc.Mutate) (int64, error) {
 }
 
 func (c *client) mutate(m *hrpc.Mutate) (*hrpc.Result, error) {
-	pbmsg, err := c.sendRPC(m)
+	pbmsg, err := c.SendRPC(m)
 	if err != nil {
 		return nil, err
 	}
@@ -297,7 +303,7 @@ func (c *client) CheckAndPut(p *hrpc.Mutate, family string,
 		return false, err
 	}
 
-	pbmsg, err := c.sendRPC(cas)
+	pbmsg, err := c.SendRPC(cas)
 	if err != nil {
 		return false, err
 	}

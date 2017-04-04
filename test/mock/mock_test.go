@@ -17,6 +17,7 @@ import (
 )
 
 var _ gohbase.Client = (*mock.MockClient)(nil)
+var _ gohbase.RPCClient = (*mock.MockRPCClient)(nil)
 var _ gohbase.AdminClient = (*mock.MockAdminClient)(nil)
 var _ hrpc.Call = (*mock.MockCall)(nil)
 var _ io.ReadWriteCloser = (*mock.MockReadWriteCloser)(nil)
