@@ -7,6 +7,7 @@ package hrpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 
@@ -58,8 +59,6 @@ type Scan struct {
 	// Maps a column family to a list of qualifiers
 	families map[string][]string
 
-	closeScanner bool
-
 	startRow []byte
 	stopRow  []byte
 
@@ -73,6 +72,9 @@ type Scan struct {
 	numberOfRows uint32
 
 	filters filter.Filter
+
+	closeScanner        bool
+	allowPartialResults bool
 }
 
 // baseScan returns a Scan struct with default values set.
@@ -200,10 +202,15 @@ func (s *Scan) MaxVersions() uint32 {
 	return s.maxVersions
 }
 
-// NumberOfRows returns maximum number of rows that could be fetched
-// by this scanner.
+// NumberOfRows returns maximum number of rows that will be fetched
+// with each scan request to regionserver.
 func (s *Scan) NumberOfRows() uint32 {
 	return s.numberOfRows
+}
+
+// AllowPartialResults returns true if client handles partials.
+func (s *Scan) AllowPartialResults() bool {
+	return s.allowPartialResults
 }
 
 // Serialize converts this Scan into a serialized protobuf message ready
@@ -266,4 +273,37 @@ func (s *Scan) SetFamilies(fam map[string][]string) error {
 func (s *Scan) SetFilter(ft filter.Filter) error {
 	s.filters = ft
 	return nil
+}
+
+// NumberOfRows is an option for scan requests.
+// Specifies how many rows are fetched with each request to regionserver.
+// Should be > 0, avoid extremely low values such as 1 because a request
+// to regionserver will be made for every row.
+func NumberOfRows(n uint32) func(Call) error {
+	return func(g Call) error {
+		scan, ok := g.(*Scan)
+		if !ok {
+			return errors.New("'NumberOfRows' option can only be used with Scan queries")
+		}
+		if n == 0 {
+			return errors.New("'NumberOfRows' option must be greater than 0")
+		}
+		scan.numberOfRows = n
+		return nil
+	}
+}
+
+// AllowPartialResults is an option for scan requests.
+// This option should be provided if the client has really big rows and
+// wants to avoid OOM errors on her side. With this option provided, Next()
+// will return partial rows.
+func AllowPartialResults() func(Call) error {
+	return func(g Call) error {
+		scan, ok := g.(*Scan)
+		if !ok {
+			return errors.New("'AllowPartialResults' option can only be used with Scan queries")
+		}
+		scan.allowPartialResults = true
+		return nil
+	}
 }

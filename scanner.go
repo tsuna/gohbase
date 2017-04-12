@@ -141,6 +141,10 @@ func (f *fetcher) coalese(partial *hrpc.Result) *hrpc.Result {
 
 // send sends a result and error to results channel. Returns true if scanner is done.
 func (f *fetcher) send(r *hrpc.Result, err error) bool {
+	if f.rpc.AllowPartialResults() {
+		return f.trySend(r, err)
+	}
+
 	r = f.coalese(r)
 	if r == nil {
 		if err == nil {

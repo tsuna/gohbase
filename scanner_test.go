@@ -239,36 +239,55 @@ func TestScannerCloseBuffered(t *testing.T) {
 	wg.Wait()
 }
 
+var cells = []*pb.Cell{
+	&pb.Cell{Row: []byte("a"), Family: []byte("A"), Qualifier: []byte("1")}, // 0
+	&pb.Cell{Row: []byte("a"), Family: []byte("A"), Qualifier: []byte("2")},
+	&pb.Cell{Row: []byte("a"), Family: []byte("A"), Qualifier: []byte("3")},
+	&pb.Cell{Row: []byte("b"), Family: []byte("B"), Qualifier: []byte("1")},   // 3
+	&pb.Cell{Row: []byte("b"), Family: []byte("B"), Qualifier: []byte("2")},   // 4
+	&pb.Cell{Row: []byte("bar"), Family: []byte("B"), Qualifier: []byte("1")}, // 5
+	&pb.Cell{Row: []byte("bar"), Family: []byte("B"), Qualifier: []byte("2")},
+	&pb.Cell{Row: []byte("bar"), Family: []byte("B"), Qualifier: []byte("3")}, // 7
+	&pb.Cell{Row: []byte("foo"), Family: []byte("F"), Qualifier: []byte("1")}, // 8
+	&pb.Cell{Row: []byte("foo"), Family: []byte("F"), Qualifier: []byte("2")}, // 9
+}
+
 func TestPartialResults(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	c := mock.NewMockRPCClient(ctrl)
-
-	cells := []*pb.Cell{
-		&pb.Cell{Row: []byte("a"), Family: []byte("A"), Qualifier: []byte("1")}, // 0
-		&pb.Cell{Row: []byte("a"), Family: []byte("A"), Qualifier: []byte("2")},
-		&pb.Cell{Row: []byte("a"), Family: []byte("A"), Qualifier: []byte("3")},
-
-		&pb.Cell{Row: []byte("b"), Family: []byte("B"), Qualifier: []byte("1")}, // 3
-
-		&pb.Cell{Row: []byte("b"), Family: []byte("B"), Qualifier: []byte("2")}, // 4
-
-		&pb.Cell{Row: []byte("bar"), Family: []byte("B"), Qualifier: []byte("1")}, // 5
-		&pb.Cell{Row: []byte("bar"), Family: []byte("B"), Qualifier: []byte("2")},
-
-		&pb.Cell{Row: []byte("bar"), Family: []byte("B"), Qualifier: []byte("3")}, // 7
-
-		&pb.Cell{Row: []byte("foo"), Family: []byte("F"), Qualifier: []byte("1")}, // 8
-
-		&pb.Cell{Row: []byte("foo"), Family: []byte("F"), Qualifier: []byte("2")}, // 9
-	}
-
-	ctx := context.Background()
-	scan, err := hrpc.NewScan(ctx, table)
+	scan, err := hrpc.NewScan(context.Background(), table)
 	if err != nil {
 		t.Fatal(err)
 	}
+	expected := []*hrpc.Result{
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[:3], Exists: &tr}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[3:5], Exists: &tr}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[5:8], Exists: &tr}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[8:], Exists: &tr}),
+	}
+	testPartialResults(t, scan, expected)
+}
 
+func TestAllowPartialResults(t *testing.T) {
+	scan, err := hrpc.NewScan(context.Background(), table, hrpc.AllowPartialResults())
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := []*hrpc.Result{
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[:3], Exists: &tr}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[3:4], Exists: &tr}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[4:5], Exists: &tr}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[5:7], Exists: &tr}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[7:8], Exists: &tr}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[8:8], Exists: &tr}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[8:9], Exists: &tr}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[9:], Exists: &tr}),
+	}
+	testPartialResults(t, scan, expected)
+}
+
+func testPartialResults(t *testing.T, scan *hrpc.Scan, expected []*hrpc.Result) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	c := mock.NewMockRPCClient(ctrl)
 	tcase := []struct {
 		region              hrpc.RegionInfo
 		results             []*pb.Result
@@ -278,63 +297,42 @@ func TestPartialResults(t *testing.T) {
 		{
 			region: region1,
 			results: []*pb.Result{
-				&pb.Result{
-					Cell:   cells[:3],
-					Exists: &tr,
-				},
-				&pb.Result{
-					Cell:   cells[3:4],
-					Exists: &tr,
-				},
+				&pb.Result{Cell: cells[:3], Exists: &tr},
+				&pb.Result{Cell: cells[3:4], Exists: &tr},
 			},
 			moreResultsInRegion: true,
 		},
 		{ // end of region, should return row b
 			region: region1,
 			results: []*pb.Result{
-				&pb.Result{
-					Cell:   cells[4:5],
-					Exists: &tr,
-				},
+				&pb.Result{Cell: cells[4:5], Exists: &tr},
 			},
 			scanFromID: true,
 		},
 		{ // half a row in a result in the same response - unlikely, but why not
 			region: region2,
 			results: []*pb.Result{
-				&pb.Result{
-					Cell:   cells[5:7],
-					Exists: &tr,
-				},
-				&pb.Result{
-					Cell:   cells[7:8],
-					Exists: &tr,
-				},
+				&pb.Result{Cell: cells[5:7], Exists: &tr},
+				&pb.Result{Cell: cells[7:8], Exists: &tr},
 			},
 			moreResultsInRegion: true,
 		},
 		{ // empty result, last in region
 			region:     region2,
-			results:    []*pb.Result{&pb.Result{}},
+			results:    []*pb.Result{&pb.Result{Exists: &tr}},
 			scanFromID: true,
 		},
 		{
 			region: region3,
 			results: []*pb.Result{
-				&pb.Result{
-					Cell:   cells[8:9],
-					Exists: &tr,
-				},
+				&pb.Result{Cell: cells[8:9], Exists: &tr},
 			},
 			moreResultsInRegion: true,
 		},
 		{ // last row
 			region: region3,
 			results: []*pb.Result{
-				&pb.Result{
-					Cell:   cells[9:],
-					Exists: &tr,
-				},
+				&pb.Result{Cell: cells[9:], Exists: &tr},
 			},
 			scanFromID: true,
 		},
@@ -342,7 +340,7 @@ func TestPartialResults(t *testing.T) {
 
 	var scannerID uint64
 	scanner := newScanner(c, scan)
-	ctx = scanner.f.ctx
+	ctx := scanner.f.ctx
 
 	for _, partial := range tcase {
 		partial := partial
@@ -377,13 +375,6 @@ func TestPartialResults(t *testing.T) {
 			t.Fatal(err)
 		}
 		rs = append(rs, r)
-	}
-
-	expected := []*hrpc.Result{
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[0:3], Exists: &tr}),
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[3:5], Exists: &tr}),
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[5:8], Exists: &tr}),
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[8:], Exists: &tr}),
 	}
 
 	if d := test.Diff(expected, rs); d != "" {
