@@ -8,6 +8,7 @@ package gohbase
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -282,6 +283,132 @@ func TestAllowPartialResults(t *testing.T) {
 		hrpc.ToLocalResult(&pb.Result{Cell: cells[9:], Exists: &tr}),
 	}
 	testPartialResults(t, scan, expected)
+}
+
+func TestErrorScanFromID(t *testing.T) {
+	scan, err := hrpc.NewScan(context.Background(), table)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := []*hrpc.Result{
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[:3], Exists: &tr}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[3:4], Exists: &tr}),
+	}
+	testErrorScanFromID(t, scan, expected)
+}
+
+func TestErrorScanFromIDAllowPartials(t *testing.T) {
+	scan, err := hrpc.NewScan(context.Background(), table, hrpc.AllowPartialResults())
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := []*hrpc.Result{
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[:3], Exists: &tr}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[3:4], Exists: &tr}),
+	}
+	testErrorScanFromID(t, scan, expected)
+}
+
+func TestErrorFirstFetch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	c := mock.NewMockRPCClient(ctrl)
+
+	scan, err := hrpc.NewScan(context.Background(), table)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scanner := newScanner(c, scan)
+	ctx := scanner.f.ctx
+
+	srange, err := hrpc.NewScanRange(ctx, table, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	outErr := errors.New("WTF")
+	c.EXPECT().SendRPC(srange).Do(func(rpc hrpc.Call) {
+		rpc.SetRegion(region1)
+	}).Return(nil, outErr).Times(1)
+
+	var r *hrpc.Result
+	var rs []*hrpc.Result
+	for {
+		r, err = scanner.Next()
+		if r != nil {
+			rs = append(rs, r)
+		}
+		if err != nil {
+			break
+		}
+	}
+	if err != outErr {
+		t.Errorf("Expected error %v, got error %v", outErr, err)
+	}
+	if d := test.Diff([]*hrpc.Result{}, rs); d != "" {
+		t.Fatal(d)
+	}
+}
+
+func testErrorScanFromID(t *testing.T, scan *hrpc.Scan, out []*hrpc.Result) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	c := mock.NewMockRPCClient(ctrl)
+
+	var scannerID uint64 = 42
+	scanner := newScanner(c, scan)
+	ctx := scanner.f.ctx
+
+	srange, err := hrpc.NewScanRange(ctx, table, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c.EXPECT().SendRPC(srange).Do(func(rpc hrpc.Call) {
+		rpc.SetRegion(region1)
+	}).Return(&pb.ScanResponse{
+		ScannerId:           cp(scannerID),
+		MoreResultsInRegion: &tr,
+		Results: []*pb.Result{
+			&pb.Result{Cell: cells[:3], Exists: &tr},
+			&pb.Result{Cell: cells[3:4], Exists: &tr},
+		},
+	}, nil).Times(1)
+
+	outErr := errors.New("WTF")
+	sid := hrpc.NewScanFromID(ctx, table, scannerID, nil)
+	c.EXPECT().SendRPC(sid).Do(func(rpc hrpc.Call) {
+		rpc.SetRegion(region1)
+	}).Return(nil, outErr).Times(1)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	// expect scan close rpc to be sent
+	c.EXPECT().SendRPC(
+		&scanMatcher{
+			scan: hrpc.NewCloseFromID(ctx, table, scannerID, nil),
+		}).
+		Return(nil, nil).Times(1).Do(func(rpc hrpc.Call) { wg.Done() })
+
+	var r *hrpc.Result
+	var rs []*hrpc.Result
+	for {
+		r, err = scanner.Next()
+		if r != nil {
+			rs = append(rs, r)
+		}
+		if err != nil {
+			break
+		}
+	}
+	wg.Wait()
+
+	if err != outErr {
+		t.Errorf("Expected error %v, got error %v", outErr, err)
+	}
+	if d := test.Diff(out, rs); d != "" {
+		t.Fatal(d)
+	}
 }
 
 func testPartialResults(t *testing.T, scan *hrpc.Scan, expected []*hrpc.Result) {
