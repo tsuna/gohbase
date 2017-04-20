@@ -644,3 +644,35 @@ func BenchmarkSendBatchMemory(b *testing.B) {
 	}
 	// we don't care about cleaning up
 }
+
+func TestBuffer(t *testing.T) {
+	size := 42
+	b := newBuffer(size)
+	if cap(b) < size {
+		t.Fatalf("Excpected cap >= %d, got %d", size, cap(b))
+	}
+	if len(b) != size {
+		t.Fatalf("Excpected len %d, got %d", size, len(b))
+	}
+	freeBuffer(b)
+
+	size = 40
+	b = newBuffer(size)
+	if cap(b) < size {
+		t.Fatalf("Excpected cap >= %d, got %d", size, cap(b))
+	}
+	if len(b) != size {
+		t.Fatalf("Excpected len %d, got %d", size, len(b))
+	}
+	freeBuffer(b)
+
+	size = 45
+	b = newBuffer(size)
+	if cap(b) < size {
+		t.Fatalf("Excpected cap >= %d, got %d", size, cap(b))
+	}
+	if len(b) != size {
+		t.Fatalf("Excpected len %d, got %d", size, len(b))
+	}
+	freeBuffer(b)
+}

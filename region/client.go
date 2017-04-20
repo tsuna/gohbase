@@ -56,6 +56,29 @@ const (
 	MasterClient = ClientType("MasterService")
 )
 
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		var b []byte
+		return b
+	},
+}
+
+func newBuffer(size int) []byte {
+	b := bufferPool.Get().([]byte)
+	if cap(b) < size {
+		doublecap := 2 * cap(b)
+		if doublecap > size {
+			return make([]byte, size, doublecap)
+		}
+		return make([]byte, size)
+	}
+	return b[:size]
+}
+
+func freeBuffer(b []byte) {
+	bufferPool.Put(b[:0])
+}
+
 // UnrecoverableError is an error that this region.Client can't recover from.
 // The connection to the RegionServer has to be closed and all queued and
 // outstanding RPCs will be failed / retried.
@@ -286,9 +309,11 @@ func (c *client) receive() error {
 		return UnrecoverableError{err}
 	}
 
-	buf := make([]byte, binary.BigEndian.Uint32(sz[:]))
+	b := newBuffer(int(binary.BigEndian.Uint32(sz[:])))
+	buf := b
 	err = c.readFully(buf)
 	if err != nil {
+		freeBuffer(b)
 		return UnrecoverableError{err}
 	}
 
@@ -298,21 +323,24 @@ func (c *client) receive() error {
 	err = proto.UnmarshalMerge(buf[:respLen], resp)
 	buf = buf[respLen:]
 	if err != nil {
+		freeBuffer(b)
 		return fmt.Errorf("failed to deserialize the response header: %s", err)
 	}
 	if resp.CallId == nil {
 		// Response doesn't have a call ID
+		freeBuffer(b)
 		return ErrMissingCallID
 	}
 
 	c.sentM.Lock()
 	rpc, ok := c.sent[*resp.CallId]
-	if !ok {
-		c.sentM.Unlock()
-		return fmt.Errorf("got a response with an unexpected call ID: %d", *resp.CallId)
-	}
 	delete(c.sent, *resp.CallId)
 	c.sentM.Unlock()
+
+	if !ok {
+		freeBuffer(b)
+		return fmt.Errorf("got a response with an unexpected call ID: %d", *resp.CallId)
+	}
 
 	// Here we know for sure that we got a response for rpc we asked
 	var rpcResp proto.Message
@@ -329,6 +357,7 @@ func (c *client) receive() error {
 			err = RetryableError{err}
 		}
 	}
+	freeBuffer(b)
 	rpc.ResultChan() <- hrpc.RPCResult{Msg: rpcResp, Error: err}
 	return nil
 }
