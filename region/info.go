@@ -35,7 +35,7 @@ type info struct {
 	// The attributes before this mutex are supposed to be immutable.
 	// The attributes defined below can be changed and accesses must
 	// be protected with this mutex.
-	m sync.Mutex
+	m sync.RWMutex
 
 	client hrpc.RegionClient
 
@@ -153,9 +153,9 @@ func ParseRegionInfo(metaRow *hrpc.Result) (hrpc.RegionInfo, string, uint16, err
 
 // IsUnavailable returns true if this region has been marked as unavailable.
 func (i *info) IsUnavailable() bool {
-	i.m.Lock()
+	i.m.RLock()
 	res := i.available != nil
-	i.m.Unlock()
+	i.m.RUnlock()
 	return res
 }
 
@@ -163,9 +163,9 @@ func (i *info) IsUnavailable() bool {
 // notification that a connection to this region has been reestablished.
 // If this region is not marked as unavailable, nil will be returned.
 func (i *info) AvailabilityChan() <-chan struct{} {
-	i.m.Lock()
+	i.m.RLock()
 	ch := i.available
-	i.m.Unlock()
+	i.m.RUnlock()
 	return ch
 }
 
@@ -242,9 +242,9 @@ func (i *info) Table() []byte {
 
 // Client returns region client
 func (i *info) Client() hrpc.RegionClient {
-	i.m.Lock()
+	i.m.RLock()
 	c := i.client
-	i.m.Unlock()
+	i.m.RUnlock()
 	return c
 }
 
