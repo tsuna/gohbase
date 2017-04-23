@@ -115,8 +115,8 @@ func (g *Get) ExistsOnly() error {
 	return nil
 }
 
-// Serialize serializes this RPC into a buffer.
-func (g *Get) Serialize() ([]byte, error) {
+// ToProto converts this RPC into a protobuf message.
+func (g *Get) ToProto() (proto.Message, error) {
 	get := &pb.GetRequest{
 		Region: g.regionSpecifier(),
 		Get: &pb.Get{
@@ -147,7 +147,7 @@ func (g *Get) Serialize() ([]byte, error) {
 		}
 		get.Get.Filter = pbFilter
 	}
-	return proto.Marshal(get)
+	return get, nil
 }
 
 // NewResponse creates an empty protobuf message to read the response of this

@@ -20,13 +20,12 @@ type EnableTable struct {
 // NewEnableTable creates a new EnableTable request that will enable the
 // given table in HBase. For use by the admin client.
 func NewEnableTable(ctx context.Context, table []byte) *EnableTable {
-	et := &EnableTable{
+	return &EnableTable{
 		tableOp{base{
 			table: table,
 			ctx:   ctx,
 		}},
 	}
-	return et
 }
 
 // Name returns the name of this RPC call.
@@ -34,16 +33,15 @@ func (et *EnableTable) Name() string {
 	return "EnableTable"
 }
 
-// Serialize will convert this HBase call into a slice of bytes to be written to
-// the network
-func (et *EnableTable) Serialize() ([]byte, error) {
-	dtreq := &pb.EnableTableRequest{
+// ToProto converts the RPC into a protobuf message
+func (et *EnableTable) ToProto() (proto.Message, error) {
+	return &pb.EnableTableRequest{
 		TableName: &pb.TableName{
+			// TODO: handle namespaces
 			Namespace: []byte("default"),
 			Qualifier: et.table,
 		},
-	}
-	return proto.Marshal(dtreq)
+	}, nil
 }
 
 // NewResponse creates an empty protobuf message to read the response of this

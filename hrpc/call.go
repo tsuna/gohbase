@@ -54,7 +54,7 @@ type Call interface {
 	Key() []byte
 	Region() RegionInfo
 	SetRegion(region RegionInfo)
-	Serialize() ([]byte, error)
+	ToProto() (proto.Message, error)
 	// Returns a newly created (default-state) protobuf in which to store the
 	// response of this call.
 	NewResponse() proto.Message

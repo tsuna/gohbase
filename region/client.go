@@ -406,32 +406,35 @@ func (c *client) sendHello(ctype ClientType) error {
 // send sends an RPC out to the wire.
 // Returns the response (for now, as the call is synchronous).
 func (c *client) send(rpc *call) error {
-	reqheader := &pb.RequestHeader{
+	request, err := rpc.ToProto()
+	if err != nil {
+		return fmt.Errorf("failed to convert RPC: %s", err)
+	}
+
+	b := newBuffer(4)
+	defer func() { freeBuffer(b) }()
+
+	buf := proto.NewBuffer(b[4:])
+	buf.Reset()
+
+	header := &pb.RequestHeader{
 		CallId:       &rpc.id,
 		MethodName:   proto.String(rpc.Name()),
 		RequestParam: proto.Bool(true),
 	}
-
-	payload, err := rpc.Serialize()
-	if err != nil {
-		return fmt.Errorf("failed to serialize RPC: %s", err)
-	}
-	payloadLen := proto.EncodeVarint(uint64(len(payload)))
-
-	headerData, err := proto.Marshal(reqheader)
-	if err != nil {
-		return fmt.Errorf("failed to marshal Get request: %s", err)
+	if err = buf.EncodeMessage(header); err != nil {
+		return fmt.Errorf("failed to marshal request header: %s", err)
 	}
 
-	buf := make([]byte, 5, 4+1+len(headerData)+len(payloadLen)+len(payload))
-	binary.BigEndian.PutUint32(buf, uint32(cap(buf)-4))
-	buf[4] = byte(len(headerData))
-	buf = append(buf, headerData...)
-	buf = append(buf, payloadLen...)
-	buf = append(buf, payload...)
+	if err = buf.EncodeMessage(request); err != nil {
+		return fmt.Errorf("failed to marshal request: %s", err)
+	}
 
-	err = c.write(buf)
-	if err != nil {
+	payload := buf.Bytes()
+	binary.BigEndian.PutUint32(b, uint32(len(payload)))
+	b = append(b[:4], payload...)
+
+	if err = c.write(b); err != nil {
 		return UnrecoverableError{err}
 	}
 	return nil

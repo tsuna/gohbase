@@ -6,17 +6,19 @@
 package region
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/aristanetworks/goarista/test"
 	"github.com/golang/mock/gomock"
+	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
+	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/test/mock"
 )
 
@@ -146,7 +148,7 @@ func TestFail(t *testing.T) {
 }
 
 type rpcMatcher struct {
-	payload string
+	payload []byte
 }
 
 func (m rpcMatcher) Matches(x interface{}) bool {
@@ -154,14 +156,14 @@ func (m rpcMatcher) Matches(x interface{}) bool {
 	if !ok {
 		return false
 	}
-	return strings.HasSuffix(string(data), m.payload)
+	return bytes.HasSuffix(data, m.payload)
 }
 
 func (m rpcMatcher) String() string {
-	return "RPC payload is equal to " + m.payload
+	return fmt.Sprintf("RPC payload is equal to %q", m.payload)
 }
 
-func newRPCMatcher(payload string) gomock.Matcher {
+func newRPCMatcher(payload []byte) gomock.Matcher {
 	return rpcMatcher{payload: payload}
 }
 
@@ -219,6 +221,22 @@ func TestAwaitingRPCsFail(t *testing.T) {
 	}
 }
 
+func mockRPCProto(row string) (proto.Message, []byte) {
+	regionType := pb.RegionSpecifier_REGION_NAME
+	r := &pb.RegionSpecifier{
+		Type:  &regionType,
+		Value: []byte("yolo"),
+	}
+	get := &pb.GetRequest{Region: r, Get: &pb.Get{Row: []byte(row)}}
+
+	var b []byte
+	buf := proto.NewBuffer(b)
+	if err := buf.EncodeMessage(get); err != nil {
+		panic(err)
+	}
+	return get, buf.Bytes()
+}
+
 func TestQueueRPC(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -249,14 +267,14 @@ func TestQueueRPC(t *testing.T) {
 		wgWrites.Add(1)
 		mockCall := mock.NewMockCall(ctrl)
 		mockCall.EXPECT().Name().Return("lol").Times(1)
-		payload := fmt.Sprintf("rpc_%d", i)
-		mockCall.EXPECT().Serialize().Return([]byte(payload), nil).Times(1)
+		p, payload := mockRPCProto(fmt.Sprintf("rpc_%d", i))
+		mockCall.EXPECT().ToProto().Return(p, nil).Times(1)
 		mockCall.EXPECT().Context().Return(ctx).Times(2)
 		mockCall.EXPECT().ResultChan().Return(make(chan hrpc.RPCResult, 1)).Times(1)
 		calls[i] = mockCall
 
 		// we expect that it eventually writes to connection
-		mockConn.EXPECT().Write(newRPCMatcher(payload)).Times(1).Return(15+len(payload), nil).Do(
+		mockConn.EXPECT().Write(newRPCMatcher(payload)).Times(1).Return(14+len(payload), nil).Do(
 			func(buf []byte) {
 				wgWrites.Done()
 			})
@@ -328,8 +346,8 @@ func TestUnrecoverableErrorWrite(t *testing.T) {
 	// define rpcs behaviour
 	mockCall := mock.NewMockCall(ctrl)
 	mockCall.EXPECT().Name().Return("lol").Times(1)
-	payload := "rpc"
-	mockCall.EXPECT().Serialize().Return([]byte(payload), nil).Times(1)
+	p, payload := mockRPCProto("rpc")
+	mockCall.EXPECT().ToProto().Return(p, nil).Times(1)
 	mockCall.EXPECT().Context().Return(context.Background()).Times(2)
 	result := make(chan hrpc.RPCResult, 1)
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
@@ -419,16 +437,15 @@ func TestUnexpectedSendError(t *testing.T) {
 	go c.processRPCs()
 	// define rpcs behaviour
 	mockCall := mock.NewMockCall(ctrl)
-	mockCall.EXPECT().Name().Return("lol").Times(1)
-	err := errors.New("Serialize error")
-	mockCall.EXPECT().Serialize().Return(nil, err).Times(1)
+	err := errors.New("ToProto error")
+	mockCall.EXPECT().ToProto().Return(nil, err).Times(1)
 	mockCall.EXPECT().Context().Return(context.Background()).Times(2)
 	result := make(chan hrpc.RPCResult, 1)
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
 
 	c.QueueRPC(mockCall)
 	r := <-result
-	err = fmt.Errorf("failed to serialize RPC: %v", err)
+	err = fmt.Errorf("failed to convert RPC: %v", err)
 	if diff := test.Diff(err, r.Error); diff != "" {
 		t.Errorf("Expected: %s\nReceived: %s\nDiff:%s",
 			err, r.Error, diff)
@@ -469,13 +486,13 @@ func TestSendBatch(t *testing.T) {
 		} else if i < 6 {
 			// we expect rpcs 3-5 to be written
 			mockCall.EXPECT().Name().Return("lol").Times(1)
-			payload := fmt.Sprintf("rpc_%d", i)
-			mockCall.EXPECT().Serialize().Return([]byte(payload), nil).Times(1)
+			p, payload := mockRPCProto(fmt.Sprintf("rpc_%d", i))
+			mockCall.EXPECT().ToProto().Return(p, nil).Times(1)
 			mockCall.EXPECT().Context().Return(ctx).Times(1)
 			// we expect that it eventually writes to connection
 			i := i
 			mockConn.EXPECT().Write(newRPCMatcher(payload)).Times(1).Return(
-				15+len(payload), nil).Do(func(buf []byte) {
+				14+len(payload), nil).Do(func(buf []byte) {
 				if i == 5 {
 					// we close on 6th rpc to check if sendBatch stop appropriately
 					c.Close()
@@ -524,12 +541,12 @@ func TestFlushInterval(t *testing.T) {
 		wgWrites.Add(1)
 		mockCall := mock.NewMockCall(ctrl)
 		mockCall.EXPECT().Name().Return("lol").Times(1)
-		payload := fmt.Sprintf("rpc_%d", i)
-		mockCall.EXPECT().Serialize().Return([]byte(payload), nil).Times(1)
+		p, payload := mockRPCProto(fmt.Sprintf("rpc_%d", i))
+		mockCall.EXPECT().ToProto().Return(p, nil).Times(1)
 		mockCall.EXPECT().Context().Return(ctx).Times(2)
 		mockCall.EXPECT().ResultChan().Return(make(chan hrpc.RPCResult, 1)).Times(1)
 		mockConn.EXPECT().Write(newRPCMatcher(payload)).Times(1).Return(
-			15+len(payload), nil).Do(func(buf []byte) {
+			14+len(payload), nil).Do(func(buf []byte) {
 			wgWrites.Done()
 		})
 		calls[i] = mockCall
@@ -575,15 +592,15 @@ func TestRPCContext(t *testing.T) {
 		wgWrites.Add(1)
 		mockCall := mock.NewMockCall(ctrl)
 		mockCall.EXPECT().Name().Return("lol").Times(1)
-		payload := fmt.Sprintf("rpc_%d", i)
+		p, payload := mockRPCProto(fmt.Sprintf("rpc_%d", i))
 		// throttle write, until we push rpc with canceled contxt
-		mockCall.EXPECT().Serialize().Return([]byte(payload), nil).Times(1).Do(func() {
+		mockCall.EXPECT().ToProto().Return(p, nil).Times(1).Do(func() {
 			wgThrottle.Wait()
 		})
 		mockCall.EXPECT().Context().Return(ctx).Times(2)
 		mockCall.EXPECT().ResultChan().Return(make(chan hrpc.RPCResult, 1)).Times(1)
 		mockConn.EXPECT().Write(newRPCMatcher(payload)).Times(1).Return(
-			15+len(payload), nil).Do(func(buf []byte) {
+			14+len(payload), nil).Do(func(buf []byte) {
 			wgWrites.Done()
 		})
 		c.QueueRPC(mockCall)
@@ -625,7 +642,8 @@ func BenchmarkSendBatchMemory(b *testing.B) {
 	ctx := context.Background()
 	mockCall := mock.NewMockCall(ctrl)
 	mockCall.EXPECT().Name().Return("lol").AnyTimes()
-	mockCall.EXPECT().Serialize().Return([]byte("rpc"), nil).AnyTimes()
+	p, _ := mockRPCProto("rpc")
+	mockCall.EXPECT().ToProto().Return(p, nil).AnyTimes()
 	mockCall.EXPECT().Context().Return(ctx).AnyTimes()
 	// for this benchmark to work, need to comment out section of in c.write()
 	// that detect short writes

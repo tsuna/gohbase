@@ -63,9 +63,8 @@ func (ct *CreateTable) Name() string {
 	return "CreateTable"
 }
 
-// Serialize will convert this HBase call into a slice of bytes to be written to
-// the network
-func (ct *CreateTable) Serialize() ([]byte, error) {
+// ToProto converts the RPC into a protobuf message
+func (ct *CreateTable) ToProto() (proto.Message, error) {
 	pbFamilies := make([]*pb.ColumnFamilySchema, 0, len(ct.families))
 	for family, attrs := range ct.families {
 		f := &pb.ColumnFamilySchema{
@@ -80,16 +79,16 @@ func (ct *CreateTable) Serialize() ([]byte, error) {
 		}
 		pbFamilies = append(pbFamilies, f)
 	}
-	ctable := &pb.CreateTableRequest{
+	return &pb.CreateTableRequest{
 		TableSchema: &pb.TableSchema{
 			TableName: &pb.TableName{
+				// TODO: handle namespaces
 				Namespace: []byte("default"),
 				Qualifier: ct.table,
 			},
 			ColumnFamilies: pbFamilies,
 		},
-	}
-	return proto.Marshal(ctable)
+	}, nil
 }
 
 // NewResponse creates an empty protobuf message to read the response of this

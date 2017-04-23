@@ -145,7 +145,7 @@ func confirmScanAttributes(s *hrpc.Scan, ctx context.Context, table, start, stop
 	return true
 }
 
-func BenchmarkMutateSerializeWithNestedMaps(b *testing.B) {
+func BenchmarkMutateToProtoWithNestedMaps(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
@@ -176,11 +176,14 @@ func BenchmarkMutateSerializeWithNestedMaps(b *testing.B) {
 			b.Errorf("Error creating mutate: %v", err)
 		}
 		mutate.SetRegion(region.NewInfo(0, nil, nil, nil, nil, nil))
-		mutate.Serialize()
+
+		if p, _ := mutate.ToProto(); p == nil {
+			b.Fatal("got a nil proto")
+		}
 	}
 }
 
-func BenchmarkMutateSerializeWithReflection(b *testing.B) {
+func BenchmarkMutateToProtoWithReflection(b *testing.B) {
 	b.ReportAllocs()
 
 	type teststr struct {
@@ -231,6 +234,9 @@ func BenchmarkMutateSerializeWithReflection(b *testing.B) {
 			b.Errorf("Error creating mutate: %v", err)
 		}
 		mutate.SetRegion(region.NewInfo(0, nil, nil, nil, nil, nil))
-		mutate.Serialize()
+
+		if p, _ := mutate.ToProto(); p == nil {
+			b.Fatal("got a nil proto")
+		}
 	}
 }

@@ -249,17 +249,12 @@ func (m *Mutate) Name() string {
 	return "Mutate"
 }
 
-// Serialize converts this mutate object into a protobuf message suitable for
-// sending to an HBase server
-func (m *Mutate) Serialize() ([]byte, error) {
-	mutateRequest, err := m.serializeToProto()
-	if err != nil {
-		return nil, fmt.Errorf("error serializing request: %s", err)
-	}
-	return proto.Marshal(mutateRequest)
+// ToProto converts this mutate RPC into a protobuf message
+func (m *Mutate) ToProto() (proto.Message, error) {
+	return m.toProto()
 }
 
-func (m *Mutate) serializeToProto() (*pb.MutateRequest, error) {
+func (m *Mutate) toProto() (*pb.MutateRequest, error) {
 	if m.data == nil {
 		return m.serializeNoReflect(), nil
 	}

@@ -213,23 +213,21 @@ func (s *Scan) AllowPartialResults() bool {
 	return s.allowPartialResults
 }
 
-// Serialize converts this Scan into a serialized protobuf message ready
-// to be sent to an HBase node.
-func (s *Scan) Serialize() ([]byte, error) {
-	t := true
+// ToProto converts this Scan into a protobuf message
+func (s *Scan) ToProto() (proto.Message, error) {
 	scan := &pb.ScanRequest{
 		Region:       s.regionSpecifier(),
 		CloseScanner: &s.closeScanner,
 		NumberOfRows: &s.numberOfRows,
 		// tell server that we can process results that are only part of a row
-		ClientHandlesPartials: &t,
+		ClientHandlesPartials: proto.Bool(true),
 		// tell server that we "handle" heartbeats by ignoring them
 		// since we don't really time out our scans (unless context was cancelled)
-		ClientHandlesHeartbeats: &t,
+		ClientHandlesHeartbeats: proto.Bool(true),
 	}
 	if s.scannerID != math.MaxUint64 {
 		scan.ScannerId = &s.scannerID
-		return proto.Marshal(scan)
+		return scan, nil
 	}
 	scan.Scan = &pb.Scan{
 		Column:    familiesToColumn(s.families),
@@ -254,7 +252,7 @@ func (s *Scan) Serialize() ([]byte, error) {
 		}
 		scan.Scan.Filter = pbFilter
 	}
-	return proto.Marshal(scan)
+	return scan, nil
 }
 
 // NewResponse creates an empty protobuf message to read the response

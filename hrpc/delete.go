@@ -20,13 +20,12 @@ type DeleteTable struct {
 // NewDeleteTable creates a new DeleteTable request that will delete the
 // given table in HBase. For use by the admin client.
 func NewDeleteTable(ctx context.Context, table []byte) *DeleteTable {
-	dt := &DeleteTable{
+	return &DeleteTable{
 		tableOp{base{
 			table: table,
 			ctx:   ctx,
 		}},
 	}
-	return dt
 }
 
 // Name returns the name of this RPC call.
@@ -34,16 +33,15 @@ func (dt *DeleteTable) Name() string {
 	return "DeleteTable"
 }
 
-// Serialize will convert this HBase call into a slice of bytes to be written to
-// the network
-func (dt *DeleteTable) Serialize() ([]byte, error) {
-	dtreq := &pb.DeleteTableRequest{
+// ToProto converts the RPC into a protobuf message
+func (dt *DeleteTable) ToProto() (proto.Message, error) {
+	return &pb.DeleteTableRequest{
 		TableName: &pb.TableName{
+			// TODO: hadle namespaces properly
 			Namespace: []byte("default"),
 			Qualifier: dt.table,
 		},
-	}
-	return proto.Marshal(dtreq)
+	}, nil
 }
 
 // NewResponse creates an empty protobuf message to read the response of this

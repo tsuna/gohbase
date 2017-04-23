@@ -92,17 +92,6 @@ func (_mr *_MockCallRecorder) ResultChan() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "ResultChan")
 }
 
-func (_m *MockCall) Serialize() ([]byte, error) {
-	ret := _m.ctrl.Call(_m, "Serialize")
-	ret0, _ := ret[0].([]byte)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-func (_mr *_MockCallRecorder) Serialize() *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "Serialize")
-}
-
 func (_m *MockCall) SetFamilies(_param0 map[string][]string) error {
 	ret := _m.ctrl.Call(_m, "SetFamilies", _param0)
 	ret0, _ := ret[0].(error)
@@ -139,4 +128,15 @@ func (_m *MockCall) Table() []byte {
 
 func (_mr *_MockCallRecorder) Table() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Table")
+}
+
+func (_m *MockCall) ToProto() (proto.Message, error) {
+	ret := _m.ctrl.Call(_m, "ToProto")
+	ret0, _ := ret[0].(proto.Message)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+func (_mr *_MockCallRecorder) ToProto() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "ToProto")
 }

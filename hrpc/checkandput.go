@@ -40,11 +40,10 @@ func NewCheckAndPut(put *Mutate, family string,
 	}, nil
 }
 
-// Serialize converts this mutate object into a protobuf message suitable for
-// sending to an HBase server
-func (cas *CheckAndPut) Serialize() ([]byte, error) {
+// ToProto converts the RPC into a protobuf message
+func (cp *CheckAndPut) ToProto() (proto.Message, error) {
 	// The condition that needs to match for the edit to be applied.
-	expectedValue := filter.NewByteArrayComparable(cas.value)
+	expectedValue := filter.NewByteArrayComparable(cp.value)
 	cmp := filter.NewBinaryComparator(expectedValue)
 
 	comparator, err := cmp.ConstructPBComparator()
@@ -53,19 +52,18 @@ func (cas *CheckAndPut) Serialize() ([]byte, error) {
 	}
 
 	// The edit.
-	mutateRequest, err := cas.serializeToProto()
+	mutateRequest, err := cp.toProto()
 	if err != nil {
 		return nil, fmt.Errorf("error serializing request: %s", err)
 	}
 
 	compareType := pb.CompareType_EQUAL
 	mutateRequest.Condition = &pb.Condition{
-		Row:         cas.key,
-		Family:      cas.family,
-		Qualifier:   cas.qualifier,
+		Row:         cp.key,
+		Family:      cp.family,
+		Qualifier:   cp.qualifier,
 		CompareType: &compareType,
 		Comparator:  comparator,
 	}
-
-	return proto.Marshal(mutateRequest)
+	return mutateRequest, nil
 }

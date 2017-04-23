@@ -20,13 +20,12 @@ type DisableTable struct {
 // NewDisableTable creates a new DisableTable request that will disable the
 // given table in HBase. For use by the admin client.
 func NewDisableTable(ctx context.Context, table []byte) *DisableTable {
-	dt := &DisableTable{
+	return &DisableTable{
 		tableOp{base{
 			table: table,
 			ctx:   ctx,
 		}},
 	}
-	return dt
 }
 
 // Name returns the name of this RPC call.
@@ -34,16 +33,15 @@ func (dt *DisableTable) Name() string {
 	return "DisableTable"
 }
 
-// Serialize will convert this HBase call into a slice of bytes to be written to
-// the network
-func (dt *DisableTable) Serialize() ([]byte, error) {
-	dtreq := &pb.DisableTableRequest{
+// ToProto converts the RPC into a protobuf message
+func (dt *DisableTable) ToProto() (proto.Message, error) {
+	return &pb.DisableTableRequest{
 		TableName: &pb.TableName{
+			// TODO: handle namespaces
 			Namespace: []byte("default"),
 			Qualifier: dt.table,
 		},
-	}
-	return proto.Marshal(dtreq)
+	}, nil
 }
 
 // NewResponse creates an empty protobuf message to read the response of this

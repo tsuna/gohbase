@@ -24,9 +24,7 @@ type GetProcedureState struct {
 // NewGetProcedureState creates a new GetProcedureState request. For use by the admin client.
 func NewGetProcedureState(ctx context.Context, procID uint64) *GetProcedureState {
 	return &GetProcedureState{
-		base: base{
-			ctx: ctx,
-		},
+		base:   base{ctx: ctx},
 		procID: procID,
 	}
 }
@@ -36,29 +34,22 @@ func (ps *GetProcedureState) Name() string {
 	return "getProcedureResult"
 }
 
-// Serialize will convert this HBase call into a slice of bytes to be written to
-// the network
-func (ps *GetProcedureState) Serialize() ([]byte, error) {
-	req := &pb.GetProcedureResultRequest{
-		ProcId: &ps.procID,
-	}
-	return proto.Marshal(req)
+// ToProto converts the RPC into a protobuf message
+func (ps *GetProcedureState) ToProto() (proto.Message, error) {
+	return &pb.GetProcedureResultRequest{ProcId: &ps.procID}, nil
 }
 
-// NewResponse creates an empty protobuf message to read the response of this
-// RPC.
+// NewResponse creates an empty protobuf message to read the response of this RPC.
 func (ps *GetProcedureState) NewResponse() proto.Message {
 	return &pb.GetProcedureResultResponse{}
 }
 
 // SetFilter always returns an error.
 func (ps *GetProcedureState) SetFilter(filter.Filter) error {
-	// Doesn't make sense on this kind of RPC.
 	return errors.New("cannot set filter on admin operations")
 }
 
 // SetFamilies always returns an error.
 func (ps *GetProcedureState) SetFamilies(map[string][]string) error {
-	// Doesn't make sense on this kind of RPC.
 	return errors.New("cannot set families on admin operations")
 }
