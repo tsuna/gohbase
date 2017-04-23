@@ -310,55 +310,49 @@ func (c *client) receive() error {
 	}
 
 	b := newBuffer(int(binary.BigEndian.Uint32(sz[:])))
-	buf := b
-	err = c.readFully(buf)
+	defer freeBuffer(b)
+
+	err = c.readFully(b)
 	if err != nil {
-		freeBuffer(b)
 		return UnrecoverableError{err}
 	}
 
-	resp := &pb.ResponseHeader{}
-	respLen, nb := proto.DecodeVarint(buf)
-	buf = buf[nb:]
-	err = proto.UnmarshalMerge(buf[:respLen], resp)
-	buf = buf[respLen:]
-	if err != nil {
-		freeBuffer(b)
-		return fmt.Errorf("failed to deserialize the response header: %s", err)
+	buf := proto.NewBuffer(b)
+
+	var header pb.ResponseHeader
+	if err = buf.DecodeMessage(&header); err != nil {
+		return fmt.Errorf("failed to decode the response header: %s", err)
 	}
-	if resp.CallId == nil {
-		// Response doesn't have a call ID
-		freeBuffer(b)
+	if header.CallId == nil {
 		return ErrMissingCallID
 	}
 
+	callID := *header.CallId
 	c.sentM.Lock()
-	rpc, ok := c.sent[*resp.CallId]
-	delete(c.sent, *resp.CallId)
+	rpc, ok := c.sent[callID]
+	delete(c.sent, callID)
 	c.sentM.Unlock()
 
 	if !ok {
-		freeBuffer(b)
-		return fmt.Errorf("got a response with an unexpected call ID: %d", *resp.CallId)
+		return fmt.Errorf("got a response with an unexpected call ID: %d", callID)
 	}
 
 	// Here we know for sure that we got a response for rpc we asked
-	var rpcResp proto.Message
-	if resp.Exception == nil {
-		respLen, nb = proto.DecodeVarint(buf)
-		buf = buf[nb:]
-		rpcResp = rpc.NewResponse()
-		err = proto.UnmarshalMerge(buf, rpcResp)
+	var response proto.Message
+	if header.Exception == nil {
+		response = rpc.NewResponse()
+		if err = buf.DecodeMessage(response); err != nil {
+			return fmt.Errorf("failed to decode the response: %s", err)
+		}
 	} else {
-		javaClass := *resp.Exception.ExceptionClassName
-		err = fmt.Errorf("HBase Java exception %s: \n%s", javaClass, *resp.Exception.StackTrace)
+		javaClass := *header.Exception.ExceptionClassName
+		err = fmt.Errorf("HBase Java exception %s: \n%s", javaClass, *header.Exception.StackTrace)
 		if _, ok := javaRetryableExceptions[javaClass]; ok {
 			// This is a recoverable error. The client should retry.
 			err = RetryableError{err}
 		}
 	}
-	freeBuffer(b)
-	rpc.ResultChan() <- hrpc.RPCResult{Msg: rpcResp, Error: err}
+	rpc.ResultChan() <- hrpc.RPCResult{Msg: response, Error: err}
 	return nil
 }
 
