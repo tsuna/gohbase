@@ -213,10 +213,15 @@ type Cell pb.Cell
 
 // Result holds a slice of Cells as well as miscellaneous information about the response.
 type Result struct {
-	Cells  []*Cell
+	Cells   []*Cell
+	Stale   bool
+	Partial bool
+	// Exists is only set if existance_only was set in the request query.
 	Exists *bool
-	Stale  *bool
-	// Any other variables we want to include.
+}
+
+func extractBool(v *bool) bool {
+	return v != nil && *v
 }
 
 // ToLocalResult takes a protobuf Result type and converts it to our own
@@ -227,9 +232,10 @@ func ToLocalResult(pbr *pb.Result) *Result {
 	}
 	return &Result{
 		// Should all be O(1) operations.
-		Cells:  toLocalCells(pbr),
-		Exists: pbr.Exists,
-		Stale:  pbr.Stale,
+		Cells:   toLocalCells(pbr),
+		Stale:   extractBool(pbr.Stale),
+		Partial: extractBool(pbr.Partial),
+		Exists:  pbr.Exists,
 	}
 }
 

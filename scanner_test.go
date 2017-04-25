@@ -16,6 +16,7 @@ import (
 
 	"github.com/aristanetworks/goarista/test"
 	"github.com/golang/mock/gomock"
+	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
@@ -52,14 +53,12 @@ var resultsPB = []*pb.Result{
 			&pb.Cell{Row: []byte("a"), Family: []byte("A"), Qualifier: []byte("2")},
 			&pb.Cell{Row: []byte("a"), Family: []byte("B"), Qualifier: []byte("1")},
 		},
-		Exists: &tr,
 	},
 	&pb.Result{
 		Cell: []*pb.Cell{
 			&pb.Cell{Row: []byte("b"), Family: []byte("A"), Qualifier: []byte("1")},
 			&pb.Cell{Row: []byte("b"), Family: []byte("B"), Qualifier: []byte("2")},
 		},
-		Exists: &tr,
 	},
 	// region 2
 	&pb.Result{
@@ -68,7 +67,6 @@ var resultsPB = []*pb.Result{
 			&pb.Cell{Row: []byte("baz"), Family: []byte("C"), Qualifier: []byte("2")},
 			&pb.Cell{Row: []byte("baz"), Family: []byte("C"), Qualifier: []byte("2")},
 		},
-		Exists: &tr,
 	},
 	// region 3
 	&pb.Result{
@@ -76,11 +74,8 @@ var resultsPB = []*pb.Result{
 			&pb.Cell{Row: []byte("yolo"), Family: []byte("D"), Qualifier: []byte("1")},
 			&pb.Cell{Row: []byte("yolo"), Family: []byte("D"), Qualifier: []byte("2")},
 		},
-		Exists: &tr,
 	},
 }
-
-var tr = true
 
 var (
 	table   = []byte("test")
@@ -114,7 +109,7 @@ func TestScanner(t *testing.T) {
 		rpc.SetRegion(region1)
 	}).Return(&pb.ScanResponse{
 		ScannerId:           cp(scannerID),
-		MoreResultsInRegion: &tr,
+		MoreResultsInRegion: proto.Bool(true),
 		Results:             resultsPB[:1],
 	}, nil).Times(1)
 
@@ -202,19 +197,8 @@ func TestScannerCloseBuffered(t *testing.T) {
 		rpc.SetRegion(r)
 	}).Return(&pb.ScanResponse{
 		ScannerId:           cp(scannerID),
-		MoreResultsInRegion: &tr,
+		MoreResultsInRegion: proto.Bool(true),
 		Results:             resultsPB[:2], // we got 2 rows
-	}, nil).Times(1)
-
-	// expecting to have one more fetch since we don't know
-	// if the last row we got is complete, and the first one got consumed
-	// so nothing is blocking from making another fetch
-	c.EXPECT().SendRPC(hrpc.NewScanFromID(ctx, table, scannerID, nil)).Do(func(rpc hrpc.Call) {
-		rpc.SetRegion(r)
-	}).Return(&pb.ScanResponse{
-		ScannerId:           cp(scannerID),
-		MoreResultsInRegion: &tr,
-		Results:             resultsPB[2:3], // we got 1 row
 	}, nil).Times(1)
 
 	// expect scan close rpc to be sent
@@ -259,10 +243,10 @@ func TestPartialResults(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected := []*hrpc.Result{
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[:3], Exists: &tr}),
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[3:5], Exists: &tr}),
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[5:8], Exists: &tr}),
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[8:], Exists: &tr}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[:3]}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[3:5]}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[5:8]}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[8:]}),
 	}
 	testPartialResults(t, scan, expected)
 }
@@ -273,14 +257,14 @@ func TestAllowPartialResults(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected := []*hrpc.Result{
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[:3], Exists: &tr}),
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[3:4], Exists: &tr}),
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[4:5], Exists: &tr}),
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[5:7], Exists: &tr}),
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[7:8], Exists: &tr}),
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[8:8], Exists: &tr}),
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[8:9], Exists: &tr}),
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[9:], Exists: &tr}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[:3], Partial: proto.Bool(true)}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[3:4], Partial: proto.Bool(true)}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[4:5], Partial: proto.Bool(true)}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[5:7], Partial: proto.Bool(true)}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[7:8], Partial: proto.Bool(true)}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[8:8], Partial: proto.Bool(true)}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[8:9], Partial: proto.Bool(true)}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[9:], Partial: proto.Bool(true)}),
 	}
 	testPartialResults(t, scan, expected)
 }
@@ -291,8 +275,8 @@ func TestErrorScanFromID(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected := []*hrpc.Result{
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[:3], Exists: &tr}),
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[3:4], Exists: &tr}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[:3]}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[3:4]}),
 	}
 	testErrorScanFromID(t, scan, expected)
 }
@@ -303,8 +287,8 @@ func TestErrorScanFromIDAllowPartials(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected := []*hrpc.Result{
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[:3], Exists: &tr}),
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[3:4], Exists: &tr}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[:3]}),
+		hrpc.ToLocalResult(&pb.Result{Cell: cells[3:4]}),
 	}
 	testErrorScanFromID(t, scan, expected)
 }
@@ -368,10 +352,10 @@ func testErrorScanFromID(t *testing.T, scan *hrpc.Scan, out []*hrpc.Result) {
 		rpc.SetRegion(region1)
 	}).Return(&pb.ScanResponse{
 		ScannerId:           cp(scannerID),
-		MoreResultsInRegion: &tr,
+		MoreResultsInRegion: proto.Bool(true),
 		Results: []*pb.Result{
-			&pb.Result{Cell: cells[:3], Exists: &tr},
-			&pb.Result{Cell: cells[3:4], Exists: &tr},
+			&pb.Result{Cell: cells[:3]},
+			&pb.Result{Cell: cells[3:4]},
 		},
 	}, nil).Times(1)
 
@@ -424,42 +408,42 @@ func testPartialResults(t *testing.T, scan *hrpc.Scan, expected []*hrpc.Result) 
 		{
 			region: region1,
 			results: []*pb.Result{
-				&pb.Result{Cell: cells[:3], Exists: &tr},
-				&pb.Result{Cell: cells[3:4], Exists: &tr},
+				&pb.Result{Cell: cells[:3], Partial: proto.Bool(true)},
+				&pb.Result{Cell: cells[3:4], Partial: proto.Bool(true)},
 			},
 			moreResultsInRegion: true,
 		},
 		{ // end of region, should return row b
 			region: region1,
 			results: []*pb.Result{
-				&pb.Result{Cell: cells[4:5], Exists: &tr},
+				&pb.Result{Cell: cells[4:5], Partial: proto.Bool(true)},
 			},
 			scanFromID: true,
 		},
 		{ // half a row in a result in the same response - unlikely, but why not
 			region: region2,
 			results: []*pb.Result{
-				&pb.Result{Cell: cells[5:7], Exists: &tr},
-				&pb.Result{Cell: cells[7:8], Exists: &tr},
+				&pb.Result{Cell: cells[5:7], Partial: proto.Bool(true)},
+				&pb.Result{Cell: cells[7:8], Partial: proto.Bool(true)},
 			},
 			moreResultsInRegion: true,
 		},
 		{ // empty result, last in region
 			region:     region2,
-			results:    []*pb.Result{&pb.Result{Exists: &tr}},
+			results:    []*pb.Result{&pb.Result{Partial: proto.Bool(true)}},
 			scanFromID: true,
 		},
 		{
 			region: region3,
 			results: []*pb.Result{
-				&pb.Result{Cell: cells[8:9], Exists: &tr},
+				&pb.Result{Cell: cells[8:9], Partial: proto.Bool(true)},
 			},
 			moreResultsInRegion: true,
 		},
 		{ // last row
 			region: region3,
 			results: []*pb.Result{
-				&pb.Result{Cell: cells[9:], Exists: &tr},
+				&pb.Result{Cell: cells[9:], Partial: proto.Bool(true)},
 			},
 			scanFromID: true,
 		},

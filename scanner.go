@@ -98,10 +98,6 @@ type fetcher struct {
 	result *hrpc.Result
 }
 
-func isStale(v *bool) bool {
-	return v != nil && *v
-}
-
 // coalese returns a complete row or nil in case more partial results
 // are expected
 func (f *fetcher) coalese(partial *hrpc.Result) *hrpc.Result {
@@ -113,6 +109,9 @@ func (f *fetcher) coalese(partial *hrpc.Result) *hrpc.Result {
 		if len(partial.Cells) == 0 {
 			return nil
 		}
+		if !partial.Partial {
+			return partial
+		}
 		f.result = partial
 		return nil
 	}
@@ -120,19 +119,21 @@ func (f *fetcher) coalese(partial *hrpc.Result) *hrpc.Result {
 	if len(partial.Cells) > 0 && !bytes.Equal(f.result.Cells[0].Row, partial.Cells[0].Row) {
 		// new row
 		result := f.result
+		result.Partial = false
 		f.result = partial
 		return result
 	}
 
 	// same row, add the partial
 	f.result.Cells = append(f.result.Cells, partial.Cells...)
-	if isStale(partial.Stale) {
+	if partial.Stale {
 		f.result.Stale = partial.Stale
 	}
 	if !f.moreResultsInRegion {
 		// no more results in this region, return whatever we have,
 		// rows cannot go across region boundaries
 		result := f.result
+		result.Partial = false
 		f.result = nil
 		return result
 	}
