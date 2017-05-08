@@ -123,9 +123,6 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 		// the client), and start a goroutine to reestablish
 		// it.
 		if reg.MarkUnavailable() {
-			if reg != c.adminRegionInfo {
-				c.clients.del(reg)
-			}
 			go c.reestablishRegion(reg)
 		}
 		return nil, ErrRegionUnavailable
