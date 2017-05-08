@@ -10,12 +10,15 @@ import (
 	"context"
 	"errors"
 	"io"
+	"math"
 	"sync"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 )
+
+const noScannerID = math.MaxUint64
 
 type re struct {
 	r *hrpc.Result
@@ -43,6 +46,7 @@ func newScanner(c RPCClient, rpc *hrpc.Scan) *scanner {
 			ctx:       ctx,
 			results:   results,
 			startRow:  rpc.StartRow(),
+			scannerID: noScannerID,
 		},
 	}
 }
@@ -88,8 +92,6 @@ type fetcher struct {
 	ctx context.Context
 	// region is the current region being scanned
 	region hrpc.RegionInfo
-	// moreResultsInRegion tells whether there are more results in current region
-	moreResultsInRegion bool
 	// scannerID is the id of scanner on current region
 	scannerID uint64
 	// startRow is the start row in the current region
@@ -129,7 +131,7 @@ func (f *fetcher) coalese(partial *hrpc.Result) *hrpc.Result {
 	if partial.Stale {
 		f.result.Stale = partial.Stale
 	}
-	if !f.moreResultsInRegion {
+	if f.scannerID == noScannerID {
 		// no more results in this region, return whatever we have,
 		// rows cannot go across region boundaries
 		result := f.result
@@ -202,7 +204,7 @@ func (f *fetcher) fetch() {
 
 	close(f.results)
 
-	if !f.moreResultsInRegion {
+	if f.scannerID == noScannerID {
 		// scanner is automatically closed by hbase
 		return
 	}
@@ -226,7 +228,7 @@ func (f *fetcher) fetch() {
 func (f *fetcher) next() (*pb.ScanResponse, hrpc.RegionInfo, error) {
 	var rpc *hrpc.Scan
 	var err error
-	if !f.moreResultsInRegion {
+	if f.scannerID == noScannerID {
 		// starting to scan on a new region
 		from, to := f.rpc.TimeRange()
 		rpc, err = hrpc.NewScanRange(
@@ -262,14 +264,15 @@ func (f *fetcher) next() (*pb.ScanResponse, hrpc.RegionInfo, error) {
 // update updates the fetcher for the next scan request. Returns true if scanner is done.
 func (f *fetcher) update(resp *pb.ScanResponse, region hrpc.RegionInfo) {
 	if resp.GetMoreResultsInRegion() {
-		f.scannerID = *resp.ScannerId
+		if resp.ScannerId != nil {
+			f.scannerID = resp.GetScannerId()
+		}
 	} else {
 		// prepare for next scan request
-		f.scannerID = 0
+		f.scannerID = noScannerID
 		f.startRow = region.StopKey()
 	}
 	f.region = region
-	f.moreResultsInRegion = resp.GetMoreResultsInRegion()
 }
 
 // shouldClose check if this scanner should be closed and should stop fetching new results
@@ -281,7 +284,7 @@ func (f *fetcher) shouldClose() bool {
 	default:
 	}
 
-	if f.moreResultsInRegion {
+	if f.scannerID != noScannerID {
 		return false
 	}
 

@@ -116,8 +116,7 @@ func TestScanner(t *testing.T) {
 	c.EXPECT().SendRPC(hrpc.NewScanFromID(ctx, table, scannerID, nil)).Do(func(rpc hrpc.Call) {
 		rpc.SetRegion(region1)
 	}).Return(&pb.ScanResponse{
-		ScannerId: cp(scannerID),
-		Results:   resultsPB[1:2],
+		Results: resultsPB[1:2],
 	}, nil).Times(1)
 
 	scannerID++
@@ -143,7 +142,7 @@ func TestScanner(t *testing.T) {
 		rpc.SetRegion(region3)
 	}).Return(&pb.ScanResponse{
 		ScannerId: cp(scannerID),
-		Results:   resultsPB[3:],
+		Results:   resultsPB[3:4],
 	}, nil).Times(1)
 
 	var rs []*hrpc.Result
