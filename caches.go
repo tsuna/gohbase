@@ -60,15 +60,8 @@ func (rcc *clientRegionCache) del(r hrpc.RegionInfo) {
 	c := r.Client()
 	if c != nil {
 		r.SetClient(nil)
-
 		regions := rcc.regions[c]
 		delete(regions, r)
-
-		if len(regions) == 0 {
-			// close region client if noone is using it
-			delete(rcc.regions, c)
-			c.Close()
-		}
 	}
 	rcc.m.Unlock()
 }
