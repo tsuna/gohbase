@@ -90,8 +90,6 @@ type fetcher struct {
 	// rpc is original scan query
 	rpc *hrpc.Scan
 	ctx context.Context
-	// region is the current region being scanned
-	region hrpc.RegionInfo
 	// scannerID is the id of scanner on current region
 	scannerID uint64
 	// startRow is the start row in the current region
@@ -193,7 +191,7 @@ func (f *fetcher) fetch() {
 		}
 
 		// check whether we should close the scanner before making next request
-		if f.shouldClose() {
+		if f.shouldClose(resp, region) {
 			if f.result != nil {
 				// if there were results, send the last row
 				f.trySend(f.result, nil)
@@ -213,7 +211,7 @@ func (f *fetcher) fetch() {
 	// send a close scanner request
 	// TODO: add a deadline
 	rpc := hrpc.NewCloseFromID(context.Background(),
-		f.region.Table(), f.scannerID, f.region.StartKey())
+		f.rpc.Table(), f.scannerID, f.startRow)
 	if _, err := f.SendRPC(rpc); err != nil {
 		// the best we can do in this case is log. If the request fails,
 		// the scanner lease will expired and it will be closed automatically
@@ -261,22 +259,21 @@ func (f *fetcher) next() (*pb.ScanResponse, hrpc.RegionInfo, error) {
 	return scanres, rpc.Region(), nil
 }
 
-// update updates the fetcher for the next scan request. Returns true if scanner is done.
+// update updates the fetcher for the next scan request
 func (f *fetcher) update(resp *pb.ScanResponse, region hrpc.RegionInfo) {
 	if resp.GetMoreResultsInRegion() {
 		if resp.ScannerId != nil {
 			f.scannerID = resp.GetScannerId()
 		}
 	} else {
-		// prepare for next scan request
+		// we are done with this region, prepare scan for next region
 		f.scannerID = noScannerID
 		f.startRow = region.StopKey()
 	}
-	f.region = region
 }
 
 // shouldClose check if this scanner should be closed and should stop fetching new results
-func (f *fetcher) shouldClose() bool {
+func (f *fetcher) shouldClose(resp *pb.ScanResponse, region hrpc.RegionInfo) bool {
 	select {
 	case <-f.ctx.Done():
 		// scanner has been asked to close
@@ -284,17 +281,23 @@ func (f *fetcher) shouldClose() bool {
 	default:
 	}
 
+	if resp.MoreResults != nil && !*resp.MoreResults {
+		// the filter for the whole scan has been exhausted, close the scanner
+		return true
+	}
+
 	if f.scannerID != noScannerID {
+		// not done with this region yet
 		return false
 	}
 
 	// Check to see if this region is the last we should scan because:
 	// (1) it's the last region
-	if len(f.region.StopKey()) == 0 {
+	if len(region.StopKey()) == 0 {
 		return true
 	}
 	// (3) because its stop_key is greater than or equal to the stop_key of this scanner,
 	// provided that (2) we're not trying to scan until the end of the table.
 	return len(f.rpc.StopRow()) != 0 && // (2)
-		bytes.Compare(f.rpc.StopRow(), f.region.StopKey()) <= 0 // (3)
+		bytes.Compare(f.rpc.StopRow(), region.StopKey()) <= 0 // (3)
 }

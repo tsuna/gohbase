@@ -141,8 +141,9 @@ func TestScanner(t *testing.T) {
 	c.EXPECT().SendRPC(s).Do(func(rpc hrpc.Call) {
 		rpc.SetRegion(region3)
 	}).Return(&pb.ScanResponse{
-		ScannerId: cp(scannerID),
-		Results:   resultsPB[3:4],
+		ScannerId:   cp(scannerID),
+		Results:     resultsPB[3:4],
+		MoreResults: proto.Bool(false),
 	}, nil).Times(1)
 
 	var rs []*hrpc.Result
