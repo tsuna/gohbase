@@ -7,8 +7,10 @@ package hrpc
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"sync"
 	"time"
@@ -58,11 +60,8 @@ type Call interface {
 	// Returns a newly created (default-state) protobuf in which to store the
 	// response of this call.
 	NewResponse() proto.Message
-
 	ResultChan() chan RPCResult
-
 	Context() context.Context
-
 	SetFamilies(fam map[string][]string) error
 	SetFilter(ft filter.Filter) error
 }
@@ -210,6 +209,91 @@ func MaxVersions(versions uint32) func(Call) error {
 // Cell is the smallest level of granularity in returned results.
 // Represents a single cell in HBase (a row will have one cell for every qualifier).
 type Cell pb.Cell
+
+// cellFromCellBlock deserializes a cell from a reader
+func cellFromCellBlock(r io.Reader) (*pb.Cell, uint32, error) {
+	var err error
+	var kvLen, rowKeyLen, valueLen, qualifierLen uint32
+	var keyLen uint16
+	var familyLen, cellType uint8
+
+	if err = binary.Read(r, binary.BigEndian, &kvLen); err != nil {
+		return nil, 0, fmt.Errorf("failed to read KeyValue length: %v", err)
+	}
+
+	if err = binary.Read(r, binary.BigEndian, &rowKeyLen); err != nil {
+		return nil, 0, fmt.Errorf("failed to read cell length: %v", err)
+	}
+
+	if err = binary.Read(r, binary.BigEndian, &valueLen); err != nil {
+		return nil, 0, fmt.Errorf("failed to read value length: %v", err)
+	}
+
+	if err = binary.Read(r, binary.BigEndian, &keyLen); err != nil {
+		return nil, 0, fmt.Errorf("failed to read key length: %v", err)
+	}
+
+	key := make([]byte, keyLen)
+	if _, err = io.ReadFull(r, key); err != nil {
+		return nil, 0, fmt.Errorf("failed to read key: %v", err)
+	}
+
+	if err = binary.Read(r, binary.BigEndian, &familyLen); err != nil {
+		return nil, 0, fmt.Errorf("failed to read family length: %v", err)
+	}
+
+	family := make([]byte, familyLen)
+	if _, err = io.ReadFull(r, family); err != nil {
+		return nil, 0, fmt.Errorf("failed to read family: %v", err)
+	}
+	qualifierLen = rowKeyLen - uint32(keyLen) - uint32(familyLen) - 2 - 1 - 8 - 1
+	if 4 /*rowKeyLen*/ +4 /*valueLen*/ +2 /*keyLen*/ +
+		uint32(keyLen)+1 /*familyLen*/ +uint32(familyLen)+qualifierLen+
+		8 /*timestamp*/ +1 /*cellType*/ +valueLen != kvLen {
+		return nil, 0, fmt.Errorf("HBase has lied about KeyValue length: expected %d, got %d",
+			kvLen, 4+4+2+uint32(keyLen)+1+uint32(familyLen)+qualifierLen+8+1+valueLen)
+	}
+
+	var qualifier []byte
+	if qualifierLen > 0 {
+		qualifier = make([]byte, qualifierLen)
+		if _, err = io.ReadFull(r, qualifier); err != nil {
+			return nil, 0, fmt.Errorf("failed to read qualifer: %v", err)
+		}
+	}
+
+	var timestamp uint64
+	if err = binary.Read(r, binary.BigEndian, &timestamp); err != nil {
+		return nil, 0, fmt.Errorf("failed to read timestamp: %v", err)
+	}
+
+	if err = binary.Read(r, binary.BigEndian, &cellType); err != nil {
+		return nil, 0, fmt.Errorf("failed to read cell type: %v", err)
+	}
+
+	// check that cell type is legit
+	if _, ok := pb.CellType_name[int32(cellType)]; !ok {
+		return nil, 0, fmt.Errorf("unexpected CellType: %d", cellType)
+	}
+
+	var value []byte
+	if valueLen > 0 {
+		value = make([]byte, valueLen)
+		if _, err = io.ReadFull(r, value); err != nil {
+			return nil, 0, fmt.Errorf("failed to read value: %v", err)
+		}
+	}
+
+	// TODO: dedup row, family, qualifer
+	return &pb.Cell{
+		Row:       key,
+		Family:    family,
+		Qualifier: qualifier,
+		Timestamp: &timestamp,
+		Value:     value,
+		CellType:  pb.CellType(cellType).Enum(),
+	}, kvLen + 4, nil
+}
 
 // Result holds a slice of Cells as well as miscellaneous information about the response.
 type Result struct {
