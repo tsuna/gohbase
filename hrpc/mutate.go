@@ -11,6 +11,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"reflect"
 	"strings"
 	"time"
@@ -540,6 +541,11 @@ func isAStruct(data interface{}) bool {
 // RPC.
 func (m *Mutate) NewResponse() proto.Message {
 	return &pb.MutateResponse{}
+}
+
+// DeserializeCellBlocks ...
+func (m *Mutate) DeserializeCellBlocks(pm proto.Message, r io.Reader, cellsLen uint32) error {
+	return nil
 }
 
 // SetFilter always returns an error when used on Mutate objects. Do not use.

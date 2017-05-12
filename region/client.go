@@ -6,6 +6,7 @@
 package region
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -22,6 +23,12 @@ import (
 
 // ClientType is a type alias to represent the type of this region client
 type ClientType string
+
+type canDeserializeCellBlocks interface {
+	// DeserializeCellBlocks populates passed protobuf message with results
+	// deserialized from the reader
+	DeserializeCellBlocks(proto.Message, io.Reader, uint32) error
+}
 
 var (
 	// ErrShortWrite is used when the writer thread only succeeds in writing
@@ -309,7 +316,8 @@ func (c *client) receive() error {
 		return UnrecoverableError{err}
 	}
 
-	b := newBuffer(int(binary.BigEndian.Uint32(sz[:])))
+	size := binary.BigEndian.Uint32(sz[:])
+	b := newBuffer(int(size))
 	defer freeBuffer(b)
 
 	err = c.readFully(b)
@@ -343,6 +351,16 @@ func (c *client) receive() error {
 		response = rpc.NewResponse()
 		if err = buf.DecodeMessage(response); err != nil {
 			return fmt.Errorf("failed to decode the response: %s", err)
+		}
+		var cellsLen uint32
+		if header.CellBlockMeta != nil {
+			cellsLen = header.CellBlockMeta.GetLength()
+		}
+		if d, ok := rpc.(canDeserializeCellBlocks); cellsLen > 0 && ok {
+			if err = d.DeserializeCellBlocks(
+				response, bytes.NewBuffer(buf.Bytes()[size-cellsLen:]), cellsLen); err != nil {
+				return UnrecoverableError{err}
+			}
 		}
 	} else {
 		javaClass := *header.Exception.ExceptionClassName

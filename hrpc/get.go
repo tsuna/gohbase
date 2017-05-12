@@ -7,6 +7,7 @@ package hrpc
 
 import (
 	"context"
+	"io"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/filter"
@@ -154,6 +155,11 @@ func (g *Get) ToProto() (proto.Message, error) {
 // RPC.
 func (g *Get) NewResponse() proto.Message {
 	return &pb.GetResponse{}
+}
+
+// DeserializeCellBlocks ...
+func (g *Get) DeserializeCellBlocks(m proto.Message, r io.Reader, cellsLen uint32) error {
+	return nil
 }
 
 // familiesToColumn takes a map from strings to lists of strings, and converts

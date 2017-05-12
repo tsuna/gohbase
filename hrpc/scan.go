@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 
 	"github.com/golang/protobuf/proto"
@@ -271,6 +272,11 @@ func (s *Scan) ToProto() (proto.Message, error) {
 // of this RPC.
 func (s *Scan) NewResponse() proto.Message {
 	return &pb.ScanResponse{}
+}
+
+// DeserializeCellBlocks ...
+func (s *Scan) DeserializeCellBlocks(m proto.Message, r io.Reader, cellsLen uint32) error {
+	return nil
 }
 
 // SetFamilies sets the families covered by this scanner.
