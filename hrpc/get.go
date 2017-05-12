@@ -7,6 +7,7 @@ package hrpc
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/golang/protobuf/proto"
@@ -157,8 +158,28 @@ func (g *Get) NewResponse() proto.Message {
 	return &pb.GetResponse{}
 }
 
-// DeserializeCellBlocks ...
+// DeserializeCellBlocks deserializes get result from cell blocks
 func (g *Get) DeserializeCellBlocks(m proto.Message, r io.Reader, cellsLen uint32) error {
+	getResp := m.(*pb.GetResponse)
+	if getResp.Result == nil {
+		// TODO: is this possible?
+		return nil
+	}
+	cells := getResp.Result.Cell
+	var readLen uint32
+	for readLen < cellsLen {
+		c, l, err := cellFromCellBlock(r)
+		if err != nil {
+			return err
+		}
+		cells = append(cells, c)
+		readLen += l
+	}
+	if readLen != cellsLen {
+		return fmt.Errorf("HBase has lied about the length of cell blocks: expected %d, read %d",
+			cellsLen, readLen)
+	}
+	getResp.Result.Cell = cells
 	return nil
 }
 
