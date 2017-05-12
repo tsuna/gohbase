@@ -176,6 +176,92 @@ func TestDeserializeCellBlocksGet(t *testing.T) {
 	}
 }
 
+func TestDeserializeCellBlocksScan(t *testing.T) {
+	expectedResults := []*pb.Result{
+		&pb.Result{
+			Cell: []*pb.Cell{
+				&pb.Cell{
+					Row:       []byte("row6"),
+					Family:    []byte("cf"),
+					Qualifier: []byte("yolo"),
+					Timestamp: proto.Uint64(1494873081120),
+					Value:     []byte("whatever"),
+					CellType:  pb.CellType_PUT.Enum(),
+				},
+			},
+		},
+		&pb.Result{
+			Cell: []*pb.Cell{
+				&pb.Cell{
+					Row:       []byte("row7"),
+					Family:    []byte("cf"),
+					Qualifier: []byte("c"),
+					Timestamp: proto.Uint64(1494873081120),
+					Value:     []byte("Hello my name is Dog."),
+					CellType:  pb.CellType_PUT.Enum(),
+				},
+				&pb.Cell{
+					Row:       []byte("row7"),
+					Family:    []byte("cf"),
+					Qualifier: []byte("b"),
+					Timestamp: proto.Uint64(1494873081120),
+					Value:     []byte("Hello my name is Dog."),
+					CellType:  pb.CellType_PUT.Enum(),
+				},
+			},
+			Partial: proto.Bool(true),
+		},
+		&pb.Result{
+			Cell: []*pb.Cell{
+				&pb.Cell{
+					Row:       []byte("row7"),
+					Family:    []byte("cf"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(1494873081120),
+					Value:     []byte("Hello my name is Dog."),
+					CellType:  pb.CellType_PUT.Enum(),
+				},
+			},
+			Partial: proto.Bool(false),
+		},
+	}
+	cellblocks := []byte{0, 0, 0, 48, 0, 0, 0, 19, 0, 0, 0, 21, 0, 4, 114, 111, 119, 55, 2, 99,
+		102, 99, 0, 0, 1, 92, 13, 97, 5, 32, 4, 72, 101, 108, 108, 111, 32, 109, 121, 32, 110,
+		97, 109, 101, 32, 105, 115, 32, 68, 111, 103, 46,
+		0, 0, 0, 48, 0, 0, 0, 19, 0, 0, 0, 21, 0, 4, 114, 111, 119, 55, 2, 99,
+		102, 98, 0, 0, 1, 92, 13, 97, 5, 32, 4, 72, 101, 108, 108, 111, 32, 109, 121, 32, 110,
+		97, 109, 101, 32, 105, 115, 32, 68, 111, 103, 46,
+		0, 0, 0, 48, 0, 0, 0, 19, 0, 0, 0, 21, 0, 4, 114, 111, 119, 55, 2, 99,
+		102, 97, 0, 0, 1, 92, 13, 97, 5, 32, 4, 72, 101, 108, 108, 111, 32, 109, 121, 32, 110,
+		97, 109, 101, 32, 105, 115, 32, 68, 111, 103, 46}
+
+	scanResp := &pb.ScanResponse{
+		// the first result is already in protobuf
+		Results:              []*pb.Result{expectedResults[0]},
+		PartialFlagPerResult: []bool{true, false},
+		CellsPerResult:       []uint32{2, 1},
+	}
+	s := &hrpc.Scan{}
+	err := s.DeserializeCellBlocks(scanResp, bytes.NewBuffer(cellblocks), uint32(len(cellblocks)))
+	if err != nil {
+		t.Error(err)
+	} else if d := test.Diff(expectedResults, scanResp.Results); len(d) != 0 {
+		t.Error(d)
+	}
+
+	// test error case
+	scanResp = &pb.ScanResponse{
+		// the first result is already in protobuf
+		PartialFlagPerResult: []bool{true, false},
+		CellsPerResult:       []uint32{2, 1},
+	}
+	err = s.DeserializeCellBlocks(scanResp, bytes.NewBuffer(cellblocks[:10]),
+		uint32(len(cellblocks)))
+	if err == nil {
+		t.Error("expected error, got none")
+	}
+}
+
 func confirmScanAttributes(s *hrpc.Scan, ctx context.Context, table, start, stop []byte,
 	fam map[string][]string, filter1 filter.Filter) bool {
 	if s.Context() != ctx ||

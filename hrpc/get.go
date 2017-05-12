@@ -7,7 +7,6 @@ package hrpc
 
 import (
 	"context"
-	"fmt"
 	"io"
 
 	"github.com/golang/protobuf/proto"
@@ -165,21 +164,11 @@ func (g *Get) DeserializeCellBlocks(m proto.Message, r io.Reader, cellsLen uint3
 		// TODO: is this possible?
 		return nil
 	}
-	cells := getResp.Result.Cell
-	var readLen uint32
-	for readLen < cellsLen {
-		c, l, err := cellFromCellBlock(r)
-		if err != nil {
-			return err
-		}
-		cells = append(cells, c)
-		readLen += l
+	cells, err := deserializeCellBlocks(r, cellsLen)
+	if err != nil {
+		return err
 	}
-	if readLen != cellsLen {
-		return fmt.Errorf("HBase has lied about the length of cell blocks: expected %d, read %d",
-			cellsLen, readLen)
-	}
-	getResp.Result.Cell = cells
+	getResp.Result.Cell = append(getResp.Result.Cell, cells...)
 	return nil
 }
 

@@ -295,6 +295,25 @@ func cellFromCellBlock(r io.Reader) (*pb.Cell, uint32, error) {
 	}, kvLen + 4, nil
 }
 
+func deserializeCellBlocks(r io.Reader, cellsLen uint32) ([]*pb.Cell, error) {
+	var cells []*pb.Cell
+	var readLen uint32
+	for readLen < cellsLen {
+		c, l, err := cellFromCellBlock(r)
+		if err != nil {
+			return nil, err
+		}
+		cells = append(cells, c)
+		readLen += l
+	}
+	if readLen != cellsLen {
+		return nil, fmt.Errorf(
+			"HBase has lied about the length of cell blocks: expected %d, read %d",
+			cellsLen, readLen)
+	}
+	return cells, nil
+}
+
 // Result holds a slice of Cells as well as miscellaneous information about the response.
 type Result struct {
 	Cells   []*Cell

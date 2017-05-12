@@ -274,8 +274,27 @@ func (s *Scan) NewResponse() proto.Message {
 	return &pb.ScanResponse{}
 }
 
-// DeserializeCellBlocks ...
+// DeserializeCellBlocks deserializes scan results from cell blocks
 func (s *Scan) DeserializeCellBlocks(m proto.Message, r io.Reader, cellsLen uint32) error {
+	if cellsLen == 0 {
+		// if no cell blocks, our job is done since protobuf took care of deserialization
+		return nil
+	}
+
+	cells, err := deserializeCellBlocks(r, cellsLen)
+	if err != nil {
+		return err
+	}
+
+	scanResp := m.(*pb.ScanResponse)
+	partials := scanResp.GetPartialFlagPerResult()
+	for i, numCells := range scanResp.GetCellsPerResult() {
+		scanResp.Results = append(scanResp.Results, &pb.Result{
+			Cell:    cells[:numCells],
+			Partial: proto.Bool(partials[i]),
+		})
+		cells = cells[numCells:]
+	}
 	return nil
 }
 
