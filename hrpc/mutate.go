@@ -543,8 +543,18 @@ func (m *Mutate) NewResponse() proto.Message {
 	return &pb.MutateResponse{}
 }
 
-// DeserializeCellBlocks ...
+// DeserializeCellBlocks deserializes mutate result from cell blocks
 func (m *Mutate) DeserializeCellBlocks(pm proto.Message, r io.Reader, cellsLen uint32) error {
+	resp := pm.(*pb.MutateResponse)
+	if resp.Result == nil {
+		// TODO: is this possible?
+		return nil
+	}
+	cells, err := deserializeCellBlocks(r, cellsLen)
+	if err != nil {
+		return err
+	}
+	resp.Result.Cell = append(resp.Result.Cell, cells...)
 	return nil
 }
 

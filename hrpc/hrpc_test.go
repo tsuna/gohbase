@@ -135,29 +135,28 @@ func TestTimeRangeError(t *testing.T) {
 	}
 }
 
-func TestDeserializeCellBlocksGet(t *testing.T) {
-	expectedCells := []*pb.Cell{
-		&pb.Cell{
-			Row:       []byte("row7"),
-			Family:    []byte("cf"),
-			Qualifier: []byte("b"),
-			Timestamp: proto.Uint64(1494873081120),
-			Value:     []byte("Hello my name is Dog."),
-		},
-		&pb.Cell{
-			Row:       []byte("row7"),
-			Family:    []byte("cf"),
-			Qualifier: []byte("a"),
-			Timestamp: proto.Uint64(1494873081120),
-			Value:     []byte("Hello my name is Dog."),
-			CellType:  pb.CellType_PUT.Enum(),
-		},
-	}
-	// this is second cell
-	cellblock := []byte{0, 0, 0, 48, 0, 0, 0, 19, 0, 0, 0, 21, 0, 4, 114, 111, 119, 55, 2, 99,
-		102, 97, 0, 0, 1, 92, 13, 97, 5, 32, 4, 72, 101, 108, 108, 111, 32, 109, 121, 32, 110,
-		97, 109, 101, 32, 105, 115, 32, 68, 111, 103, 46}
+var expectedCells = []*pb.Cell{
+	&pb.Cell{
+		Row:       []byte("row7"),
+		Family:    []byte("cf"),
+		Qualifier: []byte("b"),
+		Timestamp: proto.Uint64(1494873081120),
+		Value:     []byte("Hello my name is Dog."),
+	},
+	&pb.Cell{
+		Row:       []byte("row7"),
+		Family:    []byte("cf"),
+		Qualifier: []byte("a"),
+		Timestamp: proto.Uint64(1494873081120),
+		Value:     []byte("Hello my name is Dog."),
+		CellType:  pb.CellType_PUT.Enum(),
+	},
+}
+var cellblock = []byte{0, 0, 0, 48, 0, 0, 0, 19, 0, 0, 0, 21, 0, 4, 114, 111, 119, 55, 2, 99,
+	102, 97, 0, 0, 1, 92, 13, 97, 5, 32, 4, 72, 101, 108, 108, 111, 32, 109, 121, 32, 110,
+	97, 109, 101, 32, 105, 115, 32, 68, 111, 103, 46}
 
+func TestDeserializeCellBlocksGet(t *testing.T) {
 	// the first cell is already in protobuf
 	getResp := &pb.GetResponse{Result: &pb.Result{Cell: []*pb.Cell{expectedCells[0]}}}
 	g := &hrpc.Get{}
@@ -171,6 +170,26 @@ func TestDeserializeCellBlocksGet(t *testing.T) {
 	// test error case
 	getResp = &pb.GetResponse{Result: &pb.Result{}}
 	err = g.DeserializeCellBlocks(getResp, bytes.NewBuffer(cellblock[:10]), uint32(len(cellblock)))
+	if err == nil {
+		t.Error("expected error, got none")
+	}
+}
+
+func TestDeserializeCellblocksMutate(t *testing.T) {
+	// the first cell is already in protobuf
+	mResp := &pb.MutateResponse{Result: &pb.Result{Cell: []*pb.Cell{expectedCells[0]}}}
+	m := &hrpc.Mutate{}
+	err := m.DeserializeCellBlocks(mResp, bytes.NewBuffer(cellblock), uint32(len(cellblock)))
+	if err != nil {
+		t.Error(err)
+	}
+	if d := test.Diff(expectedCells, mResp.Result.Cell); len(d) != 0 {
+		t.Error(d)
+	}
+
+	// test error case
+	mResp = &pb.MutateResponse{Result: &pb.Result{Cell: expectedCells[:1]}}
+	err = m.DeserializeCellBlocks(mResp, bytes.NewBuffer(cellblock[:10]), uint32(len(cellblock)))
 	if err == nil {
 		t.Error("expected error, got none")
 	}
