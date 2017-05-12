@@ -78,8 +78,9 @@ func TestSendHello(t *testing.T) {
 	}
 
 	// check if it's sending the right "hello" for RegionClient
-	mockConn.EXPECT().Write(gomock.Any()).Return(33, nil).Times(1).Do(func(buf []byte) {
-		expected := []byte("HBas\x00P\x00\x00\x00\x17\n\x06\n\x04root\x12\rClientService")
+	mockConn.EXPECT().Write(gomock.Any()).Return(78, nil).Times(1).Do(func(buf []byte) {
+		expected := []byte("HBas\x00P\x00\x00\x00D\n\x06\n\x04root\x12\rClientService\x1a+" +
+			"org.apache.hadoop.hbase.codec.KeyValueCodec")
 		if diff := test.Diff(expected, buf); diff != "" {
 			t.Errorf("Type RegionClient:\n Expected: %#v\nReceived: %#v\nDiff:%s",
 				expected, buf, diff)
@@ -91,8 +92,9 @@ func TestSendHello(t *testing.T) {
 	}
 
 	// check if it sends the right "hello" for MasterClient
-	mockConn.EXPECT().Write(gomock.Any()).Return(33, nil).Times(1).Do(func(buf []byte) {
-		expected := []byte("HBas\x00P\x00\x00\x00\x17\n\x06\n\x04root\x12\rMasterService")
+	mockConn.EXPECT().Write(gomock.Any()).Return(78, nil).Times(1).Do(func(buf []byte) {
+		expected := []byte("HBas\x00P\x00\x00\x00D\n\x06\n\x04root\x12\rMasterService\x1a+" +
+			"org.apache.hadoop.hbase.codec.KeyValueCodec")
 		if diff := test.Diff(expected, buf); diff != "" {
 			t.Errorf("Type MasterClient:\n Expected: %#v\nReceived: %#v\nDiff:%s",
 				expected, buf, diff)

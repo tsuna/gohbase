@@ -404,8 +404,8 @@ func (c *client) sendHello(ctype ClientType) error {
 		UserInfo: &pb.UserInformation{
 			EffectiveUser: proto.String(c.effectiveUser),
 		},
-		ServiceName: proto.String(string(ctype)),
-		//CellBlockCodecClass: "org.apache.hadoop.hbase.codec.KeyValueCodec",
+		ServiceName:         proto.String(string(ctype)),
+		CellBlockCodecClass: proto.String("org.apache.hadoop.hbase.codec.KeyValueCodec"),
 	}
 	data, err := proto.Marshal(connHeader)
 	if err != nil {
