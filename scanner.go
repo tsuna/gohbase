@@ -238,6 +238,7 @@ func (f *fetcher) next() (*pb.ScanResponse, hrpc.RegionInfo, error) {
 			hrpc.Filters(f.rpc.Filter()),
 			hrpc.TimeRangeUint64(from, to),
 			hrpc.MaxVersions(f.rpc.MaxVersions()),
+			hrpc.MaxResultSize(f.rpc.MaxResultSize()),
 			hrpc.NumberOfRows(f.rpc.NumberOfRows()),
 		)
 		if err != nil {

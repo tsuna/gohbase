@@ -23,8 +23,12 @@ const (
 	MinTimestamp uint64 = 0
 	// MaxTimestamp default value for maximum timestamp for scan queries
 	MaxTimestamp = math.MaxUint64
+	// DefaultMaxResultSize Maximum number of bytes fetched when calling a scanner's
+	// next method. The default value is 2MB, which is good for 1ge networks.
+	// With faster and/or high latency networks this value should be increased.
+	DefaultMaxResultSize = 2097152
 	// DefaultNumberOfRows is default maximum number of rows fetched by scanner
-	DefaultNumberOfRows = 128
+	DefaultNumberOfRows = math.MaxInt32
 )
 
 // Scanner is used to read data sequentially from HBase.
@@ -69,7 +73,8 @@ type Scan struct {
 
 	scannerID uint64
 
-	numberOfRows uint32
+	maxResultSize uint64
+	numberOfRows  uint32
 
 	filters filter.Filter
 
@@ -89,6 +94,7 @@ func baseScan(ctx context.Context, table []byte,
 		toTimestamp:   MaxTimestamp,
 		maxVersions:   DefaultMaxVersions,
 		scannerID:     math.MaxUint64,
+		maxResultSize: DefaultMaxResultSize,
 		numberOfRows:  DefaultNumberOfRows,
 	}
 	err := applyOptions(s, options...)
@@ -202,6 +208,11 @@ func (s *Scan) MaxVersions() uint32 {
 	return s.maxVersions
 }
 
+// MaxResultSize returns Maximum number of bytes fetched when calling a scanner's next method.
+func (s *Scan) MaxResultSize() uint64 {
+	return s.maxResultSize
+}
+
 // NumberOfRows returns maximum number of rows that will be fetched
 // with each scan request to regionserver.
 func (s *Scan) NumberOfRows() uint32 {
@@ -218,7 +229,7 @@ func (s *Scan) ToProto() (proto.Message, error) {
 	scan := &pb.ScanRequest{
 		Region:       s.regionSpecifier(),
 		CloseScanner: &s.closeScanner,
-		NumberOfRows: &s.numberOfRows,
+		NumberOfRows: proto.Uint32(math.MaxInt32),
 		// tell server that we can process results that are only part of a row
 		ClientHandlesPartials: proto.Bool(true),
 		// tell server that we "handle" heartbeats by ignoring them
@@ -230,10 +241,11 @@ func (s *Scan) ToProto() (proto.Message, error) {
 		return scan, nil
 	}
 	scan.Scan = &pb.Scan{
-		Column:    familiesToColumn(s.families),
-		StartRow:  s.startRow,
-		StopRow:   s.stopRow,
-		TimeRange: &pb.TimeRange{},
+		Column:        familiesToColumn(s.families),
+		StartRow:      s.startRow,
+		StopRow:       s.stopRow,
+		TimeRange:     &pb.TimeRange{},
+		MaxResultSize: &s.maxResultSize,
 	}
 	if s.maxVersions != DefaultMaxVersions {
 		scan.Scan.MaxVersions = &s.maxVersions
@@ -271,6 +283,23 @@ func (s *Scan) SetFamilies(fam map[string][]string) error {
 func (s *Scan) SetFilter(ft filter.Filter) error {
 	s.filters = ft
 	return nil
+}
+
+// MaxResultSize is an option for scan requests.
+// Maximum number of bytes fetched when calling a scanner's next method.
+// MaxResultSize takes priority over NumberOfRows.
+func MaxResultSize(n uint64) func(Call) error {
+	return func(g Call) error {
+		scan, ok := g.(*Scan)
+		if !ok {
+			return errors.New("'MaxResultSize' option can only be used with Scan queries")
+		}
+		if n == 0 {
+			return errors.New("'MaxResultSize' option must be greater than 0")
+		}
+		scan.maxResultSize = n
+		return nil
+	}
 }
 
 // NumberOfRows is an option for scan requests.
