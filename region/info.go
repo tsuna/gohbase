@@ -77,16 +77,15 @@ func infoFromCell(cell *hrpc.Cell) (hrpc.RegionInfo, error) {
 	if len(value) == 0 {
 		return nil, fmt.Errorf("empty value in %q", cell)
 	} else if value[0] != 'P' {
-		return nil, fmt.Errorf("unsupported region info version %d in %q",
-			value[0], cell)
+		return nil, fmt.Errorf("unsupported region info version %d in %q", value[0], cell)
 	}
 	const pbufMagic = 1346524486 // 4 bytes: "PBUF"
-	magic := binary.BigEndian.Uint32(value)
+	magic := binary.BigEndian.Uint32(value[:4])
 	if magic != pbufMagic {
 		return nil, fmt.Errorf("invalid magic number in %q", cell)
 	}
-	regInfo := &pb.RegionInfo{}
-	err := proto.UnmarshalMerge(value[4:len(value)-4], regInfo)
+	var regInfo pb.RegionInfo
+	err := proto.UnmarshalMerge(value[4:], &regInfo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode %q: %s", cell, err)
 	}
@@ -98,8 +97,9 @@ func infoFromCell(cell *hrpc.Cell) (hrpc.RegionInfo, error) {
 		// if default namespace, pretend there's no namespace
 		namespace = regInfo.TableName.Namespace
 	}
+
 	return NewInfo(
-		*regInfo.RegionId,
+		regInfo.GetRegionId(),
 		namespace,
 		regInfo.TableName.Qualifier,
 		cell.Row,
