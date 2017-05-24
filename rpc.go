@@ -363,9 +363,15 @@ func (c *client) reestablishRegion(reg hrpc.RegionInfo) {
 }
 
 func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) {
-	backoff := backoffStart
+	var backoff time.Duration
 	var err error
 	for {
+		backoff, err = sleepAndIncreaseBackoff(reg.Context(), backoff)
+		if err != nil {
+			// region is dead
+			reg.MarkAvailable()
+			return
+		}
 		if host == "" && port == 0 {
 			// need to look up region and address of the regionserver
 			originalReg := reg
@@ -444,18 +450,13 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 		// reset address because we weren't able to connect to it,
 		// should look up again
 		host, port = "", 0
-
-		// This will be hit if there was an error connecting to the region
-		backoff, err = sleepAndIncreaseBackoff(reg.Context(), backoff)
-		if err != nil {
-			// region is dead
-			reg.MarkAvailable()
-			return
-		}
 	}
 }
 
 func sleepAndIncreaseBackoff(ctx context.Context, backoff time.Duration) (time.Duration, error) {
+	if backoff == 0 {
+		return backoffStart, nil
+	}
 	select {
 	case <-time.After(backoff):
 	case <-ctx.Done():
