@@ -208,14 +208,13 @@ func (c *client) lookupRegion(ctx context.Context,
 			}).Debug("looked up a region")
 
 			return reg, host, port, nil
-		} else {
-			log.WithFields(log.Fields{
-				"table":   string(table),
-				"key":     string(key),
-				"backoff": backoff,
-				"err":     err,
-			}).Error("failed looking up region")
 		}
+		log.WithFields(log.Fields{
+			"table":   string(table),
+			"key":     string(key),
+			"backoff": backoff,
+			"err":     err,
+		}).Error("failed looking up region")
 		// This will be hit if there was an error locating the region
 		backoff, err = sleepAndIncreaseBackoff(ctx, backoff)
 		if err != nil {

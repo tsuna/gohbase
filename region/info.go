@@ -21,6 +21,15 @@ import (
 
 var defaultNamespace = []byte("default")
 
+// OfflineRegionError is returned if region is offline
+type OfflineRegionError struct {
+	n string
+}
+
+func (e OfflineRegionError) Error() string {
+	return fmt.Sprintf("region %s is offline", e.n)
+}
+
 // info describes a region.
 type info struct {
 	id        uint64 // A timestamp when the region is created
@@ -81,7 +90,9 @@ func infoFromCell(cell *hrpc.Cell) (hrpc.RegionInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode %q: %s", cell, err)
 	}
-
+	if regInfo.GetOffline() {
+		return nil, OfflineRegionError{n: string(cell.Row)}
+	}
 	var namespace []byte
 	if !bytes.Equal(regInfo.TableName.Namespace, defaultNamespace) {
 		// if default namespace, pretend there's no namespace

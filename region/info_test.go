@@ -18,7 +18,7 @@ import (
 // Test parsing the contents of a cell found in meta.
 func TestInfoFromMeta(t *testing.T) {
 	put := pb.CellType_PUT
-	regionName := []byte("table,foo,1431921690563.53e41f94d5c3087af0d13259b8c4186d.")
+	regionName := []byte("table,,1431921690563.53e41f94d5c3087af0d13259b8c4186d.")
 	buf := []byte("PBUF\010\303\217\274\251\326)\022\020\n\007default" +
 		"\022\005table\032\000\"\000(\0000\0008\000")
 	cell := &hrpc.Cell{
@@ -44,10 +44,17 @@ func TestInfoFromMeta(t *testing.T) {
 		t.Errorf("Expected empty StopKey but got %q", info.StopKey())
 	}
 
-	expected := "RegionInfo{Name: table,foo,1431921690563.53e41f94d5c3087af0d13259b8c4186d., " +
+	expected := "RegionInfo{Name: table,,1431921690563.53e41f94d5c3087af0d13259b8c4186d., " +
 		"ID: 1431921690563, Namespace: , Table: table, StartKey: , StopKey: }"
 	if s := info.String(); s != expected {
 		t.Errorf("Unexpected string representation.\nExpected: %q\n  Actual: %q", expected, s)
+	}
+
+	// Set region to be offline
+	buf[34] = 0x01
+	_, err = infoFromCell(cell)
+	if _, ok := err.(OfflineRegionError); !ok {
+		t.Fatalf("Unexpected error on offline region: %s", err)
 	}
 
 	// Corrupt the protobuf.
