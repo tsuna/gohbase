@@ -386,22 +386,25 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 				originalReg.MarkAvailable()
 
 				log.WithFields(log.Fields{
-					"region": originalReg.String(),
-					"err":    err,
+					"region":  originalReg.String(),
+					"err":     err,
+					"backoff": backoff,
 				}).Info("region does not exist anymore")
 				return
 			} else if err == ErrDeadline {
 				// region is dead
 				originalReg.MarkAvailable()
 				log.WithFields(log.Fields{
-					"region": originalReg.String(),
-					"err":    err,
+					"region":  originalReg.String(),
+					"err":     err,
+					"backoff": backoff,
 				}).Info("region became dead while establishing client for it")
 				return
 			} else if err != nil {
 				log.WithFields(log.Fields{
-					"region": originalReg.String(),
-					"err":    err,
+					"region":  originalReg.String(),
+					"err":     err,
+					"backoff": backoff,
 				}).Fatal("unknown error occured when looking up region")
 			}
 			if !bytes.Equal(reg.Name(), originalReg.Name()) {
