@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/tsuna/gohbase/hrpc"
@@ -18,9 +19,38 @@ import (
 )
 
 type testClient struct {
-	host string
-	port uint16
+	host    string
+	port    uint16
+	numNSRE int32
 }
+
+var nsreRegion = &pb.Result{Cell: []*pb.Cell{
+	&pb.Cell{
+		Row:       []byte("nsre,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."),
+		Family:    []byte("info"),
+		Qualifier: []byte("regioninfo"),
+		Value: []byte("PBUF\b\xc4\xcd\xe9\x99\xe0)\x12\x0f\n\adefault\x12\x04nsre" +
+			"\x1a\x00\"\x00(\x000\x008\x00"),
+	},
+	&pb.Cell{
+		Row:       []byte("nsre,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."),
+		Family:    []byte("info"),
+		Qualifier: []byte("seqnumDuringOpen"),
+		Value:     []byte("\x00\x00\x00\x00\x00\x00\x00\x02"),
+	},
+	&pb.Cell{
+		Row:       []byte("nsre,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."),
+		Family:    []byte("info"),
+		Qualifier: []byte("server"),
+		Value:     []byte("regionserver:1"),
+	},
+	&pb.Cell{
+		Row:       []byte("nsre,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."),
+		Family:    []byte("info"),
+		Qualifier: []byte("serverstartcode"),
+		Value:     []byte("\x00\x00\x01N\x02\x92R\xb1"),
+	},
+}}
 
 var metaRow = &pb.Result{Cell: []*pb.Cell{
 	&pb.Cell{
@@ -135,12 +165,35 @@ func (c *testClient) QueueRPC(call hrpc.Call) {
 	default:
 	}
 	if !bytes.Equal(call.Table(), []byte("hbase:meta")) {
+		_, ok := call.(*hrpc.Get)
+		if !ok || !bytes.HasSuffix(call.Key(), bytes.Repeat([]byte{0}, 17)) {
+			// not a get and not a region probe
+			// just return as the mock call should just populate the ResultChan in test
+			return
+		}
+		// region probe, fail for the nsre region 3 times to force retry
+		if bytes.Equal(call.Table(), []byte("nsre")) {
+			i := atomic.AddInt32(&c.numNSRE, 1)
+			if i <= 3 {
+				call.ResultChan() <- hrpc.RPCResult{Error: RetryableError{}}
+				return
+			}
+		}
+	}
+	if bytes.HasSuffix(call.Key(), bytes.Repeat([]byte{0}, 17)) {
+		// meta region probe, return empty to signify that region is online
+		call.ResultChan() <- hrpc.RPCResult{}
 		return
 	}
 	if bytes.HasPrefix(call.Key(), []byte("test,")) {
 		call.ResultChan() <- hrpc.RPCResult{Msg: &pb.GetResponse{Result: metaRow}}
 	} else if bytes.HasPrefix(call.Key(), []byte("test1,,")) {
 		call.ResultChan() <- hrpc.RPCResult{Msg: &pb.GetResponse{Result: test1SplitA}}
+	} else if bytes.HasPrefix(call.Key(), []byte("nsre,,")) {
+		call.ResultChan() <- hrpc.RPCResult{Msg: &pb.GetResponse{Result: nsreRegion}}
+	} else {
+		panic(fmt.Sprintf("unexpected call to %q: %q %s",
+			call.Table(), call.Name(), call.Key(), call.Region()))
 	}
 }
 

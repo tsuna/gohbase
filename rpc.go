@@ -85,6 +85,19 @@ func (c *client) SendRPC(rpc hrpc.Call) (proto.Message, error) {
 	}
 }
 
+func sendBlocking(rc hrpc.RegionClient, rpc hrpc.Call) (hrpc.RPCResult, error) {
+	rc.QueueRPC(rpc)
+
+	var res hrpc.RPCResult
+	// Wait for the response
+	select {
+	case res = <-rpc.ResultChan():
+		return res, nil
+	case <-rpc.Context().Done():
+		return res, ErrDeadline
+	}
+}
+
 func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Message, error) {
 	if reg.IsUnavailable() {
 		return nil, ErrRegionUnavailable
@@ -103,17 +116,10 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 		}
 		return nil, ErrRegionUnavailable
 	}
-
-	client.QueueRPC(rpc)
-
-	// Wait for the response
-	var res hrpc.RPCResult
-	select {
-	case res = <-rpc.ResultChan():
-	case <-rpc.Context().Done():
-		return nil, ErrDeadline
+	res, err := sendBlocking(client, rpc)
+	if err != nil {
+		return nil, err
 	}
-
 	// Check for errors
 	switch res.Error.(type) {
 	case region.RetryableError:
@@ -359,7 +365,36 @@ func fullyQualifiedTable(reg hrpc.RegionInfo) []byte {
 }
 
 func (c *client) reestablishRegion(reg hrpc.RegionInfo) {
+	log.WithField("region", reg).Debug("reestablishing region")
 	c.establishRegion(reg, "", 0)
+}
+
+// probeKey returns a key in region that is unlikely to have data at it
+// in order to test if the region is online. This prevents the Get request
+// to actually fetch the data from the storage which consumes resources
+// of the region server
+func probeKey(reg hrpc.RegionInfo) []byte {
+	// now we create a probe key: reg.StartKey() + 17 zeros
+	probe := make([]byte, len(reg.StartKey())+17)
+	copy(probe, reg.StartKey())
+	return probe
+}
+
+// isRegionEstablished checks whether regionserver accepts rpcs for the region.
+func isRegionEstablished(rc hrpc.RegionClient, reg hrpc.RegionInfo) bool {
+	probeGet, err := hrpc.NewGet(context.Background(), fullyQualifiedTable(reg), probeKey(reg))
+	if err != nil {
+		panic(fmt.Sprintf("should not happen: %s", err))
+	}
+	probeGet.ExistsOnly()
+
+	probeGet.SetRegion(reg)
+	resGet, err := sendBlocking(rc, probeGet)
+	if err != nil {
+		panic(fmt.Sprintf("should not happen: %s", err))
+	}
+	_, ok := resGet.Error.(region.RetryableError)
+	return !ok
 }
 
 func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) {
@@ -439,19 +474,25 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 					client = existing
 				}
 			}
-			// set region client so that as soon as we mark it available,
-			// concurrent readers are able to find the client
-			reg.SetClient(client)
-			reg.MarkAvailable()
-			return
+
+			if isRegionEstablished(client, reg) {
+				// set region client so that as soon as we mark it available,
+				// concurrent readers are able to find the client
+				reg.SetClient(client)
+				reg.MarkAvailable()
+				return
+			}
 		} else if err == context.Canceled {
 			// region is dead
 			reg.MarkAvailable()
 			return
 		}
-
-		// reset address because we weren't able to connect to it,
-		// should look up again
+		log.WithFields(log.Fields{
+			"region":  reg,
+			"backoff": backoff,
+		}).Debug("region was not established, retrying")
+		// reset address because we weren't able to connect to it
+		// or regionserver says it's still offline, should look up again
 		host, port = "", 0
 	}
 }

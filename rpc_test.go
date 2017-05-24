@@ -8,6 +8,7 @@
 package gohbase
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sync"
@@ -225,6 +226,55 @@ func TestReestablishRegionSplit(t *testing.T) {
 
 	if origlReg.Client() != nil {
 		t.Error("Expected original region to have no client")
+	}
+}
+
+func TestReestablishRegionNSRE(t *testing.T) {
+	c := newMockClient(nil)
+	origlReg := region.NewInfo(0, nil, []byte("nsre"),
+		[]byte("nsre,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."), nil, nil)
+	// inject a fake regionserver client and fake region into cache
+	rc1, err := region.NewClient(context.Background(), "regionserver", 1, region.RegionClient,
+		0, 0, "root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// pretend regionserver:1 has meta table
+	c.metaRegionInfo.SetClient(rc1)
+	c.clients.put(rc1, c.metaRegionInfo)
+	// "nsre" is at the moment at regionserver:1
+	origlReg.SetClient(rc1)
+	c.clients.put(rc1, origlReg)
+	// marking unavailable to simulate error
+	origlReg.MarkUnavailable()
+	c.regions.put(origlReg)
+
+	c.reestablishRegion(origlReg)
+
+	if len(c.clients.regions) != 1 {
+		t.Errorf("Expected 1 client in cache, got %d", len(c.clients.regions))
+	}
+
+	if c.regions.regions.Len() != 1 {
+		// expecting only one region because meta isn't in cache, it's hard-coded
+		t.Errorf("Expected 1 regions in cache, got %d", c.regions.regions.Len())
+	}
+
+	// check the we have the region in regions cache
+	_, ok := c.regions.regions.Get(
+		[]byte("nsre,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."))
+	if !ok {
+		t.Error("Expected region is not in the cache")
+	}
+
+	// check region is available and it's client is empty since we
+	// need to release all the waiting callers
+	if origlReg.IsUnavailable() {
+		t.Error("Expected original region to be available")
+	}
+
+	if origlReg.Client() != rc1 {
+		t.Error("Expected original region the same client")
 	}
 }
 
@@ -595,5 +645,36 @@ func TestConcurrentRetryableError(t *testing.T) {
 	origlReg.MarkDead()
 	if ch := origlReg.AvailabilityChan(); ch != nil {
 		<-ch
+	}
+}
+
+func TestProbeKey(t *testing.T) {
+	regions := []hrpc.RegionInfo{
+		region.NewInfo(0, nil, nil, nil, nil, nil),
+		region.NewInfo(0, nil, nil, nil, nil, []byte("yolo")),
+		region.NewInfo(0, nil, nil, nil, []byte("swag"), nil),
+		region.NewInfo(0, nil, nil, nil, []byte("swag"), []byte("yolo")),
+		region.NewInfo(0, nil, nil, nil, []byte("aaaaaaaaaaaaaa"), []byte("bbbb")),
+		region.NewInfo(0, nil, nil, nil, []byte("aaaa"), []byte("bbbbbbb")),
+		region.NewInfo(0, nil, nil, nil, []byte("aaaa"), []byte("aab")),
+		region.NewInfo(0, nil, nil, nil, []byte("aaa"), []byte("aaaaaaaaaa")),
+		region.NewInfo(0, nil, nil, nil, []byte{255}, nil),
+		region.NewInfo(0, nil, nil, nil, []byte{255, 255}, nil),
+	}
+
+	for _, reg := range regions {
+		key := probeKey(reg)
+		isGreaterThanStartOfTable := len(reg.StartKey()) == 0 && len(key) > 0
+		isGreaterThanStartKey := bytes.Compare(reg.StartKey(), key) < 0
+		isLessThanEndOfTable := len(reg.StopKey()) == 0 &&
+			bytes.Compare(key, bytes.Repeat([]byte{255}, len(key))) < 0
+		isLessThanStopKey := bytes.Compare(key, reg.StopKey()) < 0
+		if (isGreaterThanStartOfTable || isGreaterThanStartKey) &&
+			(isLessThanEndOfTable || isLessThanStopKey) {
+			continue
+		}
+		t.Errorf("key %q is not within bounds of region %s: %v %v %v %v\n", key, reg,
+			isGreaterThanStartOfTable, isGreaterThanStartKey,
+			isLessThanEndOfTable, isLessThanStopKey)
 	}
 }
