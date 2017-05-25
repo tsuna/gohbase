@@ -13,12 +13,13 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/aristanetworks/goarista/test"
+	atest "github.com/aristanetworks/goarista/test"
 	"github.com/cznic/b"
 	"github.com/golang/mock/gomock"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
+	"github.com/tsuna/gohbase/test"
 	"github.com/tsuna/gohbase/test/mock"
 	mockRegion "github.com/tsuna/gohbase/test/mock/region"
 	mockZk "github.com/tsuna/gohbase/test/mock/zk"
@@ -46,7 +47,7 @@ func newMockClient(zkClient zk.Client) *client {
 }
 
 func TestSendRPCSanity(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 	// we expect to ask zookeeper for where metaregion is
 	zkClient := mockZk.NewMockClient(ctrl)
@@ -69,7 +70,7 @@ func TestSendRPCSanity(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}
-	if diff := test.Diff(expMsg, msg); diff != "" {
+	if diff := atest.Diff(expMsg, msg); diff != "" {
 		t.Errorf("Expected: %#v\nReceived: %#v\nDiff:%s",
 			expMsg, msg, diff)
 	}
@@ -118,7 +119,7 @@ func TestSendRPCSanity(t *testing.T) {
 }
 
 func TestReestablishRegionSplit(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 	// we expect to ask zookeeper for where metaregion is
 	c := newMockClient(mockZk.NewMockClient(ctrl))
@@ -183,7 +184,7 @@ func TestReestablishRegionSplit(t *testing.T) {
 					r.Client().Host(), r.Client().Port(), rc1.Host(), rc1.Port())
 			}
 		}
-		if diff := test.Diff(expRegs, gotRegs); diff != "" {
+		if diff := atest.Diff(expRegs, gotRegs); diff != "" {
 			t.Errorf("Expected: %#v\nReceived: %#v\nDiff:%s",
 				expRegs, gotRegs, diff)
 		}
@@ -230,7 +231,7 @@ func TestReestablishRegionSplit(t *testing.T) {
 func TestEstablishClientConcurrent(t *testing.T) {
 	// test that the same client isn't added when establishing it concurrently
 	// if there's a race, this test will only fail sometimes
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 	// we expect to ask zookeeper for where metaregion is
 	c := newMockClient(mockZk.NewMockClient(ctrl))
@@ -282,7 +283,7 @@ func TestEstablishClientConcurrent(t *testing.T) {
 }
 
 func TestSendRPCtoRegionClientDown(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 
 	// we don't exepct any calls to zookeeper
@@ -347,7 +348,7 @@ func TestSendRPCtoRegionClientDown(t *testing.T) {
 }
 
 func TestReestablishDeadRegion(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 	// setting zookeeper client to nil because we don't
 	// expect for it to be called
@@ -457,7 +458,7 @@ func TestFindRegion(t *testing.T) {
 		},
 	}
 
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 	// setting zookeeper client to nil because we don't
 	// expect for it to be called
@@ -529,7 +530,7 @@ func TestFindRegion(t *testing.T) {
 }
 
 func TestConcurrentRetryableError(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 
 	zkc := mockZk.NewMockClient(ctrl)

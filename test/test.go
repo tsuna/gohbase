@@ -4,3 +4,27 @@
 // that can be found in the COPYING file.
 
 package test
+
+import (
+	"fmt"
+
+	"github.com/golang/mock/gomock"
+)
+
+type reporter struct {
+	gomock.TestReporter
+}
+
+func (r reporter) Errorf(format string, args ...interface{}) {
+	r.TestReporter.Errorf(format, args...)
+}
+
+func (r reporter) Fatalf(format string, args ...interface{}) {
+	panic(fmt.Sprintf(format, args...))
+}
+
+// NewController returns a gomock controller that panics when there's no match
+// to handle goroutines
+func NewController(t gomock.TestReporter) *gomock.Controller {
+	return gomock.NewController(reporter{t})
+}
