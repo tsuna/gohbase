@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 	"sync"
 	"testing"
@@ -22,13 +23,66 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/tsuna/gohbase"
 	"github.com/tsuna/gohbase/hrpc"
-	"github.com/tsuna/gohbase/test"
 )
 
 var host = flag.String("host", "localhost", "The location where HBase is running")
 
 const table = "test1"
 
+// CreateTable creates the given table with the given families
+func CreateTable(client gohbase.AdminClient, table string, cFamilies []string) error {
+	// If the table exists, delete it
+	DeleteTable(client, table)
+	// Don't check the error, since one will be returned if the table doesn't
+	// exist
+
+	cf := make(map[string]map[string]string, len(cFamilies))
+	for _, f := range cFamilies {
+		cf[f] = nil
+	}
+	ct := hrpc.NewCreateTable(context.Background(), []byte(table), cf)
+	if err := client.CreateTable(ct); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// DeleteTable finds the HBase shell via the HBASE_HOME environment variable,
+// and disables and drops the given table
+func DeleteTable(client gohbase.AdminClient, table string) error {
+	dit := hrpc.NewDisableTable(context.Background(), []byte(table))
+	err := client.DisableTable(dit)
+	if err != nil {
+		if !strings.Contains(err.Error(), "TableNotEnabledException") {
+			return err
+		}
+	}
+
+	det := hrpc.NewDeleteTable(context.Background(), []byte(table))
+	err = client.DeleteTable(det)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// LaunchRegionServers uses the script local-regionservers.sh to create new
+// RegionServers. Fails silently if server already exists.
+// Ex. LaunchRegions([]string{"2", "3"}) launches two servers with id=2,3
+func LaunchRegionServers(servers []string) {
+	hh := os.Getenv("HBASE_HOME")
+	servers = append([]string{"start"}, servers...)
+	exec.Command(hh+"/bin/local-regionservers.sh", servers...).Run()
+}
+
+// StopRegionServers uses the script local-regionservers.sh to stop existing
+// RegionServers. Fails silently if server isn't running.
+func StopRegionServers(servers []string) {
+	hh := os.Getenv("HBASE_HOME")
+	servers = append([]string{"stop"}, servers...)
+	exec.Command(hh+"/bin/local-regionservers.sh", servers...).Run()
+}
 func TestMain(m *testing.M) {
 	if host == nil {
 		panic("Host is not set!")
@@ -39,7 +93,7 @@ func TestMain(m *testing.M) {
 	ac := gohbase.NewAdminClient(*host)
 	var err error
 	for {
-		err = test.CreateTable(ac, table, []string{"cf", "cf2"})
+		err = CreateTable(ac, table, []string{"cf", "cf2"})
 		if err != nil &&
 			(strings.Contains(err.Error(), "org.apache.hadoop.hbase.PleaseHoldException") ||
 				strings.Contains(err.Error(),
@@ -53,7 +107,7 @@ func TestMain(m *testing.M) {
 		}
 	}
 	res := m.Run()
-	err = test.DeleteTable(ac, table)
+	err = DeleteTable(ac, table)
 	if err != nil {
 		panic(err)
 	}
@@ -1013,11 +1067,11 @@ func TestChangingRegionServers(t *testing.T) {
 
 	// RegionServer 1 hosts all the current regions.
 	// Now launch servers 2,3
-	test.LaunchRegionServers([]string{"2", "3"})
+	LaunchRegionServers([]string{"2", "3"})
 
 	// Now (gracefully) stop servers 1,2.
 	// All regions should now be on server 3.
-	test.StopRegionServers([]string{"1", "2"})
+	StopRegionServers([]string{"1", "2"})
 	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
 	rsp, err := c.Get(get)
 	if err != nil {
@@ -1030,8 +1084,8 @@ func TestChangingRegionServers(t *testing.T) {
 	}
 
 	// Clean up by re-launching RS1 and closing RS3
-	test.LaunchRegionServers([]string{"1"})
-	test.StopRegionServers([]string{"3"})
+	LaunchRegionServers([]string{"1"})
+	StopRegionServers([]string{"3"})
 }
 
 func BenchmarkPut(b *testing.B) {
