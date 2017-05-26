@@ -111,9 +111,8 @@ func (g *Get) SetFamilies(f map[string][]string) error {
 
 // ExistsOnly makes this Get request not return any KeyValue, merely whether
 // or not the given row key exists in the table.
-func (g *Get) ExistsOnly() error {
+func (g *Get) ExistsOnly() {
 	g.existsOnly = true
-	return nil
 }
 
 // ToProto converts this RPC into a protobuf message.
