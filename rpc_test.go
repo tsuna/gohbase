@@ -564,8 +564,10 @@ func TestFindRegion(t *testing.T) {
 		}
 		// check client was looked up
 		if tcase.establish {
-			ch := reg.AvailabilityChan()
-			<-ch
+			if ch := reg.AvailabilityChan(); ch != nil {
+				// if still establishing, wait
+				<-ch
+			}
 			rc2 := reg.Client()
 			if rc2 == nil {
 				t.Errorf("Test %d: Expected region %q to establish a client", i, reg.Name())
