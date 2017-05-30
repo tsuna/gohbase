@@ -14,12 +14,12 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/aristanetworks/goarista/test"
-	"github.com/golang/mock/gomock"
+	atest "github.com/aristanetworks/goarista/test"
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
+	"github.com/tsuna/gohbase/test"
 	"github.com/tsuna/gohbase/test/mock"
 )
 
@@ -86,7 +86,7 @@ var (
 )
 
 func TestScanner(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 	c := mock.NewMockRPCClient(ctrl)
 
@@ -163,7 +163,7 @@ func TestScanner(t *testing.T) {
 		expected = append(expected, hrpc.ToLocalResult(r))
 	}
 
-	if d := test.Diff(expected, rs); d != "" {
+	if d := atest.Diff(expected, rs); d != "" {
 		t.Fatal(d)
 	}
 }
@@ -171,7 +171,7 @@ func TestScanner(t *testing.T) {
 func TestScannerCloseBuffered(t *testing.T) {
 	// test that if we close scanner when we still returning buffered results
 	// send closing scan rpc
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 	c := mock.NewMockRPCClient(ctrl)
 
@@ -215,7 +215,7 @@ func TestScannerCloseBuffered(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := hrpc.ToLocalResult(resultsPB[0])
-	if d := test.Diff(e, g); d != "" {
+	if d := atest.Diff(e, g); d != "" {
 		t.Fatal(e, g, d)
 	}
 
@@ -294,7 +294,7 @@ func TestErrorScanFromIDAllowPartials(t *testing.T) {
 }
 
 func TestErrorFirstFetch(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 	c := mock.NewMockRPCClient(ctrl)
 
@@ -329,13 +329,13 @@ func TestErrorFirstFetch(t *testing.T) {
 	if err != outErr {
 		t.Errorf("Expected error %v, got error %v", outErr, err)
 	}
-	if d := test.Diff([]*hrpc.Result{}, rs); d != "" {
+	if d := atest.Diff([]*hrpc.Result{}, rs); d != "" {
 		t.Fatal(d)
 	}
 }
 
 func testErrorScanFromID(t *testing.T, scan *hrpc.Scan, out []*hrpc.Result) {
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 	c := mock.NewMockRPCClient(ctrl)
 
@@ -390,13 +390,13 @@ func testErrorScanFromID(t *testing.T, scan *hrpc.Scan, out []*hrpc.Result) {
 	if err != outErr {
 		t.Errorf("Expected error %v, got error %v", outErr, err)
 	}
-	if d := test.Diff(out, rs); d != "" {
+	if d := atest.Diff(out, rs); d != "" {
 		t.Fatal(d)
 	}
 }
 
 func testPartialResults(t *testing.T, scan *hrpc.Scan, expected []*hrpc.Result) {
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 	c := mock.NewMockRPCClient(ctrl)
 	tcase := []struct {
@@ -488,7 +488,7 @@ func testPartialResults(t *testing.T, scan *hrpc.Scan, expected []*hrpc.Result) 
 		rs = append(rs, r)
 	}
 
-	if d := test.Diff(expected, rs); d != "" {
+	if d := atest.Diff(expected, rs); d != "" {
 		t.Fatal(d)
 	}
 }
