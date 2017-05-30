@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 )
@@ -21,34 +22,94 @@ import (
 const noScannerID = math.MaxUint64
 
 type re struct {
-	r *hrpc.Result
-	e error
+	rs []*pb.Result
+	e  error
 }
 
 type scanner struct {
-	// fetcher's fileds shouldn't be accessed by scanner
-	// TODO: maybe separate fetcher into a different package
-	f       fetcher
-	once    sync.Once
-	results chan re
-	cancel  context.CancelFunc
+	f         fetcher
+	once      sync.Once
+	cancel    context.CancelFunc
+	resultsCh chan re
+	// resultsM protext results slice for concurrent calls to Next()
+	resultsM sync.Mutex
+	results  []*pb.Result
+}
+
+func (s *scanner) peek() (*pb.Result, error) {
+	if s.f.ctx.Err() != nil {
+		return nil, io.EOF
+	}
+	if len(s.results) == 0 {
+		re, ok := <-s.resultsCh
+		if !ok {
+			return nil, io.EOF
+		}
+		if re.e != nil {
+			return nil, re.e
+		}
+		// fetcher never returns empty results
+		s.results = re.rs
+	}
+	return s.results[0], nil
+}
+
+func (s *scanner) shift() {
+	if len(s.results) == 0 {
+		return
+	}
+	// set to nil so that GC isn't blocked to clean up the result
+	s.results[0] = nil
+	s.results = s.results[1:]
+}
+
+// coalesce combines result with partial if they belong to the same row
+// and returns the coalesed result and whether coalescing happened
+func (s *scanner) coalesce(result, partial *pb.Result) (*pb.Result, bool) {
+	if result == nil {
+		return partial, true
+	}
+	if !result.GetPartial() {
+		// results is not partial, shouldn't coalesce
+		return result, false
+	}
+
+	if len(partial.Cell) > 0 && !bytes.Equal(result.Cell[0].Row, partial.Cell[0].Row) {
+		// new row
+		result.Partial = proto.Bool(false)
+		return result, false
+	}
+
+	// same row, add the partial
+	result.Cell = append(result.Cell, partial.Cell...)
+	if partial.GetStale() {
+		result.Stale = proto.Bool(partial.GetStale())
+	}
+	return result, true
 }
 
 func newScanner(c RPCClient, rpc *hrpc.Scan) *scanner {
 	ctx, cancel := context.WithCancel(rpc.Context())
-	results := make(chan re)
+	resultsCh := make(chan re)
 	return &scanner{
-		results: results,
-		cancel:  cancel,
+		resultsCh: resultsCh,
+		cancel:    cancel,
 		f: fetcher{
 			RPCClient: c,
 			rpc:       rpc,
 			ctx:       ctx,
-			results:   results,
+			resultsCh: resultsCh,
 			startRow:  rpc.StartRow(),
 			scannerID: noScannerID,
 		},
 	}
+}
+
+func toLocalResult(r *pb.Result) *hrpc.Result {
+	if r == nil {
+		return nil
+	}
+	return hrpc.ToLocalResult(r)
 }
 
 // Next returns a row at a time.
@@ -68,11 +129,47 @@ func (s *scanner) Next() (*hrpc.Result, error) {
 		go s.f.fetch()
 	})
 
-	re, ok := <-s.results
-	if !ok {
-		return nil, io.EOF
+	s.resultsM.Lock()
+
+	if s.f.rpc.AllowPartialResults() {
+		// if client handles partials, just return it
+		r, err := s.peek()
+		if err != nil {
+			s.resultsM.Unlock()
+			return nil, err
+		}
+		s.shift()
+		s.resultsM.Unlock()
+		return toLocalResult(r), nil
 	}
-	return re.r, re.e
+
+	var result, partial *pb.Result
+	var err error
+	for {
+		partial, err = s.peek()
+		if err == io.EOF && result != nil {
+			// no more results, return what we have. Next call to the Next() will get EOF
+			result.Partial = proto.Bool(false)
+			s.resultsM.Unlock()
+			return toLocalResult(result), nil
+		}
+		if err != nil {
+			// return whatever we have so far and the error
+			s.resultsM.Unlock()
+			return toLocalResult(result), err
+		}
+
+		var done bool
+		result, done = s.coalesce(result, partial)
+		if done {
+			s.shift()
+		}
+		if !result.GetPartial() {
+			// if not partial anymore, return it
+			s.resultsM.Unlock()
+			return toLocalResult(result), nil
+		}
+	}
 }
 
 // Close should be called if it is desired to stop scanning before getting all of results.
@@ -86,7 +183,7 @@ func (s *scanner) Close() error {
 
 type fetcher struct {
 	RPCClient
-	results chan<- re
+	resultsCh chan<- re
 	// rpc is original scan query
 	rpc *hrpc.Scan
 	ctx context.Context
@@ -94,76 +191,17 @@ type fetcher struct {
 	scannerID uint64
 	// startRow is the start row in the current region
 	startRow []byte
-	// result current result we are adding partials to
-	result *hrpc.Result
 }
 
-// coalese returns a complete row or nil in case more partial results
-// are expected
-func (f *fetcher) coalese(partial *hrpc.Result) *hrpc.Result {
-	if partial == nil {
-		return nil
+// trySend sends results and error to results channel. Returns true if scanner is done.
+func (f *fetcher) trySend(rs []*pb.Result, err error) bool {
+	if err == nil && len(rs) == 0 {
+		return false
 	}
-
-	if f.result == nil {
-		if len(partial.Cells) == 0 {
-			return nil
-		}
-		if !partial.Partial {
-			return partial
-		}
-		f.result = partial
-		return nil
-	}
-
-	if len(partial.Cells) > 0 && !bytes.Equal(f.result.Cells[0].Row, partial.Cells[0].Row) {
-		// new row
-		result := f.result
-		result.Partial = false
-		f.result = partial
-		return result
-	}
-
-	// same row, add the partial
-	f.result.Cells = append(f.result.Cells, partial.Cells...)
-	if partial.Stale {
-		f.result.Stale = partial.Stale
-	}
-	if f.scannerID == noScannerID {
-		// no more results in this region, return whatever we have,
-		// rows cannot go across region boundaries
-		result := f.result
-		result.Partial = false
-		f.result = nil
-		return result
-	}
-	return nil
-}
-
-// send sends a result and error to results channel. Returns true if scanner is done.
-func (f *fetcher) send(r *hrpc.Result, err error) bool {
-	if f.rpc.AllowPartialResults() {
-		return f.trySend(r, err)
-	}
-
-	r = f.coalese(r)
-	if r == nil {
-		if err == nil {
-			// nothing to be sent yet
-			return false
-		} else {
-			// if there's an error, return whatever result we have
-			r = f.result
-		}
-	}
-	return f.trySend(r, err)
-}
-
-func (f *fetcher) trySend(r *hrpc.Result, err error) bool {
 	select {
 	case <-f.ctx.Done():
 		return true
-	case f.results <- re{r: r, e: err}:
+	case f.resultsCh <- re{rs: rs, e: err}:
 		return false
 	}
 }
@@ -177,30 +215,23 @@ func (f *fetcher) fetch() {
 			if err != ErrDeadline {
 				// if the context of the scan rpc wasn't cancelled (same as calling Close()),
 				// return the error to client
-				f.send(nil, err)
+				f.trySend(nil, err)
 			}
 			break
 		}
 
 		f.update(resp, region)
 
-		for _, result := range resp.Results {
-			if f.send(hrpc.ToLocalResult(result), nil) {
-				break
-			}
+		if f.trySend(resp.Results, nil) {
+			break
 		}
 
-		// check whether we should close the scanner before making next request
 		if f.shouldClose(resp, region) {
-			if f.result != nil {
-				// if there were results, send the last row
-				f.trySend(f.result, nil)
-			}
 			break
 		}
 	}
 
-	close(f.results)
+	close(f.resultsCh)
 
 	if f.scannerID == noScannerID {
 		// scanner is automatically closed by hbase

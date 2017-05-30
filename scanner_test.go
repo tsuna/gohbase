@@ -85,6 +85,12 @@ var (
 	region3 = region.NewInfo(0, nil, table, []byte("table,foo,,whatever"), []byte("foo"), nil)
 )
 
+func dup(a []*pb.Result) []*pb.Result {
+	b := make([]*pb.Result, len(a))
+	copy(b, a)
+	return b
+}
+
 func TestScanner(t *testing.T) {
 	ctrl := test.NewController(t)
 	defer ctrl.Finish()
@@ -110,13 +116,13 @@ func TestScanner(t *testing.T) {
 	}).Return(&pb.ScanResponse{
 		ScannerId:           cp(scannerID),
 		MoreResultsInRegion: proto.Bool(true),
-		Results:             resultsPB[:1],
+		Results:             dup(resultsPB[:1]),
 	}, nil).Times(1)
 
 	c.EXPECT().SendRPC(hrpc.NewScanFromID(ctx, table, scannerID, nil)).Do(func(rpc hrpc.Call) {
 		rpc.SetRegion(region1)
 	}).Return(&pb.ScanResponse{
-		Results: resultsPB[1:2],
+		Results: dup(resultsPB[1:2]),
 	}, nil).Times(1)
 
 	scannerID++
@@ -129,7 +135,7 @@ func TestScanner(t *testing.T) {
 		rpc.SetRegion(region2)
 	}).Return(&pb.ScanResponse{
 		ScannerId: cp(scannerID),
-		Results:   resultsPB[2:3],
+		Results:   dup(resultsPB[2:3]),
 	}, nil).Times(1)
 
 	scannerID++
@@ -142,7 +148,7 @@ func TestScanner(t *testing.T) {
 		rpc.SetRegion(region3)
 	}).Return(&pb.ScanResponse{
 		ScannerId:   cp(scannerID),
-		Results:     resultsPB[3:4],
+		Results:     dup(resultsPB[3:4]),
 		MoreResults: proto.Bool(false),
 	}, nil).Times(1)
 
@@ -198,7 +204,17 @@ func TestScannerCloseBuffered(t *testing.T) {
 	}).Return(&pb.ScanResponse{
 		ScannerId:           cp(scannerID),
 		MoreResultsInRegion: proto.Bool(true),
-		Results:             resultsPB[:2], // we got 2 rows
+		Results:             dup(resultsPB[:2]), // we got 2 rows
+	}, nil).Times(1)
+
+	// expecting to have one more fetch since we fetch next rows in async while previous
+	// response is being consumed
+	c.EXPECT().SendRPC(hrpc.NewScanFromID(ctx, table, scannerID, nil)).Do(func(rpc hrpc.Call) {
+		rpc.SetRegion(r)
+	}).Return(&pb.ScanResponse{
+		ScannerId:           cp(scannerID),
+		MoreResultsInRegion: proto.Bool(true),
+		Results:             dup(resultsPB[2:3]), // we got 1 row
 	}, nil).Times(1)
 
 	// expect scan close rpc to be sent
