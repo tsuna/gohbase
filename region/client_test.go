@@ -46,14 +46,6 @@ func TestWrite(t *testing.T) {
 			expectErr, err, diff)
 	}
 
-	// check if it returns ErrShortWrite
-	mockConn.EXPECT().Write(gomock.Any()).Return(1, nil).Times(1)
-	err = c.write([]byte("lol"))
-	if diff := test.Diff(ErrShortWrite, err); diff != "" {
-		t.Errorf("Expected: %#v\nReceived: %#v\nDiff:%s",
-			ErrShortWrite, err, diff)
-	}
-
 	// check if it actually writes the right data
 	expected := []byte("lol")
 	mockConn.EXPECT().Write(gomock.Any()).Return(3, nil).Times(1).Do(func(buf []byte) {
@@ -624,8 +616,6 @@ func TestRPCContext(t *testing.T) {
 }
 
 func BenchmarkSendBatchMemory(b *testing.B) {
-	b.Skip("need to comment out short write detection")
-
 	ctrl := gomock.NewController(b)
 	defer ctrl.Finish()
 	mockConn := mock.NewMockReadWriteCloser(ctrl)
@@ -647,8 +637,6 @@ func BenchmarkSendBatchMemory(b *testing.B) {
 	p, _ := mockRPCProto("rpc")
 	mockCall.EXPECT().ToProto().Return(p, nil).AnyTimes()
 	mockCall.EXPECT().Context().Return(ctx).AnyTimes()
-	// for this benchmark to work, need to comment out section of in c.write()
-	// that detect short writes
 	mockConn.EXPECT().Write(gomock.Any()).AnyTimes().Return(0, nil).Do(func(buf []byte) {
 		wgWrites.Done()
 	})

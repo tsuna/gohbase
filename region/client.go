@@ -31,10 +31,6 @@ type canDeserializeCellBlocks interface {
 }
 
 var (
-	// ErrShortWrite is used when the writer thread only succeeds in writing
-	// part of its buffer to the socket, and not all of the buffer was sent
-	ErrShortWrite = errors.New("short write occurred while writing to socket")
-
 	// ErrMissingCallID is used when HBase sends us a response message for a
 	// request that we didn't send
 	ErrMissingCallID = errors.New("got a response with a nonsensical call ID")
@@ -389,17 +385,8 @@ func (c *client) receive() error {
 
 // write sends the given buffer to the RegionServer.
 func (c *client) write(buf []byte) error {
-	n, err := c.conn.Write(buf)
-	if err != nil {
-		// There was an error while writing
-		return err
-	}
-	if n != len(buf) {
-		// We failed to write the entire buffer
-		// TODO: Perhaps handle this in another way than closing down
-		return ErrShortWrite
-	}
-	return nil
+	_, err := c.conn.Write(buf)
+	return err
 }
 
 // Tries to read enough data to fully fill up the given buffer.
