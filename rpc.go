@@ -243,19 +243,7 @@ func (c *client) findRegion(ctx context.Context, table, key []byte) (hrpc.Region
 		// the cache while we were looking it up.
 		overlaps, replaced := c.regions.put(reg)
 		if !replaced {
-			// the same or younger regions are already in cache,
-			// iterate over overlaps to find the one that's right for our key
-			for _, r := range overlaps {
-				// overlaps are always the same table and in order,
-				// just compare stop keys
-				if bytes.Compare(key, r.StopKey()) < 0 || len(r.StopKey()) == 0 {
-					return r, nil
-				}
-			}
-			// our key is not in overlaps, this can happen in case there
-			// was a split, but somehow we got a pre-split region
-			// and splitA retion is already in cache and our key
-			// is in splitB, so we need to retry.
+			// the same or younger regions are already in cache, retry looking up in cache
 			return nil, ErrRegionUnavailable
 		}
 		// otherwise, new region in cache, delete overlaps from client's cache

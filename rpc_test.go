@@ -493,7 +493,7 @@ func TestFindRegion(t *testing.T) {
 			},
 			after:     []string{"test,,9999999999999.yoloyoloyoloyoloyoloyoloyoloyolo."},
 			establish: false,
-			regName:   "test,,9999999999999.yoloyoloyoloyoloyoloyoloyoloyolo.",
+			err:       ErrRegionUnavailable,
 		},
 		{ // overlapping younger region in cache, passed key is not in that region
 			before: []hrpc.RegionInfo{
