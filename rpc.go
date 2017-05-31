@@ -449,6 +449,7 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 				overlaps, replaced := c.regions.put(reg)
 				if !replaced {
 					// a region that is the same or younger is already in cache
+					reg.MarkAvailable()
 					originalReg.MarkAvailable()
 					return
 				}
