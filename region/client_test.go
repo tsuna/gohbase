@@ -14,11 +14,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aristanetworks/goarista/test"
+	atest "github.com/aristanetworks/goarista/test"
 	"github.com/golang/mock/gomock"
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
+	"github.com/tsuna/gohbase/test"
 	"github.com/tsuna/gohbase/test/mock"
 )
 
@@ -30,7 +31,7 @@ func TestErrors(t *testing.T) {
 }
 
 func TestWrite(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 	mockConn := mock.NewMockConn(ctrl)
 	c := &client{
@@ -41,7 +42,7 @@ func TestWrite(t *testing.T) {
 	expectErr := errors.New("nope")
 	mockConn.EXPECT().Write(gomock.Any()).Return(0, expectErr).Times(1)
 	err := c.write([]byte("lol"))
-	if diff := test.Diff(expectErr, err); diff != "" {
+	if diff := atest.Diff(expectErr, err); diff != "" {
 		t.Errorf("Expected: %#v\nReceived: %#v\nDiff:%s",
 			expectErr, err, diff)
 	}
@@ -49,7 +50,7 @@ func TestWrite(t *testing.T) {
 	// check if it actually writes the right data
 	expected := []byte("lol")
 	mockConn.EXPECT().Write(gomock.Any()).Return(3, nil).Times(1).Do(func(buf []byte) {
-		if diff := test.Diff(expected, buf); diff != "" {
+		if diff := atest.Diff(expected, buf); diff != "" {
 			t.Errorf("Expected: %#v\nReceived: %#v\nDiff:%s",
 				expected, buf, diff)
 		}
@@ -61,7 +62,7 @@ func TestWrite(t *testing.T) {
 }
 
 func TestSendHello(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 	mockConn := mock.NewMockConn(ctrl)
 	c := &client{
@@ -73,7 +74,7 @@ func TestSendHello(t *testing.T) {
 	mockConn.EXPECT().Write(gomock.Any()).Return(78, nil).Times(1).Do(func(buf []byte) {
 		expected := []byte("HBas\x00P\x00\x00\x00D\n\x06\n\x04root\x12\rClientService\x1a+" +
 			"org.apache.hadoop.hbase.codec.KeyValueCodec")
-		if diff := test.Diff(expected, buf); diff != "" {
+		if diff := atest.Diff(expected, buf); diff != "" {
 			t.Errorf("Type RegionClient:\n Expected: %#v\nReceived: %#v\nDiff:%s",
 				expected, buf, diff)
 		}
@@ -87,7 +88,7 @@ func TestSendHello(t *testing.T) {
 	mockConn.EXPECT().Write(gomock.Any()).Return(78, nil).Times(1).Do(func(buf []byte) {
 		expected := []byte("HBas\x00P\x00\x00\x00D\n\x06\n\x04root\x12\rMasterService\x1a+" +
 			"org.apache.hadoop.hbase.codec.KeyValueCodec")
-		if diff := test.Diff(expected, buf); diff != "" {
+		if diff := atest.Diff(expected, buf); diff != "" {
 			t.Errorf("Type MasterClient:\n Expected: %#v\nReceived: %#v\nDiff:%s",
 				expected, buf, diff)
 		}
@@ -99,7 +100,7 @@ func TestSendHello(t *testing.T) {
 }
 
 func TestFail(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 	mockConn := mock.NewMockConn(ctrl)
 	c := &client{
@@ -135,7 +136,7 @@ func TestFail(t *testing.T) {
 		}
 	}
 
-	if diff := test.Diff(expectedErr, c.err); diff != "" {
+	if diff := atest.Diff(expectedErr, c.err); diff != "" {
 		t.Errorf("Expected: %#v\nReceived: %#v\nDiff:%s",
 			expectedErr, c.err, diff)
 	}
@@ -162,7 +163,7 @@ func newRPCMatcher(payload []byte) gomock.Matcher {
 }
 
 func TestAwaitingRPCsFail(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 
 	queueSize := 100
@@ -232,7 +233,7 @@ func mockRPCProto(row string) (proto.Message, []byte) {
 }
 
 func TestQueueRPC(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 
 	queueSize := 30
@@ -312,7 +313,7 @@ func TestQueueRPC(t *testing.T) {
 				t.Errorf("Expected UnrecoverableError error")
 				return
 			}
-			if diff := test.Diff(ErrClientDead.error, err.error); diff != "" {
+			if diff := atest.Diff(ErrClientDead.error, err.error); diff != "" {
 				t.Errorf("Expected: %s\nReceived: %s\nDiff:%s",
 					ErrClientDead.error, err.error, diff)
 			}
@@ -323,7 +324,7 @@ func TestQueueRPC(t *testing.T) {
 }
 
 func TestUnrecoverableErrorWrite(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 
 	queueSize := 1
@@ -357,7 +358,7 @@ func TestUnrecoverableErrorWrite(t *testing.T) {
 	if !ok {
 		t.Errorf("Expected UnrecoverableError error")
 	}
-	if diff := test.Diff(expErr, err.error); diff != "" {
+	if diff := atest.Diff(expErr, err.error); diff != "" {
 		t.Errorf("Expected: %s\nReceived: %s\nDiff:%s",
 			expErr, err.error, diff)
 	}
@@ -367,7 +368,7 @@ func TestUnrecoverableErrorWrite(t *testing.T) {
 }
 
 func TestUnrecoverableErrorRead(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 
 	queueSize := 1
@@ -407,14 +408,14 @@ func TestUnrecoverableErrorRead(t *testing.T) {
 	if !ok {
 		t.Errorf("Expected UnrecoverableError error")
 	}
-	if diff := test.Diff(expErr, err.error); diff != "" {
+	if diff := atest.Diff(expErr, err.error); diff != "" {
 		t.Errorf("Expected: %s\nReceived: %s\nDiff:%s",
 			expErr, err.error, diff)
 	}
 }
 
 func TestUnexpectedSendError(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 
 	queueSize := 1
@@ -440,7 +441,7 @@ func TestUnexpectedSendError(t *testing.T) {
 	c.QueueRPC(mockCall)
 	r := <-result
 	err = fmt.Errorf("failed to convert RPC: %v", err)
-	if diff := test.Diff(err, r.Error); diff != "" {
+	if diff := atest.Diff(err, r.Error); diff != "" {
 		t.Errorf("Expected: %s\nReceived: %s\nDiff:%s",
 			err, r.Error, diff)
 	}
@@ -453,7 +454,7 @@ func TestUnexpectedSendError(t *testing.T) {
 }
 
 func TestSendBatch(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 	queueSize := 1
 	flushInterval := 10 * time.Millisecond
@@ -505,7 +506,7 @@ func TestSendBatch(t *testing.T) {
 }
 
 func TestFlushInterval(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 	queueSize := 100000
 	flushInterval := 30 * time.Millisecond
@@ -557,7 +558,7 @@ func TestFlushInterval(t *testing.T) {
 }
 
 func TestRPCContext(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 	queueSize := 10
 	flushInterval := 1000 * time.Second
@@ -616,7 +617,7 @@ func TestRPCContext(t *testing.T) {
 }
 
 func BenchmarkSendBatchMemory(b *testing.B) {
-	ctrl := gomock.NewController(b)
+	ctrl := test.NewController(b)
 	defer ctrl.Finish()
 	mockConn := mock.NewMockConn(ctrl)
 	c := &client{
