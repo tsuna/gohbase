@@ -52,6 +52,16 @@ var (
 		"org.apache.hadoop.hbase.exceptions.RegionMovedException":   struct{}{},
 		"org.apache.hadoop.hbase.exceptions.RegionOpeningException": struct{}{},
 	}
+
+	// javaUnrecoverableExceptions is a map where all Java exceptions that signify
+	// the RPC should be sent again are listed (as keys). If a Java exception
+	// listed here is returned by HBase, the RegionClient will be closed and a new
+	// one should be established.
+	javaUnrecoverableExceptions = map[string]struct{}{
+		"org.apache.hadoop.hbase.regionserver.RegionServerAbortedException": struct{}{},
+		"org.apache.hadoop.hbase.regionserver.RegionServerStoppedException": struct{}{},
+		"org.apache.hadoop.hbase.regionserver.ServerNotRunningYetException": struct{}{},
+	}
 )
 
 const (
@@ -368,6 +378,9 @@ func (c *client) receive() error {
 		if _, ok := javaRetryableExceptions[javaClass]; ok {
 			// This is a recoverable error. The client should retry.
 			err = RetryableError{err}
+		} else if _, ok := javaUnrecoverableExceptions[javaClass]; ok {
+			// This is unrecoverable, close the client.
+			return UnrecoverableError{err}
 		}
 	}
 	rpc.ResultChan() <- hrpc.RPCResult{Msg: response, Error: err}
