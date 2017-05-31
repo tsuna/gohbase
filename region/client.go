@@ -392,10 +392,7 @@ func (c *client) write(buf []byte) error {
 // Tries to read enough data to fully fill up the given buffer.
 func (c *client) readFully(buf []byte) error {
 	_, err := io.ReadFull(c.conn, buf)
-	if err != nil {
-		return fmt.Errorf("failed to read: %s", err)
-	}
-	return nil
+	return err
 }
 
 // sendHello sends the "hello" message needed when opening a new connection.
