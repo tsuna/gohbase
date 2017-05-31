@@ -32,7 +32,7 @@ func TestErrors(t *testing.T) {
 func TestWrite(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockConn := mock.NewMockReadWriteCloser(ctrl)
+	mockConn := mock.NewMockConn(ctrl)
 	c := &client{
 		conn: mockConn,
 	}
@@ -63,7 +63,7 @@ func TestWrite(t *testing.T) {
 func TestSendHello(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockConn := mock.NewMockReadWriteCloser(ctrl)
+	mockConn := mock.NewMockConn(ctrl)
 	c := &client{
 		conn:          mockConn,
 		effectiveUser: "root",
@@ -101,7 +101,7 @@ func TestSendHello(t *testing.T) {
 func TestFail(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockConn := mock.NewMockReadWriteCloser(ctrl)
+	mockConn := mock.NewMockConn(ctrl)
 	c := &client{
 		conn: mockConn,
 		done: make(chan struct{}),
@@ -167,7 +167,7 @@ func TestAwaitingRPCsFail(t *testing.T) {
 
 	queueSize := 100
 	flushInterval := 1000 * time.Second
-	mockConn := mock.NewMockReadWriteCloser(ctrl)
+	mockConn := mock.NewMockConn(ctrl)
 	mockConn.EXPECT().Close().Times(1)
 	c := &client{
 		conn:          mockConn,
@@ -237,7 +237,7 @@ func TestQueueRPC(t *testing.T) {
 
 	queueSize := 30
 	flushInterval := 20 * time.Millisecond
-	mockConn := mock.NewMockReadWriteCloser(ctrl)
+	mockConn := mock.NewMockConn(ctrl)
 	c := &client{
 		conn:          mockConn,
 		rpcs:          make(chan hrpc.Call),
@@ -328,7 +328,7 @@ func TestUnrecoverableErrorWrite(t *testing.T) {
 
 	queueSize := 1
 	flushInterval := 10 * time.Millisecond
-	mockConn := mock.NewMockReadWriteCloser(ctrl)
+	mockConn := mock.NewMockConn(ctrl)
 	c := &client{
 		conn:          mockConn,
 		rpcs:          make(chan hrpc.Call),
@@ -372,7 +372,7 @@ func TestUnrecoverableErrorRead(t *testing.T) {
 
 	queueSize := 1
 	flushInterval := 10 * time.Millisecond
-	mockConn := mock.NewMockReadWriteCloser(ctrl)
+	mockConn := mock.NewMockConn(ctrl)
 	c := &client{
 		conn:          mockConn,
 		rpcs:          make(chan hrpc.Call),
@@ -419,7 +419,7 @@ func TestUnexpectedSendError(t *testing.T) {
 
 	queueSize := 1
 	flushInterval := 10 * time.Millisecond
-	mockConn := mock.NewMockReadWriteCloser(ctrl)
+	mockConn := mock.NewMockConn(ctrl)
 	c := &client{
 		conn:          mockConn,
 		rpcs:          make(chan hrpc.Call),
@@ -457,7 +457,7 @@ func TestSendBatch(t *testing.T) {
 	defer ctrl.Finish()
 	queueSize := 1
 	flushInterval := 10 * time.Millisecond
-	mockConn := mock.NewMockReadWriteCloser(ctrl)
+	mockConn := mock.NewMockConn(ctrl)
 	c := &client{
 		conn:          mockConn,
 		rpcs:          make(chan hrpc.Call),
@@ -509,7 +509,7 @@ func TestFlushInterval(t *testing.T) {
 	defer ctrl.Finish()
 	queueSize := 100000
 	flushInterval := 30 * time.Millisecond
-	mockConn := mock.NewMockReadWriteCloser(ctrl)
+	mockConn := mock.NewMockConn(ctrl)
 	c := &client{
 		conn:          mockConn,
 		rpcs:          make(chan hrpc.Call),
@@ -561,7 +561,7 @@ func TestRPCContext(t *testing.T) {
 	defer ctrl.Finish()
 	queueSize := 10
 	flushInterval := 1000 * time.Second
-	mockConn := mock.NewMockReadWriteCloser(ctrl)
+	mockConn := mock.NewMockConn(ctrl)
 	mockConn.EXPECT().Close()
 	c := &client{
 		conn:          mockConn,
@@ -618,7 +618,7 @@ func TestRPCContext(t *testing.T) {
 func BenchmarkSendBatchMemory(b *testing.B) {
 	ctrl := gomock.NewController(b)
 	defer ctrl.Finish()
-	mockConn := mock.NewMockReadWriteCloser(ctrl)
+	mockConn := mock.NewMockConn(ctrl)
 	c := &client{
 		conn: mockConn,
 		rpcs: make(chan hrpc.Call),

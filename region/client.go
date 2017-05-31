@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"sync"
 	"time"
 
@@ -115,7 +116,7 @@ func (e RetryableError) Error() string {
 
 // client manages a connection to a RegionServer.
 type client struct {
-	conn io.ReadWriteCloser
+	conn net.Conn
 
 	// Hostname or IP address of the RegionServer.
 	host string
