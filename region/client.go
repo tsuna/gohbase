@@ -68,6 +68,9 @@ const (
 	// MasterClient is a ClientType that means this client will talk to the
 	// master server
 	MasterClient = ClientType("MasterService")
+
+	// readTimeout is the maximum amount of time to wait for regionserver reply
+	readTimeout = 30 * time.Second
 )
 
 var bufferPool = sync.Pool{
@@ -133,8 +136,12 @@ type client struct {
 
 	// sent contains the mapping of sent call IDs to RPC calls, so that when
 	// a response is received it can be tied to the correct RPC
-	sent  map[uint32]hrpc.Call
 	sentM sync.Mutex // protects sent
+	sent  map[uint32]hrpc.Call
+
+	// inFlight is number of rpcs sent to regionserver awaiting response
+	inFlightM sync.Mutex // protects inFlight and SetReadDeadline
+	inFlight  uint32
 
 	rpcQueueSize  int
 	flushInterval time.Duration
@@ -179,6 +186,25 @@ func (c *client) Port() uint16 {
 // String returns a string represintation of the current region client
 func (c *client) String() string {
 	return fmt.Sprintf("RegionClient{Host: %s, Port: %d}", c.host, c.port)
+}
+
+func (c *client) inFlightUp() {
+	c.inFlightM.Lock()
+	c.inFlight++
+	// we expect that at least the last request can be completed within readTimeout
+	c.conn.SetReadDeadline(time.Now().Add(readTimeout))
+	c.inFlightM.Unlock()
+}
+
+func (c *client) inFlightDown() {
+	c.inFlightM.Lock()
+	c.inFlight--
+	// reset read timeout if we are not waiting for any responses
+	// in order to prevent from closing this client if there are no request
+	if c.inFlight == 0 {
+		c.conn.SetReadDeadline(time.Time{})
+	}
+	c.inFlightM.Unlock()
 }
 
 func (c *client) fail(err error) {
@@ -352,11 +378,14 @@ func (c *client) receive() error {
 		return fmt.Errorf("got a response with an unexpected call ID: %d", callID)
 	}
 
+	c.inFlightDown()
+
 	// Here we know for sure that we got a response for rpc we asked
 	var response proto.Message
 	if header.Exception == nil {
 		response = rpc.NewResponse()
 		if err = buf.DecodeMessage(response); err != nil {
+			// TODO: consider returning this error to client
 			return fmt.Errorf("failed to decode the response: %s", err)
 		}
 		var cellsLen uint32
@@ -366,6 +395,7 @@ func (c *client) receive() error {
 		if d, ok := rpc.(canDeserializeCellBlocks); cellsLen > 0 && ok {
 			if err = d.DeserializeCellBlocks(
 				response, bytes.NewBuffer(buf.Bytes()[size-cellsLen:]), cellsLen); err != nil {
+				// TODO: consider returning this error to client
 				return UnrecoverableError{err}
 			}
 		}
@@ -453,5 +483,6 @@ func (c *client) send(rpc *call) error {
 	if err = c.write(b); err != nil {
 		return UnrecoverableError{err}
 	}
+	c.inFlightUp()
 	return nil
 }
