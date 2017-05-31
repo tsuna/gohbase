@@ -465,39 +465,49 @@ func TestMultiplePutsGetsSequentially(t *testing.T) {
 }
 
 func TestMultiplePutsGetsParallel(t *testing.T) {
-	const num_ops = 1000
-	keyPrefix := "row3.5"
-	headers := map[string][]string{"cf": nil}
 	c := gohbase.NewClient(*host)
 	defer c.Close()
+
+	const n = 1000
 	var wg sync.WaitGroup
-	for i := 0; i < num_ops; i++ {
+	for i := 0; i < n; i++ {
+		key := fmt.Sprintf("%s_%d", t.Name(), i)
 		wg.Add(1)
-		go func(client gohbase.Client, key string) {
-			defer wg.Done()
-			err := insertKeyValue(client, key, "cf", []byte(key))
-			if err != nil {
-				t.Errorf("(Parallel) Put returned an error: %v", err)
+		go func() {
+			if err := insertKeyValue(c, key, "cf", []byte(key)); err != nil {
+				t.Error(key, err)
 			}
-		}(c, keyPrefix+fmt.Sprintf("%d", i))
+			wg.Done()
+		}()
 	}
 	wg.Wait()
+
 	// All puts are complete. Now do the same for gets.
-	for i := num_ops - 1; i >= 0; i-- {
+	headers := map[string][]string{"cf": []string{"a"}}
+	for i := n - 1; i >= 0; i-- {
+		key := fmt.Sprintf("%s_%d", t.Name(), i)
 		wg.Add(1)
-		go func(client gohbase.Client, key string) {
+		go func() {
 			defer wg.Done()
 			get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
+			if err != nil {
+				t.Error(key, err)
+				return
+			}
 			rsp, err := c.Get(get)
 			if err != nil {
-				t.Errorf("(Parallel) Get returned an error: %v", err)
-			} else {
-				rsp_value := rsp.Cells[0].Value
-				if !bytes.Equal(rsp_value, []byte(key)) {
-					t.Errorf("Get returned an incorrect result.")
-				}
+				t.Error(key, err)
+				return
 			}
-		}(c, keyPrefix+fmt.Sprintf("%d", i))
+			if len(rsp.Cells) == 0 {
+				t.Error(key, " got zero cells")
+				return
+			}
+			rsp_value := rsp.Cells[0].Value
+			if !bytes.Equal(rsp_value, []byte(key)) {
+				t.Errorf("expected %q, got %q", key, rsp_value)
+			}
+		}()
 	}
 	wg.Wait()
 }
@@ -1135,6 +1145,9 @@ func insertKeyValue(c gohbase.Client, key, columnFamily string, value []byte,
 	values := map[string]map[string][]byte{columnFamily: map[string][]byte{}}
 	values[columnFamily]["a"] = value
 	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values, options...)
+	if err != nil {
+		return err
+	}
 	_, err = c.Put(putRequest)
 	return err
 }
