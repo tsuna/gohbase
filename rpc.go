@@ -381,8 +381,13 @@ func isRegionEstablished(rc hrpc.RegionClient, reg hrpc.RegionInfo) bool {
 	if err != nil {
 		panic(fmt.Sprintf("should not happen: %s", err))
 	}
-	_, ok := resGet.Error.(region.RetryableError)
-	return !ok
+
+	switch resGet.Error.(type) {
+	case region.RetryableError, region.UnrecoverableError:
+		return false
+	default:
+		return true
+	}
 }
 
 func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) {
