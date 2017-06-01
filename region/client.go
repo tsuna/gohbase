@@ -13,6 +13,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -143,6 +144,8 @@ type client struct {
 	inFlightM sync.Mutex // protects inFlight and SetReadDeadline
 	inFlight  uint32
 
+	id uint32
+
 	rpcQueueSize  int
 	flushInterval time.Duration
 
@@ -254,10 +257,17 @@ func (c *client) failAwaitingRPCs() {
 	}
 }
 
+func (c *client) registerRPC(rpc hrpc.Call) uint32 {
+	currID := atomic.AddUint32(&c.id, 1)
+	c.sentM.Lock()
+	c.sent[currID] = rpc
+	c.sentM.Unlock()
+	return currID
+}
+
 func (c *client) processRPCs() {
 	batch := make([]*call, 0, c.rpcQueueSize)
 	ticker := time.NewTicker(c.flushInterval)
-	var currID uint32
 	defer ticker.Stop()
 	for {
 		select {
@@ -273,11 +283,7 @@ func (c *client) processRPCs() {
 		case <-ticker.C:
 			batch = c.sendBatch(batch)
 		case rpc := <-c.rpcs:
-			currID++
-			// track the rpc
-			c.sentM.Lock()
-			c.sent[currID] = rpc
-			c.sentM.Unlock()
+			currID := c.registerRPC(rpc)
 			// associate with id and append
 			batch = append(batch, &call{
 				id:   currID,
@@ -303,7 +309,7 @@ func (c *client) sendBatch(rpcs []*call) []*call {
 			// request. The function that placed the RPC in our queue should
 			// stop waiting for a result and return an error.
 		default:
-			err := c.send(rpc)
+			err := c.send(rpc.id, rpc)
 			if _, ok := err.(UnrecoverableError); ok {
 				c.fail(err)
 				return nil
@@ -451,7 +457,7 @@ func (c *client) sendHello(ctype ClientType) error {
 
 // send sends an RPC out to the wire.
 // Returns the response (for now, as the call is synchronous).
-func (c *client) send(rpc *call) error {
+func (c *client) send(id uint32, rpc hrpc.Call) error {
 	request, err := rpc.ToProto()
 	if err != nil {
 		return fmt.Errorf("failed to convert RPC: %s", err)
@@ -464,7 +470,7 @@ func (c *client) send(rpc *call) error {
 	buf.Reset()
 
 	header := &pb.RequestHeader{
-		CallId:       &rpc.id,
+		CallId:       &id,
 		MethodName:   proto.String(rpc.Name()),
 		RequestParam: proto.Bool(true),
 	}
