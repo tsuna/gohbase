@@ -128,9 +128,8 @@ type client struct {
 	// Port of the RegionServer.
 	port uint16
 
-	// err is set once a write or read fails.
-	err  error
-	errM sync.RWMutex // protects err
+	// once used for concurrent calls to fail
+	once sync.Once
 
 	rpcs chan hrpc.Call
 	done chan struct{}
@@ -211,34 +210,25 @@ func (c *client) inFlightDown() {
 }
 
 func (c *client) fail(err error) {
-	c.errM.Lock()
-	if c.err != nil {
-		c.errM.Unlock()
-		return
-	}
-	c.err = err
-	c.errM.Unlock()
+	c.once.Do(func() {
+		log.WithFields(log.Fields{
+			"client": c,
+			"err":    err,
+		}).Error("error occured, closing region client")
 
-	log.WithFields(log.Fields{
-		"client": c,
-		"err":    err,
-	}).Error("error occured, closing region client")
+		// we don't close c.rpcs channel to make it block in select of QueueRPC
+		// and avoid dealing with synchronization of closing it while someone
+		// might be sending to it. Go's GC will take care of it.
 
-	// we don't close c.rpcs channel to make it block in select of QueueRPC
-	// and avoid dealing with synchronization of closing it while someone
-	// might be sending to it. Go's GC will take care of it.
-
-	// tell goroutines to stop
-	close(c.done)
-	// we close connection to the regionserver,
-	// to let it know that we can't receive anymore
-	c.conn.Close()
+		// tell goroutines to stop
+		close(c.done)
+		// we close connection to the regionserver,
+		// to let it know that we can't receive anymore
+		c.conn.Close()
+	})
 }
 
 func (c *client) failAwaitingRPCs() {
-	c.errM.Lock()
-	res := hrpc.RPCResult{Error: c.err}
-	c.errM.Unlock()
 	// channel is closed, clean up awaiting rpcs
 	c.sentM.Lock()
 	sent := c.sent
@@ -247,13 +237,12 @@ func (c *client) failAwaitingRPCs() {
 
 	log.WithFields(log.Fields{
 		"client": c,
-		"err":    res.Error,
 		"count":  len(sent),
 	}).Debug("failing awaiting RPCs")
 
 	// send error to awaiting rpcs
 	for _, rpc := range sent {
-		rpc.ResultChan() <- res
+		rpc.ResultChan() <- hrpc.RPCResult{Error: ErrClientDead}
 	}
 }
 

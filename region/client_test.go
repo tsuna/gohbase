@@ -137,11 +137,6 @@ func TestFail(t *testing.T) {
 			t.Error("expected done to be closed")
 		}
 	}
-
-	if diff := atest.Diff(expectedErr, c.err); diff != "" {
-		t.Errorf("Expected: %#v\nReceived: %#v\nDiff:%s",
-			expectedErr, c.err, diff)
-	}
 }
 
 type rpcMatcher struct {
@@ -358,13 +353,9 @@ func TestUnrecoverableErrorWrite(t *testing.T) {
 	go c.QueueRPC(mockCall)
 	c.processRPCs()
 	r := <-result
-	err, ok := r.Error.(UnrecoverableError)
-	if !ok {
-		t.Errorf("Expected UnrecoverableError error")
-	}
-	if diff := atest.Diff(expErr, err.error); diff != "" {
+	if diff := atest.Diff(ErrClientDead.Error(), r.Error.Error()); diff != "" {
 		t.Errorf("Expected: %s\nReceived: %s\nDiff:%s",
-			expErr, err.error, diff)
+			expErr, r.Error, diff)
 	}
 	if len(c.sent) != 0 {
 		t.Errorf("Expected all awaiting rpcs to be processed, %d left", len(c.sent))
@@ -387,11 +378,10 @@ func TestUnrecoverableErrorRead(t *testing.T) {
 		flushInterval: flushInterval,
 	}
 	// define rpcs behavior
-	expErr := errors.New("read failure")
 	mockCall := mock.NewMockCall(ctrl)
 	result := make(chan hrpc.RPCResult, 1)
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
-	mockConn.EXPECT().Read([]byte{0, 0, 0, 0}).Return(0, expErr)
+	mockConn.EXPECT().Read([]byte{0, 0, 0, 0}).Return(0, errors.New("read failure"))
 	mockConn.EXPECT().Close()
 
 	// pretend we already unqueued and sent the rpc
@@ -408,13 +398,9 @@ func TestUnrecoverableErrorRead(t *testing.T) {
 		t.Errorf("Expected all awaiting rpcs to be processed, %d left", len(c.sent))
 	}
 	r := <-result
-	err, ok := r.Error.(UnrecoverableError)
-	if !ok {
-		t.Errorf("Expected UnrecoverableError error")
-	}
-	if diff := atest.Diff(expErr, err.error); diff != "" {
+	if diff := atest.Diff(ErrClientDead.Error(), r.Error.Error()); diff != "" {
 		t.Errorf("Expected: %s\nReceived: %s\nDiff:%s",
-			expErr, err.error, diff)
+			ErrClientDead, r.Error, diff)
 	}
 }
 
