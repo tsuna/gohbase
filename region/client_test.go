@@ -159,7 +159,7 @@ func newRPCMatcher(payload []byte) gomock.Matcher {
 	return rpcMatcher{payload: payload}
 }
 
-func TestAwaitingRPCsFail(t *testing.T) {
+func TestFailSentRPCs(t *testing.T) {
 	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 
@@ -167,26 +167,30 @@ func TestAwaitingRPCsFail(t *testing.T) {
 	flushInterval := 1000 * time.Second
 	mockConn := mock.NewMockConn(ctrl)
 	mockConn.EXPECT().SetReadDeadline(gomock.Any()).AnyTimes()
+	mockConn.EXPECT().Write(gomock.Any()).AnyTimes()
 	mockConn.EXPECT().Close().Times(1)
 	c := &client{
 		conn:          mockConn,
 		rpcs:          make(chan hrpc.Call),
 		done:          make(chan struct{}),
 		sent:          make(map[uint32]hrpc.Call),
-		rpcQueueSize:  queueSize,
+		rpcQueueSize:  queueSize / 2,
 		flushInterval: flushInterval,
 	}
 
 	// define rpcs behaviour
 	var wgWrites sync.WaitGroup
 	// we send less calls then queueSize so that sendBatch isn't triggered
-	calls := make([]hrpc.Call, queueSize-1)
+	calls := make([]hrpc.Call, queueSize)
 	ctx := context.Background()
 	for i := range calls {
 		wgWrites.Add(1)
 		mockCall := mock.NewMockCall(ctrl)
 		mockCall.EXPECT().ResultChan().Return(make(chan hrpc.RPCResult, 1)).Times(1)
-		mockCall.EXPECT().Context().Return(ctx).Times(1)
+		mockCall.EXPECT().Context().Return(ctx).Times(2) // one at QueueRPC and one in trySend
+		// might not be called if failed
+		mockCall.EXPECT().ToProto().Return(&pb.GetRequest{}, nil).MaxTimes(1)
+		mockCall.EXPECT().Name().Return("Get").MaxTimes(1)
 		calls[i] = mockCall
 	}
 
@@ -269,9 +273,7 @@ func TestQueueRPC(t *testing.T) {
 
 		// we expect that it eventually writes to connection
 		mockConn.EXPECT().Write(newRPCMatcher(payload)).Times(1).Return(14+len(payload), nil).Do(
-			func(buf []byte) {
-				wgWrites.Done()
-			})
+			func(buf []byte) { wgWrites.Done() })
 	}
 
 	// queue calls in parallel
@@ -281,16 +283,12 @@ func TestQueueRPC(t *testing.T) {
 		}(call)
 	}
 
-	// wait till all calls complete
-	done := make(chan struct{})
-	go func() {
-		wgWrites.Wait()
-		close(done)
-	}()
-	select {
-	case <-time.After(2 * time.Second):
-		t.Fatalf("rpcs hasn't been written")
-	case <-done:
+	// wait till all writes complete
+	wgWrites.Wait()
+
+	// check sent map
+	if len(c.sent) != len(calls) {
+		t.Errorf("expected len(c.sent) be %d, got %d", len(calls), len(c.sent))
 	}
 
 	var wg sync.WaitGroup
@@ -460,7 +458,7 @@ func TestSendBatch(t *testing.T) {
 	mockConn.EXPECT().Close()
 	mockConn.EXPECT().SetReadDeadline(gomock.Any()).Times(3)
 
-	batch := make([]*call, 9)
+	batch := make([]hrpc.Call, 9)
 	ctx := context.Background()
 	canceledCtx, cancel := context.WithCancel(ctx)
 	cancel()
@@ -469,27 +467,28 @@ func TestSendBatch(t *testing.T) {
 		if i < 3 {
 			// we expect that these rpc are going to be ignored
 			mockCall.EXPECT().Context().Return(canceledCtx).Times(1)
-		} else if i < 6 {
-			// we expect rpcs 3-5 to be written
-			mockCall.EXPECT().Name().Return("lol").Times(1)
-			p, payload := mockRPCProto(fmt.Sprintf("rpc_%d", i))
-			mockCall.EXPECT().ToProto().Return(p, nil).Times(1)
+		} else {
 			mockCall.EXPECT().Context().Return(ctx).Times(1)
-			// we expect that it eventually writes to connection
-			i := i
-			mockConn.EXPECT().Write(newRPCMatcher(payload)).Times(1).Return(
-				14+len(payload), nil).Do(func(buf []byte) {
-				if i == 5 {
-					// we close on 6th rpc to check if sendBatch stop appropriately
-					c.Close()
-				}
-			})
-		} else if i == 6 {
-			// last loop before return
-			mockCall.EXPECT().Context().Return(ctx).Times(1)
+			mockCall.EXPECT().ResultChan().Return(make(chan hrpc.RPCResult, 1)).Times(1)
+			if i < 6 {
+				// we expect rpcs 3-5 to be written
+				mockCall.EXPECT().Name().Return("lol").Times(1)
+				p, payload := mockRPCProto(fmt.Sprintf("rpc_%d", i))
+				mockCall.EXPECT().ToProto().Return(p, nil).Times(1)
+				// we expect that it eventually writes to connection
+				i := i
+				mockConn.EXPECT().Write(newRPCMatcher(payload)).Times(1).Return(
+					14+len(payload), nil).Do(func(buf []byte) {
+					if i == 5 {
+						// we close on 6th rpc to check if sendBatch stop appropriately
+						c.Close()
+					}
+				})
+			}
+			// the rest should just be returned with error
 		}
-		// we expect the rest to be not even processed
-		batch[i] = &call{id: uint32(i), Call: mockCall}
+
+		batch[i] = mockCall
 	}
 	rpcs := c.sendBatch(batch)
 	if c.inFlight != 3 {

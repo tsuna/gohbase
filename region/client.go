@@ -151,11 +151,6 @@ type client struct {
 	effectiveUser string
 }
 
-type call struct {
-	id uint32
-	hrpc.Call
-}
-
 // QueueRPC will add an rpc call to the queue for processing by the writer
 // goroutine
 func (c *client) QueueRPC(rpc hrpc.Call) {
@@ -222,13 +217,15 @@ func (c *client) fail(err error) {
 
 		// tell goroutines to stop
 		close(c.done)
+
+		c.failSentRPCs()
 		// we close connection to the regionserver,
 		// to let it know that we can't receive anymore
 		c.conn.Close()
 	})
 }
 
-func (c *client) failAwaitingRPCs() {
+func (c *client) failSentRPCs() {
 	// channel is closed, clean up awaiting rpcs
 	c.sentM.Lock()
 	sent := c.sent
@@ -254,30 +251,26 @@ func (c *client) registerRPC(rpc hrpc.Call) uint32 {
 	return currID
 }
 
+func (c *client) unregisterRPC(id uint32) hrpc.Call {
+	c.sentM.Lock()
+	rpc := c.sent[id]
+	delete(c.sent, id)
+	c.sentM.Unlock()
+	return rpc
+}
+
 func (c *client) processRPCs() {
-	batch := make([]*call, 0, c.rpcQueueSize)
+	batch := make([]hrpc.Call, 0, c.rpcQueueSize)
 	ticker := time.NewTicker(c.flushInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-c.done:
-			// we cleanup awaiting rpcs here because otherwise we might
-			// end up with unprocessed: Since go's select is randomized,
-			// in case c.rpcs <- rpc in QeueueRPC is chosen over <-c.done,
-			// here rpc := <-c.rpcs can still be chosen over <-c.done as
-			// well resulting in an extra rpc we need to fail after an
-			// error has been set
-			c.failAwaitingRPCs()
 			return
 		case <-ticker.C:
 			batch = c.sendBatch(batch)
 		case rpc := <-c.rpcs:
-			currID := c.registerRPC(rpc)
-			// associate with id and append
-			batch = append(batch, &call{
-				id:   currID,
-				Call: rpc,
-			})
+			batch = append(batch, rpc)
 			if len(batch) == c.rpcQueueSize {
 				batch = c.sendBatch(batch)
 			}
@@ -285,30 +278,39 @@ func (c *client) processRPCs() {
 	}
 }
 
-func (c *client) sendBatch(rpcs []*call) []*call {
-	for i, rpc := range rpcs {
-		select {
-		case <-c.done:
-			// An unrecoverable error has occured,
-			// region client has been stopped,
-			// don't send rpcs
-			return nil
-		case <-rpc.Context().Done():
-			// If the deadline has been exceeded, don't bother sending the
-			// request. The function that placed the RPC in our queue should
-			// stop waiting for a result and return an error.
-		default:
-			err := c.send(rpc.id, rpc)
+func (c *client) trySend(rpc hrpc.Call) error {
+	select {
+	case <-c.done:
+		// An unrecoverable error has occured,
+		// region client has been stopped,
+		// don't send rpcs
+		return ErrClientDead
+	case <-rpc.Context().Done():
+		// If the deadline has been exceeded, don't bother sending the
+		// request. The function that placed the RPC in our queue should
+		// stop waiting for a result and return an error.
+		return nil
+	default:
+		id := c.registerRPC(rpc)
+
+		if err := c.send(id, rpc); err != nil {
 			if _, ok := err.(UnrecoverableError); ok {
 				c.fail(err)
-				return nil
-			} else if err != nil {
-				// Unexpected error, return to caller
-				c.sentM.Lock()
-				delete(c.sent, rpc.id)
-				c.sentM.Unlock()
-				rpc.ResultChan() <- hrpc.RPCResult{Error: err}
 			}
+			if r := c.unregisterRPC(id); r != nil {
+				// we are the ones to unregister the rpc,
+				// return err to notify client of it
+				return err
+			}
+		}
+		return nil
+	}
+}
+
+func (c *client) sendBatch(rpcs []hrpc.Call) []hrpc.Call {
+	for i, rpc := range rpcs {
+		if err := c.trySend(rpc); err != nil {
+			rpc.ResultChan() <- hrpc.RPCResult{Error: err}
 		}
 		// set to nil so that GC isn't blocked to clean up rpc
 		rpcs[i] = nil
@@ -364,15 +366,10 @@ func (c *client) receive() error {
 	}
 
 	callID := *header.CallId
-	c.sentM.Lock()
-	rpc, ok := c.sent[callID]
-	delete(c.sent, callID)
-	c.sentM.Unlock()
-
-	if !ok {
+	rpc := c.unregisterRPC(callID)
+	if rpc == nil {
 		return fmt.Errorf("got a response with an unexpected call ID: %d", callID)
 	}
-
 	c.inFlightDown()
 
 	// Here we know for sure that we got a response for rpc we asked
