@@ -7,7 +7,7 @@ package hrpc
 
 import (
 	"context"
-	"io"
+	"fmt"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/filter"
@@ -157,17 +157,20 @@ func (g *Get) NewResponse() proto.Message {
 }
 
 // DeserializeCellBlocks deserializes get result from cell blocks
-func (g *Get) DeserializeCellBlocks(m proto.Message, r io.Reader, cellsLen uint32) error {
-	getResp := m.(*pb.GetResponse)
-	if getResp.Result == nil {
+func (g *Get) DeserializeCellBlocks(m proto.Message, b []byte) error {
+	resp := m.(*pb.GetResponse)
+	if resp.Result == nil {
 		// TODO: is this possible?
 		return nil
 	}
-	cells, err := deserializeCellBlocks(r, cellsLen)
+	cells, read, err := deserializeCellBlocks(b, uint32(resp.Result.GetAssociatedCellCount()))
 	if err != nil {
 		return err
 	}
-	getResp.Result.Cell = append(getResp.Result.Cell, cells...)
+	if int(read) < len(b) {
+		return fmt.Errorf("short read: buffer len %d, read %d", len(b), read)
+	}
+	resp.Result.Cell = append(resp.Result.Cell, cells...)
 	return nil
 }
 

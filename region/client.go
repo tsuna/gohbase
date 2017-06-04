@@ -6,7 +6,6 @@
 package region
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -29,7 +28,7 @@ type ClientType string
 type canDeserializeCellBlocks interface {
 	// DeserializeCellBlocks populates passed protobuf message with results
 	// deserialized from the reader
-	DeserializeCellBlocks(proto.Message, io.Reader, uint32) error
+	DeserializeCellBlocks(proto.Message, []byte) error
 }
 
 var (
@@ -354,8 +353,7 @@ func (c *client) receive() error {
 	}
 
 	size := binary.BigEndian.Uint32(sz[:])
-	b := newBuffer(int(size))
-	defer freeBuffer(b)
+	b := make([]byte, size)
 
 	err = c.readFully(b)
 	if err != nil {
@@ -392,8 +390,7 @@ func (c *client) receive() error {
 			cellsLen = header.CellBlockMeta.GetLength()
 		}
 		if d, ok := rpc.(canDeserializeCellBlocks); cellsLen > 0 && ok {
-			if err = d.DeserializeCellBlocks(
-				response, bytes.NewBuffer(buf.Bytes()[size-cellsLen:]), cellsLen); err != nil {
+			if err = d.DeserializeCellBlocks(response, buf.Bytes()[size-cellsLen:]); err != nil {
 				// TODO: consider returning this error to client
 				return UnrecoverableError{err}
 			}

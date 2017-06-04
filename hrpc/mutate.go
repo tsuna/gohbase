@@ -11,7 +11,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"reflect"
 	"strings"
 	"time"
@@ -544,15 +543,18 @@ func (m *Mutate) NewResponse() proto.Message {
 }
 
 // DeserializeCellBlocks deserializes mutate result from cell blocks
-func (m *Mutate) DeserializeCellBlocks(pm proto.Message, r io.Reader, cellsLen uint32) error {
+func (m *Mutate) DeserializeCellBlocks(pm proto.Message, b []byte) error {
 	resp := pm.(*pb.MutateResponse)
 	if resp.Result == nil {
 		// TODO: is this possible?
 		return nil
 	}
-	cells, err := deserializeCellBlocks(r, cellsLen)
+	cells, read, err := deserializeCellBlocks(b, uint32(resp.Result.GetAssociatedCellCount()))
 	if err != nil {
 		return err
+	}
+	if int(read) < len(b) {
+		return fmt.Errorf("short read: buffer len %d, read %d", len(b), read)
 	}
 	resp.Result.Cell = append(resp.Result.Cell, cells...)
 	return nil

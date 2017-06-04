@@ -9,7 +9,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 
 	"github.com/golang/protobuf/proto"
@@ -275,25 +274,24 @@ func (s *Scan) NewResponse() proto.Message {
 }
 
 // DeserializeCellBlocks deserializes scan results from cell blocks
-func (s *Scan) DeserializeCellBlocks(m proto.Message, r io.Reader, cellsLen uint32) error {
-	if cellsLen == 0 {
-		// if no cell blocks, our job is done since protobuf took care of deserialization
-		return nil
-	}
-
-	cells, err := deserializeCellBlocks(r, cellsLen)
-	if err != nil {
-		return err
-	}
-
+func (s *Scan) DeserializeCellBlocks(m proto.Message, b []byte) error {
 	scanResp := m.(*pb.ScanResponse)
 	partials := scanResp.GetPartialFlagPerResult()
+	scanResp.Results = make([]*pb.Result, len(partials))
+	var readLen uint32
 	for i, numCells := range scanResp.GetCellsPerResult() {
-		scanResp.Results = append(scanResp.Results, &pb.Result{
-			Cell:    cells[:numCells],
+		cells, l, err := deserializeCellBlocks(b[readLen:], numCells)
+		if err != nil {
+			return err
+		}
+		scanResp.Results[i] = &pb.Result{
+			Cell:    cells,
 			Partial: proto.Bool(partials[i]),
-		})
-		cells = cells[numCells:]
+		}
+		readLen += l
+	}
+	if int(readLen) < len(b) {
+		return fmt.Errorf("short read: buffer len %d, read %d", len(b), readLen)
 	}
 	return nil
 }

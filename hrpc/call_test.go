@@ -6,7 +6,6 @@
 package hrpc
 
 import (
-	"bytes"
 	"errors"
 	"strconv"
 	"testing"
@@ -21,7 +20,7 @@ func TestCellFromCellBlock(t *testing.T) {
 		102, 97, 0, 0, 1, 92, 13, 97, 5, 32, 4, 72, 101, 108, 108, 111, 32, 109, 121, 32, 110,
 		97, 109, 101, 32, 105, 115, 32, 68, 111, 103, 46}
 
-	cell, n, err := cellFromCellBlock(bytes.NewBuffer(cellblock))
+	cell, n, err := cellFromCellBlock(cellblock)
 	if err != nil {
 		t.Error(err)
 	}
@@ -46,7 +45,7 @@ func TestCellFromCellBlock(t *testing.T) {
 	// test error cases
 	for i := range cellblock {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			cell, n, err := cellFromCellBlock(bytes.NewBuffer(cellblock[:i]))
+			cell, n, err := cellFromCellBlock(cellblock[:i])
 			if err == nil {
 				t.Error("expected error, got none")
 			}
@@ -63,7 +62,7 @@ func TestCellFromCellBlock(t *testing.T) {
 
 	expectedError := errors.New("HBase has lied about KeyValue length: expected 42, got 48")
 	cellblock[3] = 42
-	_, _, err = cellFromCellBlock(bytes.NewBuffer(cellblock))
+	_, _, err = cellFromCellBlock(cellblock)
 	if d := test.Diff(expectedError, err); len(d) != 0 {
 		t.Error(d)
 	}
@@ -77,9 +76,12 @@ func TestDeserializeCellblocks(t *testing.T) {
 		0, 26, 84, 101, 115, 116, 83, 99, 97, 110, 84, 105, 109, 101, 82, 97, 110, 103, 101, 86,
 		101, 114, 115, 105, 111, 110, 115, 50, 2, 99, 102, 97, 0, 0, 0, 0, 0, 0, 0, 52, 4, 49}
 
-	cells, err := deserializeCellBlocks(bytes.NewBuffer(cellblocks), uint32(len(cellblocks)))
+	cells, read, err := deserializeCellBlocks(cellblocks, 2)
 	if err != nil {
 		t.Error(err)
+	}
+	if int(read) != len(cellblocks) {
+		t.Errorf("invalid number of bytes read: expected %d, got %d", len(cellblocks), int(read))
 	}
 
 	expectedCells := []*pb.Cell{
@@ -106,8 +108,8 @@ func TestDeserializeCellblocks(t *testing.T) {
 	}
 
 	// test error cases
-	cells, err = deserializeCellBlocks(bytes.NewBuffer(cellblocks[:100]), uint32(len(cellblocks)))
-	expectedError := errors.New("failed to read timestamp: unexpected EOF")
+	cells, read, err = deserializeCellBlocks(cellblocks[:100], 2)
+	expectedError := errors.New("buffer is too small: expected 54, got 46")
 	if d := test.Diff(expectedError, err); len(d) != 0 {
 		t.Error(d)
 	}
@@ -115,10 +117,14 @@ func TestDeserializeCellblocks(t *testing.T) {
 		t.Error(d)
 	}
 
-	_, err = deserializeCellBlocks(bytes.NewBuffer(cellblocks), uint32(len(cellblocks))-1)
-	expectedError = errors.New(
-		"HBase has lied about the length of cell blocks: expected 107, read 108")
-	if d := test.Diff(expectedError, err); len(d) != 0 {
+	cells, read, err = deserializeCellBlocks(cellblocks, 1)
+	if err != nil {
+		t.Error(err)
+	}
+	if d := test.Diff(expectedCells[:1], cells); len(d) != 0 {
 		t.Error(d)
+	}
+	if int(read) != 54 {
+		t.Errorf("invalid number of bytes read: expected %d, got %d", 54, int(read))
 	}
 }

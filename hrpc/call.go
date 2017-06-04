@@ -10,7 +10,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"sync"
 	"time"
@@ -211,80 +210,50 @@ func MaxVersions(versions uint32) func(Call) error {
 type Cell pb.Cell
 
 // cellFromCellBlock deserializes a cell from a reader
-func cellFromCellBlock(r io.Reader) (*pb.Cell, uint32, error) {
-	var err error
-	var kvLen, rowKeyLen, valueLen, qualifierLen uint32
-	var keyLen uint16
-	var familyLen, cellType uint8
-
-	if err = binary.Read(r, binary.BigEndian, &kvLen); err != nil {
-		return nil, 0, fmt.Errorf("failed to read KeyValue length: %v", err)
+func cellFromCellBlock(b []byte) (*pb.Cell, uint32, error) {
+	if len(b) < 4 {
+		return nil, 0, fmt.Errorf(
+			"buffer is too small: expected %d, got %d", 4, len(b))
 	}
 
-	if err = binary.Read(r, binary.BigEndian, &rowKeyLen); err != nil {
-		return nil, 0, fmt.Errorf("failed to read cell length: %v", err)
+	kvLen := binary.BigEndian.Uint32(b[0:4])
+	if len(b) < int(kvLen)+4 {
+		return nil, 0, fmt.Errorf(
+			"buffer is too small: expected %d, got %d", int(kvLen)+4, len(b))
 	}
 
-	if err = binary.Read(r, binary.BigEndian, &valueLen); err != nil {
-		return nil, 0, fmt.Errorf("failed to read value length: %v", err)
-	}
+	rowKeyLen := binary.BigEndian.Uint32(b[4:8])
+	valueLen := binary.BigEndian.Uint32(b[8:12])
+	keyLen := binary.BigEndian.Uint16(b[12:14])
+	b = b[14:]
 
-	if err = binary.Read(r, binary.BigEndian, &keyLen); err != nil {
-		return nil, 0, fmt.Errorf("failed to read key length: %v", err)
-	}
+	key := b[:keyLen]
+	b = b[keyLen:]
 
-	key := make([]byte, keyLen)
-	if _, err = io.ReadFull(r, key); err != nil {
-		return nil, 0, fmt.Errorf("failed to read key: %v", err)
-	}
+	familyLen := uint8(b[0])
+	b = b[1:]
 
-	if err = binary.Read(r, binary.BigEndian, &familyLen); err != nil {
-		return nil, 0, fmt.Errorf("failed to read family length: %v", err)
-	}
+	family := b[:familyLen]
+	b = b[familyLen:]
 
-	family := make([]byte, familyLen)
-	if _, err = io.ReadFull(r, family); err != nil {
-		return nil, 0, fmt.Errorf("failed to read family: %v", err)
-	}
-	qualifierLen = rowKeyLen - uint32(keyLen) - uint32(familyLen) - 2 - 1 - 8 - 1
+	qualifierLen := rowKeyLen - uint32(keyLen) - uint32(familyLen) - 2 - 1 - 8 - 1
 	if 4 /*rowKeyLen*/ +4 /*valueLen*/ +2 /*keyLen*/ +
 		uint32(keyLen)+1 /*familyLen*/ +uint32(familyLen)+qualifierLen+
 		8 /*timestamp*/ +1 /*cellType*/ +valueLen != kvLen {
 		return nil, 0, fmt.Errorf("HBase has lied about KeyValue length: expected %d, got %d",
 			kvLen, 4+4+2+uint32(keyLen)+1+uint32(familyLen)+qualifierLen+8+1+valueLen)
 	}
+	qualifier := b[:qualifierLen]
+	b = b[qualifierLen:]
 
-	var qualifier []byte
-	if qualifierLen > 0 {
-		qualifier = make([]byte, qualifierLen)
-		if _, err = io.ReadFull(r, qualifier); err != nil {
-			return nil, 0, fmt.Errorf("failed to read qualifer: %v", err)
-		}
-	}
+	timestamp := binary.BigEndian.Uint64(b[:8])
+	b = b[8:]
 
-	var timestamp uint64
-	if err = binary.Read(r, binary.BigEndian, &timestamp); err != nil {
-		return nil, 0, fmt.Errorf("failed to read timestamp: %v", err)
-	}
+	cellType := uint8(b[0])
+	b = b[1:]
 
-	if err = binary.Read(r, binary.BigEndian, &cellType); err != nil {
-		return nil, 0, fmt.Errorf("failed to read cell type: %v", err)
-	}
+	value := b[:valueLen]
 
-	// check that cell type is legit
-	if _, ok := pb.CellType_name[int32(cellType)]; !ok {
-		return nil, 0, fmt.Errorf("unexpected CellType: %d", cellType)
-	}
-
-	var value []byte
-	if valueLen > 0 {
-		value = make([]byte, valueLen)
-		if _, err = io.ReadFull(r, value); err != nil {
-			return nil, 0, fmt.Errorf("failed to read value: %v", err)
-		}
-	}
-
-	// TODO: dedup row, family, qualifer
 	return &pb.Cell{
 		Row:       key,
 		Family:    family,
@@ -295,23 +264,18 @@ func cellFromCellBlock(r io.Reader) (*pb.Cell, uint32, error) {
 	}, kvLen + 4, nil
 }
 
-func deserializeCellBlocks(r io.Reader, cellsLen uint32) ([]*pb.Cell, error) {
-	var cells []*pb.Cell
+func deserializeCellBlocks(b []byte, cellsLen uint32) ([]*pb.Cell, uint32, error) {
+	cells := make([]*pb.Cell, cellsLen)
 	var readLen uint32
-	for readLen < cellsLen {
-		c, l, err := cellFromCellBlock(r)
+	for i := 0; i < int(cellsLen); i++ {
+		c, l, err := cellFromCellBlock(b[readLen:])
 		if err != nil {
-			return nil, err
+			return nil, readLen, err
 		}
-		cells = append(cells, c)
+		cells[i] = c
 		readLen += l
 	}
-	if readLen != cellsLen {
-		return nil, fmt.Errorf(
-			"HBase has lied about the length of cell blocks: expected %d, read %d",
-			cellsLen, readLen)
-	}
-	return cells, nil
+	return cells, readLen, nil
 }
 
 // Result holds a slice of Cells as well as miscellaneous information about the response.

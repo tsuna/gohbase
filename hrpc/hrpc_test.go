@@ -158,9 +158,12 @@ var cellblock = []byte{0, 0, 0, 48, 0, 0, 0, 19, 0, 0, 0, 21, 0, 4, 114, 111, 11
 
 func TestDeserializeCellBlocksGet(t *testing.T) {
 	// the first cell is already in protobuf
-	getResp := &pb.GetResponse{Result: &pb.Result{Cell: []*pb.Cell{expectedCells[0]}}}
+	getResp := &pb.GetResponse{Result: &pb.Result{
+		Cell:                []*pb.Cell{expectedCells[0]},
+		AssociatedCellCount: proto.Int32(1),
+	}}
 	g := &hrpc.Get{}
-	err := g.DeserializeCellBlocks(getResp, bytes.NewBuffer(cellblock), uint32(len(cellblock)))
+	err := g.DeserializeCellBlocks(getResp, cellblock)
 	if err != nil {
 		t.Error(err)
 	} else if d := test.Diff(expectedCells, getResp.Result.Cell); len(d) != 0 {
@@ -168,8 +171,10 @@ func TestDeserializeCellBlocksGet(t *testing.T) {
 	}
 
 	// test error case
-	getResp = &pb.GetResponse{Result: &pb.Result{}}
-	err = g.DeserializeCellBlocks(getResp, bytes.NewBuffer(cellblock[:10]), uint32(len(cellblock)))
+	getResp = &pb.GetResponse{Result: &pb.Result{
+		AssociatedCellCount: proto.Int32(1),
+	}}
+	err = g.DeserializeCellBlocks(getResp, cellblock[:10])
 	if err == nil {
 		t.Error("expected error, got none")
 	}
@@ -177,9 +182,12 @@ func TestDeserializeCellBlocksGet(t *testing.T) {
 
 func TestDeserializeCellblocksMutate(t *testing.T) {
 	// the first cell is already in protobuf
-	mResp := &pb.MutateResponse{Result: &pb.Result{Cell: []*pb.Cell{expectedCells[0]}}}
+	mResp := &pb.MutateResponse{Result: &pb.Result{
+		Cell:                []*pb.Cell{expectedCells[0]},
+		AssociatedCellCount: proto.Int32(1),
+	}}
 	m := &hrpc.Mutate{}
-	err := m.DeserializeCellBlocks(mResp, bytes.NewBuffer(cellblock), uint32(len(cellblock)))
+	err := m.DeserializeCellBlocks(mResp, cellblock)
 	if err != nil {
 		t.Error(err)
 	}
@@ -188,8 +196,11 @@ func TestDeserializeCellblocksMutate(t *testing.T) {
 	}
 
 	// test error case
-	mResp = &pb.MutateResponse{Result: &pb.Result{Cell: expectedCells[:1]}}
-	err = m.DeserializeCellBlocks(mResp, bytes.NewBuffer(cellblock[:10]), uint32(len(cellblock)))
+	mResp = &pb.MutateResponse{Result: &pb.Result{
+		Cell:                expectedCells[:1],
+		AssociatedCellCount: proto.Int32(1),
+	}}
+	err = m.DeserializeCellBlocks(mResp, cellblock[:10])
 	if err == nil {
 		t.Error("expected error, got none")
 	}
@@ -197,18 +208,6 @@ func TestDeserializeCellblocksMutate(t *testing.T) {
 
 func TestDeserializeCellBlocksScan(t *testing.T) {
 	expectedResults := []*pb.Result{
-		&pb.Result{
-			Cell: []*pb.Cell{
-				&pb.Cell{
-					Row:       []byte("row6"),
-					Family:    []byte("cf"),
-					Qualifier: []byte("yolo"),
-					Timestamp: proto.Uint64(1494873081120),
-					Value:     []byte("whatever"),
-					CellType:  pb.CellType_PUT.Enum(),
-				},
-			},
-		},
 		&pb.Result{
 			Cell: []*pb.Cell{
 				&pb.Cell{
@@ -255,13 +254,12 @@ func TestDeserializeCellBlocksScan(t *testing.T) {
 		97, 109, 101, 32, 105, 115, 32, 68, 111, 103, 46}
 
 	scanResp := &pb.ScanResponse{
-		// the first result is already in protobuf
-		Results:              []*pb.Result{expectedResults[0]},
+		Results:              []*pb.Result{},
 		PartialFlagPerResult: []bool{true, false},
 		CellsPerResult:       []uint32{2, 1},
 	}
 	s := &hrpc.Scan{}
-	err := s.DeserializeCellBlocks(scanResp, bytes.NewBuffer(cellblocks), uint32(len(cellblocks)))
+	err := s.DeserializeCellBlocks(scanResp, cellblocks)
 	if err != nil {
 		t.Error(err)
 	} else if d := test.Diff(expectedResults, scanResp.Results); len(d) != 0 {
@@ -270,12 +268,10 @@ func TestDeserializeCellBlocksScan(t *testing.T) {
 
 	// test error case
 	scanResp = &pb.ScanResponse{
-		// the first result is already in protobuf
 		PartialFlagPerResult: []bool{true, false},
 		CellsPerResult:       []uint32{2, 1},
 	}
-	err = s.DeserializeCellBlocks(scanResp, bytes.NewBuffer(cellblocks[:10]),
-		uint32(len(cellblocks)))
+	err = s.DeserializeCellBlocks(scanResp, cellblocks[:10])
 	if err == nil {
 		t.Error("expected error, got none")
 	}
