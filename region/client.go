@@ -151,15 +151,22 @@ type client struct {
 	effectiveUser string
 }
 
-// QueueRPC will add an rpc call to the queue for processing by the writer
-// goroutine
+// QueueRPC will add an rpc call to the queue for processing by the writer goroutine
 func (c *client) QueueRPC(rpc hrpc.Call) {
-	select {
-	case <-rpc.Context().Done():
-		// rpc timed out before being processed
-	case <-c.done:
-		rpc.ResultChan() <- hrpc.RPCResult{Error: ErrClientDead}
-	case c.rpcs <- rpc:
+	if _, ok := rpc.(*hrpc.Mutate); ok && c.rpcQueueSize > 1 {
+		// batch mutates
+		select {
+		case <-rpc.Context().Done():
+			// rpc timed out before being processed
+		case <-c.done:
+			rpc.ResultChan() <- hrpc.RPCResult{Error: ErrClientDead}
+		case c.rpcs <- rpc:
+		}
+	} else {
+		// send the rest of rpcs right away in the same goroutine
+		if err := c.trySend(rpc); err != nil {
+			rpc.ResultChan() <- hrpc.RPCResult{Error: err}
+		}
 	}
 }
 

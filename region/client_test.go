@@ -187,7 +187,7 @@ func TestFailSentRPCs(t *testing.T) {
 		wgWrites.Add(1)
 		mockCall := mock.NewMockCall(ctrl)
 		mockCall.EXPECT().ResultChan().Return(make(chan hrpc.RPCResult, 1)).Times(1)
-		mockCall.EXPECT().Context().Return(ctx).Times(2) // one at QueueRPC and one in trySend
+		mockCall.EXPECT().Context().Return(ctx).MaxTimes(1)
 		// might not be called if failed
 		mockCall.EXPECT().ToProto().Return(&pb.GetRequest{}, nil).MaxTimes(1)
 		mockCall.EXPECT().Name().Return("Get").MaxTimes(1)
@@ -264,10 +264,10 @@ func TestQueueRPC(t *testing.T) {
 	for i := range calls {
 		wgWrites.Add(1)
 		mockCall := mock.NewMockCall(ctrl)
-		mockCall.EXPECT().Name().Return("lol").Times(1)
+		mockCall.EXPECT().Name().Return("Get").Times(1)
 		p, payload := mockRPCProto(fmt.Sprintf("rpc_%d", i))
 		mockCall.EXPECT().ToProto().Return(p, nil).Times(1)
-		mockCall.EXPECT().Context().Return(ctx).Times(2)
+		mockCall.EXPECT().Context().Return(ctx).Times(1)
 		mockCall.EXPECT().ResultChan().Return(make(chan hrpc.RPCResult, 1)).Times(1)
 		calls[i] = mockCall
 
@@ -337,10 +337,10 @@ func TestUnrecoverableErrorWrite(t *testing.T) {
 	}
 	// define rpcs behaviour
 	mockCall := mock.NewMockCall(ctrl)
-	mockCall.EXPECT().Name().Return("lol").Times(1)
 	p, payload := mockRPCProto("rpc")
 	mockCall.EXPECT().ToProto().Return(p, nil).Times(1)
-	mockCall.EXPECT().Context().Return(context.Background()).Times(2)
+	mockCall.EXPECT().Name().Return("Get").Times(1)
+	mockCall.EXPECT().Context().Return(context.Background()).Times(1)
 	result := make(chan hrpc.RPCResult, 1)
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
 	// we expect that it eventually writes to connection
@@ -348,7 +348,8 @@ func TestUnrecoverableErrorWrite(t *testing.T) {
 	mockConn.EXPECT().Write(newRPCMatcher(payload)).Times(1).Return(0, expErr)
 	mockConn.EXPECT().Close()
 
-	go c.QueueRPC(mockCall)
+	c.QueueRPC(mockCall)
+	// check that processRPCs exists
 	c.processRPCs()
 	r := <-result
 	if diff := atest.Diff(ErrClientDead.Error(), r.Error.Error()); diff != "" {
@@ -422,7 +423,7 @@ func TestUnexpectedSendError(t *testing.T) {
 	mockCall := mock.NewMockCall(ctrl)
 	err := errors.New("ToProto error")
 	mockCall.EXPECT().ToProto().Return(nil, err).Times(1)
-	mockCall.EXPECT().Context().Return(context.Background()).Times(2)
+	mockCall.EXPECT().Context().Return(context.Background()).Times(1)
 	result := make(chan hrpc.RPCResult, 1)
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
 
@@ -529,10 +530,10 @@ func TestFlushInterval(t *testing.T) {
 	for i := range calls {
 		wgWrites.Add(1)
 		mockCall := mock.NewMockCall(ctrl)
-		mockCall.EXPECT().Name().Return("lol").Times(1)
+		mockCall.EXPECT().Name().Return("Get").Times(1)
 		p, payload := mockRPCProto(fmt.Sprintf("rpc_%d", i))
 		mockCall.EXPECT().ToProto().Return(p, nil).Times(1)
-		mockCall.EXPECT().Context().Return(ctx).Times(2)
+		mockCall.EXPECT().Context().Return(ctx).Times(1)
 		mockCall.EXPECT().ResultChan().Return(make(chan hrpc.RPCResult, 1)).Times(1)
 		mockConn.EXPECT().Write(newRPCMatcher(payload)).Times(1).Return(
 			14+len(payload), nil).Do(func(buf []byte) {
@@ -570,35 +571,18 @@ func TestRPCContext(t *testing.T) {
 		flushInterval: flushInterval,
 	}
 
-	mockConn.EXPECT().SetReadDeadline(gomock.Any()).Times(queueSize)
+	mockConn.EXPECT().SetReadDeadline(gomock.Any()).Times(1)
 
-	var wgProcessRPCs sync.WaitGroup
-	wgProcessRPCs.Add(1)
-	go func() {
-		c.processRPCs()
-		wgProcessRPCs.Done()
-	}()
+	// queue rpc with background context
+	mockCall := mock.NewMockCall(ctrl)
+	mockCall.EXPECT().Name().Return("Get").Times(1)
+	p, payload := mockRPCProto("yolo")
+	mockCall.EXPECT().ToProto().Return(p, nil).Times(1)
+	mockCall.EXPECT().Context().Return(context.Background()).Times(1)
+	mockCall.EXPECT().ResultChan().Return(make(chan hrpc.RPCResult, 1)).Times(1)
+	mockConn.EXPECT().Write(newRPCMatcher(payload)).Times(1).Return(14+len(payload), nil)
+	c.QueueRPC(mockCall)
 
-	var wgWrites, wgThrottle sync.WaitGroup
-	wgThrottle.Add(1)
-	ctx := context.Background()
-	for i := 0; i < queueSize; i++ {
-		wgWrites.Add(1)
-		mockCall := mock.NewMockCall(ctrl)
-		mockCall.EXPECT().Name().Return("lol").Times(1)
-		p, payload := mockRPCProto(fmt.Sprintf("rpc_%d", i))
-		// throttle write, until we push rpc with canceled contxt
-		mockCall.EXPECT().ToProto().Return(p, nil).Times(1).Do(func() {
-			wgThrottle.Wait()
-		})
-		mockCall.EXPECT().Context().Return(ctx).Times(2)
-		mockCall.EXPECT().ResultChan().Return(make(chan hrpc.RPCResult, 1)).Times(1)
-		mockConn.EXPECT().Write(newRPCMatcher(payload)).Times(1).Return(
-			14+len(payload), nil).Do(func(buf []byte) {
-			wgWrites.Done()
-		})
-		c.QueueRPC(mockCall)
-	}
 	ctxCancel, cancel := context.WithCancel(context.Background())
 	cancel()
 	callWithCancel := mock.NewMockCall(ctrl)
@@ -606,16 +590,11 @@ func TestRPCContext(t *testing.T) {
 	// this shouldn't block
 	c.QueueRPC(callWithCancel)
 
-	wgThrottle.Done()
-
-	// test will timeout if some rpcs are never processed
-	wgWrites.Wait()
+	if int(c.inFlight) != 1 {
+		t.Errorf("expected %d in-flight rpcs, got %d", 1, c.inFlight)
+	}
 	// clean up
 	c.Close()
-	wgProcessRPCs.Wait()
-	if int(c.inFlight) != queueSize {
-		t.Errorf("expected %d in-flight rpcs, got %d", queueSize, c.inFlight)
-	}
 }
 
 type readBufSizeMatcher struct {
@@ -747,7 +726,7 @@ func BenchmarkSendBatchMemory(b *testing.B) {
 	var wgWrites sync.WaitGroup
 	ctx := context.Background()
 	mockCall := mock.NewMockCall(ctrl)
-	mockCall.EXPECT().Name().Return("lol").AnyTimes()
+	mockCall.EXPECT().Name().Return("Get").AnyTimes()
 	p, _ := mockRPCProto("rpc")
 	mockCall.EXPECT().ToProto().Return(p, nil).AnyTimes()
 	mockCall.EXPECT().Context().Return(ctx).AnyTimes()
