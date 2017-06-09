@@ -382,8 +382,9 @@ func (c *client) receive() error {
 	if header.Exception == nil {
 		response = rpc.NewResponse()
 		if err = buf.DecodeMessage(response); err != nil {
-			// TODO: consider returning this error to client
-			return fmt.Errorf("failed to decode the response: %s", err)
+			rpc.ResultChan() <- hrpc.RPCResult{
+				Error: fmt.Errorf("failed to decode the response: %s", err)}
+			return nil
 		}
 		var cellsLen uint32
 		if header.CellBlockMeta != nil {
@@ -391,8 +392,9 @@ func (c *client) receive() error {
 		}
 		if d, ok := rpc.(canDeserializeCellBlocks); cellsLen > 0 && ok {
 			if err = d.DeserializeCellBlocks(response, buf.Bytes()[size-cellsLen:]); err != nil {
-				// TODO: consider returning this error to client
-				return UnrecoverableError{err}
+				rpc.ResultChan() <- hrpc.RPCResult{
+					Error: fmt.Errorf("failed to decode the response: %s", err)}
+				return nil
 			}
 		}
 	} else {

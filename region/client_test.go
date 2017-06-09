@@ -403,6 +403,95 @@ func TestUnrecoverableErrorRead(t *testing.T) {
 	}
 }
 
+func TestReceiveDecodeProtobufError(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+
+	mockConn := mock.NewMockConn(ctrl)
+	c := &client{
+		conn: mockConn,
+		done: make(chan struct{}),
+		sent: make(map[uint32]hrpc.Call),
+	}
+
+	mockCall := mock.NewMockCall(ctrl)
+	result := make(chan hrpc.RPCResult, 1)
+	mockCall.EXPECT().ResultChan().Return(result).Times(1)
+	mockCall.EXPECT().NewResponse().Return(&pb.MutateResponse{}).Times(1)
+
+	c.sent[1] = mockCall
+	c.inFlight = 1
+
+	// Append mutate response with a chunk in the middle missing
+	response := []byte{6, 8, 1, 26, 2, 8, 38, 34, 0, 0, 0, 22,
+		0, 0, 0, 4, 0, 4, 121, 111, 108, 111, 2, 99, 102, 115, 119, 97, 103, 0, 0, 0, 0, 0, 0,
+		0, 0, 4, 109, 101, 111, 119}
+	mockConn.EXPECT().Read(readBufSizeMatcher{l: 4}).Times(1).Return(4, nil).
+		Do(func(buf []byte) { binary.BigEndian.PutUint32(buf, uint32(len(response))) })
+	mockConn.EXPECT().Read(readBufSizeMatcher{l: len(response)}).Times(1).
+		Return(len(response), nil).Do(func(buf []byte) { copy(buf, response) })
+	mockConn.EXPECT().SetReadDeadline(time.Time{}).Times(1)
+
+	err := c.receive()
+	if err != nil {
+		t.Error(err)
+	}
+
+	res := <-result
+	expError := errors.New(
+		"failed to decode the response: proto: pb.MutateResponse: illegal tag 0 (wire type 0)")
+	if res.Error == nil || res.Error.Error() != expError.Error() {
+		t.Errorf("Expected error %v, got %v", expError, res.Error)
+	}
+}
+
+type callWithCellBlocksError struct{ hrpc.Call }
+
+func (cwcbe callWithCellBlocksError) DeserializeCellBlocks(proto.Message, []byte) error {
+	return errors.New("OOPS")
+}
+
+func TestReceiveDeserializeCellblocksError(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+
+	mockConn := mock.NewMockConn(ctrl)
+	c := &client{
+		conn: mockConn,
+		done: make(chan struct{}),
+		sent: make(map[uint32]hrpc.Call),
+	}
+
+	mockCall := mock.NewMockCall(ctrl)
+	result := make(chan hrpc.RPCResult, 1)
+	mockCall.EXPECT().ResultChan().Return(result).Times(1)
+	mockCall.EXPECT().NewResponse().Return(&pb.MutateResponse{}).Times(1)
+
+	c.sent[1] = callWithCellBlocksError{mockCall}
+	c.inFlight = 1
+
+	// Append mutate response
+	response := []byte{6, 8, 1, 26, 2, 8, 38, 6, 10, 4, 16, 1, 32, 0, 0, 0, 0, 34, 0, 0, 0, 22,
+		0, 0, 0, 4, 0, 4, 121, 111, 108, 111, 2, 99, 102, 115, 119, 97, 103, 0, 0, 0, 0, 0, 0,
+		0, 0, 4, 109, 101, 111, 119}
+	mockConn.EXPECT().Read(readBufSizeMatcher{l: 4}).Times(1).Return(4, nil).
+		Do(func(buf []byte) { binary.BigEndian.PutUint32(buf, uint32(len(response))) })
+	mockConn.EXPECT().Read(readBufSizeMatcher{l: len(response)}).Times(1).
+		Return(len(response), nil).Do(func(buf []byte) { copy(buf, response) })
+	mockConn.EXPECT().SetReadDeadline(time.Time{}).Times(1)
+
+	err := c.receive()
+	if err != nil {
+		t.Error(err)
+	}
+
+	res := <-result
+	expError := errors.New("failed to decode the response: OOPS")
+	if res.Error == nil || res.Error.Error() != expError.Error() {
+		t.Errorf("Expected error %v, got %v", expError, res.Error)
+	}
+}
+
 func TestUnexpectedSendError(t *testing.T) {
 	ctrl := test.NewController(t)
 	defer ctrl.Finish()
