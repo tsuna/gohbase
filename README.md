@@ -2,7 +2,7 @@
 
 This is a pure [Go](http://golang.org/) client for [HBase](http://hbase.org).
 
-Current status: alpha.
+Current status: beta.
 
 ## Supported Versions
 
