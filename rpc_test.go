@@ -332,22 +332,21 @@ func TestEstablishClientConcurrent(t *testing.T) {
 	}
 }
 
-func TestSendRPCtoRegionClientDown(t *testing.T) {
+// TestSendRPCToRegionClientDownDelayed check that the we don't replace a newly
+// looked up client (by other goroutine) in clients cache if we are too slow
+// at finding out that our old client died.
+func TestSendRPCToRegionClientDownDelayed(t *testing.T) {
 	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 
-	// we don't exepct any calls to zookeeper
+	// we don't expect any calls to zookeeper
 	c := newMockClient(nil)
 
-	// create region with mock clien
+	// create region with mock client
 	origlReg := region.NewInfo(
-		0,
-		nil,
-		[]byte("test1"),
+		0, nil, []byte("test1"),
 		[]byte("test1,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-		nil,
-		nil,
-	)
+		nil, nil)
 	rc := mockRegion.NewMockRegionClient(ctrl)
 	rc.EXPECT().String().Return("mock region client").AnyTimes()
 	origlReg.SetClient(rc)
