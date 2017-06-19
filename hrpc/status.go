@@ -16,7 +16,7 @@ func NewClusterStatus() *ClusterStatus {
 	return &ClusterStatus{
 		base{
 			ctx:   context.Background(),
-			table: []byte("entity"),
+			table: []byte{},
 		},
 	}
 }
