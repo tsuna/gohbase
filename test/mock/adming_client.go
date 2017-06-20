@@ -29,6 +29,16 @@ func (_m *MockAdminClient) EXPECT() *_MockAdminClientRecorder {
 	return _m.recorder
 }
 
+func (_m *MockAdminClient) ClusterStatus(_param0 *hrpc.ClusterStatus) error {
+	ret := _m.ctrl.Call(_m, "ClusterStatus", _param0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockAdminClientRecorder) ClusterStatus(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "ClusterStatus", arg0)
+}
+
 func (_m *MockAdminClient) CreateTable(_param0 *hrpc.CreateTable) error {
 	ret := _m.ctrl.Call(_m, "CreateTable", _param0)
 	ret0, _ := ret[0].(error)
