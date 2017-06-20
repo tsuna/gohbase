@@ -9,27 +9,30 @@ import (
 	hrpc "github.com/tsuna/gohbase/hrpc"
 )
 
-// Mock of RPCClient interface
+// MockRPCClient is a mock of RPCClient interface
 type MockRPCClient struct {
 	ctrl     *gomock.Controller
-	recorder *_MockRPCClientRecorder
+	recorder *MockRPCClientMockRecorder
 }
 
-// Recorder for MockRPCClient (not exported)
-type _MockRPCClientRecorder struct {
+// MockRPCClientMockRecorder is the mock recorder for MockRPCClient
+type MockRPCClientMockRecorder struct {
 	mock *MockRPCClient
 }
 
+// NewMockRPCClient creates a new mock instance
 func NewMockRPCClient(ctrl *gomock.Controller) *MockRPCClient {
 	mock := &MockRPCClient{ctrl: ctrl}
-	mock.recorder = &_MockRPCClientRecorder{mock}
+	mock.recorder = &MockRPCClientMockRecorder{mock}
 	return mock
 }
 
-func (_m *MockRPCClient) EXPECT() *_MockRPCClientRecorder {
+// EXPECT returns an object that allows the caller to indicate expected use
+func (_m *MockRPCClient) EXPECT() *MockRPCClientMockRecorder {
 	return _m.recorder
 }
 
+// SendRPC mocks base method
 func (_m *MockRPCClient) SendRPC(_param0 hrpc.Call) (proto.Message, error) {
 	ret := _m.ctrl.Call(_m, "SendRPC", _param0)
 	ret0, _ := ret[0].(proto.Message)
@@ -37,6 +40,7 @@ func (_m *MockRPCClient) SendRPC(_param0 hrpc.Call) (proto.Message, error) {
 	return ret0, ret1
 }
 
-func (_mr *_MockRPCClientRecorder) SendRPC(arg0 interface{}) *gomock.Call {
+// SendRPC indicates an expected call of SendRPC
+func (_mr *MockRPCClientMockRecorder) SendRPC(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "SendRPC", arg0)
 }
