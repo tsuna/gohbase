@@ -22,7 +22,7 @@ type AdminClient interface {
 	DeleteTable(t *hrpc.DeleteTable) error
 	EnableTable(t *hrpc.EnableTable) error
 	DisableTable(t *hrpc.DisableTable) error
-	GetStatus() (*pb.ClusterStatus, error)
+	ClusterStatus() (*pb.ClusterStatus, error)
 }
 
 // NewAdminClient creates an admin HBase client.
@@ -50,7 +50,7 @@ func newAdminClient(zkquorum string, options ...Option) AdminClient {
 	return c
 }
 
-func (c *client) GetStatus() (*pb.ClusterStatus, error) {
+func (c *client) ClusterStatus() (*pb.ClusterStatus, error) {
 	pbmsg, err := c.SendRPC(hrpc.NewClusterStatus())
 	if err != nil {
 		return nil, err
