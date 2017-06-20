@@ -8,27 +8,30 @@ import (
 	hrpc "github.com/tsuna/gohbase/hrpc"
 )
 
-// Mock of Client interface
+// MockClient is a mock of Client interface
 type MockClient struct {
 	ctrl     *gomock.Controller
-	recorder *_MockClientRecorder
+	recorder *MockClientMockRecorder
 }
 
-// Recorder for MockClient (not exported)
-type _MockClientRecorder struct {
+// MockClientMockRecorder is the mock recorder for MockClient
+type MockClientMockRecorder struct {
 	mock *MockClient
 }
 
+// NewMockClient creates a new mock instance
 func NewMockClient(ctrl *gomock.Controller) *MockClient {
 	mock := &MockClient{ctrl: ctrl}
-	mock.recorder = &_MockClientRecorder{mock}
+	mock.recorder = &MockClientMockRecorder{mock}
 	return mock
 }
 
-func (_m *MockClient) EXPECT() *_MockClientRecorder {
+// EXPECT returns an object that allows the caller to indicate expected use
+func (_m *MockClient) EXPECT() *MockClientMockRecorder {
 	return _m.recorder
 }
 
+// Append mocks base method
 func (_m *MockClient) Append(_param0 *hrpc.Mutate) (*hrpc.Result, error) {
 	ret := _m.ctrl.Call(_m, "Append", _param0)
 	ret0, _ := ret[0].(*hrpc.Result)
@@ -36,10 +39,12 @@ func (_m *MockClient) Append(_param0 *hrpc.Mutate) (*hrpc.Result, error) {
 	return ret0, ret1
 }
 
-func (_mr *_MockClientRecorder) Append(arg0 interface{}) *gomock.Call {
+// Append indicates an expected call of Append
+func (_mr *MockClientMockRecorder) Append(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Append", arg0)
 }
 
+// CheckAndPut mocks base method
 func (_m *MockClient) CheckAndPut(_param0 *hrpc.Mutate, _param1 string, _param2 string, _param3 []byte) (bool, error) {
 	ret := _m.ctrl.Call(_m, "CheckAndPut", _param0, _param1, _param2, _param3)
 	ret0, _ := ret[0].(bool)
@@ -47,18 +52,22 @@ func (_m *MockClient) CheckAndPut(_param0 *hrpc.Mutate, _param1 string, _param2 
 	return ret0, ret1
 }
 
-func (_mr *_MockClientRecorder) CheckAndPut(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+// CheckAndPut indicates an expected call of CheckAndPut
+func (_mr *MockClientMockRecorder) CheckAndPut(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "CheckAndPut", arg0, arg1, arg2, arg3)
 }
 
+// Close mocks base method
 func (_m *MockClient) Close() {
 	_m.ctrl.Call(_m, "Close")
 }
 
-func (_mr *_MockClientRecorder) Close() *gomock.Call {
+// Close indicates an expected call of Close
+func (_mr *MockClientMockRecorder) Close() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Close")
 }
 
+// Delete mocks base method
 func (_m *MockClient) Delete(_param0 *hrpc.Mutate) (*hrpc.Result, error) {
 	ret := _m.ctrl.Call(_m, "Delete", _param0)
 	ret0, _ := ret[0].(*hrpc.Result)
@@ -66,10 +75,12 @@ func (_m *MockClient) Delete(_param0 *hrpc.Mutate) (*hrpc.Result, error) {
 	return ret0, ret1
 }
 
-func (_mr *_MockClientRecorder) Delete(arg0 interface{}) *gomock.Call {
+// Delete indicates an expected call of Delete
+func (_mr *MockClientMockRecorder) Delete(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Delete", arg0)
 }
 
+// Get mocks base method
 func (_m *MockClient) Get(_param0 *hrpc.Get) (*hrpc.Result, error) {
 	ret := _m.ctrl.Call(_m, "Get", _param0)
 	ret0, _ := ret[0].(*hrpc.Result)
@@ -77,10 +88,12 @@ func (_m *MockClient) Get(_param0 *hrpc.Get) (*hrpc.Result, error) {
 	return ret0, ret1
 }
 
-func (_mr *_MockClientRecorder) Get(arg0 interface{}) *gomock.Call {
+// Get indicates an expected call of Get
+func (_mr *MockClientMockRecorder) Get(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Get", arg0)
 }
 
+// Increment mocks base method
 func (_m *MockClient) Increment(_param0 *hrpc.Mutate) (int64, error) {
 	ret := _m.ctrl.Call(_m, "Increment", _param0)
 	ret0, _ := ret[0].(int64)
@@ -88,10 +101,12 @@ func (_m *MockClient) Increment(_param0 *hrpc.Mutate) (int64, error) {
 	return ret0, ret1
 }
 
-func (_mr *_MockClientRecorder) Increment(arg0 interface{}) *gomock.Call {
+// Increment indicates an expected call of Increment
+func (_mr *MockClientMockRecorder) Increment(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Increment", arg0)
 }
 
+// Put mocks base method
 func (_m *MockClient) Put(_param0 *hrpc.Mutate) (*hrpc.Result, error) {
 	ret := _m.ctrl.Call(_m, "Put", _param0)
 	ret0, _ := ret[0].(*hrpc.Result)
@@ -99,16 +114,19 @@ func (_m *MockClient) Put(_param0 *hrpc.Mutate) (*hrpc.Result, error) {
 	return ret0, ret1
 }
 
-func (_mr *_MockClientRecorder) Put(arg0 interface{}) *gomock.Call {
+// Put indicates an expected call of Put
+func (_mr *MockClientMockRecorder) Put(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Put", arg0)
 }
 
+// Scan mocks base method
 func (_m *MockClient) Scan(_param0 *hrpc.Scan) hrpc.Scanner {
 	ret := _m.ctrl.Call(_m, "Scan", _param0)
 	ret0, _ := ret[0].(hrpc.Scanner)
 	return ret0
 }
 
-func (_mr *_MockClientRecorder) Scan(arg0 interface{}) *gomock.Call {
+// Scan indicates an expected call of Scan
+func (_mr *MockClientMockRecorder) Scan(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Scan", arg0)
 }

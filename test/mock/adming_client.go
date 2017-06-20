@@ -6,75 +6,89 @@ package mock
 import (
 	gomock "github.com/golang/mock/gomock"
 	hrpc "github.com/tsuna/gohbase/hrpc"
+	pb "github.com/tsuna/gohbase/pb"
 )
 
-// Mock of AdminClient interface
+// MockAdminClient is a mock of AdminClient interface
 type MockAdminClient struct {
 	ctrl     *gomock.Controller
-	recorder *_MockAdminClientRecorder
+	recorder *MockAdminClientMockRecorder
 }
 
-// Recorder for MockAdminClient (not exported)
-type _MockAdminClientRecorder struct {
+// MockAdminClientMockRecorder is the mock recorder for MockAdminClient
+type MockAdminClientMockRecorder struct {
 	mock *MockAdminClient
 }
 
+// NewMockAdminClient creates a new mock instance
 func NewMockAdminClient(ctrl *gomock.Controller) *MockAdminClient {
 	mock := &MockAdminClient{ctrl: ctrl}
-	mock.recorder = &_MockAdminClientRecorder{mock}
+	mock.recorder = &MockAdminClientMockRecorder{mock}
 	return mock
 }
 
-func (_m *MockAdminClient) EXPECT() *_MockAdminClientRecorder {
+// EXPECT returns an object that allows the caller to indicate expected use
+func (_m *MockAdminClient) EXPECT() *MockAdminClientMockRecorder {
 	return _m.recorder
 }
 
-func (_m *MockAdminClient) ClusterStatus(_param0 *hrpc.ClusterStatus) error {
-	ret := _m.ctrl.Call(_m, "ClusterStatus", _param0)
-	ret0, _ := ret[0].(error)
-	return ret0
+// ClusterStatus mocks base method
+func (_m *MockAdminClient) ClusterStatus() (*pb.ClusterStatus, error) {
+	ret := _m.ctrl.Call(_m, "ClusterStatus")
+	ret0, _ := ret[0].(*pb.ClusterStatus)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-func (_mr *_MockAdminClientRecorder) ClusterStatus(arg0 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "ClusterStatus", arg0)
+// ClusterStatus indicates an expected call of ClusterStatus
+func (_mr *MockAdminClientMockRecorder) ClusterStatus() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "ClusterStatus")
 }
 
+// CreateTable mocks base method
 func (_m *MockAdminClient) CreateTable(_param0 *hrpc.CreateTable) error {
 	ret := _m.ctrl.Call(_m, "CreateTable", _param0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-func (_mr *_MockAdminClientRecorder) CreateTable(arg0 interface{}) *gomock.Call {
+// CreateTable indicates an expected call of CreateTable
+func (_mr *MockAdminClientMockRecorder) CreateTable(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "CreateTable", arg0)
 }
 
+// DeleteTable mocks base method
 func (_m *MockAdminClient) DeleteTable(_param0 *hrpc.DeleteTable) error {
 	ret := _m.ctrl.Call(_m, "DeleteTable", _param0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-func (_mr *_MockAdminClientRecorder) DeleteTable(arg0 interface{}) *gomock.Call {
+// DeleteTable indicates an expected call of DeleteTable
+func (_mr *MockAdminClientMockRecorder) DeleteTable(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "DeleteTable", arg0)
 }
 
+// DisableTable mocks base method
 func (_m *MockAdminClient) DisableTable(_param0 *hrpc.DisableTable) error {
 	ret := _m.ctrl.Call(_m, "DisableTable", _param0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-func (_mr *_MockAdminClientRecorder) DisableTable(arg0 interface{}) *gomock.Call {
+// DisableTable indicates an expected call of DisableTable
+func (_mr *MockAdminClientMockRecorder) DisableTable(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "DisableTable", arg0)
 }
 
+// EnableTable mocks base method
 func (_m *MockAdminClient) EnableTable(_param0 *hrpc.EnableTable) error {
 	ret := _m.ctrl.Call(_m, "EnableTable", _param0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-func (_mr *_MockAdminClientRecorder) EnableTable(arg0 interface{}) *gomock.Call {
+// EnableTable indicates an expected call of EnableTable
+func (_mr *MockAdminClientMockRecorder) EnableTable(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "EnableTable", arg0)
 }

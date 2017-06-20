@@ -11,125 +11,148 @@ import (
 	hrpc "github.com/tsuna/gohbase/hrpc"
 )
 
-// Mock of Call interface
+// MockCall is a mock of Call interface
 type MockCall struct {
 	ctrl     *gomock.Controller
-	recorder *_MockCallRecorder
+	recorder *MockCallMockRecorder
 }
 
-// Recorder for MockCall (not exported)
-type _MockCallRecorder struct {
+// MockCallMockRecorder is the mock recorder for MockCall
+type MockCallMockRecorder struct {
 	mock *MockCall
 }
 
+// NewMockCall creates a new mock instance
 func NewMockCall(ctrl *gomock.Controller) *MockCall {
 	mock := &MockCall{ctrl: ctrl}
-	mock.recorder = &_MockCallRecorder{mock}
+	mock.recorder = &MockCallMockRecorder{mock}
 	return mock
 }
 
-func (_m *MockCall) EXPECT() *_MockCallRecorder {
+// EXPECT returns an object that allows the caller to indicate expected use
+func (_m *MockCall) EXPECT() *MockCallMockRecorder {
 	return _m.recorder
 }
 
+// Context mocks base method
 func (_m *MockCall) Context() context.Context {
 	ret := _m.ctrl.Call(_m, "Context")
 	ret0, _ := ret[0].(context.Context)
 	return ret0
 }
 
-func (_mr *_MockCallRecorder) Context() *gomock.Call {
+// Context indicates an expected call of Context
+func (_mr *MockCallMockRecorder) Context() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Context")
 }
 
+// Key mocks base method
 func (_m *MockCall) Key() []byte {
 	ret := _m.ctrl.Call(_m, "Key")
 	ret0, _ := ret[0].([]byte)
 	return ret0
 }
 
-func (_mr *_MockCallRecorder) Key() *gomock.Call {
+// Key indicates an expected call of Key
+func (_mr *MockCallMockRecorder) Key() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Key")
 }
 
+// Name mocks base method
 func (_m *MockCall) Name() string {
 	ret := _m.ctrl.Call(_m, "Name")
 	ret0, _ := ret[0].(string)
 	return ret0
 }
 
-func (_mr *_MockCallRecorder) Name() *gomock.Call {
+// Name indicates an expected call of Name
+func (_mr *MockCallMockRecorder) Name() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Name")
 }
 
+// NewResponse mocks base method
 func (_m *MockCall) NewResponse() proto.Message {
 	ret := _m.ctrl.Call(_m, "NewResponse")
 	ret0, _ := ret[0].(proto.Message)
 	return ret0
 }
 
-func (_mr *_MockCallRecorder) NewResponse() *gomock.Call {
+// NewResponse indicates an expected call of NewResponse
+func (_mr *MockCallMockRecorder) NewResponse() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "NewResponse")
 }
 
+// Region mocks base method
 func (_m *MockCall) Region() hrpc.RegionInfo {
 	ret := _m.ctrl.Call(_m, "Region")
 	ret0, _ := ret[0].(hrpc.RegionInfo)
 	return ret0
 }
 
-func (_mr *_MockCallRecorder) Region() *gomock.Call {
+// Region indicates an expected call of Region
+func (_mr *MockCallMockRecorder) Region() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Region")
 }
 
+// ResultChan mocks base method
 func (_m *MockCall) ResultChan() chan hrpc.RPCResult {
 	ret := _m.ctrl.Call(_m, "ResultChan")
 	ret0, _ := ret[0].(chan hrpc.RPCResult)
 	return ret0
 }
 
-func (_mr *_MockCallRecorder) ResultChan() *gomock.Call {
+// ResultChan indicates an expected call of ResultChan
+func (_mr *MockCallMockRecorder) ResultChan() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "ResultChan")
 }
 
+// SetFamilies mocks base method
 func (_m *MockCall) SetFamilies(_param0 map[string][]string) error {
 	ret := _m.ctrl.Call(_m, "SetFamilies", _param0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-func (_mr *_MockCallRecorder) SetFamilies(arg0 interface{}) *gomock.Call {
+// SetFamilies indicates an expected call of SetFamilies
+func (_mr *MockCallMockRecorder) SetFamilies(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "SetFamilies", arg0)
 }
 
+// SetFilter mocks base method
 func (_m *MockCall) SetFilter(_param0 filter.Filter) error {
 	ret := _m.ctrl.Call(_m, "SetFilter", _param0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-func (_mr *_MockCallRecorder) SetFilter(arg0 interface{}) *gomock.Call {
+// SetFilter indicates an expected call of SetFilter
+func (_mr *MockCallMockRecorder) SetFilter(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "SetFilter", arg0)
 }
 
+// SetRegion mocks base method
 func (_m *MockCall) SetRegion(_param0 hrpc.RegionInfo) {
 	_m.ctrl.Call(_m, "SetRegion", _param0)
 }
 
-func (_mr *_MockCallRecorder) SetRegion(arg0 interface{}) *gomock.Call {
+// SetRegion indicates an expected call of SetRegion
+func (_mr *MockCallMockRecorder) SetRegion(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "SetRegion", arg0)
 }
 
+// Table mocks base method
 func (_m *MockCall) Table() []byte {
 	ret := _m.ctrl.Call(_m, "Table")
 	ret0, _ := ret[0].([]byte)
 	return ret0
 }
 
-func (_mr *_MockCallRecorder) Table() *gomock.Call {
+// Table indicates an expected call of Table
+func (_mr *MockCallMockRecorder) Table() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Table")
 }
 
+// ToProto mocks base method
 func (_m *MockCall) ToProto() (proto.Message, error) {
 	ret := _m.ctrl.Call(_m, "ToProto")
 	ret0, _ := ret[0].(proto.Message)
@@ -137,6 +160,7 @@ func (_m *MockCall) ToProto() (proto.Message, error) {
 	return ret0, ret1
 }
 
-func (_mr *_MockCallRecorder) ToProto() *gomock.Call {
+// ToProto indicates an expected call of ToProto
+func (_mr *MockCallMockRecorder) ToProto() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "ToProto")
 }
