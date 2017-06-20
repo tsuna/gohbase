@@ -218,7 +218,7 @@ func MaxResultsPerColumnFamily(maxresults uint32) func(Call) error {
 			c.storeLimit = maxresults
 		case *Scan:
 			if maxresults > math.MaxInt32 {
-				return errors.New("'MaxResultsPerColumnFamily' exceeds supported number of avlue versions")
+				return errors.New("'MaxResultsPerColumnFamily' exceeds supported number of value results")
 			}
 			c.storeLimit = maxresults
 		}
@@ -234,12 +234,12 @@ func ResultOffset(offset uint32) func(Call) error {
 			return errors.New("'ResultOffset' option can only be used with Get or Scan queries")
 		case *Get:
 			if offset > math.MaxInt32 {
-				return errors.New("'ResultOffset' exceeds supported number of value results")
+				return errors.New("'ResultOffset' exceeds supported offset value")
 			}
 			c.storeOffset = offset
 		case *Scan:
 			if offset > math.MaxInt32 {
-				return errors.New("'ResultOffset' exceeds supported number of avlue versions")
+				return errors.New("'ResultOffset' exceeds supported offset value")
 			}
 			c.storeOffset = offset
 		}
