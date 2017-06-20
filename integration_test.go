@@ -20,9 +20,12 @@ import (
 	"testing"
 	"time"
 
+	"strconv"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/tsuna/gohbase"
 	"github.com/tsuna/gohbase/hrpc"
+	"github.com/willf/pad"
 )
 
 var host = flag.String("host", "localhost", "The location where HBase is running")
@@ -1150,4 +1153,76 @@ func insertKeyValue(c gohbase.Client, key, columnFamily string, value []byte,
 	}
 	_, err = c.Put(putRequest)
 	return err
+}
+
+func TestMaxResultsPerColumnFamilyGet(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+	key := "variablecolumnrow"
+
+	values := make(map[string]map[string][]byte)
+	values["cf"] = map[string][]byte{}
+
+	// Save a row with 20 columns
+	for i := 0; i < 20; i++ {
+		colKey := pad.Left(strconv.FormatInt(int64(i), 10), 2, "0")
+		values["cf"][colKey] = []byte(fmt.Sprintf("value %d", i))
+	}
+	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values)
+	if err != nil {
+		t.Errorf("TestMaxResultsPerColumnFamilyGet error building put string: %s", err)
+
+	}
+	_, err = c.Put(putRequest)
+	if err != nil {
+		t.Errorf("TestMaxResultsPerColumnFamilyGet error saving row: %s", err)
+	}
+
+	family := hrpc.Families(map[string][]string{"cf": nil})
+	// Do we get the correct number of cells without qualifier
+	getRequest, err := hrpc.NewGetStr(context.Background(), table, key, family, hrpc.MaxVersions(1))
+	if err != nil {
+		t.Errorf("TestMaxResultsPerColumnFamilyGet error building get request: %s", err)
+	}
+	result, err := c.Get(getRequest)
+	if len(result.Cells) != 20 {
+		t.Errorf("TestMaxResultsPerColumnFamilyGet error - expecting %d results with parameters; received %d", 20, len(result.Cells))
+	}
+
+	// Simple test for max columns per column family. Return the first n columns in order
+	for testCnt := 1; testCnt <= 10; testCnt++ {
+		// Get the first n columns
+		getRequest, err := hrpc.NewGetStr(context.Background(), table, key, family, hrpc.MaxVersions(1), hrpc.MaxResultsPerColumnFamily(uint32(testCnt)))
+		if err != nil {
+			t.Errorf("TestMaxResultsPerColumnFamilyGet error building get request: %s", err)
+		}
+		result, err := c.Get(getRequest)
+		if len(result.Cells) != testCnt {
+			t.Errorf("TestMaxResultsPerColumnFamilyGet error - expecting %d results; received %d", testCnt, len(result.Cells))
+		}
+		for i, x := range result.Cells {
+			if string(x.Qualifier) != pad.Left(strconv.FormatInt(int64(i), 10), 2, "0") || string(x.Value) != fmt.Sprintf("value %d", i) {
+				t.Errorf("TestMaxResultsPerColumnFamilyGet error - unexpected return value. Expecting %s received %s", fmt.Sprintf("value %d", i), string(x.Value))
+			}
+		}
+	}
+
+	// Max columns per column family. Return first n cells in order with offset.
+	for offset := 0; offset < 20; offset++ {
+		for maxResults := 1; maxResults < 20-offset; maxResults++ {
+			getRequest, err := hrpc.NewGetStr(context.Background(), table, key, family, hrpc.MaxVersions(1), hrpc.MaxResultsPerColumnFamily(uint32(maxResults)), hrpc.ResultOffset(uint32(offset)))
+			if err != nil {
+				t.Errorf("TestMaxResultsPerColumnFamilyGet error building get request testing offset: %s", err)
+			}
+			result, err := c.Get(getRequest)
+			if len(result.Cells) != maxResults {
+				t.Errorf("TestMaxResultsPerColumnFamilyGet error with offset - expecting %d results; received %d", maxResults, len(result.Cells))
+			}
+			for i, _ := range result.Cells {
+				if string(result.Cells[i].Value) != fmt.Sprintf("value %d", offset+i) {
+					t.Errorf("TestMaxResultsPerColumnFamilyGet error with offset - Unexpected results when using offset. Expecting  %s but received  %s", fmt.Sprintf("value %d", offset+i), string(result.Cells[i].Value))
+				}
+			}
+		}
+	}
 }
