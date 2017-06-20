@@ -119,7 +119,7 @@ func TestMain(m *testing.M) {
 //Test retrieval of cluster status
 func TestClusterStatus(t *testing.T) {
 	ac := gohbase.NewAdminClient(*host)
-	defer ac.(Client).Close()
+	defer ac.(gohbase.Client).Close()
 
 	stats, err := ac.ClusterStatus()
 	if err != nil {
