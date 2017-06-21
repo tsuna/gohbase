@@ -134,7 +134,7 @@ func (g *Get) ToProto() (proto.Message, error) {
 	}
 
 	/* added support for limit number of cells per row */
-	if g.storeLimit != math.MaxUint32 && g.storeLimit > 0 {
+	if g.storeLimit != DefaultMaxResultsPerColumnFamily {
 		get.Get.StoreLimit = &g.storeLimit
 	}
 	if g.storeOffset != 0 {
