@@ -207,18 +207,19 @@ func MaxVersions(versions uint32) func(Call) error {
 
 // MaxResultsPerColumnFamily sets the maximum number of values returned for each row
 func MaxResultsPerColumnFamily(maxresults uint32) func(Call) error {
+	opt := "'MaxResultsperColumnFamily' "
 	return func(g Call) error {
 		switch c := g.(type) {
 		default:
-			return errors.New("'MaxResultsPerColumnFamily' option can only be used with Get or Scan queries")
+			return errors.New(opt + "option can only be used with Get or Scan queries")
 		case *Get:
 			if maxresults > math.MaxInt32 {
-				return errors.New("'MaxResultsPerColumnFamily' exceeds supported number of value results")
+				return errors.New(opt + "exceeds supported number of value results")
 			}
 			c.storeLimit = maxresults
 		case *Scan:
 			if maxresults > math.MaxInt32 {
-				return errors.New("'MaxResultsPerColumnFamily' exceeds supported number of value results")
+				return errors.New(opt + "exceeds supported number of value results")
 			}
 			c.storeLimit = maxresults
 		}
