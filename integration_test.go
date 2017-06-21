@@ -1177,6 +1177,7 @@ func TestMaxResultsPerColumnFamilyGet(t *testing.T) {
 	c := gohbase.NewClient(*host)
 	defer c.Close()
 	key := "variablecolumnrow"
+	baseErr := "MaxResultsPerColumnFamilyGet error "
 
 	values := make(map[string]map[string][]byte)
 	values["cf"] = map[string][]byte{}
@@ -1188,39 +1189,58 @@ func TestMaxResultsPerColumnFamilyGet(t *testing.T) {
 	}
 	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values)
 	if err != nil {
-		t.Errorf("TestMaxResultsPerColumnFamilyGet error building put string: %s", err)
+		t.Errorf(baseErr+"building put string: %s", err)
 
 	}
 	_, err = c.Put(putRequest)
 	if err != nil {
-		t.Errorf("TestMaxResultsPerColumnFamilyGet error saving row: %s", err)
+		t.Errorf(baseErr+"saving row: %s", err)
 	}
 
 	family := hrpc.Families(map[string][]string{"cf": nil})
 	// Do we get the correct number of cells without qualifier
-	getRequest, err := hrpc.NewGetStr(context.Background(), table, key, family, hrpc.MaxVersions(1))
+	getRequest, err := hrpc.NewGetStr(context.Background(),
+		table,
+		key,
+		family,
+		hrpc.MaxVersions(1),
+	)
 	if err != nil {
-		t.Errorf("TestMaxResultsPerColumnFamilyGet error building get request: %s", err)
+		t.Errorf(baseErr+"building get request: %s", err)
 	}
 	result, err := c.Get(getRequest)
 	if len(result.Cells) != 20 {
-		t.Errorf("TestMaxResultsPerColumnFamilyGet error - expecting %d results with parameters; received %d", 20, len(result.Cells))
+		t.Errorf(baseErr+"- expecting %d results with parameters; received %d",
+			20,
+			len(result.Cells),
+		)
 	}
 
 	// Simple test for max columns per column family. Return the first n columns in order
 	for testCnt := 1; testCnt <= 20; testCnt++ {
 		// Get the first n columns
-		getRequest, err := hrpc.NewGetStr(context.Background(), table, key, family, hrpc.MaxVersions(1), hrpc.MaxResultsPerColumnFamily(uint32(testCnt)))
+		getRequest, err := hrpc.NewGetStr(context.Background(),
+			table,
+			key,
+			family,
+			hrpc.MaxVersions(1),
+			hrpc.MaxResultsPerColumnFamily(uint32(testCnt)),
+		)
 		if err != nil {
-			t.Errorf("TestMaxResultsPerColumnFamilyGet error building get request: %s", err)
+			t.Errorf(baseErr+"building get request: %s", err)
 		}
 		result, err := c.Get(getRequest)
 		if len(result.Cells) != testCnt {
-			t.Errorf("TestMaxResultsPerColumnFamilyGet error - expecting %d results; received %d", testCnt, len(result.Cells))
+			t.Errorf(baseErr+"- expecting %d results; received %d", testCnt, len(result.Cells))
 		}
 		for i, x := range result.Cells {
-			if string(x.Qualifier) != pad.Left(strconv.FormatInt(int64(i), 10), 2, "0") || string(x.Value) != fmt.Sprintf("value %d", i) {
-				t.Errorf("TestMaxResultsPerColumnFamilyGet error - unexpected return value. Expecting %s received %s", fmt.Sprintf("value %d", i), string(x.Value))
+			// Make sure the column name and value are what is expected and in correct sequence
+			if string(x.Qualifier) != pad.Left(strconv.FormatInt(int64(i), 10), 2, "0") ||
+				string(x.Value) != fmt.Sprintf("value %d", i) {
+				t.Errorf(baseErr+"- unexpected return value. Expecting %s received %s",
+					fmt.Sprintf("value %d", i),
+					string(x.Value),
+				)
 			}
 		}
 	}
@@ -1228,17 +1248,33 @@ func TestMaxResultsPerColumnFamilyGet(t *testing.T) {
 	// Max columns per column family. Return first n cells in order with offset.
 	for offset := 0; offset < 20; offset++ {
 		for maxResults := 1; maxResults <= 20-offset; maxResults++ {
-			getRequest, err := hrpc.NewGetStr(context.Background(), table, key, family, hrpc.MaxVersions(1), hrpc.MaxResultsPerColumnFamily(uint32(maxResults)), hrpc.ResultOffset(uint32(offset)))
+			getRequest, err := hrpc.NewGetStr(context.Background(),
+				table,
+				key,
+				family,
+				hrpc.MaxVersions(1),
+				hrpc.MaxResultsPerColumnFamily(uint32(maxResults)),
+				hrpc.ResultOffset(uint32(offset)),
+			)
 			if err != nil {
-				t.Errorf("TestMaxResultsPerColumnFamilyGet error building get request testing offset: %s", err)
+				t.Errorf(baseErr+"building get request testing offset: %s", err)
 			}
 			result, err := c.Get(getRequest)
+
+			// Make sure number of cells returned is still correct
 			if len(result.Cells) != maxResults {
-				t.Errorf("TestMaxResultsPerColumnFamilyGet error with offset - expecting %d results; received %d", maxResults, len(result.Cells))
+				t.Errorf(baseErr+"with offset - expecting %d results; received %d",
+					maxResults,
+					len(result.Cells),
+				)
 			}
+			// make sure the cells returned are what is expected and in correct sequence
 			for i, _ := range result.Cells {
 				if string(result.Cells[i].Value) != fmt.Sprintf("value %d", offset+i) {
-					t.Errorf("TestMaxResultsPerColumnFamilyGet error with offset - Unexpected results when using offset. Expecting  %s but received  %s", fmt.Sprintf("value %d", offset+i), string(result.Cells[i].Value))
+					t.Errorf(baseErr+"with offset - Expected value %s but received %s",
+						fmt.Sprintf("value %d", offset+i),
+						string(result.Cells[i].Value),
+					)
 				}
 			}
 		}
@@ -1248,6 +1284,8 @@ func TestMaxResultsPerColumnFamilyGet(t *testing.T) {
 func TestMaxResultsPerColumnFamilyScan(t *testing.T) {
 	c := gohbase.NewClient(*host)
 	defer c.Close()
+
+	baseErr := "MaxResultsPerColumnFamilyScan error "
 	key := "variablecolumnrow_1"
 
 	values := make(map[string]map[string][]byte)
@@ -1260,32 +1298,37 @@ func TestMaxResultsPerColumnFamilyScan(t *testing.T) {
 	}
 	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values)
 	if err != nil {
-		t.Errorf("TestMaxResultsPerColumnFamilyScan error building put string: %s", err)
+		t.Errorf(baseErr+"building put string: %s", err)
 
 	}
 	_, err = c.Put(putRequest)
 	if err != nil {
-		t.Errorf("TestMaxResultsPerColumnFamilyScan error saving row: %s", err)
+		t.Errorf(baseErr+"saving row: %s", err)
 	}
 	// Save another row with 20 columns
 	key = "variablecolumnrow_2"
 	putRequest, err = hrpc.NewPutStr(context.Background(), table, key, values)
 	if err != nil {
-		t.Errorf("TestMaxResultsPerColumnFamilyScan error building put string: %s", err)
+		t.Errorf(baseErr+"building put string: %s", err)
 
 	}
 	_, err = c.Put(putRequest)
 	if err != nil {
-		t.Errorf("TestMaxResultsPerColumnFamilyScan error saving row: %s", err)
+		t.Errorf(baseErr+"saving row: %s", err)
 	}
 
 	family := hrpc.Families(map[string][]string{"cf": nil})
 	pFilter := filter.NewPrefixFilter([]byte("variablecolumnrow_"))
 
 	// Do we get the correct number of cells without qualifier
-	scanRequest, err := hrpc.NewScanStr(context.Background(), table, family, hrpc.Filters(pFilter), hrpc.MaxVersions(1))
+	scanRequest, err := hrpc.NewScanStr(context.Background(),
+		table,
+		family,
+		hrpc.Filters(pFilter),
+		hrpc.MaxVersions(1),
+	)
 	if err != nil {
-		t.Errorf("TestMaxResultsPerColumnFamilyScan error building scan request: %s", err)
+		t.Errorf(baseErr+"building scan request: %s", err)
 	}
 
 	result := c.Scan(scanRequest)
@@ -1296,21 +1339,28 @@ func TestMaxResultsPerColumnFamilyScan(t *testing.T) {
 			break
 		}
 		if err != nil {
-			t.Errorf("TestMaxResultsPerColumnFamilyScan error scanning result: %s", err)
+			t.Errorf(baseErr+"scanning result: %s", err)
 		}
 		if len(rRow.Cells) != 20 {
-			t.Errorf("TestMaxResultsPerColumnFamilyScan expected all 20 columns but received %d", len(rRow.Cells))
+			t.Errorf(baseErr+"- expected all 20 columns but received %d", len(rRow.Cells))
 		}
 		resultCnt++
 	}
 	if resultCnt != 2 {
-		t.Errorf("TestMaxResultsPerColumnFamilyScan error - expected 2 rows; received %d", resultCnt)
+		t.Errorf(baseErr+"- expected 2 rows; received %d", resultCnt)
 	}
 
 	// Do we get a limited number of columns per row
-	scanRequest, err = hrpc.NewScanStr(context.Background(), table, family, hrpc.Filters(pFilter), hrpc.MaxVersions(1), hrpc.MaxResultsPerColumnFamily(15))
+	baseErr = "MaxResultsPerColumnFamilyScan with limited columns error "
+	scanRequest, err = hrpc.NewScanStr(context.Background(),
+		table,
+		family,
+		hrpc.Filters(pFilter),
+		hrpc.MaxVersions(1),
+		hrpc.MaxResultsPerColumnFamily(15),
+	)
 	if err != nil {
-		t.Errorf("TestMaxResultsPerColumnFamilyScan error building scan request: %s", err)
+		t.Errorf(baseErr+"building scan request: %s", err)
 	}
 
 	result = c.Scan(scanRequest)
@@ -1321,21 +1371,29 @@ func TestMaxResultsPerColumnFamilyScan(t *testing.T) {
 			break
 		}
 		if err != nil {
-			t.Errorf("TestMaxResultsPerColumnFamilyScan error scanning result: %s", err)
+			t.Errorf(baseErr+"scanning result: %s", err)
 		}
 		if len(rRow.Cells) != 15 {
-			t.Errorf("TestMaxResultsPerColumnFamilyScan expected 15 columns but received %d", len(rRow.Cells))
+			t.Errorf(baseErr+"- expected 15 columns but received %d", len(rRow.Cells))
 		}
 		resultCnt++
 	}
 	if resultCnt != 2 {
-		t.Errorf("TestMaxResultsPerColumnFamilyScan error - expected 2 rows when setting max results per column family; received %d", resultCnt)
+		t.Errorf(baseErr+"- expected 2 rows; received %d", resultCnt)
 	}
 
 	// Do we get a limited number of columns per row and are they correctly offset
-	scanRequest, err = hrpc.NewScanStr(context.Background(), table, family, hrpc.Filters(pFilter), hrpc.MaxVersions(1), hrpc.MaxResultsPerColumnFamily(2), hrpc.ResultOffset(10))
+	baseErr = "MaxResultsPerColumnFamilyScan with limited columns and offset error "
+	scanRequest, err = hrpc.NewScanStr(context.Background(),
+		table,
+		family,
+		hrpc.Filters(pFilter),
+		hrpc.MaxVersions(1),
+		hrpc.MaxResultsPerColumnFamily(2),
+		hrpc.ResultOffset(10),
+	)
 	if err != nil {
-		t.Errorf("TestMaxResultsPerColumnFamilyScan error building scan request: %s", err)
+		t.Errorf(baseErr+"building scan request: %s", err)
 	}
 
 	result = c.Scan(scanRequest)
@@ -1346,18 +1404,22 @@ func TestMaxResultsPerColumnFamilyScan(t *testing.T) {
 			break
 		}
 		if err != nil {
-			t.Errorf("TestMaxResultsPerColumnFamilyScan with offset error scanning result: %s", err)
+			t.Errorf(baseErr+"scanning result: %s", err)
 		}
 		if len(rRow.Cells) != 2 {
-			t.Errorf("TestMaxResultsPerColumnFamilyScan with offset expected 2 columns but received %d", len(rRow.Cells))
+			t.Errorf(baseErr+"- expected 2 columns but received %d", len(rRow.Cells))
 		}
 		if string(rRow.Cells[0].Value) != "value 10" || string(rRow.Cells[1].Value) != "value 11" {
-			t.Errorf("TestMaxResultsPerColumnFamilyScan with offset returned unexpected sets of cells. Expected 'value 10' and 'value 11' - received %s and %s", string(rRow.Cells[0].Value), string(rRow.Cells[1].Value))
+			t.Errorf(baseErr+"- unexpected cells values. "+
+				"Expected 'value 10' and 'value 11' - received %s and %s",
+				string(rRow.Cells[0].Value),
+				string(rRow.Cells[1].Value),
+			)
 		}
 		resultCnt++
 	}
 	if resultCnt != 2 {
-		t.Errorf("TestMaxResultsPerColumnFamilyScan with offset error - expected 2 rows when setting max results per column family; received %d", resultCnt)
+		t.Errorf(baseErr+"- expected 2 rows; received %d", resultCnt)
 	}
 
 }
