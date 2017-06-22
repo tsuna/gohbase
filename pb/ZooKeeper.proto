@@ -18,8 +18,8 @@
 
 // ZNode data in hbase are serialized protobufs with a four byte
 // 'magic' 'PBUF' prefix.
-
 package pb;
+
 option java_package = "org.apache.hadoop.hbase.protobuf.generated";
 option java_outer_classname = "ZooKeeperProtos";
 option java_generic_services = true;
@@ -166,4 +166,11 @@ message TableLock {
   optional bool is_shared = 4;
   optional string purpose = 5;
   optional int64 create_time = 6;
+}
+
+/**
+ * State of the switch.
+ */
+message SwitchState {
+  optional bool enabled = 1;
 }

@@ -5,10 +5,12 @@
 package pb
 
 import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
 import math "math"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
+var _ = fmt.Errorf
 var _ = math.Inf
 
 type BitComparator_BitwiseOp int32
@@ -46,16 +48,18 @@ func (x *BitComparator_BitwiseOp) UnmarshalJSON(data []byte) error {
 	*x = BitComparator_BitwiseOp(value)
 	return nil
 }
+func (BitComparator_BitwiseOp) EnumDescriptor() ([]byte, []int) { return fileDescriptor8, []int{5, 0} }
 
 type Comparator struct {
 	Name                 *string `protobuf:"bytes,1,req,name=name" json:"name,omitempty"`
-	SerializedComparator []byte  `protobuf:"bytes,2,opt,name=serialized_comparator" json:"serialized_comparator,omitempty"`
+	SerializedComparator []byte  `protobuf:"bytes,2,opt,name=serialized_comparator,json=serializedComparator" json:"serialized_comparator,omitempty"`
 	XXX_unrecognized     []byte  `json:"-"`
 }
 
-func (m *Comparator) Reset()         { *m = Comparator{} }
-func (m *Comparator) String() string { return proto.CompactTextString(m) }
-func (*Comparator) ProtoMessage()    {}
+func (m *Comparator) Reset()                    { *m = Comparator{} }
+func (m *Comparator) String() string            { return proto.CompactTextString(m) }
+func (*Comparator) ProtoMessage()               {}
+func (*Comparator) Descriptor() ([]byte, []int) { return fileDescriptor8, []int{0} }
 
 func (m *Comparator) GetName() string {
 	if m != nil && m.Name != nil {
@@ -76,9 +80,10 @@ type ByteArrayComparable struct {
 	XXX_unrecognized []byte `json:"-"`
 }
 
-func (m *ByteArrayComparable) Reset()         { *m = ByteArrayComparable{} }
-func (m *ByteArrayComparable) String() string { return proto.CompactTextString(m) }
-func (*ByteArrayComparable) ProtoMessage()    {}
+func (m *ByteArrayComparable) Reset()                    { *m = ByteArrayComparable{} }
+func (m *ByteArrayComparable) String() string            { return proto.CompactTextString(m) }
+func (*ByteArrayComparable) ProtoMessage()               {}
+func (*ByteArrayComparable) Descriptor() ([]byte, []int) { return fileDescriptor8, []int{1} }
 
 func (m *ByteArrayComparable) GetValue() []byte {
 	if m != nil {
@@ -92,9 +97,10 @@ type BinaryComparator struct {
 	XXX_unrecognized []byte               `json:"-"`
 }
 
-func (m *BinaryComparator) Reset()         { *m = BinaryComparator{} }
-func (m *BinaryComparator) String() string { return proto.CompactTextString(m) }
-func (*BinaryComparator) ProtoMessage()    {}
+func (m *BinaryComparator) Reset()                    { *m = BinaryComparator{} }
+func (m *BinaryComparator) String() string            { return proto.CompactTextString(m) }
+func (*BinaryComparator) ProtoMessage()               {}
+func (*BinaryComparator) Descriptor() ([]byte, []int) { return fileDescriptor8, []int{2} }
 
 func (m *BinaryComparator) GetComparable() *ByteArrayComparable {
 	if m != nil {
@@ -108,9 +114,10 @@ type LongComparator struct {
 	XXX_unrecognized []byte               `json:"-"`
 }
 
-func (m *LongComparator) Reset()         { *m = LongComparator{} }
-func (m *LongComparator) String() string { return proto.CompactTextString(m) }
-func (*LongComparator) ProtoMessage()    {}
+func (m *LongComparator) Reset()                    { *m = LongComparator{} }
+func (m *LongComparator) String() string            { return proto.CompactTextString(m) }
+func (*LongComparator) ProtoMessage()               {}
+func (*LongComparator) Descriptor() ([]byte, []int) { return fileDescriptor8, []int{3} }
 
 func (m *LongComparator) GetComparable() *ByteArrayComparable {
 	if m != nil {
@@ -124,9 +131,10 @@ type BinaryPrefixComparator struct {
 	XXX_unrecognized []byte               `json:"-"`
 }
 
-func (m *BinaryPrefixComparator) Reset()         { *m = BinaryPrefixComparator{} }
-func (m *BinaryPrefixComparator) String() string { return proto.CompactTextString(m) }
-func (*BinaryPrefixComparator) ProtoMessage()    {}
+func (m *BinaryPrefixComparator) Reset()                    { *m = BinaryPrefixComparator{} }
+func (m *BinaryPrefixComparator) String() string            { return proto.CompactTextString(m) }
+func (*BinaryPrefixComparator) ProtoMessage()               {}
+func (*BinaryPrefixComparator) Descriptor() ([]byte, []int) { return fileDescriptor8, []int{4} }
 
 func (m *BinaryPrefixComparator) GetComparable() *ByteArrayComparable {
 	if m != nil {
@@ -137,13 +145,14 @@ func (m *BinaryPrefixComparator) GetComparable() *ByteArrayComparable {
 
 type BitComparator struct {
 	Comparable       *ByteArrayComparable     `protobuf:"bytes,1,req,name=comparable" json:"comparable,omitempty"`
-	BitwiseOp        *BitComparator_BitwiseOp `protobuf:"varint,2,req,name=bitwise_op,enum=pb.BitComparator_BitwiseOp" json:"bitwise_op,omitempty"`
+	BitwiseOp        *BitComparator_BitwiseOp `protobuf:"varint,2,req,name=bitwise_op,json=bitwiseOp,enum=pb.BitComparator_BitwiseOp" json:"bitwise_op,omitempty"`
 	XXX_unrecognized []byte                   `json:"-"`
 }
 
-func (m *BitComparator) Reset()         { *m = BitComparator{} }
-func (m *BitComparator) String() string { return proto.CompactTextString(m) }
-func (*BitComparator) ProtoMessage()    {}
+func (m *BitComparator) Reset()                    { *m = BitComparator{} }
+func (m *BitComparator) String() string            { return proto.CompactTextString(m) }
+func (*BitComparator) ProtoMessage()               {}
+func (*BitComparator) Descriptor() ([]byte, []int) { return fileDescriptor8, []int{5} }
 
 func (m *BitComparator) GetComparable() *ByteArrayComparable {
 	if m != nil {
@@ -163,21 +172,23 @@ type NullComparator struct {
 	XXX_unrecognized []byte `json:"-"`
 }
 
-func (m *NullComparator) Reset()         { *m = NullComparator{} }
-func (m *NullComparator) String() string { return proto.CompactTextString(m) }
-func (*NullComparator) ProtoMessage()    {}
+func (m *NullComparator) Reset()                    { *m = NullComparator{} }
+func (m *NullComparator) String() string            { return proto.CompactTextString(m) }
+func (*NullComparator) ProtoMessage()               {}
+func (*NullComparator) Descriptor() ([]byte, []int) { return fileDescriptor8, []int{6} }
 
 type RegexStringComparator struct {
 	Pattern          *string `protobuf:"bytes,1,req,name=pattern" json:"pattern,omitempty"`
-	PatternFlags     *int32  `protobuf:"varint,2,req,name=pattern_flags" json:"pattern_flags,omitempty"`
+	PatternFlags     *int32  `protobuf:"varint,2,req,name=pattern_flags,json=patternFlags" json:"pattern_flags,omitempty"`
 	Charset          *string `protobuf:"bytes,3,req,name=charset" json:"charset,omitempty"`
 	Engine           *string `protobuf:"bytes,4,opt,name=engine" json:"engine,omitempty"`
 	XXX_unrecognized []byte  `json:"-"`
 }
 
-func (m *RegexStringComparator) Reset()         { *m = RegexStringComparator{} }
-func (m *RegexStringComparator) String() string { return proto.CompactTextString(m) }
-func (*RegexStringComparator) ProtoMessage()    {}
+func (m *RegexStringComparator) Reset()                    { *m = RegexStringComparator{} }
+func (m *RegexStringComparator) String() string            { return proto.CompactTextString(m) }
+func (*RegexStringComparator) ProtoMessage()               {}
+func (*RegexStringComparator) Descriptor() ([]byte, []int) { return fileDescriptor8, []int{7} }
 
 func (m *RegexStringComparator) GetPattern() string {
 	if m != nil && m.Pattern != nil {
@@ -212,9 +223,10 @@ type SubstringComparator struct {
 	XXX_unrecognized []byte  `json:"-"`
 }
 
-func (m *SubstringComparator) Reset()         { *m = SubstringComparator{} }
-func (m *SubstringComparator) String() string { return proto.CompactTextString(m) }
-func (*SubstringComparator) ProtoMessage()    {}
+func (m *SubstringComparator) Reset()                    { *m = SubstringComparator{} }
+func (m *SubstringComparator) String() string            { return proto.CompactTextString(m) }
+func (*SubstringComparator) ProtoMessage()               {}
+func (*SubstringComparator) Descriptor() ([]byte, []int) { return fileDescriptor8, []int{8} }
 
 func (m *SubstringComparator) GetSubstr() string {
 	if m != nil && m.Substr != nil {
@@ -224,5 +236,44 @@ func (m *SubstringComparator) GetSubstr() string {
 }
 
 func init() {
+	proto.RegisterType((*Comparator)(nil), "pb.Comparator")
+	proto.RegisterType((*ByteArrayComparable)(nil), "pb.ByteArrayComparable")
+	proto.RegisterType((*BinaryComparator)(nil), "pb.BinaryComparator")
+	proto.RegisterType((*LongComparator)(nil), "pb.LongComparator")
+	proto.RegisterType((*BinaryPrefixComparator)(nil), "pb.BinaryPrefixComparator")
+	proto.RegisterType((*BitComparator)(nil), "pb.BitComparator")
+	proto.RegisterType((*NullComparator)(nil), "pb.NullComparator")
+	proto.RegisterType((*RegexStringComparator)(nil), "pb.RegexStringComparator")
+	proto.RegisterType((*SubstringComparator)(nil), "pb.SubstringComparator")
 	proto.RegisterEnum("pb.BitComparator_BitwiseOp", BitComparator_BitwiseOp_name, BitComparator_BitwiseOp_value)
+}
+
+var fileDescriptor8 = []byte{
+	// 411 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xac, 0x53, 0x5d, 0x6f, 0xd3, 0x30,
+	0x14, 0x95, 0xd3, 0x7d, 0xa8, 0x97, 0xad, 0x8a, 0xbc, 0x0f, 0x22, 0xf1, 0x32, 0x05, 0x21, 0x55,
+	0x20, 0xf2, 0x30, 0x1e, 0x90, 0x78, 0x5b, 0x40, 0x13, 0x08, 0xb4, 0x0d, 0x4f, 0x48, 0xbc, 0x55,
+	0x76, 0x7b, 0x9b, 0x5a, 0xca, 0x62, 0xcb, 0x76, 0x60, 0xe5, 0x17, 0xec, 0x67, 0xf0, 0xce, 0x9f,
+	0x24, 0x4e, 0xdc, 0x36, 0xa0, 0x3d, 0xf6, 0xed, 0x9e, 0xe3, 0x73, 0x4e, 0x8e, 0x62, 0x5f, 0x88,
+	0xdf, 0xab, 0x3b, 0xcd, 0x0d, 0x77, 0xca, 0x64, 0xda, 0x28, 0xa7, 0x68, 0xa4, 0x45, 0xfa, 0x0d,
+	0x60, 0xc3, 0x53, 0x0a, 0x3b, 0x15, 0xbf, 0xc3, 0x84, 0x9c, 0x45, 0xe3, 0x21, 0x6b, 0x67, 0xfa,
+	0x06, 0x4e, 0x2c, 0x1a, 0xc9, 0x4b, 0xf9, 0x0b, 0x67, 0x93, 0xe9, 0x5a, 0x9c, 0x44, 0x67, 0x64,
+	0x7c, 0xc0, 0x8e, 0x37, 0x87, 0x9b, 0xa0, 0xf4, 0x15, 0x1c, 0xe5, 0x4b, 0x87, 0x17, 0xc6, 0xf0,
+	0x65, 0xa0, 0x45, 0x89, 0xf4, 0x18, 0x76, 0x7f, 0xf0, 0xb2, 0xf6, 0x1f, 0xf0, 0xde, 0x0e, 0xa4,
+	0x9f, 0x21, 0xce, 0x65, 0xc5, 0xcd, 0xb2, 0xd7, 0xe4, 0x2d, 0xc0, 0x74, 0xed, 0x6b, 0xfb, 0x3c,
+	0x39, 0x7f, 0x9a, 0x69, 0x91, 0x3d, 0x12, 0xcb, 0x7a, 0xd2, 0xf4, 0x13, 0x8c, 0xbe, 0xa8, 0xaa,
+	0xd8, 0x46, 0xd4, 0x57, 0x38, 0xed, 0x7a, 0xdd, 0x18, 0x9c, 0xcb, 0xfb, 0x6d, 0x44, 0xfe, 0x21,
+	0x70, 0x98, 0x4b, 0xb7, 0x85, 0x28, 0xfa, 0x0e, 0x40, 0x48, 0xf7, 0x53, 0x5a, 0x9c, 0x28, 0xdd,
+	0x5c, 0x46, 0x34, 0x1e, 0x9d, 0x3f, 0x6b, 0x8d, 0xfd, 0x7c, 0x8f, 0xbc, 0xe6, 0x5a, 0xb3, 0xa1,
+	0x58, 0x8d, 0xe9, 0x0b, 0x18, 0xae, 0x79, 0xba, 0x0f, 0x83, 0x8b, 0xab, 0x0f, 0x31, 0xa1, 0x7b,
+	0x10, 0x5d, 0xb3, 0x38, 0xf2, 0xc4, 0xf7, 0x66, 0x18, 0xa4, 0x31, 0x8c, 0xae, 0xea, 0xb2, 0xec,
+	0xdd, 0xeb, 0x03, 0x81, 0x13, 0x86, 0x05, 0xde, 0xdf, 0x3a, 0x23, 0xff, 0xf9, 0xcb, 0x09, 0xec,
+	0x6b, 0xee, 0x1c, 0x9a, 0x2a, 0xbc, 0x9e, 0x15, 0xa4, 0xcf, 0xe1, 0x30, 0x8c, 0x93, 0x79, 0xc9,
+	0x0b, 0xdb, 0x76, 0xdd, 0x65, 0x07, 0x81, 0xbc, 0xf4, 0x9c, 0xb7, 0x4f, 0x17, 0xdc, 0x58, 0x74,
+	0xc9, 0xa0, 0xb3, 0x07, 0x48, 0x4f, 0x61, 0x0f, 0xab, 0x42, 0x56, 0x98, 0xec, 0x34, 0x8f, 0x66,
+	0xc8, 0x02, 0x4a, 0x5f, 0xc3, 0xd1, 0x6d, 0x2d, 0xec, 0xff, 0x3d, 0x1a, 0xb9, 0x6d, 0xe9, 0x50,
+	0x23, 0xa0, 0xfc, 0x12, 0x5e, 0x2a, 0x53, 0x64, 0x5c, 0xf3, 0xe9, 0x02, 0xb3, 0x05, 0x9f, 0x29,
+	0xa5, 0xb3, 0x85, 0xe0, 0x16, 0xbb, 0x6d, 0x10, 0xf5, 0x3c, 0x2b, 0xb0, 0xc2, 0x26, 0x05, 0x67,
+	0x79, 0x6f, 0x59, 0x6e, 0xfc, 0xa9, 0xfd, 0x48, 0x1e, 0x08, 0xf9, 0x4d, 0xc8, 0xdf, 0x00, 0x00,
+	0x00, 0xff, 0xff, 0xff, 0x76, 0x5f, 0x6f, 0x47, 0x03, 0x00, 0x00,
 }
