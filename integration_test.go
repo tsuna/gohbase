@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"math"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/tsuna/gohbase"
 	"github.com/tsuna/gohbase/filter"
@@ -1167,7 +1169,19 @@ func TestMaxResultsPerColumnFamilyGet(t *testing.T) {
 		colKey := fmt.Sprintf("%02d", i)
 		values["cf"][colKey] = []byte(fmt.Sprintf("value %d", i))
 	}
-	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values)
+
+	// First test that the function can't be used on types other than get or scan
+	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values, hrpc.MaxResultsPerColumnFamily(5))
+	if err == nil {
+		t.Errorf(baseErr+"- Option allowed to be used with incorrect type: %s", err)
+	}
+	putRequest, err = hrpc.NewPutStr(context.Background(), table, key, values, hrpc.ResultOffset(5))
+	if err == nil {
+		t.Errorf(baseErr+"- Option allowed to be used with incorrect type: %s", err)
+	}
+
+	// Now actually save the values
+	putRequest, err = hrpc.NewPutStr(context.Background(), table, key, values)
 	if err != nil {
 		t.Errorf(baseErr+"building put string: %s", err)
 
@@ -1223,6 +1237,30 @@ func TestMaxResultsPerColumnFamilyGet(t *testing.T) {
 				)
 			}
 		}
+
+		// Get with out of range values
+		getRequest, err = hrpc.NewGetStr(context.Background(),
+			table,
+			key,
+			family,
+			hrpc.MaxVersions(1),
+			hrpc.MaxResultsPerColumnFamily(math.MaxUint32),
+		)
+		if err == nil {
+			t.Error(baseErr + "- out of range column result parameter accepted")
+		}
+		// Get with out of range values
+		getRequest, err = hrpc.NewGetStr(context.Background(),
+			table,
+			key,
+			family,
+			hrpc.MaxVersions(1),
+			hrpc.ResultOffset(math.MaxUint32),
+		)
+		if err == nil {
+			t.Error(baseErr + "- out of range column offset parameter accepted")
+		}
+
 	}
 
 	// Max columns per column family. Return first n cells in order with offset.
@@ -1369,11 +1407,21 @@ func TestMaxResultsPerColumnFamilyScan(t *testing.T) {
 		family,
 		hrpc.Filters(pFilter),
 		hrpc.MaxVersions(1),
+		hrpc.MaxResultSize(1),
 		hrpc.MaxResultsPerColumnFamily(2),
 		hrpc.ResultOffset(10),
 	)
 	if err != nil {
 		t.Errorf(baseErr+"building scan request: %s", err)
+	}
+	if scanRequest.MaxResultsPerColumnFamily() != 2 {
+		t.Error(baseErr + " unable to retrieve MaxResultsPerColumnFamily from scan request")
+	}
+	if scanRequest.ResultOffset() != 10 {
+		t.Error(baseErr + " unable to retrieve ResultOffset from scan request")
+	}
+	if scanRequest.MaxResultSize() != 1 {
+		t.Error(baseErr + " unable to retrieve MaxResultSize from scan request")
 	}
 
 	result = c.Scan(scanRequest)
@@ -1398,7 +1446,30 @@ func TestMaxResultsPerColumnFamilyScan(t *testing.T) {
 		}
 		resultCnt++
 	}
-	if resultCnt != 2 {
-		t.Errorf(baseErr+"- expected 2 rows; received %d", resultCnt)
+	if resultCnt != 1 {
+		t.Errorf(baseErr+"- expected 1 row; received %d", resultCnt)
 	}
+
+	// Test with out of range values
+	scanRequest, err = hrpc.NewScanStr(context.Background(),
+		table,
+		family,
+		hrpc.Filters(pFilter),
+		hrpc.MaxVersions(1),
+		hrpc.MaxResultsPerColumnFamily(math.MaxUint32),
+	)
+	if err == nil {
+		t.Error(baseErr + "- out of range column result parameter accepted")
+	}
+	scanRequest, err = hrpc.NewScanStr(context.Background(),
+		table,
+		family,
+		hrpc.Filters(pFilter),
+		hrpc.MaxVersions(1),
+		hrpc.ResultOffset(math.MaxUint32),
+	)
+	if err == nil {
+		t.Error(baseErr + "- out of range column result parameter accepted")
+	}
+
 }
