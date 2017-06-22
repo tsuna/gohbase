@@ -1188,11 +1188,21 @@ func TestMaxResultsPerColumnFamilyGet(t *testing.T) {
 	}
 
 	// First test that the function can't be used on types other than get or scan
-	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values, hrpc.MaxResultsPerColumnFamily(5))
+	putRequest, err := hrpc.NewPutStr(context.Background(),
+		table,
+		key,
+		values,
+		hrpc.MaxResultsPerColumnFamily(5),
+	)
 	if err == nil {
 		t.Errorf(baseErr+"- Option allowed to be used with incorrect type: %s", err)
 	}
-	putRequest, err = hrpc.NewPutStr(context.Background(), table, key, values, hrpc.ResultOffset(5))
+	putRequest, err = hrpc.NewPutStr(context.Background(),
+		table,
+		key,
+		values,
+		hrpc.ResultOffset(5),
+	)
 	if err == nil {
 		t.Errorf(baseErr+"- Option allowed to be used with incorrect type: %s", err)
 	}
