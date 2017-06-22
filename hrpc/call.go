@@ -227,7 +227,7 @@ func MaxResultsPerColumnFamily(maxresults uint32) func(Call) error {
 	}
 }
 
-// ResultOffset sets the offset within a column family set of results - used in conjunction with MaxResultsPerColumnFamily
+// ResultOffset sets the offset within a column family set of results
 func ResultOffset(offset uint32) func(Call) error {
 	return func(g Call) error {
 		switch c := g.(type) {
