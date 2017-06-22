@@ -20,13 +20,10 @@ import (
 	"testing"
 	"time"
 
-	"strconv"
-
 	log "github.com/Sirupsen/logrus"
 	"github.com/tsuna/gohbase"
 	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/hrpc"
-	"github.com/willf/pad"
 )
 
 var host = flag.String("host", "localhost", "The location where HBase is running")
@@ -1167,7 +1164,7 @@ func TestMaxResultsPerColumnFamilyGet(t *testing.T) {
 
 	// Save a row with 20 columns
 	for i := 0; i < 20; i++ {
-		colKey := pad.Left(strconv.FormatInt(int64(i), 10), 2, "0")
+		colKey := fmt.Sprintf("%02d", i)
 		values["cf"][colKey] = []byte(fmt.Sprintf("value %d", i))
 	}
 	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values)
@@ -1218,7 +1215,7 @@ func TestMaxResultsPerColumnFamilyGet(t *testing.T) {
 		}
 		for i, x := range result.Cells {
 			// Make sure the column name and value are what is expected and in correct sequence
-			if string(x.Qualifier) != pad.Left(strconv.FormatInt(int64(i), 10), 2, "0") ||
+			if string(x.Qualifier) != fmt.Sprintf("%02d", i) ||
 				string(x.Value) != fmt.Sprintf("value %d", i) {
 				t.Errorf(baseErr+"- unexpected return value. Expecting %s received %s",
 					fmt.Sprintf("value %d", i),
@@ -1276,7 +1273,7 @@ func TestMaxResultsPerColumnFamilyScan(t *testing.T) {
 
 	// Save a row with 20 columns
 	for i := 0; i < 20; i++ {
-		colKey := pad.Left(strconv.FormatInt(int64(i), 10), 2, "0")
+		colKey := fmt.Sprintf("%02d", i)
 		values["cf"][colKey] = []byte(fmt.Sprintf("value %d", i))
 	}
 	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values)
@@ -1404,5 +1401,4 @@ func TestMaxResultsPerColumnFamilyScan(t *testing.T) {
 	if resultCnt != 2 {
 		t.Errorf(baseErr+"- expected 2 rows; received %d", resultCnt)
 	}
-
 }
