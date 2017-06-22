@@ -5,22 +5,25 @@
 package pb
 
 import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
 import math "math"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
+var _ = fmt.Errorf
 var _ = math.Inf
 
 // User Information proto.  Included in ConnectionHeader on connection setup
 type UserInformation struct {
-	EffectiveUser    *string `protobuf:"bytes,1,req,name=effective_user" json:"effective_user,omitempty"`
-	RealUser         *string `protobuf:"bytes,2,opt,name=real_user" json:"real_user,omitempty"`
+	EffectiveUser    *string `protobuf:"bytes,1,req,name=effective_user,json=effectiveUser" json:"effective_user,omitempty"`
+	RealUser         *string `protobuf:"bytes,2,opt,name=real_user,json=realUser" json:"real_user,omitempty"`
 	XXX_unrecognized []byte  `json:"-"`
 }
 
-func (m *UserInformation) Reset()         { *m = UserInformation{} }
-func (m *UserInformation) String() string { return proto.CompactTextString(m) }
-func (*UserInformation) ProtoMessage()    {}
+func (m *UserInformation) Reset()                    { *m = UserInformation{} }
+func (m *UserInformation) String() string            { return proto.CompactTextString(m) }
+func (*UserInformation) ProtoMessage()               {}
+func (*UserInformation) Descriptor() ([]byte, []int) { return fileDescriptor25, []int{0} }
 
 func (m *UserInformation) GetEffectiveUser() string {
 	if m != nil && m.EffectiveUser != nil {
@@ -36,80 +39,24 @@ func (m *UserInformation) GetRealUser() string {
 	return ""
 }
 
-// Rpc client version info proto. Included in ConnectionHeader on connection setup
-type VersionInfo struct {
-	Version          *string `protobuf:"bytes,1,req,name=version" json:"version,omitempty"`
-	Url              *string `protobuf:"bytes,2,req,name=url" json:"url,omitempty"`
-	Revision         *string `protobuf:"bytes,3,req,name=revision" json:"revision,omitempty"`
-	User             *string `protobuf:"bytes,4,req,name=user" json:"user,omitempty"`
-	Date             *string `protobuf:"bytes,5,req,name=date" json:"date,omitempty"`
-	SrcChecksum      *string `protobuf:"bytes,6,req,name=src_checksum" json:"src_checksum,omitempty"`
-	XXX_unrecognized []byte  `json:"-"`
-}
-
-func (m *VersionInfo) Reset()         { *m = VersionInfo{} }
-func (m *VersionInfo) String() string { return proto.CompactTextString(m) }
-func (*VersionInfo) ProtoMessage()    {}
-
-func (m *VersionInfo) GetVersion() string {
-	if m != nil && m.Version != nil {
-		return *m.Version
-	}
-	return ""
-}
-
-func (m *VersionInfo) GetUrl() string {
-	if m != nil && m.Url != nil {
-		return *m.Url
-	}
-	return ""
-}
-
-func (m *VersionInfo) GetRevision() string {
-	if m != nil && m.Revision != nil {
-		return *m.Revision
-	}
-	return ""
-}
-
-func (m *VersionInfo) GetUser() string {
-	if m != nil && m.User != nil {
-		return *m.User
-	}
-	return ""
-}
-
-func (m *VersionInfo) GetDate() string {
-	if m != nil && m.Date != nil {
-		return *m.Date
-	}
-	return ""
-}
-
-func (m *VersionInfo) GetSrcChecksum() string {
-	if m != nil && m.SrcChecksum != nil {
-		return *m.SrcChecksum
-	}
-	return ""
-}
-
 // This is sent on connection setup after the connection preamble is sent.
 type ConnectionHeader struct {
-	UserInfo    *UserInformation `protobuf:"bytes,1,opt,name=user_info" json:"user_info,omitempty"`
-	ServiceName *string          `protobuf:"bytes,2,opt,name=service_name" json:"service_name,omitempty"`
+	UserInfo    *UserInformation `protobuf:"bytes,1,opt,name=user_info,json=userInfo" json:"user_info,omitempty"`
+	ServiceName *string          `protobuf:"bytes,2,opt,name=service_name,json=serviceName" json:"service_name,omitempty"`
 	// Cell block codec we will use sending over optional cell blocks.  Server throws exception
 	// if cannot deal.  Null means no codec'ing going on so we are pb all the time (SLOW!!!)
-	CellBlockCodecClass *string `protobuf:"bytes,3,opt,name=cell_block_codec_class" json:"cell_block_codec_class,omitempty"`
+	CellBlockCodecClass *string `protobuf:"bytes,3,opt,name=cell_block_codec_class,json=cellBlockCodecClass" json:"cell_block_codec_class,omitempty"`
 	// Compressor we will use if cell block is compressed.  Server will throw exception if not supported.
 	// Class must implement hadoop's CompressionCodec Interface.  Can't compress if no codec.
-	CellBlockCompressorClass *string      `protobuf:"bytes,4,opt,name=cell_block_compressor_class" json:"cell_block_compressor_class,omitempty"`
-	VersionInfo              *VersionInfo `protobuf:"bytes,5,opt,name=version_info" json:"version_info,omitempty"`
+	CellBlockCompressorClass *string      `protobuf:"bytes,4,opt,name=cell_block_compressor_class,json=cellBlockCompressorClass" json:"cell_block_compressor_class,omitempty"`
+	VersionInfo              *VersionInfo `protobuf:"bytes,5,opt,name=version_info,json=versionInfo" json:"version_info,omitempty"`
 	XXX_unrecognized         []byte       `json:"-"`
 }
 
-func (m *ConnectionHeader) Reset()         { *m = ConnectionHeader{} }
-func (m *ConnectionHeader) String() string { return proto.CompactTextString(m) }
-func (*ConnectionHeader) ProtoMessage()    {}
+func (m *ConnectionHeader) Reset()                    { *m = ConnectionHeader{} }
+func (m *ConnectionHeader) String() string            { return proto.CompactTextString(m) }
+func (*ConnectionHeader) ProtoMessage()               {}
+func (*ConnectionHeader) Descriptor() ([]byte, []int) { return fileDescriptor25, []int{1} }
 
 func (m *ConnectionHeader) GetUserInfo() *UserInformation {
 	if m != nil {
@@ -153,9 +100,10 @@ type CellBlockMeta struct {
 	XXX_unrecognized []byte  `json:"-"`
 }
 
-func (m *CellBlockMeta) Reset()         { *m = CellBlockMeta{} }
-func (m *CellBlockMeta) String() string { return proto.CompactTextString(m) }
-func (*CellBlockMeta) ProtoMessage()    {}
+func (m *CellBlockMeta) Reset()                    { *m = CellBlockMeta{} }
+func (m *CellBlockMeta) String() string            { return proto.CompactTextString(m) }
+func (*CellBlockMeta) ProtoMessage()               {}
+func (*CellBlockMeta) Descriptor() ([]byte, []int) { return fileDescriptor25, []int{2} }
 
 func (m *CellBlockMeta) GetLength() uint32 {
 	if m != nil && m.Length != nil {
@@ -168,21 +116,22 @@ func (m *CellBlockMeta) GetLength() uint32 {
 // the server side exception to the RPC client.
 type ExceptionResponse struct {
 	// Class name of the exception thrown from the server
-	ExceptionClassName *string `protobuf:"bytes,1,opt,name=exception_class_name" json:"exception_class_name,omitempty"`
+	ExceptionClassName *string `protobuf:"bytes,1,opt,name=exception_class_name,json=exceptionClassName" json:"exception_class_name,omitempty"`
 	// Exception stack trace from the server side
-	StackTrace *string `protobuf:"bytes,2,opt,name=stack_trace" json:"stack_trace,omitempty"`
+	StackTrace *string `protobuf:"bytes,2,opt,name=stack_trace,json=stackTrace" json:"stack_trace,omitempty"`
 	// Optional hostname.  Filled in for some exceptions such as region moved
 	// where exception gives clue on where the region may have moved.
 	Hostname *string `protobuf:"bytes,3,opt,name=hostname" json:"hostname,omitempty"`
 	Port     *int32  `protobuf:"varint,4,opt,name=port" json:"port,omitempty"`
 	// Set if we are NOT to retry on receipt of this exception
-	DoNotRetry       *bool  `protobuf:"varint,5,opt,name=do_not_retry" json:"do_not_retry,omitempty"`
+	DoNotRetry       *bool  `protobuf:"varint,5,opt,name=do_not_retry,json=doNotRetry" json:"do_not_retry,omitempty"`
 	XXX_unrecognized []byte `json:"-"`
 }
 
-func (m *ExceptionResponse) Reset()         { *m = ExceptionResponse{} }
-func (m *ExceptionResponse) String() string { return proto.CompactTextString(m) }
-func (*ExceptionResponse) ProtoMessage()    {}
+func (m *ExceptionResponse) Reset()                    { *m = ExceptionResponse{} }
+func (m *ExceptionResponse) String() string            { return proto.CompactTextString(m) }
+func (*ExceptionResponse) ProtoMessage()               {}
+func (*ExceptionResponse) Descriptor() ([]byte, []int) { return fileDescriptor25, []int{3} }
 
 func (m *ExceptionResponse) GetExceptionClassName() string {
 	if m != nil && m.ExceptionClassName != nil {
@@ -222,22 +171,24 @@ func (m *ExceptionResponse) GetDoNotRetry() bool {
 // Header sent making a request.
 type RequestHeader struct {
 	// Monotonically increasing call_id to keep track of RPC requests and their response
-	CallId     *uint32   `protobuf:"varint,1,opt,name=call_id" json:"call_id,omitempty"`
-	TraceInfo  *RPCTInfo `protobuf:"bytes,2,opt,name=trace_info" json:"trace_info,omitempty"`
-	MethodName *string   `protobuf:"bytes,3,opt,name=method_name" json:"method_name,omitempty"`
+	CallId     *uint32   `protobuf:"varint,1,opt,name=call_id,json=callId" json:"call_id,omitempty"`
+	TraceInfo  *RPCTInfo `protobuf:"bytes,2,opt,name=trace_info,json=traceInfo" json:"trace_info,omitempty"`
+	MethodName *string   `protobuf:"bytes,3,opt,name=method_name,json=methodName" json:"method_name,omitempty"`
 	// If true, then a pb Message param follows.
-	RequestParam *bool `protobuf:"varint,4,opt,name=request_param" json:"request_param,omitempty"`
+	RequestParam *bool `protobuf:"varint,4,opt,name=request_param,json=requestParam" json:"request_param,omitempty"`
 	// If present, then an encoded data block follows.
-	CellBlockMeta *CellBlockMeta `protobuf:"bytes,5,opt,name=cell_block_meta" json:"cell_block_meta,omitempty"`
+	CellBlockMeta *CellBlockMeta `protobuf:"bytes,5,opt,name=cell_block_meta,json=cellBlockMeta" json:"cell_block_meta,omitempty"`
 	// 0 is NORMAL priority.  200 is HIGH.  If no priority, treat it as NORMAL.
 	// See HConstants.
 	Priority         *uint32 `protobuf:"varint,6,opt,name=priority" json:"priority,omitempty"`
+	Timeout          *uint32 `protobuf:"varint,7,opt,name=timeout" json:"timeout,omitempty"`
 	XXX_unrecognized []byte  `json:"-"`
 }
 
-func (m *RequestHeader) Reset()         { *m = RequestHeader{} }
-func (m *RequestHeader) String() string { return proto.CompactTextString(m) }
-func (*RequestHeader) ProtoMessage()    {}
+func (m *RequestHeader) Reset()                    { *m = RequestHeader{} }
+func (m *RequestHeader) String() string            { return proto.CompactTextString(m) }
+func (*RequestHeader) ProtoMessage()               {}
+func (*RequestHeader) Descriptor() ([]byte, []int) { return fileDescriptor25, []int{4} }
 
 func (m *RequestHeader) GetCallId() uint32 {
 	if m != nil && m.CallId != nil {
@@ -281,18 +232,26 @@ func (m *RequestHeader) GetPriority() uint32 {
 	return 0
 }
 
+func (m *RequestHeader) GetTimeout() uint32 {
+	if m != nil && m.Timeout != nil {
+		return *m.Timeout
+	}
+	return 0
+}
+
 type ResponseHeader struct {
-	CallId *uint32 `protobuf:"varint,1,opt,name=call_id" json:"call_id,omitempty"`
+	CallId *uint32 `protobuf:"varint,1,opt,name=call_id,json=callId" json:"call_id,omitempty"`
 	// If present, then request threw an exception and no response message (else we presume one)
 	Exception *ExceptionResponse `protobuf:"bytes,2,opt,name=exception" json:"exception,omitempty"`
 	// If present, then an encoded data block follows.
-	CellBlockMeta    *CellBlockMeta `protobuf:"bytes,3,opt,name=cell_block_meta" json:"cell_block_meta,omitempty"`
+	CellBlockMeta    *CellBlockMeta `protobuf:"bytes,3,opt,name=cell_block_meta,json=cellBlockMeta" json:"cell_block_meta,omitempty"`
 	XXX_unrecognized []byte         `json:"-"`
 }
 
-func (m *ResponseHeader) Reset()         { *m = ResponseHeader{} }
-func (m *ResponseHeader) String() string { return proto.CompactTextString(m) }
-func (*ResponseHeader) ProtoMessage()    {}
+func (m *ResponseHeader) Reset()                    { *m = ResponseHeader{} }
+func (m *ResponseHeader) String() string            { return proto.CompactTextString(m) }
+func (*ResponseHeader) ProtoMessage()               {}
+func (*ResponseHeader) Descriptor() ([]byte, []int) { return fileDescriptor25, []int{5} }
 
 func (m *ResponseHeader) GetCallId() uint32 {
 	if m != nil && m.CallId != nil {
@@ -316,4 +275,52 @@ func (m *ResponseHeader) GetCellBlockMeta() *CellBlockMeta {
 }
 
 func init() {
+	proto.RegisterType((*UserInformation)(nil), "pb.UserInformation")
+	proto.RegisterType((*ConnectionHeader)(nil), "pb.ConnectionHeader")
+	proto.RegisterType((*CellBlockMeta)(nil), "pb.CellBlockMeta")
+	proto.RegisterType((*ExceptionResponse)(nil), "pb.ExceptionResponse")
+	proto.RegisterType((*RequestHeader)(nil), "pb.RequestHeader")
+	proto.RegisterType((*ResponseHeader)(nil), "pb.ResponseHeader")
+}
+
+var fileDescriptor25 = []byte{
+	// 601 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x8c, 0x54, 0x4d, 0x6f, 0xd3, 0x40,
+	0x10, 0x95, 0xd3, 0xaf, 0x64, 0x12, 0xb7, 0x74, 0x0b, 0x25, 0x6a, 0x0f, 0x14, 0x23, 0x44, 0x05,
+	0x92, 0x85, 0xda, 0x13, 0x12, 0x5c, 0x12, 0x21, 0xb5, 0x07, 0xaa, 0x6a, 0xd5, 0x72, 0xb5, 0x36,
+	0xeb, 0x49, 0x6c, 0x61, 0x7b, 0xcd, 0xee, 0x26, 0xa2, 0xff, 0x01, 0x89, 0x33, 0x37, 0x7e, 0x06,
+	0x3f, 0x8f, 0xfd, 0xb0, 0xdd, 0x16, 0x90, 0xe0, 0xe6, 0x79, 0x6f, 0x66, 0xf7, 0xbd, 0x37, 0x2b,
+	0xc3, 0x80, 0x5e, 0x4e, 0xe3, 0x5a, 0x0a, 0x2d, 0x48, 0xaf, 0x9e, 0x1d, 0x84, 0x57, 0x92, 0xf1,
+	0xbc, 0x5a, 0x78, 0xe8, 0x60, 0x78, 0x36, 0x61, 0x0a, 0x7d, 0x11, 0x5d, 0xc3, 0xce, 0xb5, 0x42,
+	0x79, 0x5e, 0xcd, 0x85, 0x2c, 0x99, 0xce, 0x45, 0x45, 0x9e, 0xc3, 0x36, 0xce, 0xe7, 0xc8, 0x75,
+	0xbe, 0xc2, 0x64, 0x69, 0xc8, 0x71, 0x70, 0xd4, 0x3b, 0x1e, 0xd0, 0xb0, 0x43, 0xed, 0x04, 0x39,
+	0x84, 0x81, 0x44, 0x56, 0xf8, 0x8e, 0xde, 0x51, 0x60, 0x3a, 0xfa, 0x16, 0xb0, 0x64, 0xf4, 0xad,
+	0x07, 0x0f, 0xa6, 0xa2, 0xaa, 0x6c, 0xbf, 0xa8, 0xce, 0x90, 0xa5, 0x66, 0xe2, 0x35, 0x0c, 0x6c,
+	0x73, 0x92, 0x9b, 0xcb, 0xcc, 0x99, 0xc1, 0xf1, 0xf0, 0x64, 0x2f, 0xae, 0x67, 0xf1, 0x6f, 0x02,
+	0x68, 0x7f, 0xd9, 0x00, 0xe4, 0x29, 0x8c, 0xcc, 0xe7, 0x2a, 0xe7, 0x98, 0x54, 0xac, 0xc4, 0xe6,
+	0x9a, 0x61, 0x83, 0x5d, 0x18, 0x88, 0x9c, 0xc2, 0x3e, 0xc7, 0xa2, 0x48, 0x66, 0x85, 0xe0, 0x9f,
+	0x12, 0x2e, 0x52, 0xe4, 0x09, 0x2f, 0x98, 0x52, 0xe3, 0x35, 0xd7, 0xbc, 0x67, 0xd9, 0x89, 0x25,
+	0xa7, 0x96, 0x9b, 0x5a, 0x8a, 0xbc, 0x83, 0xc3, 0x7b, 0x43, 0x65, 0x2d, 0x51, 0x29, 0x21, 0x9b,
+	0xc9, 0x75, 0x37, 0x39, 0xbe, 0x33, 0xd9, 0x36, 0xf8, 0xf1, 0x13, 0x18, 0xad, 0x50, 0x2a, 0xa3,
+	0xd5, 0x7b, 0xd9, 0x70, 0x5e, 0x76, 0xac, 0x97, 0x8f, 0x1e, 0xb7, 0xea, 0xe9, 0x70, 0x75, 0x5b,
+	0x44, 0x2f, 0x20, 0x9c, 0xb6, 0xe7, 0x7d, 0x40, 0xcd, 0xc8, 0x3e, 0x6c, 0x16, 0x58, 0x2d, 0x74,
+	0xe6, 0xa2, 0x08, 0x69, 0x53, 0x45, 0x3f, 0x03, 0xd8, 0x7d, 0xff, 0x85, 0x63, 0xed, 0xb2, 0x40,
+	0x55, 0x8b, 0x4a, 0xa1, 0xc9, 0xee, 0x21, 0xb6, 0xa0, 0x57, 0xe9, 0x13, 0x09, 0x9c, 0x54, 0xd2,
+	0x71, 0x4e, 0xa0, 0x0b, 0xe6, 0x09, 0x0c, 0x95, 0x66, 0xc6, 0x9e, 0x36, 0xdb, 0x6f, 0xa3, 0x03,
+	0x07, 0xd9, 0xf7, 0x80, 0xe4, 0x00, 0xfa, 0x99, 0x50, 0xda, 0x1d, 0xe3, 0xb3, 0xea, 0x6a, 0x42,
+	0x60, 0xbd, 0x16, 0x52, 0xbb, 0x24, 0x36, 0xa8, 0xfb, 0x26, 0x47, 0x30, 0x4a, 0x45, 0x52, 0x09,
+	0x9d, 0x48, 0xd4, 0xf2, 0xc6, 0xb9, 0xee, 0x53, 0x48, 0xc5, 0x85, 0xd0, 0xd4, 0x22, 0xd1, 0xd7,
+	0x1e, 0x84, 0x14, 0x3f, 0x2f, 0x51, 0xe9, 0x66, 0xe5, 0x8f, 0x61, 0x8b, 0x33, 0x13, 0x74, 0x9e,
+	0xb6, 0x2e, 0x6d, 0x79, 0x9e, 0x92, 0x57, 0x00, 0x4e, 0x97, 0x0f, 0xb0, 0xe7, 0x02, 0x1c, 0xd9,
+	0x00, 0xcd, 0xd3, 0xbd, 0x72, 0xe9, 0x0d, 0x1c, 0xef, 0x9e, 0x81, 0xb1, 0x52, 0xa2, 0xce, 0x44,
+	0x9a, 0xdc, 0x11, 0x0b, 0x1e, 0x72, 0x5e, 0x9f, 0x41, 0x28, 0xfd, 0xbd, 0x49, 0xcd, 0x24, 0x2b,
+	0x9d, 0xee, 0x3e, 0x1d, 0x35, 0xe0, 0xa5, 0xc5, 0xc8, 0x1b, 0xd8, 0xb9, 0xb3, 0x74, 0x33, 0xcd,
+	0x9a, 0xc5, 0xed, 0xda, 0x7b, 0xef, 0x2d, 0x87, 0x86, 0xfc, 0xde, 0xae, 0x4c, 0x54, 0xb5, 0xcc,
+	0x85, 0xcc, 0xf5, 0xcd, 0x78, 0xd3, 0xf9, 0xe8, 0x6a, 0x32, 0x86, 0x2d, 0x9d, 0x97, 0x28, 0x96,
+	0x7a, 0xbc, 0xe5, 0xa8, 0xb6, 0x8c, 0xbe, 0x07, 0xb0, 0xdd, 0x2e, 0xf0, 0x5f, 0x79, 0x9c, 0xc2,
+	0xa0, 0xdb, 0x61, 0x13, 0xc7, 0x23, 0x2b, 0xeb, 0x8f, 0x97, 0x40, 0x6f, 0xfb, 0xfe, 0xe6, 0x68,
+	0xed, 0xff, 0x1c, 0x4d, 0xde, 0xc2, 0x4b, 0x21, 0x17, 0x31, 0xab, 0x19, 0xcf, 0x30, 0xce, 0x58,
+	0x2a, 0x44, 0x1d, 0x67, 0xb3, 0xee, 0xc7, 0x30, 0x5b, 0xce, 0xe3, 0x05, 0x56, 0x28, 0x99, 0xc6,
+	0x74, 0x62, 0x7f, 0x28, 0x97, 0x16, 0x56, 0x67, 0xc1, 0x8f, 0x20, 0xf8, 0x15, 0x00, 0x00, 0xff,
+	0xff, 0xde, 0x56, 0xde, 0xc7, 0x61, 0x04, 0x00, 0x00,
 }

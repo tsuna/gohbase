@@ -5,10 +5,12 @@
 package pb
 
 import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
 import math "math"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
+var _ = fmt.Errorf
 var _ = math.Inf
 
 type SplitLogTask_State int32
@@ -52,6 +54,7 @@ func (x *SplitLogTask_State) UnmarshalJSON(data []byte) error {
 	*x = SplitLogTask_State(value)
 	return nil
 }
+func (SplitLogTask_State) EnumDescriptor() ([]byte, []int) { return fileDescriptor31, []int{4, 0} }
 
 type SplitLogTask_RecoveryMode int32
 
@@ -87,6 +90,9 @@ func (x *SplitLogTask_RecoveryMode) UnmarshalJSON(data []byte) error {
 	}
 	*x = SplitLogTask_RecoveryMode(value)
 	return nil
+}
+func (SplitLogTask_RecoveryMode) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor31, []int{4, 1}
 }
 
 // Table's current state
@@ -128,6 +134,7 @@ func (x *Table_State) UnmarshalJSON(data []byte) error {
 	*x = Table_State(value)
 	return nil
 }
+func (Table_State) EnumDescriptor() ([]byte, []int) { return fileDescriptor31, []int{5, 0} }
 
 type ReplicationState_State int32
 
@@ -161,6 +168,7 @@ func (x *ReplicationState_State) UnmarshalJSON(data []byte) error {
 	*x = ReplicationState_State(value)
 	return nil
 }
+func (ReplicationState_State) EnumDescriptor() ([]byte, []int) { return fileDescriptor31, []int{7, 0} }
 
 // *
 // Content of the meta-region-server znode.
@@ -171,15 +179,16 @@ type MetaRegionServer struct {
 	// The major version of the rpc the server speaks.  This is used so that
 	// clients connecting to the cluster can have prior knowledge of what version
 	// to send to a RegionServer.  AsyncHBase will use this to detect versions.
-	RpcVersion *uint32 `protobuf:"varint,2,opt,name=rpc_version" json:"rpc_version,omitempty"`
+	RpcVersion *uint32 `protobuf:"varint,2,opt,name=rpc_version,json=rpcVersion" json:"rpc_version,omitempty"`
 	// State of the region transition. OPEN means fully operational 'hbase:meta'
 	State            *RegionState_State `protobuf:"varint,3,opt,name=state,enum=pb.RegionState_State" json:"state,omitempty"`
 	XXX_unrecognized []byte             `json:"-"`
 }
 
-func (m *MetaRegionServer) Reset()         { *m = MetaRegionServer{} }
-func (m *MetaRegionServer) String() string { return proto.CompactTextString(m) }
-func (*MetaRegionServer) ProtoMessage()    {}
+func (m *MetaRegionServer) Reset()                    { *m = MetaRegionServer{} }
+func (m *MetaRegionServer) String() string            { return proto.CompactTextString(m) }
+func (*MetaRegionServer) ProtoMessage()               {}
+func (*MetaRegionServer) Descriptor() ([]byte, []int) { return fileDescriptor31, []int{0} }
 
 func (m *MetaRegionServer) GetServer() *ServerName {
 	if m != nil {
@@ -208,14 +217,15 @@ type Master struct {
 	// The ServerName of the current Master
 	Master *ServerName `protobuf:"bytes,1,req,name=master" json:"master,omitempty"`
 	// Major RPC version so that clients can know what version the master can accept.
-	RpcVersion       *uint32 `protobuf:"varint,2,opt,name=rpc_version" json:"rpc_version,omitempty"`
-	InfoPort         *uint32 `protobuf:"varint,3,opt,name=info_port" json:"info_port,omitempty"`
+	RpcVersion       *uint32 `protobuf:"varint,2,opt,name=rpc_version,json=rpcVersion" json:"rpc_version,omitempty"`
+	InfoPort         *uint32 `protobuf:"varint,3,opt,name=info_port,json=infoPort" json:"info_port,omitempty"`
 	XXX_unrecognized []byte  `json:"-"`
 }
 
-func (m *Master) Reset()         { *m = Master{} }
-func (m *Master) String() string { return proto.CompactTextString(m) }
-func (*Master) ProtoMessage()    {}
+func (m *Master) Reset()                    { *m = Master{} }
+func (m *Master) String() string            { return proto.CompactTextString(m) }
+func (*Master) ProtoMessage()               {}
+func (*Master) Descriptor() ([]byte, []int) { return fileDescriptor31, []int{1} }
 
 func (m *Master) GetMaster() *ServerName {
 	if m != nil {
@@ -243,13 +253,14 @@ func (m *Master) GetInfoPort() uint32 {
 type ClusterUp struct {
 	// If this znode is present, cluster is up.  Currently
 	// the data is cluster start_date.
-	StartDate        *string `protobuf:"bytes,1,req,name=start_date" json:"start_date,omitempty"`
+	StartDate        *string `protobuf:"bytes,1,req,name=start_date,json=startDate" json:"start_date,omitempty"`
 	XXX_unrecognized []byte  `json:"-"`
 }
 
-func (m *ClusterUp) Reset()         { *m = ClusterUp{} }
-func (m *ClusterUp) String() string { return proto.CompactTextString(m) }
-func (*ClusterUp) ProtoMessage()    {}
+func (m *ClusterUp) Reset()                    { *m = ClusterUp{} }
+func (m *ClusterUp) String() string            { return proto.CompactTextString(m) }
+func (*ClusterUp) ProtoMessage()               {}
+func (*ClusterUp) Descriptor() ([]byte, []int) { return fileDescriptor31, []int{2} }
 
 func (m *ClusterUp) GetStartDate() string {
 	if m != nil && m.StartDate != nil {
@@ -263,19 +274,20 @@ func (m *ClusterUp) GetStartDate() string {
 // open/close, etc., regions.  Details a region in transition.
 type RegionTransition struct {
 	// Code for EventType gotten by doing o.a.h.h.EventHandler.EventType.getCode()
-	EventTypeCode *uint32 `protobuf:"varint,1,req,name=event_type_code" json:"event_type_code,omitempty"`
+	EventTypeCode *uint32 `protobuf:"varint,1,req,name=event_type_code,json=eventTypeCode" json:"event_type_code,omitempty"`
 	// Full regionname in bytes
-	RegionName []byte  `protobuf:"bytes,2,req,name=region_name" json:"region_name,omitempty"`
-	CreateTime *uint64 `protobuf:"varint,3,req,name=create_time" json:"create_time,omitempty"`
+	RegionName []byte  `protobuf:"bytes,2,req,name=region_name,json=regionName" json:"region_name,omitempty"`
+	CreateTime *uint64 `protobuf:"varint,3,req,name=create_time,json=createTime" json:"create_time,omitempty"`
 	// The region server where the transition will happen or is happening
-	ServerName       *ServerName `protobuf:"bytes,4,req,name=server_name" json:"server_name,omitempty"`
+	ServerName       *ServerName `protobuf:"bytes,4,req,name=server_name,json=serverName" json:"server_name,omitempty"`
 	Payload          []byte      `protobuf:"bytes,5,opt,name=payload" json:"payload,omitempty"`
 	XXX_unrecognized []byte      `json:"-"`
 }
 
-func (m *RegionTransition) Reset()         { *m = RegionTransition{} }
-func (m *RegionTransition) String() string { return proto.CompactTextString(m) }
-func (*RegionTransition) ProtoMessage()    {}
+func (m *RegionTransition) Reset()                    { *m = RegionTransition{} }
+func (m *RegionTransition) String() string            { return proto.CompactTextString(m) }
+func (*RegionTransition) ProtoMessage()               {}
+func (*RegionTransition) Descriptor() ([]byte, []int) { return fileDescriptor31, []int{3} }
 
 func (m *RegionTransition) GetEventTypeCode() uint32 {
 	if m != nil && m.EventTypeCode != nil {
@@ -317,14 +329,15 @@ func (m *RegionTransition) GetPayload() []byte {
 // WAL splitting.  Holds current state and name of server that originated split.
 type SplitLogTask struct {
 	State            *SplitLogTask_State        `protobuf:"varint,1,req,name=state,enum=pb.SplitLogTask_State" json:"state,omitempty"`
-	ServerName       *ServerName                `protobuf:"bytes,2,req,name=server_name" json:"server_name,omitempty"`
+	ServerName       *ServerName                `protobuf:"bytes,2,req,name=server_name,json=serverName" json:"server_name,omitempty"`
 	Mode             *SplitLogTask_RecoveryMode `protobuf:"varint,3,opt,name=mode,enum=pb.SplitLogTask_RecoveryMode,def=0" json:"mode,omitempty"`
 	XXX_unrecognized []byte                     `json:"-"`
 }
 
-func (m *SplitLogTask) Reset()         { *m = SplitLogTask{} }
-func (m *SplitLogTask) String() string { return proto.CompactTextString(m) }
-func (*SplitLogTask) ProtoMessage()    {}
+func (m *SplitLogTask) Reset()                    { *m = SplitLogTask{} }
+func (m *SplitLogTask) String() string            { return proto.CompactTextString(m) }
+func (*SplitLogTask) ProtoMessage()               {}
+func (*SplitLogTask) Descriptor() ([]byte, []int) { return fileDescriptor31, []int{4} }
 
 const Default_SplitLogTask_Mode SplitLogTask_RecoveryMode = SplitLogTask_UNKNOWN
 
@@ -359,9 +372,10 @@ type Table struct {
 	XXX_unrecognized []byte       `json:"-"`
 }
 
-func (m *Table) Reset()         { *m = Table{} }
-func (m *Table) String() string { return proto.CompactTextString(m) }
-func (*Table) ProtoMessage()    {}
+func (m *Table) Reset()                    { *m = Table{} }
+func (m *Table) String() string            { return proto.CompactTextString(m) }
+func (*Table) ProtoMessage()               {}
+func (*Table) Descriptor() ([]byte, []int) { return fileDescriptor31, []int{5} }
 
 const Default_Table_State Table_State = Table_ENABLED
 
@@ -384,9 +398,10 @@ type ReplicationPeer struct {
 	XXX_unrecognized        []byte            `json:"-"`
 }
 
-func (m *ReplicationPeer) Reset()         { *m = ReplicationPeer{} }
-func (m *ReplicationPeer) String() string { return proto.CompactTextString(m) }
-func (*ReplicationPeer) ProtoMessage()    {}
+func (m *ReplicationPeer) Reset()                    { *m = ReplicationPeer{} }
+func (m *ReplicationPeer) String() string            { return proto.CompactTextString(m) }
+func (*ReplicationPeer) ProtoMessage()               {}
+func (*ReplicationPeer) Descriptor() ([]byte, []int) { return fileDescriptor31, []int{6} }
 
 func (m *ReplicationPeer) GetClusterkey() string {
 	if m != nil && m.Clusterkey != nil {
@@ -423,9 +438,10 @@ type ReplicationState struct {
 	XXX_unrecognized []byte                  `json:"-"`
 }
 
-func (m *ReplicationState) Reset()         { *m = ReplicationState{} }
-func (m *ReplicationState) String() string { return proto.CompactTextString(m) }
-func (*ReplicationState) ProtoMessage()    {}
+func (m *ReplicationState) Reset()                    { *m = ReplicationState{} }
+func (m *ReplicationState) String() string            { return proto.CompactTextString(m) }
+func (*ReplicationState) ProtoMessage()               {}
+func (*ReplicationState) Descriptor() ([]byte, []int) { return fileDescriptor31, []int{7} }
 
 func (m *ReplicationState) GetState() ReplicationState_State {
 	if m != nil && m.State != nil {
@@ -441,9 +457,10 @@ type ReplicationHLogPosition struct {
 	XXX_unrecognized []byte `json:"-"`
 }
 
-func (m *ReplicationHLogPosition) Reset()         { *m = ReplicationHLogPosition{} }
-func (m *ReplicationHLogPosition) String() string { return proto.CompactTextString(m) }
-func (*ReplicationHLogPosition) ProtoMessage()    {}
+func (m *ReplicationHLogPosition) Reset()                    { *m = ReplicationHLogPosition{} }
+func (m *ReplicationHLogPosition) String() string            { return proto.CompactTextString(m) }
+func (*ReplicationHLogPosition) ProtoMessage()               {}
+func (*ReplicationHLogPosition) Descriptor() ([]byte, []int) { return fileDescriptor31, []int{8} }
 
 func (m *ReplicationHLogPosition) GetPosition() int64 {
 	if m != nil && m.Position != nil {
@@ -455,13 +472,14 @@ func (m *ReplicationHLogPosition) GetPosition() int64 {
 // *
 // Used by replication. Used to lock a region server during failover.
 type ReplicationLock struct {
-	LockOwner        *string `protobuf:"bytes,1,req,name=lock_owner" json:"lock_owner,omitempty"`
+	LockOwner        *string `protobuf:"bytes,1,req,name=lock_owner,json=lockOwner" json:"lock_owner,omitempty"`
 	XXX_unrecognized []byte  `json:"-"`
 }
 
-func (m *ReplicationLock) Reset()         { *m = ReplicationLock{} }
-func (m *ReplicationLock) String() string { return proto.CompactTextString(m) }
-func (*ReplicationLock) ProtoMessage()    {}
+func (m *ReplicationLock) Reset()                    { *m = ReplicationLock{} }
+func (m *ReplicationLock) String() string            { return proto.CompactTextString(m) }
+func (*ReplicationLock) ProtoMessage()               {}
+func (*ReplicationLock) Descriptor() ([]byte, []int) { return fileDescriptor31, []int{9} }
 
 func (m *ReplicationLock) GetLockOwner() string {
 	if m != nil && m.LockOwner != nil {
@@ -473,18 +491,19 @@ func (m *ReplicationLock) GetLockOwner() string {
 // *
 // Metadata associated with a table lock in zookeeper
 type TableLock struct {
-	TableName        *TableName  `protobuf:"bytes,1,opt,name=table_name" json:"table_name,omitempty"`
-	LockOwner        *ServerName `protobuf:"bytes,2,opt,name=lock_owner" json:"lock_owner,omitempty"`
-	ThreadId         *int64      `protobuf:"varint,3,opt,name=thread_id" json:"thread_id,omitempty"`
-	IsShared         *bool       `protobuf:"varint,4,opt,name=is_shared" json:"is_shared,omitempty"`
+	TableName        *TableName  `protobuf:"bytes,1,opt,name=table_name,json=tableName" json:"table_name,omitempty"`
+	LockOwner        *ServerName `protobuf:"bytes,2,opt,name=lock_owner,json=lockOwner" json:"lock_owner,omitempty"`
+	ThreadId         *int64      `protobuf:"varint,3,opt,name=thread_id,json=threadId" json:"thread_id,omitempty"`
+	IsShared         *bool       `protobuf:"varint,4,opt,name=is_shared,json=isShared" json:"is_shared,omitempty"`
 	Purpose          *string     `protobuf:"bytes,5,opt,name=purpose" json:"purpose,omitempty"`
-	CreateTime       *int64      `protobuf:"varint,6,opt,name=create_time" json:"create_time,omitempty"`
+	CreateTime       *int64      `protobuf:"varint,6,opt,name=create_time,json=createTime" json:"create_time,omitempty"`
 	XXX_unrecognized []byte      `json:"-"`
 }
 
-func (m *TableLock) Reset()         { *m = TableLock{} }
-func (m *TableLock) String() string { return proto.CompactTextString(m) }
-func (*TableLock) ProtoMessage()    {}
+func (m *TableLock) Reset()                    { *m = TableLock{} }
+func (m *TableLock) String() string            { return proto.CompactTextString(m) }
+func (*TableLock) ProtoMessage()               {}
+func (*TableLock) Descriptor() ([]byte, []int) { return fileDescriptor31, []int{10} }
 
 func (m *TableLock) GetTableName() *TableName {
 	if m != nil {
@@ -528,9 +547,100 @@ func (m *TableLock) GetCreateTime() int64 {
 	return 0
 }
 
+// *
+// State of the switch.
+type SwitchState struct {
+	Enabled          *bool  `protobuf:"varint,1,opt,name=enabled" json:"enabled,omitempty"`
+	XXX_unrecognized []byte `json:"-"`
+}
+
+func (m *SwitchState) Reset()                    { *m = SwitchState{} }
+func (m *SwitchState) String() string            { return proto.CompactTextString(m) }
+func (*SwitchState) ProtoMessage()               {}
+func (*SwitchState) Descriptor() ([]byte, []int) { return fileDescriptor31, []int{11} }
+
+func (m *SwitchState) GetEnabled() bool {
+	if m != nil && m.Enabled != nil {
+		return *m.Enabled
+	}
+	return false
+}
+
 func init() {
+	proto.RegisterType((*MetaRegionServer)(nil), "pb.MetaRegionServer")
+	proto.RegisterType((*Master)(nil), "pb.Master")
+	proto.RegisterType((*ClusterUp)(nil), "pb.ClusterUp")
+	proto.RegisterType((*RegionTransition)(nil), "pb.RegionTransition")
+	proto.RegisterType((*SplitLogTask)(nil), "pb.SplitLogTask")
+	proto.RegisterType((*Table)(nil), "pb.Table")
+	proto.RegisterType((*ReplicationPeer)(nil), "pb.ReplicationPeer")
+	proto.RegisterType((*ReplicationState)(nil), "pb.ReplicationState")
+	proto.RegisterType((*ReplicationHLogPosition)(nil), "pb.ReplicationHLogPosition")
+	proto.RegisterType((*ReplicationLock)(nil), "pb.ReplicationLock")
+	proto.RegisterType((*TableLock)(nil), "pb.TableLock")
+	proto.RegisterType((*SwitchState)(nil), "pb.SwitchState")
 	proto.RegisterEnum("pb.SplitLogTask_State", SplitLogTask_State_name, SplitLogTask_State_value)
 	proto.RegisterEnum("pb.SplitLogTask_RecoveryMode", SplitLogTask_RecoveryMode_name, SplitLogTask_RecoveryMode_value)
 	proto.RegisterEnum("pb.Table_State", Table_State_name, Table_State_value)
 	proto.RegisterEnum("pb.ReplicationState_State", ReplicationState_State_name, ReplicationState_State_value)
+}
+
+var fileDescriptor31 = []byte{
+	// 896 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x84, 0x55, 0xe1, 0x6e, 0xe2, 0x46,
+	0x10, 0xae, 0x0d, 0x24, 0x78, 0x80, 0x84, 0x6e, 0xd5, 0x1e, 0x4a, 0x75, 0xed, 0xc9, 0x3f, 0xae,
+	0xe8, 0x7a, 0x75, 0x4f, 0x91, 0x2a, 0x55, 0xf9, 0xd1, 0x2a, 0x04, 0x2b, 0x41, 0x47, 0x0c, 0x5a,
+	0x93, 0x56, 0xed, 0x1f, 0xcb, 0xd8, 0x1b, 0xb0, 0x02, 0x5e, 0xcb, 0x5e, 0xee, 0xca, 0x1b, 0xdc,
+	0x63, 0xf4, 0x09, 0xfa, 0x1a, 0xfd, 0xd5, 0x47, 0xe8, 0xbb, 0x74, 0x76, 0xd7, 0x10, 0x48, 0x2f,
+	0xca, 0x1f, 0xd8, 0xf9, 0x66, 0x76, 0xbe, 0x6f, 0x67, 0x67, 0xc7, 0x70, 0xfc, 0x3b, 0xe7, 0x6f,
+	0x19, 0xcb, 0x58, 0xee, 0x64, 0x39, 0x17, 0x9c, 0x98, 0xd9, 0xf4, 0xa4, 0x71, 0xd5, 0x0b, 0x0b,
+	0xa6, 0x81, 0x93, 0xcf, 0x2e, 0x16, 0xab, 0x42, 0xb0, 0xdc, 0x17, 0xa1, 0x58, 0x15, 0x1a, 0xb4,
+	0x3f, 0x18, 0xd0, 0xbe, 0x66, 0x22, 0xa4, 0x6c, 0x96, 0xf0, 0xd4, 0x67, 0xf9, 0x3b, 0x96, 0x93,
+	0x97, 0x70, 0x50, 0xa8, 0x55, 0xc7, 0x78, 0x61, 0x76, 0x1b, 0xa7, 0x47, 0x4e, 0x36, 0x75, 0xb4,
+	0xcf, 0x0b, 0x97, 0x8c, 0x96, 0x5e, 0xf2, 0x35, 0x34, 0xf2, 0x2c, 0x0a, 0x70, 0x59, 0xe0, 0xe6,
+	0x8e, 0xf9, 0xc2, 0xe8, 0xb6, 0x28, 0x20, 0xf4, 0x8b, 0x46, 0xc8, 0xb7, 0x50, 0x2b, 0x90, 0x8d,
+	0x75, 0x2a, 0xe8, 0x3a, 0x3a, 0xfd, 0x5c, 0xe6, 0x29, 0x99, 0x24, 0xec, 0xa8, 0x5f, 0xaa, 0x63,
+	0xec, 0x14, 0x0e, 0xae, 0x43, 0x29, 0x50, 0xf2, 0x2f, 0xd5, 0xea, 0x31, 0x7e, 0xed, 0x7d, 0x9a,
+	0xff, 0x4b, 0xb0, 0x92, 0xf4, 0x96, 0x07, 0x19, 0xcf, 0x85, 0xd2, 0xd0, 0xa2, 0x75, 0x09, 0x8c,
+	0xd1, 0xb6, 0x5f, 0x81, 0x55, 0x56, 0xe4, 0x26, 0x23, 0xcf, 0x01, 0x50, 0x45, 0x2e, 0x82, 0x58,
+	0xca, 0x95, 0xb4, 0x16, 0xb5, 0x14, 0xd2, 0x97, 0xda, 0xfe, 0xc6, 0x32, 0x69, 0xe1, 0x93, 0x3c,
+	0x4c, 0x8b, 0x44, 0xc8, 0xec, 0x2f, 0xe1, 0x98, 0xbd, 0x63, 0xa9, 0x08, 0xc4, 0x3a, 0x63, 0x41,
+	0xc4, 0x63, 0xbd, 0xb1, 0x45, 0x5b, 0x0a, 0x9e, 0x20, 0x7a, 0x81, 0xa0, 0x92, 0xa9, 0xf6, 0x06,
+	0x29, 0xaa, 0x47, 0x99, 0x66, 0xb7, 0x89, 0x32, 0x15, 0x24, 0xcf, 0x23, 0x03, 0xa2, 0x9c, 0x21,
+	0x4f, 0x20, 0x92, 0xa5, 0x2c, 0x96, 0xd9, 0xad, 0x52, 0xd0, 0xd0, 0x04, 0x11, 0xf2, 0x3d, 0x34,
+	0x74, 0xc9, 0x75, 0x86, 0xea, 0x47, 0xab, 0x02, 0xc5, 0x76, 0x4d, 0x3a, 0x70, 0x98, 0x85, 0xeb,
+	0x05, 0x0f, 0xe3, 0x4e, 0x0d, 0x8f, 0xdd, 0xa4, 0x1b, 0xd3, 0xfe, 0xcb, 0x84, 0xa6, 0x9f, 0x2d,
+	0x12, 0x31, 0xe4, 0xb3, 0x49, 0x58, 0xdc, 0x91, 0xd7, 0x9b, 0x3b, 0x92, 0xda, 0x8f, 0x4e, 0xbf,
+	0x50, 0x59, 0x77, 0x02, 0xf6, 0x2e, 0xe9, 0xa1, 0x12, 0xf3, 0x49, 0x25, 0x67, 0x50, 0x5d, 0xca,
+	0xca, 0xe8, 0x0e, 0x78, 0xfe, 0xbf, 0xec, 0x94, 0x45, 0x1c, 0x63, 0xd7, 0xd7, 0x18, 0x74, 0x76,
+	0x78, 0xe3, 0xbd, 0xf5, 0x46, 0xbf, 0x7a, 0x54, 0xed, 0xb1, 0x2f, 0xa0, 0xa6, 0xc8, 0xc9, 0x11,
+	0xc0, 0x8d, 0x77, 0xee, 0xfb, 0x83, 0x4b, 0xcf, 0xed, 0xb7, 0x3f, 0x21, 0x16, 0xd4, 0x30, 0x0a,
+	0x97, 0x06, 0x69, 0x42, 0x9d, 0xba, 0xa5, 0xc3, 0x24, 0x75, 0xa8, 0xf6, 0x47, 0x9e, 0xdb, 0xae,
+	0x90, 0x43, 0xa8, 0xb8, 0x94, 0xb6, 0xab, 0xf6, 0x4f, 0xd0, 0xdc, 0xe5, 0x20, 0x0d, 0xd8, 0xb0,
+	0x60, 0xa2, 0x4f, 0xa1, 0x35, 0x1c, 0x5d, 0x06, 0xfe, 0x78, 0x38, 0x98, 0x4c, 0x06, 0xde, 0x25,
+	0x26, 0x44, 0x2e, 0x09, 0x51, 0x77, 0x3c, 0x3c, 0xff, 0xad, 0x6d, 0xda, 0x7f, 0x40, 0x6d, 0x12,
+	0x4e, 0x17, 0x8c, 0x38, 0xfb, 0x85, 0x3a, 0x96, 0x47, 0x51, 0x1e, 0x5d, 0xa1, 0xb3, 0x43, 0xd7,
+	0x3b, 0xef, 0x0d, 0xdd, 0xfe, 0xa6, 0x9f, 0x7f, 0xde, 0xa8, 0x47, 0xc6, 0xd2, 0x85, 0x8c, 0xa8,
+	0xb7, 0x3f, 0xf0, 0xb5, 0x65, 0x90, 0x16, 0x58, 0xda, 0x92, 0xdc, 0xa6, 0x74, 0xaa, 0x48, 0x69,
+	0x55, 0xec, 0x7f, 0x0c, 0x38, 0xa6, 0x0c, 0x8b, 0x15, 0x85, 0xb2, 0xdf, 0xc6, 0x0c, 0x5b, 0xfe,
+	0x2b, 0x80, 0x48, 0x37, 0xed, 0x1d, 0x5b, 0x97, 0x7d, 0xba, 0x83, 0x90, 0x1f, 0xe1, 0x59, 0x7e,
+	0xbf, 0xc5, 0x4d, 0xe3, 0x8c, 0x27, 0xa9, 0x18, 0x2c, 0xb3, 0x85, 0x7a, 0x1e, 0x16, 0x7d, 0xcc,
+	0x8d, 0xdd, 0x5c, 0xc5, 0xde, 0x0f, 0xf1, 0xa2, 0x2a, 0x78, 0xa5, 0x44, 0x9e, 0xae, 0xb7, 0x16,
+	0xac, 0x50, 0x3f, 0xe3, 0x30, 0xc9, 0xa9, 0xf2, 0x23, 0x43, 0x2b, 0xe2, 0xe9, 0x6d, 0x32, 0x5b,
+	0xe5, 0x2a, 0x09, 0x76, 0xe3, 0x76, 0x83, 0xbc, 0x71, 0x5f, 0xe4, 0x49, 0x3a, 0x53, 0x1b, 0xf6,
+	0x03, 0xed, 0xb9, 0x7c, 0x43, 0x5b, 0x72, 0x5d, 0x9b, 0x37, 0xfb, 0x45, 0x3d, 0xd1, 0x13, 0x62,
+	0x3f, 0x68, 0x7f, 0x4c, 0xd8, 0x4f, 0x97, 0xd5, 0xfe, 0x01, 0x9e, 0xed, 0x24, 0xb9, 0xc2, 0x5e,
+	0x1b, 0xf3, 0xf2, 0xd1, 0x9e, 0x40, 0x3d, 0x2b, 0xd7, 0x8a, 0xb3, 0x42, 0xb7, 0xb6, 0xfd, 0x66,
+	0xaf, 0xde, 0x43, 0x1e, 0xdd, 0xc9, 0xb9, 0xb0, 0xc0, 0xff, 0x80, 0xbf, 0x4f, 0xcb, 0x71, 0x84,
+	0x73, 0x41, 0x22, 0x23, 0x09, 0xd8, 0xff, 0x1a, 0x60, 0xa9, 0x1e, 0x50, 0xc1, 0xaf, 0x01, 0x84,
+	0x34, 0xf4, 0xdb, 0x30, 0xb0, 0xde, 0x8d, 0xd3, 0xd6, 0xb6, 0x4d, 0xd4, 0xd3, 0xb0, 0xc4, 0x66,
+	0x49, 0xbe, 0xdb, 0x4b, 0x6d, 0xaa, 0xe8, 0x87, 0x2f, 0xe9, 0x9e, 0x4a, 0xce, 0x32, 0x31, 0xc7,
+	0x91, 0x10, 0x07, 0x49, 0xac, 0x5e, 0x13, 0x2a, 0xd7, 0xc0, 0x20, 0x56, 0x83, 0xae, 0x08, 0x8a,
+	0x79, 0x98, 0xb3, 0x18, 0x2f, 0xc4, 0xe8, 0xd6, 0x71, 0xd0, 0x15, 0xbe, 0xb2, 0xd5, 0x30, 0x58,
+	0xe5, 0x78, 0x4a, 0xa6, 0x86, 0x81, 0x45, 0x37, 0xe6, 0xc3, 0xc1, 0x73, 0xa0, 0xb2, 0xee, 0x0c,
+	0x1e, 0xfb, 0x1b, 0x68, 0xf8, 0xef, 0x13, 0x11, 0xcd, 0x75, 0xc9, 0x31, 0x13, 0x4b, 0xe5, 0x01,
+	0x62, 0x75, 0xba, 0x3a, 0xdd, 0x98, 0x3d, 0x17, 0x5e, 0xf1, 0x7c, 0xe6, 0x84, 0x59, 0x18, 0xcd,
+	0x99, 0x33, 0x0f, 0x63, 0xce, 0x33, 0x67, 0x3e, 0xdd, 0x7e, 0x7d, 0xa6, 0xab, 0x5b, 0x67, 0xc6,
+	0xf0, 0x1c, 0x98, 0x26, 0xee, 0xdd, 0x7f, 0xac, 0xc6, 0xd2, 0x59, 0x5c, 0x19, 0x1f, 0x0c, 0xe3,
+	0x4f, 0xc3, 0xf8, 0x2f, 0x00, 0x00, 0xff, 0xff, 0x48, 0xdb, 0x93, 0x4c, 0xc6, 0x06, 0x00, 0x00,
 }
