@@ -205,7 +205,8 @@ func MaxVersions(versions uint32) func(Call) error {
 	}
 }
 
-// MaxResultsPerColumnFamily sets the maximum number of values returned for each row
+// MaxResultsPerColumnFamily is an option for Get or Scan requests that sets the maximum
+// number of cells returned per column family in a row
 func MaxResultsPerColumnFamily(maxresults uint32) func(Call) error {
 	opt := "'MaxResultsperColumnFamily' "
 	return func(g Call) error {
@@ -227,7 +228,8 @@ func MaxResultsPerColumnFamily(maxresults uint32) func(Call) error {
 	}
 }
 
-// ResultOffset sets the offset within a column family set of results
+// ResultOffset is a option for Scan or Get requests that sets the offset for cells
+// within a column family
 func ResultOffset(offset uint32) func(Call) error {
 	return func(g Call) error {
 		switch c := g.(type) {
