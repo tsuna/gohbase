@@ -29,7 +29,8 @@ const (
 	DefaultMaxResultSize = 2097152
 	// DefaultNumberOfRows is default maximum number of rows fetched by scanner
 	DefaultNumberOfRows = math.MaxInt32
-	// DefaultMaxResultsPerColumnFamily is the default max number of columns fetched for each row
+	// DefaultMaxResultsPerColumnFamily is the default max number of cells fetched
+	// per column family for each row
 	DefaultMaxResultsPerColumnFamily = math.MaxInt32
 )
 
