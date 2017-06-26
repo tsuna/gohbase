@@ -94,6 +94,7 @@ func TestMain(m *testing.M) {
 	log.SetLevel(log.DebugLevel)
 
 	ac := gohbase.NewAdminClient(*host)
+
 	var err error
 	for {
 		err = CreateTable(ac, table, []string{"cf", "cf2"})
@@ -116,6 +117,22 @@ func TestMain(m *testing.M) {
 	}
 
 	os.Exit(res)
+}
+
+//Test retrieval of cluster status
+func TestClusterStatus(t *testing.T) {
+	ac := gohbase.NewAdminClient(*host)
+	defer ac.(gohbase.Client).Close()
+
+	stats, err := ac.ClusterStatus()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//Sanity check the data coming back
+	if len(stats.GetMaster().GetHostName()) == 0 {
+		t.Fatal("Master hostname is empty in ClusterStatus")
+	}
 }
 
 func TestGet(t *testing.T) {

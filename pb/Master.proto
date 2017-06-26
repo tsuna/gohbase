@@ -18,8 +18,8 @@
 
 // All to do with the Master.  Includes schema management since these
 // changes are run by the Master process.
-
 package pb;
+
 option java_package = "org.apache.hadoop.hbase.protobuf.generated";
 option java_outer_classname = "MasterProtos";
 option java_generic_services = true;
@@ -30,6 +30,7 @@ import "HBase.proto";
 import "Client.proto";
 import "ClusterStatus.proto";
 import "ErrorHandling.proto";
+import "Procedure.proto";
 import "Quota.proto";
 
 /* Column-level protobufs */
@@ -37,6 +38,8 @@ import "Quota.proto";
 message AddColumnRequest {
   required TableName table_name = 1;
   required ColumnFamilySchema column_families = 2;
+  optional uint64 nonce_group = 3 [default = 0];
+  optional uint64 nonce = 4 [default = 0];
 }
 
 message AddColumnResponse {
@@ -45,6 +48,8 @@ message AddColumnResponse {
 message DeleteColumnRequest {
   required TableName table_name = 1;
   required bytes column_name = 2;
+  optional uint64 nonce_group = 3 [default = 0];
+  optional uint64 nonce = 4 [default = 0];
 }
 
 message DeleteColumnResponse {
@@ -53,6 +58,8 @@ message DeleteColumnResponse {
 message ModifyColumnRequest {
   required TableName table_name = 1;
   required ColumnFamilySchema column_families = 2;
+  optional uint64 nonce_group = 3 [default = 0];
+  optional uint64 nonce = 4 [default = 0];
 }
 
 message ModifyColumnResponse {
@@ -107,6 +114,8 @@ message OfflineRegionResponse {
 message CreateTableRequest {
   required TableSchema table_schema = 1;
   repeated bytes split_keys = 2;
+  optional uint64 nonce_group = 3 [default = 0];
+  optional uint64 nonce = 4 [default = 0];
 }
 
 message CreateTableResponse {
@@ -115,6 +124,8 @@ message CreateTableResponse {
 
 message DeleteTableRequest {
   required TableName table_name = 1;
+  optional uint64 nonce_group = 2 [default = 0];
+  optional uint64 nonce = 3 [default = 0];
 }
 
 message DeleteTableResponse {
@@ -124,6 +135,8 @@ message DeleteTableResponse {
 message TruncateTableRequest {
   required TableName tableName = 1;
   optional bool preserveSplits = 2 [default = false];
+  optional uint64 nonce_group = 3 [default = 0];
+  optional uint64 nonce = 4 [default = 0];
 }
 
 message TruncateTableResponse {
@@ -131,6 +144,8 @@ message TruncateTableResponse {
 
 message EnableTableRequest {
   required TableName table_name = 1;
+  optional uint64 nonce_group = 2 [default = 0];
+  optional uint64 nonce = 3 [default = 0];
 }
 
 message EnableTableResponse {
@@ -139,6 +154,8 @@ message EnableTableResponse {
 
 message DisableTableRequest {
   required TableName table_name = 1;
+  optional uint64 nonce_group = 2 [default = 0];
+  optional uint64 nonce = 3 [default = 0];
 }
 
 message DisableTableResponse {
@@ -148,6 +165,8 @@ message DisableTableResponse {
 message ModifyTableRequest {
   required TableName table_name = 1;
   required TableSchema table_schema = 2;
+  optional uint64 nonce_group = 3 [default = 0];
+  optional uint64 nonce = 4 [default = 0];
 }
 
 message ModifyTableResponse {
@@ -157,6 +176,8 @@ message ModifyTableResponse {
 
 message CreateNamespaceRequest {
   required NamespaceDescriptor namespaceDescriptor = 1;
+  optional uint64 nonce_group = 2 [default = 0];
+  optional uint64 nonce = 3 [default = 0];
 }
 
 message CreateNamespaceResponse {
@@ -164,6 +185,8 @@ message CreateNamespaceResponse {
 
 message DeleteNamespaceRequest {
   required string namespaceName = 1;
+  optional uint64 nonce_group = 2 [default = 0];
+  optional uint64 nonce = 3 [default = 0];
 }
 
 message DeleteNamespaceResponse {
@@ -171,6 +194,8 @@ message DeleteNamespaceResponse {
 
 message ModifyNamespaceRequest {
   required NamespaceDescriptor namespaceDescriptor = 1;
+  optional uint64 nonce_group = 2 [default = 0];
+  optional uint64 nonce = 3 [default = 0];
 }
 
 message ModifyNamespaceResponse {
@@ -223,6 +248,7 @@ message StopMasterResponse {
 }
 
 message BalanceRequest {
+  optional bool force = 1;
 }
 
 message BalanceResponse {
@@ -242,6 +268,51 @@ message IsBalancerEnabledRequest {
 }
 
 message IsBalancerEnabledResponse {
+  required bool enabled = 1;
+}
+
+enum MasterSwitchType {
+  SPLIT = 0;
+  MERGE = 1;
+}
+
+message SetSplitOrMergeEnabledRequest {
+  required bool enabled = 1;
+  optional bool synchronous = 2;
+  repeated MasterSwitchType switch_types = 3;
+}
+
+message SetSplitOrMergeEnabledResponse {
+  repeated bool prev_value = 1;
+}
+
+message IsSplitOrMergeEnabledRequest {
+  required MasterSwitchType switch_type = 1;
+}
+
+message IsSplitOrMergeEnabledResponse {
+  required bool enabled = 1;
+}
+
+message NormalizeRequest {
+}
+
+message NormalizeResponse {
+  required bool normalizer_ran = 1;
+}
+
+message SetNormalizerRunningRequest {
+  required bool on = 1;
+}
+
+message SetNormalizerRunningResponse {
+  optional bool prev_normalizer_value = 1;
+}
+
+message IsNormalizerEnabledRequest {
+}
+
+message IsNormalizerEnabledResponse {
   required bool enabled = 1;
 }
 
@@ -361,21 +432,21 @@ message IsMasterRunningResponse {
 }
 
 message ExecProcedureRequest {
-        required ProcedureDescription procedure = 1;
+  required ProcedureDescription procedure = 1;
 }
 
 message ExecProcedureResponse {
-        optional int64 expected_timeout = 1;
-        optional bytes return_data = 2;
+  optional int64 expected_timeout = 1;
+  optional bytes return_data = 2;
 }
 
 message IsProcedureDoneRequest {
-        optional ProcedureDescription procedure = 1;
+  optional ProcedureDescription procedure = 1;
 }
 
 message IsProcedureDoneResponse {
-        optional bool done = 1 [default = false];
-        optional ProcedureDescription snapshot = 2;
+  optional bool done = 1 [default = false];
+  optional ProcedureDescription snapshot = 2;
 }
 
 message GetProcedureResultRequest {
@@ -394,6 +465,22 @@ message GetProcedureResultResponse {
   optional uint64 last_update = 3;
   optional bytes result = 4;
   optional ForeignExceptionMessage exception = 5;
+}
+
+message AbortProcedureRequest {
+  required uint64 proc_id = 1;
+  optional bool mayInterruptIfRunning = 2 [default = true];
+}
+
+message AbortProcedureResponse {
+  required bool is_procedure_aborted = 1;
+}
+
+message ListProceduresRequest {
+}
+
+message ListProceduresResponse {
+  repeated Procedure procedure = 1;
 }
 
 message SetQuotaRequest {
@@ -420,6 +507,21 @@ message MajorCompactionTimestampForRegionRequest {
 
 message MajorCompactionTimestampResponse {
   required int64 compaction_timestamp = 1;
+}
+
+message SecurityCapabilitiesRequest {
+}
+
+message SecurityCapabilitiesResponse {
+  enum Capability {
+    SIMPLE_AUTHENTICATION = 0;
+    SECURE_AUTHENTICATION = 1;
+    AUTHORIZATION = 2;
+    CELL_AUTHORIZATION = 3;
+    CELL_VISIBILITY = 4;
+  }
+
+  repeated Capability capabilities = 1;
 }
 
 service MasterService {
@@ -537,6 +639,37 @@ service MasterService {
   rpc IsBalancerEnabled(IsBalancerEnabledRequest)
     returns(IsBalancerEnabledResponse);
 
+  /**
+   * Turn the split or merge switch on or off.
+   * If synchronous is true, it waits until current operation call, if outstanding, to return.
+   */
+  rpc SetSplitOrMergeEnabled(SetSplitOrMergeEnabledRequest)
+    returns(SetSplitOrMergeEnabledResponse);
+
+  /**
+   * Query whether the split or merge switch is on/off.
+   */
+  rpc IsSplitOrMergeEnabled(IsSplitOrMergeEnabledRequest)
+    returns(IsSplitOrMergeEnabledResponse);
+
+  /**
+   * Run region normalizer. Can NOT run for various reasons. Check logs.
+   */
+  rpc Normalize(NormalizeRequest)
+  returns(NormalizeResponse);
+
+  /**
+   * Turn region normalizer on or off.
+   */
+  rpc SetNormalizerRunning(SetNormalizerRunningRequest)
+  returns(SetNormalizerRunningResponse);
+
+  /**
+   * Query whether region normalizer is enabled.
+   */
+  rpc IsNormalizerEnabled(IsNormalizerEnabledRequest)
+  returns(IsNormalizerEnabledResponse);
+
   /** Get a run of the catalog janitor */
   rpc RunCatalogScan(RunCatalogScanRequest)
      returns(RunCatalogScanResponse);
@@ -649,4 +782,16 @@ service MasterService {
 
   rpc getProcedureResult(GetProcedureResultRequest)
     returns(GetProcedureResultResponse);
+
+  /** Returns the security capabilities in effect on the cluster */
+  rpc getSecurityCapabilities(SecurityCapabilitiesRequest)
+    returns(SecurityCapabilitiesResponse);
+
+  /** Abort a procedure */
+  rpc AbortProcedure(AbortProcedureRequest)
+    returns(AbortProcedureResponse);
+
+  /** returns a list of procedures */
+  rpc ListProcedures(ListProceduresRequest)
+    returns(ListProceduresResponse);
 }

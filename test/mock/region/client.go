@@ -8,69 +8,81 @@ import (
 	hrpc "github.com/tsuna/gohbase/hrpc"
 )
 
-// Mock of RegionClient interface
+// MockRegionClient is a mock of RegionClient interface
 type MockRegionClient struct {
 	ctrl     *gomock.Controller
-	recorder *_MockRegionClientRecorder
+	recorder *MockRegionClientMockRecorder
 }
 
-// Recorder for MockRegionClient (not exported)
-type _MockRegionClientRecorder struct {
+// MockRegionClientMockRecorder is the mock recorder for MockRegionClient
+type MockRegionClientMockRecorder struct {
 	mock *MockRegionClient
 }
 
+// NewMockRegionClient creates a new mock instance
 func NewMockRegionClient(ctrl *gomock.Controller) *MockRegionClient {
 	mock := &MockRegionClient{ctrl: ctrl}
-	mock.recorder = &_MockRegionClientRecorder{mock}
+	mock.recorder = &MockRegionClientMockRecorder{mock}
 	return mock
 }
 
-func (_m *MockRegionClient) EXPECT() *_MockRegionClientRecorder {
+// EXPECT returns an object that allows the caller to indicate expected use
+func (_m *MockRegionClient) EXPECT() *MockRegionClientMockRecorder {
 	return _m.recorder
 }
 
+// Close mocks base method
 func (_m *MockRegionClient) Close() {
 	_m.ctrl.Call(_m, "Close")
 }
 
-func (_mr *_MockRegionClientRecorder) Close() *gomock.Call {
+// Close indicates an expected call of Close
+func (_mr *MockRegionClientMockRecorder) Close() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Close")
 }
 
+// Host mocks base method
 func (_m *MockRegionClient) Host() string {
 	ret := _m.ctrl.Call(_m, "Host")
 	ret0, _ := ret[0].(string)
 	return ret0
 }
 
-func (_mr *_MockRegionClientRecorder) Host() *gomock.Call {
+// Host indicates an expected call of Host
+func (_mr *MockRegionClientMockRecorder) Host() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Host")
 }
 
+// Port mocks base method
 func (_m *MockRegionClient) Port() uint16 {
 	ret := _m.ctrl.Call(_m, "Port")
 	ret0, _ := ret[0].(uint16)
 	return ret0
 }
 
-func (_mr *_MockRegionClientRecorder) Port() *gomock.Call {
+// Port indicates an expected call of Port
+func (_mr *MockRegionClientMockRecorder) Port() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Port")
 }
 
+// QueueRPC mocks base method
 func (_m *MockRegionClient) QueueRPC(_param0 hrpc.Call) {
 	_m.ctrl.Call(_m, "QueueRPC", _param0)
 }
 
-func (_mr *_MockRegionClientRecorder) QueueRPC(arg0 interface{}) *gomock.Call {
+// QueueRPC indicates an expected call of QueueRPC
+func (_mr *MockRegionClientMockRecorder) QueueRPC(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "QueueRPC", arg0)
 }
 
+// String mocks base method
 func (_m *MockRegionClient) String() string {
 	ret := _m.ctrl.Call(_m, "String")
 	ret0, _ := ret[0].(string)
 	return ret0
 }
 
-func (_mr *_MockRegionClientRecorder) String() *gomock.Call {
+// String indicates an expected call of String
+func (_mr *MockRegionClientMockRecorder) String() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "String")
 }
