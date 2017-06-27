@@ -39,7 +39,15 @@ var (
 	// doesn't exist on this cluster.
 	TableNotFound = errors.New("table not found")
 
-	// Default timeouts
+	// ErrCannotFindRegion is returned when it took too many tries to find a
+	// region for the request. It's likely that hbase:meta has overlaps or some other
+	// inconsistency.
+	ErrConnotFindRegion = errors.New("cannot find region for the rpc")
+)
+
+const (
+	// maxSendRPCTries is the maximum number of times to try to send an RPC
+	maxSendRPCTries = 10
 
 	// How long to wait for a region lookup (either meta lookup or finding
 	// meta in ZooKeeper).  Should be greater than or equal to the ZooKeeper
@@ -50,14 +58,9 @@ var (
 )
 
 func (c *client) SendRPC(rpc hrpc.Call) (proto.Message, error) {
-	// Check the cache for a region that can handle this request
 	var err error
-
-	for {
-		// block in case someone is updating regions.
-		// for example someone is replacing a region with a new one,
-		// we want to wait for that to finish so that we don't do
-		// unnecessary region lookups in case that's our region.
+	for i := 0; i < maxSendRPCTries; i++ {
+		// Check the cache for a region that can handle this request
 		reg := c.getRegionFromCache(rpc.Table(), rpc.Key())
 		if reg == nil {
 			reg, err = c.findRegion(rpc.Context(), rpc.Table(), rpc.Key())
@@ -84,6 +87,7 @@ func (c *client) SendRPC(rpc hrpc.Call) (proto.Message, error) {
 			return msg, err
 		}
 	}
+	return nil, ErrConnotFindRegion
 }
 
 func sendBlocking(rc hrpc.RegionClient, rpc hrpc.Call) (hrpc.RPCResult, error) {

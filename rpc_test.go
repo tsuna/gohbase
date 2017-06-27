@@ -580,6 +580,39 @@ func TestFindRegion(t *testing.T) {
 	}
 }
 
+func TestErrConnotFindRegion(t *testing.T) {
+	c := newMockClient(nil)
+
+	rc, err := region.NewClient(context.Background(), "regionserver", 0,
+		region.RegionClient, 0, 0, "root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// pretend regionserver:0 has meta table
+	c.metaRegionInfo.SetClient(rc)
+	c.clients.put(rc, c.metaRegionInfo)
+
+	// add young and small region to cache
+	origlReg := region.NewInfo(1434573235910, nil, []byte("test"),
+		[]byte("test,yolo,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("yolo"), nil)
+	c.regions.put(origlReg)
+	c.clients.put(rc, origlReg)
+	origlReg.SetClient(rc)
+
+	// request a key not in the "yolo" region.
+	get, err := hrpc.NewGetStr(context.Background(), "test", "meow")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// it should lookup a new older region (1434573235908) that overlaps with the one in cache.
+	// However, it shouldn't be put into cache, as it's older, resulting in a new lookup,
+	// evetually leading to ErrConnotFindRegion.
+	_, err = c.Get(get)
+	if err != ErrConnotFindRegion {
+		t.Errorf("Expected error %v, got error %v", ErrConnotFindRegion, err)
+	}
+}
+
 func TestConcurrentRetryableError(t *testing.T) {
 	ctrl := test.NewController(t)
 	defer ctrl.Finish()
