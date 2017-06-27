@@ -466,7 +466,8 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, host string, port uint16) 
 		}
 
 		// connect to the region's regionserver
-		if client, err := c.establishRegionClient(reg, host, port); err == nil {
+		client, err := c.establishRegionClient(reg, host, port)
+		if err == nil {
 			if c.clientType != adminClient {
 				if existing := c.clients.put(client, reg); existing != client {
 					// a client for this regionserver is already in cache, discard this one.
