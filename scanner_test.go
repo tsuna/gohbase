@@ -202,20 +202,20 @@ func TestScannerCloseBuffered(t *testing.T) {
 	c.EXPECT().SendRPC(s).Do(func(rpc hrpc.Call) {
 		rpc.SetRegion(r)
 	}).Return(&pb.ScanResponse{
-		ScannerId:           cp(scannerID),
+		ScannerId:           proto.Uint64(scannerID),
 		MoreResultsInRegion: proto.Bool(true),
 		Results:             dup(resultsPB[:2]), // we got 2 rows
 	}, nil).Times(1)
 
-	// expecting to have one more fetch since we fetch next rows in async while previous
-	// response is being consumed
+	// expecting to have a possible extra fetch since we fetch next rows
+	// in async while previous response is being processed
 	c.EXPECT().SendRPC(hrpc.NewScanFromID(ctx, table, scannerID, nil)).Do(func(rpc hrpc.Call) {
 		rpc.SetRegion(r)
 	}).Return(&pb.ScanResponse{
-		ScannerId:           cp(scannerID),
+		ScannerId:           proto.Uint64(scannerID),
 		MoreResultsInRegion: proto.Bool(true),
 		Results:             dup(resultsPB[2:3]), // we got 1 row
-	}, nil).Times(1)
+	}, nil).MaxTimes(1)
 
 	// expect scan close rpc to be sent
 	c.EXPECT().SendRPC(

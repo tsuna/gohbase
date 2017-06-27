@@ -707,17 +707,15 @@ func TestSanity(t *testing.T) {
 	defer ctrl.Finish()
 	mockConn := mock.NewMockConn(ctrl)
 	c := &client{
-		conn: mockConn,
-		rpcs: make(chan hrpc.Call),
-		done: make(chan struct{}),
-		sent: make(map[uint32]hrpc.Call),
-		// queue size is 1 so that all QueueRPC calls trigger sendBatch,
-		// and buffer slice reset
-		rpcQueueSize:  1,
+		conn:          mockConn,
+		rpcs:          make(chan hrpc.Call),
+		done:          make(chan struct{}),
+		sent:          make(map[uint32]hrpc.Call),
+		rpcQueueSize:  1, // size one to skip sendBatch
 		flushInterval: 1000 * time.Second,
 	}
 
-	var wg, wgOps sync.WaitGroup
+	var wg sync.WaitGroup
 
 	wg.Add(1)
 	go func() {
@@ -734,12 +732,10 @@ func TestSanity(t *testing.T) {
 	app.SetRegion(
 		NewInfo(0, nil, []byte("test1"), []byte("test1,,lololololololololololo"), nil, nil))
 
-	wgOps.Add(1)
-	mockConn.EXPECT().Write(gomock.Any()).Times(1).Return(0, nil).
-		Do(func(buf []byte) { wgOps.Done() })
+	mockConn.EXPECT().Write(gomock.Any()).Times(1).Return(0, nil)
 	mockConn.EXPECT().SetReadDeadline(gomock.Any()).Times(1)
+
 	c.QueueRPC(app)
-	wgOps.Wait()
 
 	response := []byte{6, 8, 1, 26, 2, 8, 38, 6, 10, 4, 16, 1, 32, 0, 0, 0, 0, 34, 0, 0, 0, 22,
 		0, 0, 0, 4, 0, 4, 121, 111, 108, 111, 2, 99, 102, 115, 119, 97, 103, 0, 0, 0, 0, 0, 0,
@@ -753,8 +749,8 @@ func TestSanity(t *testing.T) {
 		copy(buf, response)
 
 		// stall the next read
-		mockConn.EXPECT().Read(readBufSizeMatcher{l: 4}).Times(1).Return(0, errors.New("closed")).
-			Do(func(buf []byte) { <-c.done })
+		mockConn.EXPECT().Read(readBufSizeMatcher{l: 4}).MaxTimes(1).
+			Return(0, errors.New("closed")).Do(func(buf []byte) { <-c.done })
 	})
 	mockConn.EXPECT().SetReadDeadline(time.Time{}).Times(1)
 	wg.Add(1)

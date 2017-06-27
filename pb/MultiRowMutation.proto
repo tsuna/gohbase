@@ -15,8 +15,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import "Client.proto";
 package pb;
+
+import "Client.proto";
 option java_package = "org.apache.hadoop.hbase.protobuf.generated";
 option java_outer_classname = "MultiRowMutationProtos";
 option java_generate_equals_and_hash = true;

@@ -17,8 +17,8 @@
  */
 
 // This file contains protocol buffers that are shared throughout HBase
-
 package pb;
+
 option java_package = "org.apache.hadoop.hbase.protobuf.generated";
 option java_outer_classname = "HBaseProtos";
 option java_generate_equals_and_hash = true;
@@ -103,6 +103,12 @@ message RegionSpecifier {
 message TimeRange {
   optional uint64 from = 1;
   optional uint64 to = 2;
+}
+
+/* ColumnFamily Specific TimeRange */
+message ColumnFamilyTimeRange {
+  required bytes column_family = 1;
+  required TimeRange time_range = 2;
 }
 
 /* Comparison operators */
@@ -213,9 +219,22 @@ message NamespaceDescriptor {
   repeated NameStringPair configuration = 2;
 }
 
+// Rpc client version info proto. Included in ConnectionHeader on connection setup
+message VersionInfo {
+  required string version = 1;
+  required string url = 2;
+  required string revision = 3;
+  required string user = 4;
+  required string date = 5;
+  required string src_checksum = 6;
+  optional uint32 version_major = 7;
+  optional uint32 version_minor = 8;
+}
+
 /**
  * Description of the region server info
  */
 message RegionServerInfo {
   optional int32 infoPort = 1;
+  optional VersionInfo version_info = 2;
 }
