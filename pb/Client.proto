@@ -29,7 +29,7 @@ import "HBase.proto";
 import "Filter.proto";
 import "Cell.proto";
 import "Comparator.proto";
-import "MapReduce.proto";
+//import "MapReduce.proto";
 
 /**
  * The protocol buffer version of Authorizations.
@@ -331,7 +331,7 @@ message ScanResponse {
   // This field is filled in if the client has requested that scan metrics be tracked.
   // The metrics tracked here are sent back to the client to be tracked together with 
   // the existing client side metrics.
-  optional ScanMetrics scan_metrics = 10;
+  //optional ScanMetrics scan_metrics = 10; // not in gohbase
 }
 
 /**
