@@ -15,10 +15,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import "Tracing.proto";
+package pb;
+
+import "Tracing.proto"; 
 import "HBase.proto";
 
-package pb;
 option java_package = "org.apache.hadoop.hbase.protobuf.generated";
 option java_outer_classname = "RPCProtos";
 option java_generate_equals_and_hash = true;
@@ -77,16 +78,6 @@ message UserInformation {
   optional string real_user = 2;
 }
 
-// Rpc client version info proto. Included in ConnectionHeader on connection setup
-message VersionInfo {
-  required string version = 1;
-  required string url = 2;
-  required string revision = 3;
-  required string user = 4;
-  required string date = 5;
-  required string src_checksum = 6;
-}
-
 // This is sent on connection setup after the connection preamble is sent.
 message ConnectionHeader {
   optional UserInformation user_info = 1;
@@ -134,6 +125,7 @@ message RequestHeader {
   // 0 is NORMAL priority.  200 is HIGH.  If no priority, treat it as NORMAL.
   // See HConstants.
   optional uint32 priority = 6;
+  optional uint32 timeout = 7;
 }
 
 message ResponseHeader {

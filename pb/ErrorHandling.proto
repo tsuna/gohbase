@@ -17,8 +17,8 @@
  */
 
 // This file contains protocol buffers that are used for error handling
-
 package pb;
+
 option java_package = "org.apache.hadoop.hbase.protobuf.generated";
 option java_outer_classname = "ErrorHandlingProtos";
 option java_generate_equals_and_hash = true;

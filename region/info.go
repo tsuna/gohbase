@@ -217,7 +217,7 @@ func (i *info) Context() context.Context {
 
 func (i *info) String() string {
 	return fmt.Sprintf(
-		"RegionInfo{Name: %s, ID: %d, Namespace: %s, Table: %s, StartKey: %s, StopKey: %s}",
+		"RegionInfo{Name: %q, ID: %d, Namespace: %q, Table: %q, StartKey: %q, StopKey: %q}",
 		i.name, i.id, i.namespace, i.table, i.startKey, i.stopKey)
 }
 
