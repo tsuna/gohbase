@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -189,16 +190,16 @@ func (c *client) lookupRegion(ctx context.Context,
 			reg = c.metaRegionInfo
 		} else {
 			log.WithFields(log.Fields{
-				"table": string(table),
-				"key":   string(key),
+				"table": strconv.Quote(string(table)),
+				"key":   strconv.Quote(string(key)),
 			}).Debug("looking up region")
 
 			reg, host, port, err = c.metaLookup(lookupCtx, table, key)
 			cancel()
 			if err == TableNotFound {
 				log.WithFields(log.Fields{
-					"table": string(table),
-					"key":   string(key),
+					"table": strconv.Quote(string(table)),
+					"key":   strconv.Quote(string(key)),
 					"err":   err,
 				}).Debug("hbase:meta does not know about this table/key")
 				return nil, "", 0, err
@@ -206,8 +207,8 @@ func (c *client) lookupRegion(ctx context.Context,
 		}
 		if err == nil {
 			log.WithFields(log.Fields{
-				"table":  string(table),
-				"key":    string(key),
+				"table":  strconv.Quote(string(table)),
+				"key":    strconv.Quote(string(key)),
 				"region": reg,
 				"host":   host,
 				"port":   port,
@@ -216,8 +217,8 @@ func (c *client) lookupRegion(ctx context.Context,
 			return reg, host, port, nil
 		}
 		log.WithFields(log.Fields{
-			"table":   string(table),
-			"key":     string(key),
+			"table":   strconv.Quote(string(table)),
+			"key":     strconv.Quote(string(key)),
 			"backoff": backoff,
 			"err":     err,
 		}).Error("failed looking up region")
