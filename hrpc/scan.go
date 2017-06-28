@@ -29,6 +29,9 @@ const (
 	DefaultMaxResultSize = 2097152
 	// DefaultNumberOfRows is default maximum number of rows fetched by scanner
 	DefaultNumberOfRows = math.MaxInt32
+	// DefaultMaxResultsPerColumnFamily is the default max number of cells fetched
+	// per column family for each row
+	DefaultMaxResultsPerColumnFamily = math.MaxInt32
 )
 
 // Scanner is used to read data sequentially from HBase.
@@ -69,6 +72,9 @@ type Scan struct {
 	fromTimestamp uint64
 	toTimestamp   uint64
 
+	storeLimit  uint32
+	storeOffset uint32
+
 	maxVersions uint32
 
 	scannerID uint64
@@ -93,6 +99,8 @@ func baseScan(ctx context.Context, table []byte,
 		fromTimestamp: MinTimestamp,
 		toTimestamp:   MaxTimestamp,
 		maxVersions:   DefaultMaxVersions,
+		storeLimit:    DefaultMaxResultsPerColumnFamily,
+		storeOffset:   0,
 		scannerID:     math.MaxUint64,
 		maxResultSize: DefaultMaxResultSize,
 		numberOfRows:  DefaultNumberOfRows,
@@ -213,6 +221,16 @@ func (s *Scan) MaxResultSize() uint64 {
 	return s.maxResultSize
 }
 
+// MaxResultsPerColumnFamily returns the maximum number of columns to be returned per row
+func (s *Scan) MaxResultsPerColumnFamily() uint32 {
+	return s.storeLimit
+}
+
+// ResultOffset returns the column offset to be returned per row
+func (s *Scan) ResultOffset() uint32 {
+	return s.storeOffset
+}
+
 // NumberOfRows returns maximum number of rows that will be fetched
 // with each scan request to regionserver.
 func (s *Scan) NumberOfRows() uint32 {
@@ -250,6 +268,15 @@ func (s *Scan) ToProto() (proto.Message, error) {
 	if s.maxVersions != DefaultMaxVersions {
 		scan.Scan.MaxVersions = &s.maxVersions
 	}
+
+	/* added support for limit number of cells per row */
+	if s.storeLimit != DefaultMaxResultsPerColumnFamily {
+		scan.Scan.StoreLimit = &s.storeLimit
+	}
+	if s.storeOffset != 0 {
+		scan.Scan.StoreOffset = &s.storeOffset
+	}
+
 	if s.fromTimestamp != MinTimestamp {
 		scan.Scan.TimeRange.From = &s.fromTimestamp
 	}
