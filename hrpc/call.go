@@ -205,6 +205,51 @@ func MaxVersions(versions uint32) func(Call) error {
 	}
 }
 
+// MaxResultsPerColumnFamily is an option for Get or Scan requests that sets the maximum
+// number of cells returned per column family in a row
+func MaxResultsPerColumnFamily(maxresults uint32) func(Call) error {
+	opt := "'MaxResultsperColumnFamily' "
+	return func(g Call) error {
+		switch c := g.(type) {
+		default:
+			return errors.New(opt + "option can only be used with Get or Scan queries")
+		case *Get:
+			if maxresults > math.MaxInt32 {
+				return errors.New(opt + "exceeds supported number of value results")
+			}
+			c.storeLimit = maxresults
+		case *Scan:
+			if maxresults > math.MaxInt32 {
+				return errors.New(opt + "exceeds supported number of value results")
+			}
+			c.storeLimit = maxresults
+		}
+		return nil
+	}
+}
+
+// ResultOffset is a option for Scan or Get requests that sets the offset for cells
+// within a column family
+func ResultOffset(offset uint32) func(Call) error {
+	return func(g Call) error {
+		switch c := g.(type) {
+		default:
+			return errors.New("'ResultOffset' option can only be used with Get or Scan queries")
+		case *Get:
+			if offset > math.MaxInt32 {
+				return errors.New("'ResultOffset' exceeds supported offset value")
+			}
+			c.storeOffset = offset
+		case *Scan:
+			if offset > math.MaxInt32 {
+				return errors.New("'ResultOffset' exceeds supported offset value")
+			}
+			c.storeOffset = offset
+		}
+		return nil
+	}
+}
+
 // Cell is the smallest level of granularity in returned results.
 // Represents a single cell in HBase (a row will have one cell for every qualifier).
 type Cell pb.Cell
