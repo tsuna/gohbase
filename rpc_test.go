@@ -320,6 +320,45 @@ func TestEstablishClientConcurrent(t *testing.T) {
 	}
 }
 
+func TestEstablishUnrecoverlableErrorDuringProbe(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+	c := newMockClient(nil)
+
+	rc, err := region.NewClient(
+		context.Background(), "regionserver:0", region.RegionClient, 0, 0, "root")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// pretend regionserver:0 has meta table
+	c.metaRegionInfo.SetClient(rc)
+	c.clients.put(rc, c.metaRegionInfo)
+
+	mockCall := mock.NewMockCall(ctrl)
+	mockCall.EXPECT().Context().Return(context.Background()).AnyTimes()
+	mockCall.EXPECT().Table().Return([]byte("down")).AnyTimes()
+	mockCall.EXPECT().Key().Return([]byte("yolo")).AnyTimes()
+	mockCall.EXPECT().SetRegion(gomock.Any()).AnyTimes()
+	result := make(chan hrpc.RPCResult, 1)
+	// pretend that response is successful
+	expMsg := &pb.GetResponse{}
+	result <- hrpc.RPCResult{Msg: expMsg}
+	mockCall.EXPECT().ResultChan().Return(result).Times(1)
+	msg, err := c.SendRPC(mockCall)
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err)
+	}
+	if diff := atest.Diff(expMsg, msg); diff != "" {
+		t.Errorf("Expected: %#v\nReceived: %#v\nDiff:%s",
+			expMsg, msg, diff)
+	}
+
+	if len(c.clients.regions) != 2 {
+		t.Errorf("expected to have 2 clients in cache, got %d", len(c.clients.regions))
+	}
+}
+
 // TestSendRPCToRegionClientDownDelayed check that the we don't replace a newly
 // looked up client (by other goroutine) in clients cache if we are too slow
 // at finding out that our old client died.

@@ -148,16 +148,7 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 				go c.reestablishRegion(reg)
 			}
 		} else {
-			// Else this is a normal region. Mark all the regions
-			// sharing this region's client as unavailable, and start
-			// a goroutine to reconnect for each of them.
-			downregions := c.clients.clientDown(client)
-			for downreg := range downregions {
-				if downreg.MarkUnavailable() {
-					downreg.SetClient(nil)
-					go c.reestablishRegion(downreg)
-				}
-			}
+			c.clientDown(client)
 		}
 
 		// Fall through to the case of the region being unavailable,
@@ -167,6 +158,20 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 		// RPC was successfully sent, or an unknown type of error
 		// occurred. In either case, return the results.
 		return res.Msg, res.Error
+	}
+}
+
+// clientDown removes client from cache and marks
+// all the regions sharing this region's
+// client as unavailable, and start a goroutine
+// to reconnect for each of them.
+func (c *client) clientDown(client hrpc.RegionClient) {
+	downregions := c.clients.clientDown(client)
+	for downreg := range downregions {
+		if downreg.MarkUnavailable() {
+			downreg.SetClient(nil)
+			go c.reestablishRegion(downreg)
+		}
 	}
 }
 
@@ -480,6 +485,9 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 				reg.SetClient(client)
 				reg.MarkAvailable()
 				return
+			} else if _, ok := err.(region.UnrecoverableError); ok {
+				// the client we got died
+				c.clientDown(client)
 			}
 		} else if err == context.Canceled {
 			// region is dead
