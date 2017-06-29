@@ -19,8 +19,7 @@ import (
 )
 
 type testClient struct {
-	host    string
-	port    uint16
+	addr    string
 	numNSRE int32
 }
 
@@ -137,24 +136,17 @@ var test1SplitB = &pb.Result{Cell: []*pb.Cell{
 }}
 
 // NewClient creates a new test region client.
-func NewClient(ctx context.Context, host string, port uint16, ctype ClientType,
+func NewClient(ctx context.Context, addr string, ctype ClientType,
 	queueSize int, flushInterval time.Duration, effectiveUser string) (hrpc.RegionClient, error) {
-	return &testClient{
-		host: host,
-		port: port,
-	}, nil
+	return &testClient{addr: addr}, nil
 }
 
-func (c *testClient) Host() string {
-	return c.host
-}
-
-func (c *testClient) Port() uint16 {
-	return c.port
+func (c *testClient) Addr() string {
+	return c.addr
 }
 
 func (c *testClient) String() string {
-	return fmt.Sprintf("RegionClient{Host: %s, Port %d}", c.host, c.port)
+	return fmt.Sprintf("RegionClient{Addr: %s}", c.addr)
 }
 
 func (c *testClient) QueueRPC(call hrpc.Call) {

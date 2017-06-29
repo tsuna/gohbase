@@ -11,7 +11,6 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"strconv"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
@@ -109,11 +108,10 @@ func infoFromCell(cell *hrpc.Cell) (hrpc.RegionInfo, error) {
 }
 
 // ParseRegionInfo parses the contents of a row from the meta table.
-// It's guaranteed to return a region info and a host/port OR return an error.
-func ParseRegionInfo(metaRow *hrpc.Result) (hrpc.RegionInfo, string, uint16, error) {
+// It's guaranteed to return a region info and a host:port OR return an error.
+func ParseRegionInfo(metaRow *hrpc.Result) (hrpc.RegionInfo, string, error) {
 	var reg hrpc.RegionInfo
-	var host string
-	var port uint16
+	var addr string
 
 	for _, cell := range metaRow.Cells {
 		switch string(cell.Qualifier) {
@@ -121,24 +119,14 @@ func ParseRegionInfo(metaRow *hrpc.Result) (hrpc.RegionInfo, string, uint16, err
 			var err error
 			reg, err = infoFromCell(cell)
 			if err != nil {
-				return nil, "", 0, err
+				return nil, "", err
 			}
 		case "server":
 			value := cell.Value
 			if len(value) == 0 {
 				continue // Empty during NSRE.
 			}
-			colon := bytes.IndexByte(value, ':')
-			if colon < 1 { // Colon can't be at the beginning.
-				return nil, "", 0,
-					fmt.Errorf("broken meta: no colon found in info:server %q", cell)
-			}
-			host = string(value[:colon])
-			portU64, err := strconv.ParseUint(string(value[colon+1:]), 10, 16)
-			if err != nil {
-				return nil, "", 0, err
-			}
-			port = uint16(portU64)
+			addr = string(value)
 		default:
 			// Other kinds of qualifiers: ignore them.
 			// TODO: If this is the parent of a split region, there are two other
@@ -149,17 +137,13 @@ func ParseRegionInfo(metaRow *hrpc.Result) (hrpc.RegionInfo, string, uint16, err
 	}
 
 	if reg == nil {
-		// There was no region in the row in meta, this is really not
-		// expected.
-		err := fmt.Errorf("meta seems to be broken, there was no region in %v",
-			metaRow)
-		return nil, "", 0, err
-	} else if port == 0 { // Either both `host' and `port' are set, or both aren't.
-		return nil, "", 0, fmt.Errorf("meta doesn't have a server location in %v",
-			metaRow)
+		// There was no region in the row in meta, this is really not expected.
+		return nil, "", fmt.Errorf("meta seems to be broken, there was no region in %v", metaRow)
 	}
-
-	return reg, host, port, nil
+	if len(addr) == 0 {
+		return nil, "", fmt.Errorf("meta doesn't have a server location in %v", metaRow)
+	}
+	return reg, addr, nil
 }
 
 // IsUnavailable returns true if this region has been marked as unavailable.

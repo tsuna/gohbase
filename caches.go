@@ -30,7 +30,7 @@ func (rcc *clientRegionCache) put(c hrpc.RegionClient, r hrpc.RegionInfo) hrpc.R
 	for existingClient, regions := range rcc.regions {
 		// check if client already exists, checking by host and port
 		// because concurrent callers might try to put the same client
-		if c.Host() == existingClient.Host() && c.Port() == existingClient.Port() {
+		if c.Addr() == existingClient.Addr() {
 			// check client already knows about the region, checking
 			// by pointer is enough because we make sure that there are
 			// no regions with the same name around
@@ -91,11 +91,11 @@ func (rcc *clientRegionCache) clientDown(c hrpc.RegionClient) map[hrpc.RegionInf
 }
 
 // TODO: obvious place for optimization (use map with address as key to lookup exisiting clients)
-func (rcc *clientRegionCache) checkForClient(host string, port uint16) hrpc.RegionClient {
+func (rcc *clientRegionCache) checkForClient(addr string) hrpc.RegionClient {
 	rcc.m.RLock()
 
 	for client := range rcc.regions {
-		if client.Host() == host && client.Port() == port {
+		if client.Addr() == addr {
 			rcc.m.RUnlock()
 			return client
 		}

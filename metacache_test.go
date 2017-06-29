@@ -40,8 +40,7 @@ func TestMetaCache(t *testing.T) {
 	defer ctrl.Finish()
 	regClient := mockRegion.NewMockRegionClient(ctrl)
 	regClient.EXPECT().String().Return("mock region client").AnyTimes()
-	regClient.EXPECT().Host().Return("regionserver").AnyTimes()
-	regClient.EXPECT().Port().Return(uint16(1)).AnyTimes()
+	regClient.EXPECT().Addr().Return("regionserver:1").AnyTimes()
 
 	client.regions.put(wholeTable)
 	client.clients.put(regClient, wholeTable)
@@ -633,8 +632,7 @@ func TestClientCachePut(t *testing.T) {
 	defer ctrl.Finish()
 	regClient := mockRegion.NewMockRegionClient(ctrl)
 	regClient.EXPECT().String().Return("mock region client").AnyTimes()
-	regClient.EXPECT().Host().Return("regionserver").AnyTimes()
-	regClient.EXPECT().Port().Return(uint16(1)).AnyTimes()
+	regClient.EXPECT().Addr().Return("regionserver:1").AnyTimes()
 
 	existing := client.clients.put(regClient, region.NewInfo(
 		0,
@@ -659,8 +657,7 @@ func TestClientCachePut(t *testing.T) {
 	// try putting client with the same host port
 	regClient2 := mockRegion.NewMockRegionClient(ctrl)
 	regClient.EXPECT().String().Return("mock region client").AnyTimes()
-	regClient2.EXPECT().Host().Return("regionserver").AnyTimes()
-	regClient2.EXPECT().Port().Return(uint16(1)).AnyTimes()
+	regClient2.EXPECT().Addr().Return("regionserver:1").AnyTimes()
 
 	// but put a different region
 	existing = client.clients.put(regClient, region.NewInfo(

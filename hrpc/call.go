@@ -42,8 +42,7 @@ type RegionInfo interface {
 // RegionClient represents HBase region client.
 type RegionClient interface {
 	Close()
-	Host() string
-	Port() uint16
+	Addr() string
 	QueueRPC(Call)
 	String() string
 }

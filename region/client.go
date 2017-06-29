@@ -121,11 +121,8 @@ func (e RetryableError) Error() string {
 type client struct {
 	conn net.Conn
 
-	// Hostname or IP address of the RegionServer.
-	host string
-
-	// Port of the RegionServer.
-	port uint16
+	// Address of the RegionServer.
+	addr string
 
 	// once used for concurrent calls to fail
 	once sync.Once
@@ -176,19 +173,14 @@ func (c *client) Close() {
 	c.fail(ErrClientDead)
 }
 
-// Host returns the host that this client talks to
-func (c *client) Host() string {
-	return c.host
-}
-
-// Port returns the port that this client talks over
-func (c *client) Port() uint16 {
-	return c.port
+// Addr returns address of the region server the client is connected to
+func (c *client) Addr() string {
+	return c.addr
 }
 
 // String returns a string represintation of the current region client
 func (c *client) String() string {
-	return fmt.Sprintf("RegionClient{Host: %s, Port: %d}", c.host, c.port)
+	return fmt.Sprintf("RegionClient{Addr: %s}", c.addr)
 }
 
 func (c *client) inFlightUp() {

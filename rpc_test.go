@@ -52,8 +52,7 @@ func TestSendRPCSanity(t *testing.T) {
 	defer ctrl.Finish()
 	// we expect to ask zookeeper for where metaregion is
 	zkClient := mockZk.NewMockClient(ctrl)
-	zkClient.EXPECT().LocateResource(zk.Meta).Return(
-		"regionserver", uint16(1), nil).MinTimes(1)
+	zkClient.EXPECT().LocateResource(zk.Meta).Return("regionserver:1", nil).MinTimes(1)
 	c := newMockClient(zkClient)
 
 	// ask for "theKey" in table "test"
@@ -88,27 +87,25 @@ func TestSendRPCSanity(t *testing.T) {
 
 	// make sure those are the right clients
 	for c, rs := range c.clients.regions {
-		cAddr := fmt.Sprintf("%s:%d", c.Host(), c.Port())
-		name, ok := expClients[cAddr]
+		name, ok := expClients[c.Addr()]
 		if !ok {
-			t.Errorf("Got unexpected client %s:%d in cache", c.Host(), c.Port())
+			t.Errorf("Got unexpected client %s in cache", c.Addr())
 			continue
 		}
 		if len(rs) != 1 {
-			t.Errorf("Expected to have only 1 region in cache for client %s:%d",
-				c.Host(), c.Port())
+			t.Errorf("Expected to have only 1 region in cache for client %s", c.Addr())
 			continue
 		}
 		for r := range rs {
 			if string(r.Name()) != name {
-				t.Errorf("Unexpected name of region %q for client %s:%d, expected %q",
-					r.Name(), c.Host(), c.Port(), name)
+				t.Errorf("Unexpected name of region %q for client %s, expected %q",
+					r.Name(), c.Addr(), name)
 			}
 			// check bidirectional mapping, they have to be the same objects
 			rc := r.Client()
 			if c != rc {
-				t.Errorf("Invalid bidirectional mapping: forward=%s:%d, backward=%s:%d",
-					c.Host(), c.Port(), rc.Host(), rc.Port())
+				t.Errorf("Invalid bidirectional mapping: forward=%s, backward=%s",
+					c.Addr(), rc.Addr())
 			}
 		}
 	}
@@ -135,14 +132,7 @@ func TestReestablishRegionSplit(t *testing.T) {
 		nil,
 	)
 	rc1, err := region.NewClient(
-		context.Background(),
-		"regionserver",
-		1,
-		region.RegionClient,
-		0,
-		0,
-		"root",
-	)
+		context.Background(), "regionserver:1", region.RegionClient, 0, 0, "root")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,9 +159,8 @@ func TestReestablishRegionSplit(t *testing.T) {
 
 	// make sure those are the right clients
 	for rc, rs := range c.clients.regions {
-		cAddr := fmt.Sprintf("%s:%d", rc.Host(), rc.Port())
-		if cAddr != "regionserver:1" {
-			t.Errorf("Got unexpected client %s:%d in cache", rc.Host(), rc.Port())
+		if rc.Addr() != "regionserver:1" {
+			t.Errorf("Got unexpected client %s in cache", rc.Addr())
 			break
 		}
 
@@ -181,8 +170,8 @@ func TestReestablishRegionSplit(t *testing.T) {
 			gotRegs[string(r.Name())] = struct{}{}
 			// check that regions have correct client
 			if r.Client() != rc1 {
-				t.Errorf("Invalid bidirectional mapping: forward=%s:%d, backward=%s:%d",
-					r.Client().Host(), r.Client().Port(), rc1.Host(), rc1.Port())
+				t.Errorf("Invalid bidirectional mapping: forward=%s, backward=%s",
+					r.Client().Addr(), rc1.Addr())
 			}
 		}
 		if diff := atest.Diff(expRegs, gotRegs); diff != "" {
@@ -192,8 +181,8 @@ func TestReestablishRegionSplit(t *testing.T) {
 
 		// check that we still have the same client that we injected
 		if rc != rc1 {
-			t.Errorf("Invalid bidirectional mapping: forward=%s:%d, backward=%s:%d",
-				rc.Host(), rc.Port(), rc1.Host(), rc1.Port())
+			t.Errorf("Invalid bidirectional mapping: forward=%s, backward=%s",
+				rc.Addr(), rc1.Addr())
 		}
 	}
 
@@ -234,7 +223,7 @@ func TestReestablishRegionNSRE(t *testing.T) {
 	origlReg := region.NewInfo(0, nil, []byte("nsre"),
 		[]byte("nsre,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."), nil, nil)
 	// inject a fake regionserver client and fake region into cache
-	rc1, err := region.NewClient(context.Background(), "regionserver", 1, region.RegionClient,
+	rc1, err := region.NewClient(context.Background(), "regionserver:1", region.RegionClient,
 		0, 0, "root")
 	if err != nil {
 		t.Fatal(err)
@@ -305,7 +294,7 @@ func TestEstablishClientConcurrent(t *testing.T) {
 		r := r
 		wg.Add(1)
 		go func() {
-			c.establishRegion(r, "regionserver", 1)
+			c.establishRegion(r, "regionserver:1")
 			wg.Done()
 		}()
 	}
@@ -322,8 +311,7 @@ func TestEstablishClientConcurrent(t *testing.T) {
 		// check that all regions have the same client set and are available
 		for _, r := range regions {
 			if r.Client() != rc {
-				t.Errorf("Region %q has unexpected client %s:%d",
-					r.Name(), r.Client().Host(), r.Client().Port())
+				t.Errorf("Region %q has unexpected client %s", r.Name(), rc.Addr())
 			}
 			if r.IsUnavailable() {
 				t.Errorf("Expected region %s to be available", r.Name())
@@ -403,14 +391,7 @@ func TestReestablishDeadRegion(t *testing.T) {
 	// expect for it to be called
 	c := newMockClient(nil)
 	rc1, err := region.NewClient(
-		context.Background(),
-		"regionserver",
-		0,
-		region.RegionClient,
-		0,
-		0,
-		"root",
-	)
+		context.Background(), "regionserver:0", region.RegionClient, 0, 0, "root")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -513,14 +494,7 @@ func TestFindRegion(t *testing.T) {
 	// expect for it to be called
 	c := newMockClient(nil)
 	rc, err := region.NewClient(
-		context.Background(),
-		"regionserver",
-		0,
-		region.RegionClient,
-		0,
-		0,
-		"root",
-	)
+		context.Background(), "regionserver:0", region.RegionClient, 0, 0, "root")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -572,9 +546,8 @@ func TestFindRegion(t *testing.T) {
 				t.Errorf("Test %d: Expected region %q to establish a client", i, reg.Name())
 				continue
 			}
-			rsAddr := fmt.Sprintf("%s:%d", rc2.Host(), rc2.Port())
-			if rsAddr != "regionserver:2" {
-				t.Errorf("Test %d: Expected regionserver:2, got %q", i, rsAddr)
+			if rc2.Addr() != "regionserver:2" {
+				t.Errorf("Test %d: Expected regionserver:2, got %q", i, rc2.Addr())
 			}
 		}
 	}
@@ -583,7 +556,7 @@ func TestFindRegion(t *testing.T) {
 func TestErrConnotFindRegion(t *testing.T) {
 	c := newMockClient(nil)
 
-	rc, err := region.NewClient(context.Background(), "regionserver", 0,
+	rc, err := region.NewClient(context.Background(), "regionserver:0",
 		region.RegionClient, 0, 0, "root")
 	if err != nil {
 		t.Fatal(err)
@@ -619,7 +592,7 @@ func TestConcurrentRetryableError(t *testing.T) {
 
 	zkc := mockZk.NewMockClient(ctrl)
 	// keep failing on zookeeper lookup
-	zkc.EXPECT().LocateResource(gomock.Any()).Return("", uint16(0), ErrDeadline).AnyTimes()
+	zkc.EXPECT().LocateResource(gomock.Any()).Return("", ErrDeadline).AnyTimes()
 	c := newMockClient(zkc)
 	// create region with mock clien
 	origlReg := region.NewInfo(
@@ -641,8 +614,7 @@ func TestConcurrentRetryableError(t *testing.T) {
 	)
 	rc := mockRegion.NewMockRegionClient(ctrl)
 	rc.EXPECT().String().Return("mock region client").AnyTimes()
-	rc.EXPECT().Host().Return("host").AnyTimes()
-	rc.EXPECT().Port().Return(uint16(1234)).AnyTimes()
+	rc.EXPECT().Addr().Return("host:1234").AnyTimes()
 	origlReg.SetClient(rc)
 	whateverRegion.SetClient(rc)
 	c.regions.put(origlReg)

@@ -9,54 +9,47 @@ import (
 	time "time"
 )
 
-// MockConn is a mock of Conn interface
+// Mock of Conn interface
 type MockConn struct {
 	ctrl     *gomock.Controller
-	recorder *MockConnMockRecorder
+	recorder *_MockConnRecorder
 }
 
-// MockConnMockRecorder is the mock recorder for MockConn
-type MockConnMockRecorder struct {
+// Recorder for MockConn (not exported)
+type _MockConnRecorder struct {
 	mock *MockConn
 }
 
-// NewMockConn creates a new mock instance
 func NewMockConn(ctrl *gomock.Controller) *MockConn {
 	mock := &MockConn{ctrl: ctrl}
-	mock.recorder = &MockConnMockRecorder{mock}
+	mock.recorder = &_MockConnRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
-func (_m *MockConn) EXPECT() *MockConnMockRecorder {
+func (_m *MockConn) EXPECT() *_MockConnRecorder {
 	return _m.recorder
 }
 
-// Close mocks base method
 func (_m *MockConn) Close() error {
 	ret := _m.ctrl.Call(_m, "Close")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// Close indicates an expected call of Close
-func (_mr *MockConnMockRecorder) Close() *gomock.Call {
+func (_mr *_MockConnRecorder) Close() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Close")
 }
 
-// LocalAddr mocks base method
 func (_m *MockConn) LocalAddr() net.Addr {
 	ret := _m.ctrl.Call(_m, "LocalAddr")
 	ret0, _ := ret[0].(net.Addr)
 	return ret0
 }
 
-// LocalAddr indicates an expected call of LocalAddr
-func (_mr *MockConnMockRecorder) LocalAddr() *gomock.Call {
+func (_mr *_MockConnRecorder) LocalAddr() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "LocalAddr")
 }
 
-// Read mocks base method
 func (_m *MockConn) Read(_param0 []byte) (int, error) {
 	ret := _m.ctrl.Call(_m, "Read", _param0)
 	ret0, _ := ret[0].(int)
@@ -64,60 +57,50 @@ func (_m *MockConn) Read(_param0 []byte) (int, error) {
 	return ret0, ret1
 }
 
-// Read indicates an expected call of Read
-func (_mr *MockConnMockRecorder) Read(arg0 interface{}) *gomock.Call {
+func (_mr *_MockConnRecorder) Read(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Read", arg0)
 }
 
-// RemoteAddr mocks base method
 func (_m *MockConn) RemoteAddr() net.Addr {
 	ret := _m.ctrl.Call(_m, "RemoteAddr")
 	ret0, _ := ret[0].(net.Addr)
 	return ret0
 }
 
-// RemoteAddr indicates an expected call of RemoteAddr
-func (_mr *MockConnMockRecorder) RemoteAddr() *gomock.Call {
+func (_mr *_MockConnRecorder) RemoteAddr() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "RemoteAddr")
 }
 
-// SetDeadline mocks base method
 func (_m *MockConn) SetDeadline(_param0 time.Time) error {
 	ret := _m.ctrl.Call(_m, "SetDeadline", _param0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// SetDeadline indicates an expected call of SetDeadline
-func (_mr *MockConnMockRecorder) SetDeadline(arg0 interface{}) *gomock.Call {
+func (_mr *_MockConnRecorder) SetDeadline(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "SetDeadline", arg0)
 }
 
-// SetReadDeadline mocks base method
 func (_m *MockConn) SetReadDeadline(_param0 time.Time) error {
 	ret := _m.ctrl.Call(_m, "SetReadDeadline", _param0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// SetReadDeadline indicates an expected call of SetReadDeadline
-func (_mr *MockConnMockRecorder) SetReadDeadline(arg0 interface{}) *gomock.Call {
+func (_mr *_MockConnRecorder) SetReadDeadline(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "SetReadDeadline", arg0)
 }
 
-// SetWriteDeadline mocks base method
 func (_m *MockConn) SetWriteDeadline(_param0 time.Time) error {
 	ret := _m.ctrl.Call(_m, "SetWriteDeadline", _param0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// SetWriteDeadline indicates an expected call of SetWriteDeadline
-func (_mr *MockConnMockRecorder) SetWriteDeadline(arg0 interface{}) *gomock.Call {
+func (_mr *_MockConnRecorder) SetWriteDeadline(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "SetWriteDeadline", arg0)
 }
 
-// Write mocks base method
 func (_m *MockConn) Write(_param0 []byte) (int, error) {
 	ret := _m.ctrl.Call(_m, "Write", _param0)
 	ret0, _ := ret[0].(int)
@@ -125,7 +108,6 @@ func (_m *MockConn) Write(_param0 []byte) (int, error) {
 	return ret0, ret1
 }
 
-// Write indicates an expected call of Write
-func (_mr *MockConnMockRecorder) Write(arg0 interface{}) *gomock.Call {
+func (_mr *_MockConnRecorder) Write(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Write", arg0)
 }
