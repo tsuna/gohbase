@@ -244,8 +244,10 @@ func (c *client) findRegion(ctx context.Context, table, key []byte) (hrpc.Region
 	if err != nil {
 		return nil, err
 	}
-
-	reg.MarkUnavailable()
+	if !reg.MarkUnavailable() {
+		// the region is already being established by other goroutine
+		return reg, nil
+	}
 	if reg != c.metaRegionInfo && reg != c.adminRegionInfo {
 		// Check that the region wasn't added to
 		// the cache while we were looking it up.
@@ -311,6 +313,28 @@ func createRegionSearchKey(table, key []byte) []byte {
 	return metaKey
 }
 
+// metaLimit throttles lookups to hbase:meta to metaLookupLimit requests
+// per metaLookupInterval. It returns true if we were lucky enough to
+// reserve right away and false otherwise.
+func (c *client) metaLimit(ctx context.Context) bool {
+	r := c.metaLookupLimiter.Reserve()
+	if !r.OK() {
+		panic("wtf: cannot reserve a meta lookup")
+	}
+
+	delay := r.Delay()
+	if delay <= 0 {
+		return true
+	}
+
+	// wait until it's our turn or passed context has expired
+	ctx, cancel := context.WithTimeout(ctx, delay)
+	<-ctx.Done()
+	cancel()
+
+	return false
+}
+
 // metaLookup checks meta table for the region in which the given row key for the given table is.
 func (c *client) metaLookup(ctx context.Context,
 	table, key []byte) (hrpc.RegionInfo, string, error) {
@@ -321,10 +345,17 @@ func (c *client) metaLookup(ctx context.Context,
 		return nil, "", err
 	}
 
+	if ok := c.metaLimit(ctx); !ok {
+		// check the cache, maybe someone already looked up our region.
+		if reg := c.getRegionFromCache(table, key); reg != nil {
+			return reg, "", nil
+		}
+	}
 	resp, err := c.Get(rpc)
 	if err != nil {
 		return nil, "", err
 	}
+
 	if len(resp.Cells) == 0 {
 		return nil, "", TableNotFound
 	}

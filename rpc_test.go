@@ -13,6 +13,9 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
+
+	"golang.org/x/time/rate"
 
 	atest "github.com/aristanetworks/goarista/test"
 	"github.com/cznic/b"
@@ -36,14 +39,11 @@ func newMockClient(zkClient zk.Client) *client {
 		},
 		rpcQueueSize:  defaultRPCQueueSize,
 		flushInterval: defaultFlushInterval,
-		metaRegionInfo: region.NewInfo(
-			0,
-			[]byte("hbase"),
-			[]byte("meta"),
-			[]byte("hbase:meta,,1"),
-			nil,
-			nil),
+		metaRegionInfo: region.NewInfo(0, []byte("hbase"), []byte("meta"),
+			[]byte("hbase:meta,,1"), nil, nil),
 		zkClient: zkClient,
+		metaLookupLimiter: rate.NewLimiter(
+			metaLookupLimit*rate.Every(metaLookupInterval), 1),
 	}
 }
 
@@ -216,6 +216,40 @@ func TestReestablishRegionSplit(t *testing.T) {
 	if origlReg.Client() != nil {
 		t.Error("Expected original region to have no client")
 	}
+}
+
+func TestThrottleMetaLookups(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+	c := newMockClient(nil)
+
+	ch := make(chan struct{}, metaLookupLimit)
+	rc := mockRegion.NewMockRegionClient(ctrl)
+	rc.EXPECT().String().Return("mock region client").AnyTimes()
+	rc.EXPECT().QueueRPC(gomock.Any()).AnyTimes().Do(func(rpc hrpc.Call) {
+		select {
+		case ch <- struct{}{}:
+			time.Sleep(time.Millisecond)
+			<-ch
+			rpc.ResultChan() <- hrpc.RPCResult{}
+		default:
+			panic("too many concurrent requests")
+		}
+	})
+	c.metaRegionInfo.SetClient(rc)
+	c.clients.put(rc, c.metaRegionInfo)
+	ctx := context.Background()
+	table, key := []byte("yolo"), []byte("swag")
+
+	var wg sync.WaitGroup
+	for i := 0; i < 1000; i++ {
+		wg.Add(1)
+		go func() {
+			c.metaLookup(ctx, table, key)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }
 
 func TestReestablishRegionNSRE(t *testing.T) {
