@@ -11,7 +11,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -41,9 +43,8 @@ func newMockClient(zkClient zk.Client) *client {
 		flushInterval: defaultFlushInterval,
 		metaRegionInfo: region.NewInfo(0, []byte("hbase"), []byte("meta"),
 			[]byte("hbase:meta,,1"), nil, nil),
-		zkClient: zkClient,
-		metaLookupLimiter: rate.NewLimiter(
-			metaLookupLimit*rate.Every(metaLookupInterval), 1),
+		zkClient:          zkClient,
+		metaLookupLimiter: rate.NewLimiter(metaLimit, metaBurst),
 	}
 }
 
@@ -62,6 +63,7 @@ func TestSendRPCSanity(t *testing.T) {
 	mockCall.EXPECT().Key().Return([]byte("theKey")).AnyTimes()
 	mockCall.EXPECT().SetRegion(gomock.Any()).AnyTimes()
 	result := make(chan hrpc.RPCResult, 1)
+
 	// pretend that response is successful
 	expMsg := &pb.GetResponse{}
 	result <- hrpc.RPCResult{Msg: expMsg}
@@ -218,38 +220,44 @@ func TestReestablishRegionSplit(t *testing.T) {
 	}
 }
 
-func TestThrottleMetaLookups(t *testing.T) {
+func TestThrottleRegionLookups(t *testing.T) {
 	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 	c := newMockClient(nil)
+	numOK := int32(0)
 
-	ch := make(chan struct{}, metaLookupLimit)
 	rc := mockRegion.NewMockRegionClient(ctrl)
 	rc.EXPECT().String().Return("mock region client").AnyTimes()
 	rc.EXPECT().QueueRPC(gomock.Any()).AnyTimes().Do(func(rpc hrpc.Call) {
-		select {
-		case ch <- struct{}{}:
-			time.Sleep(time.Millisecond)
-			<-ch
-			rpc.ResultChan() <- hrpc.RPCResult{}
-		default:
-			panic("too many concurrent requests")
-		}
+		atomic.AddInt32(&numOK, 1)
+		rpc.ResultChan() <- hrpc.RPCResult{}
 	})
 	c.metaRegionInfo.SetClient(rc)
 	c.clients.put(rc, c.metaRegionInfo)
 	ctx := context.Background()
 	table, key := []byte("yolo"), []byte("swag")
 
+	start := time.Now()
+	end := start.Add(time.Second)
 	var wg sync.WaitGroup
-	for i := 0; i < 1000; i++ {
+	for time.Now().Before(end) {
 		wg.Add(1)
 		go func() {
 			c.metaLookup(ctx, table, key)
 			wg.Done()
 		}()
+		// this will offer ~2,000 requests per second
+		// while we only allow 100 request per 100 milliseconds
+		time.Sleep(500 * time.Microsecond)
 	}
 	wg.Wait()
+	elapsed := time.Since(start)
+	ideal := 1 + (100 * float64(elapsed) / float64(100*time.Millisecond))
+
+	// We should never get more requests than allowed.
+	if want := int32(ideal + 1); numOK > want {
+		t.Errorf("numOK = %d, want %d (ideal %f)", numOK, want, ideal)
+	}
 }
 
 func TestReestablishRegionNSRE(t *testing.T) {
@@ -528,10 +536,8 @@ func TestFindRegion(t *testing.T) {
 		},
 		{ // older region in cache
 			before: []hrpc.RegionInfo{
-				region.NewInfo(
-					1, nil, []byte("test"),
-					[]byte("test,,1.yoloyoloyoloyoloyoloyoloyoloyolo."),
-					nil, nil),
+				region.NewInfo(1, nil, []byte("test"),
+					[]byte("test,,1.yoloyoloyoloyoloyoloyoloyoloyolo."), nil, nil),
 			},
 			after:     []string{"test,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."},
 			establish: true,
@@ -539,10 +545,8 @@ func TestFindRegion(t *testing.T) {
 		},
 		{ // younger region in cache
 			before: []hrpc.RegionInfo{
-				region.NewInfo(
-					9999999999999, nil, []byte("test"),
-					[]byte("test,,9999999999999.yoloyoloyoloyoloyoloyoloyoloyolo."),
-					nil, nil),
+				region.NewInfo(9999999999999, nil, []byte("test"),
+					[]byte("test,,9999999999999.yoloyoloyoloyoloyoloyoloyoloyolo."), nil, nil),
 			},
 			after:     []string{"test,,9999999999999.yoloyoloyoloyoloyoloyoloyoloyolo."},
 			establish: false,
@@ -550,8 +554,7 @@ func TestFindRegion(t *testing.T) {
 		},
 		{ // overlapping younger region in cache, passed key is not in that region
 			before: []hrpc.RegionInfo{
-				region.NewInfo(
-					9999999999999, nil, []byte("test"),
+				region.NewInfo(9999999999999, nil, []byte("test"),
 					[]byte("test,,9999999999999.yoloyoloyoloyoloyoloyoloyoloyolo."),
 					nil, []byte("foo")),
 			},
@@ -579,51 +582,54 @@ func TestFindRegion(t *testing.T) {
 	testTable := []byte("test")
 	testKey := []byte("yolo")
 	for i, tcase := range tcases {
-		c.regions.regions.Clear()
-		// set up initial cache
-		for _, region := range tcase.before {
-			c.regions.put(region)
-		}
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			c.regions.regions.Clear()
+			// set up initial cache
+			for _, region := range tcase.before {
+				c.regions.put(region)
+			}
 
-		reg, err := c.findRegion(ctx, testTable, testKey)
-		if err != tcase.err {
-			t.Errorf("Test %d: Expected error %v, got %v", i, tcase.err, err)
-		}
-		if len(tcase.regName) == 0 {
-			if reg != nil {
-				t.Errorf("Test %d: Expected nil region, got %v", i, reg)
+			reg, err := c.findRegion(ctx, testTable, testKey)
+			if err != tcase.err {
+				t.Fatalf("Expected error %v, got %v", tcase.err, err)
 			}
-		} else if string(reg.Name()) != tcase.regName {
-			t.Errorf("Test %d: Expected region with name %q, got region %v",
-				i, tcase.regName, reg)
-		}
+			if len(tcase.regName) == 0 {
+				if reg != nil {
+					t.Errorf("Expected nil region, got %v", reg)
+				}
+			} else if string(reg.Name()) != tcase.regName {
+				t.Errorf("Expected region with name %q, got region %v",
+					tcase.regName, reg)
+			}
 
-		// check cache
-		if len(tcase.after) != c.regions.regions.Len() {
-			t.Errorf("Test %d: Expected to have %d regions in cache, got %d",
-				i, len(tcase.after), c.regions.regions.Len())
-		}
-		for _, rn := range tcase.after {
-			if _, ok := c.regions.regions.Get([]byte(rn)); !ok {
-				t.Errorf("Test %d: Expected region %q to be in regions cache", i, rn)
+			// check cache
+			if len(tcase.after) != c.regions.regions.Len() {
+				t.Errorf("Test %d: Expected to have %d regions in cache, got %d",
+					len(tcase.after), c.regions.regions.Len())
 			}
-		}
-		// check client was looked up
-		if tcase.establish {
-			if ch := reg.AvailabilityChan(); ch != nil {
-				// if still establishing, wait
-				<-ch
+			for _, rn := range tcase.after {
+				if _, ok := c.regions.regions.Get([]byte(rn)); !ok {
+					t.Errorf("Expected region %q to be in regions cache", rn)
+				}
 			}
-			rc2 := reg.Client()
-			if rc2 == nil {
-				t.Errorf("Test %d: Expected region %q to establish a client", i, reg.Name())
-				continue
+			// check client was looked up
+			if tcase.establish {
+				if ch := reg.AvailabilityChan(); ch != nil {
+					// if still establishing, wait
+					<-ch
+				}
+				rc2 := reg.Client()
+				if rc2 == nil {
+					t.Errorf("Expected region %q to establish a client", reg.Name())
+					return
+				}
+				if rc2.Addr() != "regionserver:2" {
+					t.Errorf("Expected regionserver:2, got %q", rc2.Addr())
+				}
 			}
-			if rc2.Addr() != "regionserver:2" {
-				t.Errorf("Test %d: Expected regionserver:2, got %q", i, rc2.Addr())
-			}
-		}
+		})
 	}
+
 }
 
 func TestErrConnotFindRegion(t *testing.T) {
