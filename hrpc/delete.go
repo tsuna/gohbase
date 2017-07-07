@@ -14,17 +14,17 @@ import (
 
 // DeleteTable represents a DeleteTable HBase call
 type DeleteTable struct {
-	tableOp
+	base
 }
 
 // NewDeleteTable creates a new DeleteTable request that will delete the
 // given table in HBase. For use by the admin client.
 func NewDeleteTable(ctx context.Context, table []byte) *DeleteTable {
 	return &DeleteTable{
-		tableOp{base{
+		base{
 			table: table,
 			ctx:   ctx,
-		}},
+		},
 	}
 }
 

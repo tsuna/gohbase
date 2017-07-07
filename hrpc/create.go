@@ -14,7 +14,7 @@ import (
 
 // CreateTable represents a CreateTable HBase call
 type CreateTable struct {
-	tableOp
+	base
 
 	families map[string]map[string]string
 }
@@ -39,10 +39,10 @@ var defaultAttributes = map[string]string{
 func NewCreateTable(ctx context.Context, table []byte,
 	families map[string]map[string]string) *CreateTable {
 	ct := &CreateTable{
-		tableOp: tableOp{base{
+		base: base{
 			table: table,
 			ctx:   ctx,
-		}},
+		},
 		families: make(map[string]map[string]string, len(families)),
 	}
 	for family, attrs := range families {

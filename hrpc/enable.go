@@ -14,17 +14,17 @@ import (
 
 // EnableTable represents a EnableTable HBase call
 type EnableTable struct {
-	tableOp
+	base
 }
 
 // NewEnableTable creates a new EnableTable request that will enable the
 // given table in HBase. For use by the admin client.
 func NewEnableTable(ctx context.Context, table []byte) *EnableTable {
 	return &EnableTable{
-		tableOp{base{
+		base{
 			table: table,
 			ctx:   ctx,
-		}},
+		},
 	}
 }
 

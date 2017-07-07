@@ -14,17 +14,17 @@ import (
 
 // DisableTable represents a DisableTable HBase call
 type DisableTable struct {
-	tableOp
+	base
 }
 
 // NewDisableTable creates a new DisableTable request that will disable the
 // given table in HBase. For use by the admin client.
 func NewDisableTable(ctx context.Context, table []byte) *DisableTable {
 	return &DisableTable{
-		tableOp{base{
+		base{
 			table: table,
 			ctx:   ctx,
-		}},
+		},
 	}
 }
 
