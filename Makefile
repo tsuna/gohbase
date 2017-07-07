@@ -18,7 +18,7 @@ install:
 check: vet fmtcheck lint test
 jenkins: check integration
 
-COVER_PKGS := `find ./* -name '*_test.go' | xargs -I{} dirname {} | sort -u`
+COVER_PKGS := `find ./* -name '*_test.go' ! -path "./test/mock/*" | xargs -I{} dirname {} | sort -u`
 COVER_MODE := count
 coverdata:
 	echo 'mode: $(COVER_MODE)' >coverage.out
