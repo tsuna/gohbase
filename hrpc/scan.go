@@ -12,7 +12,6 @@ import (
 	"math"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
 )
 
@@ -62,27 +61,15 @@ type Scanner interface {
 // Scan represents a scanner on an HBase table.
 type Scan struct {
 	base
-
-	// Maps a column family to a list of qualifiers
-	families map[string][]string
+	baseQuery
 
 	startRow []byte
 	stopRow  []byte
-
-	fromTimestamp uint64
-	toTimestamp   uint64
-
-	storeLimit  uint32
-	storeOffset uint32
-
-	maxVersions uint32
 
 	scannerID uint64
 
 	maxResultSize uint64
 	numberOfRows  uint32
-
-	filters filter.Filter
 
 	closeScanner        bool
 	allowPartialResults bool
@@ -96,11 +83,7 @@ func baseScan(ctx context.Context, table []byte,
 			table: table,
 			ctx:   ctx,
 		},
-		fromTimestamp: MinTimestamp,
-		toTimestamp:   MaxTimestamp,
-		maxVersions:   DefaultMaxVersions,
-		storeLimit:    DefaultMaxResultsPerColumnFamily,
-		storeOffset:   0,
+		baseQuery:     newBaseQuery(),
 		scannerID:     math.MaxUint64,
 		maxResultSize: DefaultMaxResultSize,
 		numberOfRows:  DefaultNumberOfRows,
@@ -109,8 +92,16 @@ func baseScan(ctx context.Context, table []byte,
 	if err != nil {
 		return nil, err
 	}
-
 	return s, nil
+}
+
+func (s *Scan) String() string {
+	return fmt.Sprintf("Scan{Table=%q StartRow=%q StopRow=%q TimeRange=(%d, %d) "+
+		"MaxVersions=%d NumberOfRows=%d MaxResultSize=%d Familes=%v Filter=%v "+
+		"StoreLimit=%d StoreOffset=%d ScannerID=%d Close=%v}",
+		s.table, s.startRow, s.stopRow, s.fromTimestamp, s.toTimestamp,
+		s.maxVersions, s.numberOfRows, s.maxResultSize, s.families, s.filter,
+		s.storeLimit, s.storeOffset, s.scannerID, s.closeScanner)
 }
 
 // NewScan creates a scanner for the given table.
@@ -168,13 +159,6 @@ func NewCloseFromID(ctx context.Context, table []byte,
 	return scan
 }
 
-func (s *Scan) String() string {
-	return fmt.Sprintf("Scan{Table=%q StartRow=%q StopRow=%q TimeRange=(%d, %d) "+
-		"MaxVersions=%d NumberOfRows=%d ScannerID=%d Close=%v}",
-		s.table, s.startRow, s.stopRow, s.fromTimestamp, s.toTimestamp,
-		s.maxVersions, s.numberOfRows, s.scannerID, s.closeScanner)
-}
-
 // Name returns the name of this RPC call.
 func (s *Scan) Name() string {
 	return "Scan"
@@ -195,40 +179,9 @@ func (s *Scan) IsClosing() bool {
 	return s.closeScanner
 }
 
-// Families returns the set families covered by this scanner.
-// If no families are specified then all the families are scanned.
-func (s *Scan) Families() map[string][]string {
-	return s.families
-}
-
-// Filter returns the filter set on this scanner.
-func (s *Scan) Filter() filter.Filter {
-	return s.filters
-}
-
-// TimeRange returns the to and from timestamps set on this scanner.
-func (s *Scan) TimeRange() (uint64, uint64) {
-	return s.fromTimestamp, s.toTimestamp
-}
-
-// MaxVersions returns the max versions set on this scanner.
-func (s *Scan) MaxVersions() uint32 {
-	return s.maxVersions
-}
-
 // MaxResultSize returns Maximum number of bytes fetched when calling a scanner's next method.
 func (s *Scan) MaxResultSize() uint64 {
 	return s.maxResultSize
-}
-
-// MaxResultsPerColumnFamily returns the maximum number of columns to be returned per row
-func (s *Scan) MaxResultsPerColumnFamily() uint32 {
-	return s.storeLimit
-}
-
-// ResultOffset returns the column offset to be returned per row
-func (s *Scan) ResultOffset() uint32 {
-	return s.storeOffset
 }
 
 // NumberOfRows returns maximum number of rows that will be fetched
@@ -284,8 +237,8 @@ func (s *Scan) ToProto() (proto.Message, error) {
 		scan.Scan.TimeRange.To = &s.toTimestamp
 	}
 
-	if s.filters != nil {
-		pbFilter, err := s.filters.ConstructPBFilter()
+	if s.filter != nil {
+		pbFilter, err := s.filter.ConstructPBFilter()
 		if err != nil {
 			return nil, err
 		}
@@ -320,18 +273,6 @@ func (s *Scan) DeserializeCellBlocks(m proto.Message, b []byte) error {
 	if int(readLen) < len(b) {
 		return fmt.Errorf("short read: buffer len %d, read %d", len(b), readLen)
 	}
-	return nil
-}
-
-// SetFamilies sets the families covered by this scanner.
-func (s *Scan) SetFamilies(fam map[string][]string) error {
-	s.families = fam
-	return nil
-}
-
-// SetFilter sets the request's filter.
-func (s *Scan) SetFilter(ft filter.Filter) error {
-	s.filters = ft
 	return nil
 }
 

@@ -9,18 +9,14 @@ import (
 	"context"
 	"fmt"
 
-	"math"
-
 	"github.com/golang/protobuf/proto"
-	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
 )
 
 // Get represents a Get HBase call.
 type Get struct {
 	base
-
-	families map[string][]string //Maps a column family to a list of qualifiers
+	baseQuery
 
 	// Return the row for the given key or, if this key doesn't exist,
 	// whichever key happens to be right before.
@@ -29,15 +25,6 @@ type Get struct {
 	// Don't return any KeyValue, just say whether the row key exists in the
 	// table or not.
 	existsOnly bool
-
-	fromTimestamp uint64
-	toTimestamp   uint64
-
-	maxVersions uint32
-	storeLimit  uint32
-	storeOffset uint32
-
-	filters filter.Filter
 }
 
 // baseGet returns a Get struct with default values set.
@@ -49,12 +36,7 @@ func baseGet(ctx context.Context, table []byte, key []byte,
 			table: table,
 			ctx:   ctx,
 		},
-		storeLimit:  math.MaxUint32,
-		storeOffset: 0,
-
-		fromTimestamp: MinTimestamp,
-		toTimestamp:   MaxTimestamp,
-		maxVersions:   DefaultMaxVersions,
+		baseQuery: newBaseQuery(),
 	}
 	err := applyOptions(g, options...)
 	if err != nil {
@@ -90,30 +72,6 @@ func NewGetBefore(ctx context.Context, table, key []byte,
 // Name returns the name of this RPC call.
 func (g *Get) Name() string {
 	return "Get"
-}
-
-// Filter returns the filter of this Get request.
-func (g *Get) Filter() filter.Filter {
-	return g.filters
-}
-
-// Families returns the families to retrieve with this Get request.
-func (g *Get) Families() map[string][]string {
-	return g.families
-}
-
-// SetFilter sets filter to use for this Get request.
-func (g *Get) SetFilter(f filter.Filter) error {
-	g.filters = f
-	// TODO: Validation?
-	return nil
-}
-
-// SetFamilies sets families to retrieve with this Get request.
-func (g *Get) SetFamilies(f map[string][]string) error {
-	g.families = f
-	// TODO: Validation?
-	return nil
 }
 
 // ExistsOnly makes this Get request not return any KeyValue, merely whether
@@ -156,8 +114,8 @@ func (g *Get) ToProto() (proto.Message, error) {
 	if g.existsOnly {
 		get.Get.ExistenceOnly = proto.Bool(true)
 	}
-	if g.filters != nil {
-		pbFilter, err := g.filters.ConstructPBFilter()
+	if g.filter != nil {
+		pbFilter, err := g.filter.ConstructPBFilter()
 		if err != nil {
 			return nil, err
 		}

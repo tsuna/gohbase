@@ -7,7 +7,6 @@ import (
 	context "context"
 	gomock "github.com/golang/mock/gomock"
 	proto "github.com/golang/protobuf/proto"
-	filter "github.com/tsuna/gohbase/filter"
 	hrpc "github.com/tsuna/gohbase/hrpc"
 )
 
@@ -90,26 +89,6 @@ func (_m *MockCall) ResultChan() chan hrpc.RPCResult {
 
 func (_mr *_MockCallRecorder) ResultChan() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "ResultChan")
-}
-
-func (_m *MockCall) SetFamilies(_param0 map[string][]string) error {
-	ret := _m.ctrl.Call(_m, "SetFamilies", _param0)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-func (_mr *_MockCallRecorder) SetFamilies(arg0 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "SetFamilies", arg0)
-}
-
-func (_m *MockCall) SetFilter(_param0 filter.Filter) error {
-	ret := _m.ctrl.Call(_m, "SetFilter", _param0)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-func (_mr *_MockCallRecorder) SetFilter(arg0 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "SetFilter", arg0)
 }
 
 func (_m *MockCall) SetRegion(_param0 hrpc.RegionInfo) {

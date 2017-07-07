@@ -11,7 +11,6 @@ import (
 	"math"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/aristanetworks/goarista/test"
 	"github.com/golang/protobuf/proto"
@@ -113,25 +112,6 @@ func TestNewScan(t *testing.T) {
 	scan, err = hrpc.NewScan(ctx, tableb, hrpc.Filters(filter1), hrpc.Families(fam))
 	if err != nil || !confirmScanAttributes(scan, ctx, tableb, nil, nil, fam, filter1) {
 		t.Errorf("Scan6 didn't set attributes correctly.")
-	}
-}
-
-func TestTimeRangeError(t *testing.T) {
-	key := "TestTimeRangeError"
-	table := "test"
-	_, err := hrpc.NewGetStr(context.Background(), table, key,
-		hrpc.Families(map[string][]string{"cf": nil}), hrpc.TimeRange(time.Unix(51, 0),
-			time.Unix(51, 0)))
-	expErr := "'from' timestamp (51000ms) is greater or equal to 'to' timestamp (51000ms)"
-	if err.Error() != expErr {
-		t.Errorf("Expected error: %s, Got error: %s", expErr, err)
-	}
-	_, err = hrpc.NewGetStr(context.Background(), table, key,
-		hrpc.Families(map[string][]string{"cf": nil}), hrpc.TimeRange(time.Unix(52, 0),
-			time.Unix(51, 0)))
-	expErr = "'from' timestamp (52000ms) is greater or equal to 'to' timestamp (51000ms)"
-	if err.Error() != expErr {
-		t.Errorf("Expected error: %s, Got error: %s", expErr, err)
 	}
 }
 
