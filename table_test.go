@@ -45,7 +45,7 @@ func TestCreateTable(t *testing.T) {
 
 	// check in hbase:meta if there's a region for the table
 	c := gohbase.NewClient(*host)
-	metaKey := testTableName + ",,"
+	metaKey := testTableName + ","
 	keyFilter := filter.NewPrefixFilter([]byte(metaKey))
 	scan, err := hrpc.NewScanStr(context.Background(), metaTableName, hrpc.Filters(keyFilter))
 	if err != nil {
