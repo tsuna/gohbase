@@ -27,8 +27,8 @@ type ClientType string
 
 type canDeserializeCellBlocks interface {
 	// DeserializeCellBlocks populates passed protobuf message with results
-	// deserialized from the reader
-	DeserializeCellBlocks(proto.Message, []byte) error
+	// deserialized from the reader and returns number of bytes read or error.
+	DeserializeCellBlocks(proto.Message, []byte) (uint32, error)
 }
 
 var (
@@ -383,9 +383,16 @@ func (c *client) receive() error {
 			cellsLen = header.CellBlockMeta.GetLength()
 		}
 		if d, ok := rpc.(canDeserializeCellBlocks); cellsLen > 0 && ok {
-			if err = d.DeserializeCellBlocks(response, buf.Bytes()[size-cellsLen:]); err != nil {
+			b := buf.Bytes()[size-cellsLen:]
+			nread, err := d.DeserializeCellBlocks(response, b)
+			if err != nil {
 				rpc.ResultChan() <- hrpc.RPCResult{
 					Error: fmt.Errorf("failed to decode the response: %s", err)}
+				return nil
+			}
+			if int(nread) < len(b) {
+				rpc.ResultChan() <- hrpc.RPCResult{
+					Error: fmt.Errorf("short read: buffer len %d, read %d", len(b), nread)}
 				return nil
 			}
 		}

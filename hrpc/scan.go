@@ -254,7 +254,7 @@ func (s *Scan) NewResponse() proto.Message {
 }
 
 // DeserializeCellBlocks deserializes scan results from cell blocks
-func (s *Scan) DeserializeCellBlocks(m proto.Message, b []byte) error {
+func (s *Scan) DeserializeCellBlocks(m proto.Message, b []byte) (uint32, error) {
 	scanResp := m.(*pb.ScanResponse)
 	partials := scanResp.GetPartialFlagPerResult()
 	scanResp.Results = make([]*pb.Result, len(partials))
@@ -262,7 +262,7 @@ func (s *Scan) DeserializeCellBlocks(m proto.Message, b []byte) error {
 	for i, numCells := range scanResp.GetCellsPerResult() {
 		cells, l, err := deserializeCellBlocks(b[readLen:], numCells)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		scanResp.Results[i] = &pb.Result{
 			Cell:    cells,
@@ -270,10 +270,7 @@ func (s *Scan) DeserializeCellBlocks(m proto.Message, b []byte) error {
 		}
 		readLen += l
 	}
-	if int(readLen) < len(b) {
-		return fmt.Errorf("short read: buffer len %d, read %d", len(b), readLen)
-	}
-	return nil
+	return readLen, nil
 }
 
 // MaxResultSize is an option for scan requests.

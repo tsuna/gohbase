@@ -542,19 +542,16 @@ func (m *Mutate) NewResponse() proto.Message {
 }
 
 // DeserializeCellBlocks deserializes mutate result from cell blocks
-func (m *Mutate) DeserializeCellBlocks(pm proto.Message, b []byte) error {
+func (m *Mutate) DeserializeCellBlocks(pm proto.Message, b []byte) (uint32, error) {
 	resp := pm.(*pb.MutateResponse)
 	if resp.Result == nil {
 		// TODO: is this possible?
-		return nil
+		return 0, nil
 	}
 	cells, read, err := deserializeCellBlocks(b, uint32(resp.Result.GetAssociatedCellCount()))
 	if err != nil {
-		return err
-	}
-	if int(read) < len(b) {
-		return fmt.Errorf("short read: buffer len %d, read %d", len(b), read)
+		return 0, err
 	}
 	resp.Result.Cell = append(resp.Result.Cell, cells...)
-	return nil
+	return read, nil
 }

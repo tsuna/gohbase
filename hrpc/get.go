@@ -7,7 +7,6 @@ package hrpc
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
@@ -131,21 +130,18 @@ func (g *Get) NewResponse() proto.Message {
 }
 
 // DeserializeCellBlocks deserializes get result from cell blocks
-func (g *Get) DeserializeCellBlocks(m proto.Message, b []byte) error {
+func (g *Get) DeserializeCellBlocks(m proto.Message, b []byte) (uint32, error) {
 	resp := m.(*pb.GetResponse)
 	if resp.Result == nil {
 		// TODO: is this possible?
-		return nil
+		return 0, nil
 	}
 	cells, read, err := deserializeCellBlocks(b, uint32(resp.Result.GetAssociatedCellCount()))
 	if err != nil {
-		return err
-	}
-	if int(read) < len(b) {
-		return fmt.Errorf("short read: buffer len %d, read %d", len(b), read)
+		return 0, err
 	}
 	resp.Result.Cell = append(resp.Result.Cell, cells...)
-	return nil
+	return read, nil
 }
 
 // familiesToColumn takes a map from strings to lists of strings, and converts
