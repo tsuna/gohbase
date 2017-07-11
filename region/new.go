@@ -45,7 +45,10 @@ func NewClient(ctx context.Context, addr string, ctype ClientType,
 	}
 	// reset write deadline
 	conn.SetWriteDeadline(time.Time{})
-	go c.processRPCs() // Writer goroutine
+
+	if ctype == RegionClient {
+		go c.processRPCs() // Batching goroutine
+	}
 	go c.receiveRPCs() // Reader goroutine
 	return c, nil
 }
