@@ -529,12 +529,16 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 		// connect to the region's regionserver
 		client, err := c.establishRegionClient(reg, addr)
 		if err == nil {
-			if c.clientType != adminClient {
-				if existing := c.clients.put(client, reg); existing != client {
-					// a client for this regionserver is already in cache, discard this one.
-					client.Close()
-					client = existing
-				}
+			if reg == c.adminRegionInfo {
+				reg.SetClient(client)
+				reg.MarkAvailable()
+				return
+			}
+
+			if existing := c.clients.put(client, reg); existing != client {
+				// a client for this regionserver is already in cache, discard this one.
+				client.Close()
+				client = existing
 			}
 
 			if err = isRegionEstablished(client, reg); err == nil {
