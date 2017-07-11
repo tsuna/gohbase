@@ -429,21 +429,22 @@ func probeKey(reg hrpc.RegionInfo) []byte {
 // isRegionEstablished checks whether regionserver accepts rpcs for the region.
 // Returns the cause if not established.
 func isRegionEstablished(rc hrpc.RegionClient, reg hrpc.RegionInfo) error {
-	probeGet, err := hrpc.NewGet(context.Background(), fullyQualifiedTable(reg), probeKey(reg))
+	probe, err := hrpc.NewGet(context.Background(), fullyQualifiedTable(reg), probeKey(reg),
+		hrpc.SkipBatch())
 	if err != nil {
 		panic(fmt.Sprintf("should not happen: %s", err))
 	}
-	probeGet.ExistsOnly()
+	probe.ExistsOnly()
 
-	probeGet.SetRegion(reg)
-	resGet, err := sendBlocking(rc, probeGet)
+	probe.SetRegion(reg)
+	res, err := sendBlocking(rc, probe)
 	if err != nil {
 		panic(fmt.Sprintf("should not happen: %s", err))
 	}
 
-	switch resGet.Error.(type) {
+	switch res.Error.(type) {
 	case region.RetryableError, region.UnrecoverableError:
-		return resGet.Error
+		return res.Error
 	default:
 		return nil
 	}

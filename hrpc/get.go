@@ -24,6 +24,8 @@ type Get struct {
 	// Don't return any KeyValue, just say whether the row key exists in the
 	// table or not.
 	existsOnly bool
+
+	skipbatch bool
 }
 
 // baseGet returns a Get struct with default values set.
@@ -71,6 +73,16 @@ func NewGetBefore(ctx context.Context, table, key []byte,
 // Name returns the name of this RPC call.
 func (g *Get) Name() string {
 	return "Get"
+}
+
+// SkipBatch returns true if the Get request shouldn't be batched,
+// but should be sent to Region Server right away.
+func (g *Get) SkipBatch() bool {
+	return g.skipbatch
+}
+
+func (g *Get) setSkipBatch(v bool) {
+	g.skipbatch = v
 }
 
 // ExistsOnly makes this Get request not return any KeyValue, merely whether
