@@ -149,8 +149,7 @@ type client struct {
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine
 func (c *client) QueueRPC(rpc hrpc.Call) {
-	if _, ok := rpc.(*hrpc.Mutate); ok && c.rpcQueueSize > 1 {
-		// batch mutates
+	if b, ok := rpc.(hrpc.Batchable); ok && c.rpcQueueSize > 1 && !b.SkipBatch() {
 		select {
 		case <-rpc.Context().Done():
 			// rpc timed out before being processed

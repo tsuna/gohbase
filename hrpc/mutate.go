@@ -63,11 +63,9 @@ type Mutate struct {
 	// columns
 	data interface{}
 
-	// timestamp to save at
-	timestamp uint64
-
-	// mutation durability
+	timestamp  uint64
 	durability DurabilityType
+	skipbatch  bool
 }
 
 // Timestamp sets timestamp for mutation queries.
@@ -251,6 +249,16 @@ func (m *Mutate) Name() string {
 // ToProto converts this mutate RPC into a protobuf message
 func (m *Mutate) ToProto() (proto.Message, error) {
 	return m.toProto()
+}
+
+// SkipBatch returns true if the Mutate request shouldn't be batched,
+// but should be sent to Region Server right away.
+func (m *Mutate) SkipBatch() bool {
+	return m.skipbatch
+}
+
+func (m *Mutate) setSkipBatch(v bool) {
+	m.skipbatch = v
 }
 
 func (m *Mutate) toProto() (*pb.MutateRequest, error) {

@@ -8,6 +8,7 @@ package hrpc
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"sync"
 	"unsafe"
@@ -57,6 +58,28 @@ type Call interface {
 	NewResponse() proto.Message
 	ResultChan() chan RPCResult
 	Context() context.Context
+}
+
+// Batchable interface should be implemented by calls that can be batched into MultiRequest
+type Batchable interface {
+	// SkipBatch returns true if a call shouldn't be batched into MultiRequest and
+	// should be sent right away.
+	SkipBatch() bool
+
+	setSkipBatch(v bool)
+}
+
+// SkipBatch is an option for batchable requests (Get and Mutate) to tell
+// the client to skip batching and just send the request to Region Server
+// right away.
+func SkipBatch() func(Call) error {
+	return func(c Call) error {
+		if b, ok := c.(Batchable); ok {
+			b.setSkipBatch(true)
+			return nil
+		}
+		return errors.New("'SkipBatch' option only works with Get and Mutate requests")
+	}
 }
 
 // hasQueryOptions is interface that needs to be implemented by calls
