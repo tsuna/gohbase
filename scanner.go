@@ -19,7 +19,10 @@ import (
 	"github.com/tsuna/gohbase/pb"
 )
 
-const noScannerID = math.MaxUint64
+const (
+	noScannerID      = math.MaxUint64
+	scanChBufferSize = 256
+)
 
 type re struct {
 	rs []*pb.Result
@@ -110,6 +113,25 @@ func toLocalResult(r *pb.Result) *hrpc.Result {
 		return nil
 	}
 	return hrpc.ToLocalResult(r)
+}
+
+// ScanCh returns a channel for consuming rows as they are scanned. If an error is
+// encountered, that row is skipped and the error is ignored. This method should only
+// be used if errors are not a concern.
+func (s *scanner) ScanCh() <-chan *hrpc.Result {
+	ch := make(chan *hrpc.Result, scanChBufferSize)
+	go func() {
+		defer close(ch)
+		defer s.Close()
+		var row *hrpc.Result
+		var err error
+		for err == nil {
+			if row, err = s.Next(); err == nil {
+				ch <- row
+			}
+		}
+	}()
+	return ch
 }
 
 // Next returns a row at a time.

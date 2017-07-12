@@ -37,6 +37,10 @@ const (
 // Scanner will be automatically closed if there's no more data to read,
 // otherwise Close method should be called.
 type Scanner interface {
+	// ScanCh returns a channel for consuming rows as they are scanned. If an error is
+	// encountered, that row is skipped and the error is ignored. This method should only
+	// be used if errors are not a concern.
+	ScanCh() <-chan *Result
 	// Next returns a row at a time.
 	// Once all rows are returned, subsequent calls will return nil and io.EOF.
 	//
