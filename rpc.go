@@ -365,7 +365,8 @@ func (c *client) metaLookup(ctx context.Context,
 	}
 
 	metaKey := createRegionSearchKey(table, key)
-	rpc, err := hrpc.NewGetBefore(ctx, metaTableName, metaKey, hrpc.Families(infoFamily))
+	rpc, err := hrpc.NewGetBefore(ctx, metaTableName, metaKey,
+		hrpc.Families(infoFamily), hrpc.SkipBatch())
 	if err != nil {
 		return nil, "", err
 	}
