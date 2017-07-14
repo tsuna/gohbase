@@ -24,7 +24,7 @@ func TestFamilesOption(t *testing.T) {
 		t.Error(err)
 	}
 
-	if d := test.Diff(f, g.Families()); d != "" {
+	if d := test.Diff(f, g.families); d != "" {
 		t.Error(d)
 	}
 
@@ -41,7 +41,7 @@ func TestFiltersOption(t *testing.T) {
 		t.Error(err)
 	}
 
-	if d := test.Diff(f, g.Filter()); d != "" {
+	if d := test.Diff(f, g.filter); d != "" {
 		t.Error(d)
 	}
 
@@ -75,7 +75,7 @@ func TestTimeRangeOption(t *testing.T) {
 			continue
 		}
 
-		from, to := g.TimeRange()
+		from, to := g.fromTimestamp, g.toTimestamp
 		if fromExp := uint64(tcase.from.UnixNano() / 1e6); from != fromExp {
 			t.Errorf("expected from time %d, got from time %d", fromExp, from)
 		}
@@ -98,7 +98,7 @@ func TestMaxVersions(t *testing.T) {
 		t.Error(err)
 	}
 
-	if vExp, vGot := v, g.MaxVersions(); vExp != vGot {
+	if vExp, vGot := v, g.maxVersions; vExp != vGot {
 		t.Errorf("expected %d, got %d", vExp, vGot)
 	}
 
@@ -121,7 +121,7 @@ func TestMaxResultsPerColumnFamily(t *testing.T) {
 		t.Error(err)
 	}
 
-	if rExp, rGot := r, g.MaxResultsPerColumnFamily(); rExp != rGot {
+	if rExp, rGot := r, g.storeLimit; rExp != rGot {
 		t.Errorf("expected %d, got %d", rExp, rGot)
 	}
 
@@ -146,7 +146,7 @@ func TestResultOffset(t *testing.T) {
 		t.Error(err)
 	}
 
-	if rExp, rGot := r, g.ResultOffset(); rExp != rGot {
+	if rExp, rGot := r, g.storeOffset; rExp != rGot {
 		t.Errorf("expected %d, got %d", rExp, rGot)
 	}
 

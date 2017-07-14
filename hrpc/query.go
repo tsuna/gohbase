@@ -54,36 +54,6 @@ func (bq *baseQuery) setResultOffset(offset uint32) {
 	bq.storeOffset = offset
 }
 
-// Families returns the set families covered by this query.
-func (bq *baseQuery) Families() map[string][]string {
-	return bq.families
-}
-
-// Filter returns filter of this query.
-func (bq *baseQuery) Filter() filter.Filter {
-	return bq.filter
-}
-
-// TimeRange returns to and from timestamps of this query.
-func (bq *baseQuery) TimeRange() (uint64, uint64) {
-	return bq.fromTimestamp, bq.toTimestamp
-}
-
-// MaxVersions returns max versions of this query.
-func (bq *baseQuery) MaxVersions() uint32 {
-	return bq.maxVersions
-}
-
-// MaxResultsPerColumnFamily returns the maximum number of columns to be returned per row.
-func (bq *baseQuery) MaxResultsPerColumnFamily() uint32 {
-	return bq.storeLimit
-}
-
-// ResultOffset returns the column offset to be returned per row.
-func (bq *baseQuery) ResultOffset() uint32 {
-	return bq.storeOffset
-}
-
 // Families option adds families constraint to a Scan or Get request.
 func Families(f map[string][]string) func(Call) error {
 	return func(hc Call) error {

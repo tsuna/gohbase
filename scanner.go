@@ -259,20 +259,12 @@ func (f *fetcher) next() (*pb.ScanResponse, hrpc.RegionInfo, error) {
 	var err error
 	if f.scannerID == noScannerID {
 		// starting to scan on a new region
-		from, to := f.rpc.TimeRange()
 		rpc, err = hrpc.NewScanRange(
 			f.ctx,
 			f.rpc.Table(),
 			f.startRow,
 			f.rpc.StopRow(),
-			hrpc.Families(f.rpc.Families()),
-			hrpc.Filters(f.rpc.Filter()),
-			hrpc.TimeRangeUint64(from, to),
-			hrpc.MaxVersions(f.rpc.MaxVersions()),
-			hrpc.MaxResultSize(f.rpc.MaxResultSize()),
-			hrpc.NumberOfRows(f.rpc.NumberOfRows()),
-			hrpc.MaxResultsPerColumnFamily(f.rpc.MaxResultsPerColumnFamily()),
-			hrpc.ResultOffset(f.rpc.ResultOffset()),
+			f.rpc.Options()...,
 		)
 		if err != nil {
 			return nil, nil, err

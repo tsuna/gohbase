@@ -359,7 +359,7 @@ func testErrorScanFromID(t *testing.T, scan *hrpc.Scan, out []*hrpc.Result) {
 	scanner := newScanner(c, scan)
 	ctx := scanner.f.ctx
 
-	srange, err := hrpc.NewScanRange(ctx, table, nil, nil)
+	srange, err := hrpc.NewScanRange(ctx, table, nil, nil, scan.Options()...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -476,7 +476,8 @@ func testPartialResults(t *testing.T, scan *hrpc.Scan, expected []*hrpc.Result) 
 		if partial.scanFromID {
 			s = hrpc.NewScanFromID(ctx, table, scannerID, partial.region.StartKey())
 		} else {
-			s, err = hrpc.NewScanRange(ctx, table, partial.region.StartKey(), nil)
+			s, err = hrpc.NewScanRange(ctx, table, partial.region.StartKey(), nil,
+				scan.Options()...)
 			if err != nil {
 				t.Fatal(err)
 			}
