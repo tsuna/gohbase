@@ -1443,15 +1443,6 @@ func TestMaxResultsPerColumnFamilyScan(t *testing.T) {
 	if err != nil {
 		t.Errorf(baseErr+"building scan request: %s", err)
 	}
-	if scanRequest.MaxResultsPerColumnFamily() != 2 {
-		t.Error(baseErr + " unable to retrieve MaxResultsPerColumnFamily from scan request")
-	}
-	if scanRequest.ResultOffset() != 10 {
-		t.Error(baseErr + " unable to retrieve ResultOffset from scan request")
-	}
-	if scanRequest.MaxResultSize() != 1 {
-		t.Error(baseErr + " unable to retrieve MaxResultSize from scan request")
-	}
 
 	result = c.Scan(scanRequest)
 	resultCnt = 0

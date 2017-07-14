@@ -150,8 +150,7 @@ func NewScanFromID(ctx context.Context, table []byte, scannerID uint64, startRow
 // NewCloseFromID creates a new Scan request that will close the scanner for
 // the given scanner ID.  This is an internal method, users are not expected
 // to deal with scanner IDs.
-func NewCloseFromID(ctx context.Context, table []byte,
-	scannerID uint64, startRow []byte) *Scan {
+func NewCloseFromID(ctx context.Context, table []byte, scannerID uint64, startRow []byte) *Scan {
 	scan, _ := baseScan(ctx, table)
 	scan.scannerID = scannerID
 	scan.closeScanner = true
@@ -177,17 +176,6 @@ func (s *Scan) StartRow() []byte {
 // IsClosing returns wether this scan closes scanner prematurely
 func (s *Scan) IsClosing() bool {
 	return s.closeScanner
-}
-
-// MaxResultSize returns Maximum number of bytes fetched when calling a scanner's next method.
-func (s *Scan) MaxResultSize() uint64 {
-	return s.maxResultSize
-}
-
-// NumberOfRows returns maximum number of rows that will be fetched
-// with each scan request to regionserver.
-func (s *Scan) NumberOfRows() uint32 {
-	return s.numberOfRows
 }
 
 // AllowPartialResults returns true if client handles partials.

@@ -60,6 +60,11 @@ type Call interface {
 	Context() context.Context
 }
 
+type withOptions interface {
+	Options() []func(Call) error
+	setOptions([]func(Call) error)
+}
+
 // Batchable interface should be implemented by calls that can be batched into MultiRequest
 type Batchable interface {
 	// SkipBatch returns true if a call shouldn't be batched into MultiRequest and
@@ -113,6 +118,8 @@ type base struct {
 	resultch chan RPCResult
 
 	ctx context.Context
+
+	options []func(Call) error
 }
 
 func (b *base) Context() context.Context {
@@ -135,7 +142,17 @@ func (b *base) regionSpecifier() *pb.RegionSpecifier {
 	}
 }
 
+func (b *base) setOptions(options []func(Call) error) {
+	b.options = options
+}
+
+// Options returns all the options passed to this call
+func (b *base) Options() []func(Call) error {
+	return b.options
+}
+
 func applyOptions(call Call, options ...func(Call) error) error {
+	call.(withOptions).setOptions(options)
 	for _, option := range options {
 		err := option(call)
 		if err != nil {
