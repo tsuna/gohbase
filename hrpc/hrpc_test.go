@@ -3,7 +3,7 @@
 // Use of this source code is governed by the Apache License 2.0
 // that can be found in the COPYING file.
 
-package hrpc_test
+package hrpc
 
 import (
 	"bytes"
@@ -15,9 +15,7 @@ import (
 	"github.com/aristanetworks/goarista/test"
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/filter"
-	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
-	"github.com/tsuna/gohbase/region"
 )
 
 func TestNewGet(t *testing.T) {
@@ -29,49 +27,49 @@ func TestNewGet(t *testing.T) {
 	fam := make(map[string][]string)
 	fam["info"] = []string{"c1"}
 	filter1 := filter.NewFirstKeyOnlyFilter()
-	get, err := hrpc.NewGet(ctx, tableb, keyb)
-	if err != nil || !confirmGetAttributes(get, ctx, tableb, keyb, nil, nil) {
+	get, err := NewGet(ctx, tableb, keyb)
+	if err != nil || !confirmGetAttributes(ctx, get, tableb, keyb, nil, nil) {
 		t.Errorf("Get1 didn't set attributes correctly.")
 	}
-	get, err = hrpc.NewGetStr(ctx, table, key)
-	if err != nil || !confirmGetAttributes(get, ctx, tableb, keyb, nil, nil) {
+	get, err = NewGetStr(ctx, table, key)
+	if err != nil || !confirmGetAttributes(ctx, get, tableb, keyb, nil, nil) {
 		t.Errorf("Get2 didn't set attributes correctly.")
 	}
-	get, err = hrpc.NewGet(ctx, tableb, keyb, hrpc.Families(fam))
-	if err != nil || !confirmGetAttributes(get, ctx, tableb, keyb, fam, nil) {
+	get, err = NewGet(ctx, tableb, keyb, Families(fam))
+	if err != nil || !confirmGetAttributes(ctx, get, tableb, keyb, fam, nil) {
 		t.Errorf("Get3 didn't set attributes correctly.")
 	}
-	get, err = hrpc.NewGet(ctx, tableb, keyb, hrpc.Filters(filter1))
-	if err != nil || !confirmGetAttributes(get, ctx, tableb, keyb, nil, filter1) {
+	get, err = NewGet(ctx, tableb, keyb, Filters(filter1))
+	if err != nil || !confirmGetAttributes(ctx, get, tableb, keyb, nil, filter1) {
 		t.Errorf("Get4 didn't set attributes correctly.")
 	}
-	get, err = hrpc.NewGet(ctx, tableb, keyb, hrpc.Filters(filter1), hrpc.Families(fam))
-	if err != nil || !confirmGetAttributes(get, ctx, tableb, keyb, fam, filter1) {
+	get, err = NewGet(ctx, tableb, keyb, Filters(filter1), Families(fam))
+	if err != nil || !confirmGetAttributes(ctx, get, tableb, keyb, fam, filter1) {
 		t.Errorf("Get5 didn't set attributes correctly.")
 	}
-	get, err = hrpc.NewGet(ctx, tableb, keyb, hrpc.Filters(filter1))
-	err = hrpc.Families(fam)(get)
-	if err != nil || !confirmGetAttributes(get, ctx, tableb, keyb, fam, filter1) {
+	get, err = NewGet(ctx, tableb, keyb, Filters(filter1))
+	err = Families(fam)(get)
+	if err != nil || !confirmGetAttributes(ctx, get, tableb, keyb, fam, filter1) {
 		t.Errorf("Get6 didn't set attributes correctly.")
 	}
-	get, err = hrpc.NewGet(ctx, tableb, keyb, hrpc.MaxVersions(math.MaxInt32))
+	get, err = NewGet(ctx, tableb, keyb, MaxVersions(math.MaxInt32))
 	if err != nil {
 		t.Errorf("Get7 didn't set attributes correctly.")
 	}
-	get, err = hrpc.NewGet(ctx, tableb, keyb, hrpc.MaxVersions(math.MaxInt32+1))
+	get, err = NewGet(ctx, tableb, keyb, MaxVersions(math.MaxInt32+1))
 	errStr := "'MaxVersions' exceeds supported number of versions"
 	if err != nil && errStr != err.Error() || err == nil {
 		t.Errorf("Get8 Expected: %#v\nReceived: %#v", errStr, err)
 	}
 }
 
-func confirmGetAttributes(g *hrpc.Get, ctx context.Context, table, key []byte,
+func confirmGetAttributes(ctx context.Context, g *Get, table, key []byte,
 	fam map[string][]string, filter1 filter.Filter) bool {
 	if g.Context() != ctx ||
 		!bytes.Equal(g.Table(), table) ||
 		!bytes.Equal(g.Key(), key) ||
-		!reflect.DeepEqual(g.Families(), fam) ||
-		reflect.TypeOf(g.Filter()) != reflect.TypeOf(filter1) {
+		!reflect.DeepEqual(g.families, fam) ||
+		reflect.TypeOf(g.filter) != reflect.TypeOf(filter1) {
 		return false
 	}
 	return true
@@ -88,29 +86,29 @@ func TestNewScan(t *testing.T) {
 	stop := "100"
 	startb := []byte("0")
 	stopb := []byte("100")
-	scan, err := hrpc.NewScan(ctx, tableb)
-	if err != nil || !confirmScanAttributes(scan, ctx, tableb, nil, nil, nil, nil) {
+	scan, err := NewScan(ctx, tableb)
+	if err != nil || !confirmScanAttributes(ctx, scan, tableb, nil, nil, nil, nil) {
 		t.Errorf("Scan1 didn't set attributes correctly.")
 	}
-	scan, err = hrpc.NewScanRange(ctx, tableb, startb, stopb)
-	if err != nil || !confirmScanAttributes(scan, ctx, tableb, startb, stopb, nil, nil) {
+	scan, err = NewScanRange(ctx, tableb, startb, stopb)
+	if err != nil || !confirmScanAttributes(ctx, scan, tableb, startb, stopb, nil, nil) {
 		t.Errorf("Scan2 didn't set attributes correctly.")
 	}
-	scan, err = hrpc.NewScanStr(ctx, table)
-	if err != nil || !confirmScanAttributes(scan, ctx, tableb, nil, nil, nil, nil) {
+	scan, err = NewScanStr(ctx, table)
+	if err != nil || !confirmScanAttributes(ctx, scan, tableb, nil, nil, nil, nil) {
 		t.Errorf("Scan3 didn't set attributes correctly.")
 	}
-	scan, err = hrpc.NewScanRangeStr(ctx, table, start, stop)
-	if err != nil || !confirmScanAttributes(scan, ctx, tableb, startb, stopb, nil, nil) {
+	scan, err = NewScanRangeStr(ctx, table, start, stop)
+	if err != nil || !confirmScanAttributes(ctx, scan, tableb, startb, stopb, nil, nil) {
 		t.Errorf("Scan4 didn't set attributes correctly.")
 	}
-	scan, err = hrpc.NewScanRange(ctx, tableb, startb, stopb, hrpc.Families(fam),
-		hrpc.Filters(filter1))
-	if err != nil || !confirmScanAttributes(scan, ctx, tableb, startb, stopb, fam, filter1) {
+	scan, err = NewScanRange(ctx, tableb, startb, stopb, Families(fam),
+		Filters(filter1))
+	if err != nil || !confirmScanAttributes(ctx, scan, tableb, startb, stopb, fam, filter1) {
 		t.Errorf("Scan5 didn't set attributes correctly.")
 	}
-	scan, err = hrpc.NewScan(ctx, tableb, hrpc.Filters(filter1), hrpc.Families(fam))
-	if err != nil || !confirmScanAttributes(scan, ctx, tableb, nil, nil, fam, filter1) {
+	scan, err = NewScan(ctx, tableb, Filters(filter1), Families(fam))
+	if err != nil || !confirmScanAttributes(ctx, scan, tableb, nil, nil, fam, filter1) {
 		t.Errorf("Scan6 didn't set attributes correctly.")
 	}
 }
@@ -142,7 +140,7 @@ func TestDeserializeCellBlocksGet(t *testing.T) {
 		Cell:                []*pb.Cell{expectedCells[0]},
 		AssociatedCellCount: proto.Int32(1),
 	}}
-	g := &hrpc.Get{}
+	g := &Get{}
 	n, err := g.DeserializeCellBlocks(getResp, cellblock)
 	if err != nil {
 		t.Error(err)
@@ -169,7 +167,7 @@ func TestDeserializeCellblocksMutate(t *testing.T) {
 		Cell:                []*pb.Cell{expectedCells[0]},
 		AssociatedCellCount: proto.Int32(1),
 	}}
-	m := &hrpc.Mutate{}
+	m := &Mutate{}
 	n, err := m.DeserializeCellBlocks(mResp, cellblock)
 	if err != nil {
 		t.Error(err)
@@ -244,7 +242,7 @@ func TestDeserializeCellBlocksScan(t *testing.T) {
 		PartialFlagPerResult: []bool{true, false},
 		CellsPerResult:       []uint32{2, 1},
 	}
-	s := &hrpc.Scan{}
+	s := &Scan{}
 	n, err := s.DeserializeCellBlocks(scanResp, cellblocks)
 	if err != nil {
 		t.Error(err)
@@ -266,14 +264,14 @@ func TestDeserializeCellBlocksScan(t *testing.T) {
 	}
 }
 
-func confirmScanAttributes(s *hrpc.Scan, ctx context.Context, table, start, stop []byte,
+func confirmScanAttributes(ctx context.Context, s *Scan, table, start, stop []byte,
 	fam map[string][]string, filter1 filter.Filter) bool {
 	if s.Context() != ctx ||
 		!bytes.Equal(s.Table(), table) ||
 		!bytes.Equal(s.StartRow(), start) ||
 		!bytes.Equal(s.StopRow(), stop) ||
-		!reflect.DeepEqual(s.Families(), fam) ||
-		reflect.TypeOf(s.Filter()) != reflect.TypeOf(filter1) {
+		!reflect.DeepEqual(s.families, fam) ||
+		reflect.TypeOf(s.filter) != reflect.TypeOf(filter1) {
 		return false
 	}
 	return true
@@ -305,11 +303,10 @@ func BenchmarkMutateToProtoWithNestedMaps(b *testing.B) {
 				"r": []byte("This is a test string."),
 			},
 		}
-		mutate, err := hrpc.NewPutStr(context.Background(), "", "", data)
+		mutate, err := NewPutStr(context.Background(), "", "", data)
 		if err != nil {
 			b.Errorf("Error creating mutate: %v", err)
 		}
-		mutate.SetRegion(region.NewInfo(0, nil, nil, nil, nil, nil))
 
 		if p, _ := mutate.ToProto(); p == nil {
 			b.Fatal("got a nil proto")
@@ -363,11 +360,10 @@ func BenchmarkMutateToProtoWithReflection(b *testing.B) {
 			ASlice:      []uint8{1, 1, 3, 5, 8, 13, 21, 34, 55},
 			AString:     "This is a test string.",
 		}
-		mutate, err := hrpc.NewPutStrRef(context.Background(), "", "", str)
+		mutate, err := NewPutStrRef(context.Background(), "", "", str)
 		if err != nil {
 			b.Errorf("Error creating mutate: %v", err)
 		}
-		mutate.SetRegion(region.NewInfo(0, nil, nil, nil, nil, nil))
 
 		if p, _ := mutate.ToProto(); p == nil {
 			b.Fatal("got a nil proto")
