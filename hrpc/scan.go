@@ -224,14 +224,7 @@ func (s *Scan) ToProto() (proto.Message, error) {
 	if s.toTimestamp != MaxTimestamp {
 		scan.Scan.TimeRange.To = &s.toTimestamp
 	}
-
-	if s.filter != nil {
-		pbFilter, err := s.filter.ConstructPBFilter()
-		if err != nil {
-			return nil, err
-		}
-		scan.Scan.Filter = pbFilter
-	}
+	scan.Scan.Filter = s.filter
 	return scan, nil
 }
 

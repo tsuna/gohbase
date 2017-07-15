@@ -14,7 +14,6 @@ import (
 	"unsafe"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
 )
 
@@ -91,7 +90,7 @@ func SkipBatch() func(Call) error {
 // that allow to provide Families and Filters options.
 type hasQueryOptions interface {
 	setFamilies(families map[string][]string)
-	setFilter(filter filter.Filter)
+	setFilter(filter *pb.Filter)
 	setTimeRangeUint64(from, to uint64)
 	setMaxVersions(versions uint32)
 	setMaxResultsPerColumnFamily(maxresults uint32)
