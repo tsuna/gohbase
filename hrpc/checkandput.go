@@ -55,17 +55,12 @@ func (cp *CheckAndPut) ToProto() (proto.Message, error) {
 	}
 
 	// The edit.
-	mutateRequest, err := cp.toProto()
-	if err != nil {
-		return nil, fmt.Errorf("error serializing request: %s", err)
-	}
-
-	compareType := pb.CompareType_EQUAL
+	mutateRequest := cp.toProto()
 	mutateRequest.Condition = &pb.Condition{
 		Row:         cp.key,
 		Family:      cp.family,
 		Qualifier:   cp.qualifier,
-		CompareType: &compareType,
+		CompareType: pb.CompareType_EQUAL.Enum(),
 		Comparator:  comparator,
 	}
 	return mutateRequest, nil
