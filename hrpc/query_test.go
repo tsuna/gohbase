@@ -41,8 +41,8 @@ func TestFiltersOption(t *testing.T) {
 		t.Error(err)
 	}
 
-	if d := test.Diff(f, g.filter); d != "" {
-		t.Error(d)
+	if g.filter == nil {
+		t.Error("expected filter to be set")
 	}
 
 	_, err = NewPutStr(context.Background(), "", "", nil, Filters(f))

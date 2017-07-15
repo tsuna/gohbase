@@ -69,7 +69,7 @@ func confirmGetAttributes(ctx context.Context, g *Get, table, key []byte,
 		!bytes.Equal(g.Table(), table) ||
 		!bytes.Equal(g.Key(), key) ||
 		!reflect.DeepEqual(g.families, fam) ||
-		reflect.TypeOf(g.filter) != reflect.TypeOf(filter1) {
+		(filter1 != nil && g.filter == nil) {
 		return false
 	}
 	return true
@@ -271,7 +271,7 @@ func confirmScanAttributes(ctx context.Context, s *Scan, table, start, stop []by
 		!bytes.Equal(s.StartRow(), start) ||
 		!bytes.Equal(s.StopRow(), stop) ||
 		!reflect.DeepEqual(s.families, fam) ||
-		reflect.TypeOf(s.filter) != reflect.TypeOf(filter1) {
+		(filter1 != nil && s.filter == nil) {
 		return false
 	}
 	return true

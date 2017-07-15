@@ -125,13 +125,7 @@ func (g *Get) ToProto() (proto.Message, error) {
 	if g.existsOnly {
 		get.Get.ExistenceOnly = proto.Bool(true)
 	}
-	if g.filter != nil {
-		pbFilter, err := g.filter.ConstructPBFilter()
-		if err != nil {
-			return nil, err
-		}
-		get.Get.Filter = pbFilter
-	}
+	get.Get.Filter = g.filter
 	return get, nil
 }
 

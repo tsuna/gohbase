@@ -11,12 +11,13 @@ import (
 	"time"
 
 	"github.com/tsuna/gohbase/filter"
+	"github.com/tsuna/gohbase/pb"
 )
 
 // baseQuery bundles common fields that can be provided for quering requests: Scans and Gets
 type baseQuery struct {
 	families      map[string][]string
-	filter        filter.Filter
+	filter        *pb.Filter
 	fromTimestamp uint64
 	toTimestamp   uint64
 	maxVersions   uint32
@@ -37,7 +38,7 @@ func newBaseQuery() baseQuery {
 func (bq *baseQuery) setFamilies(families map[string][]string) {
 	bq.families = families
 }
-func (bq *baseQuery) setFilter(filter filter.Filter) {
+func (bq *baseQuery) setFilter(filter *pb.Filter) {
 	bq.filter = filter
 }
 func (bq *baseQuery) setTimeRangeUint64(from, to uint64) {
@@ -69,7 +70,11 @@ func Families(f map[string][]string) func(Call) error {
 func Filters(f filter.Filter) func(Call) error {
 	return func(hc Call) error {
 		if c, ok := hc.(hasQueryOptions); ok {
-			c.setFilter(f)
+			pbF, err := f.ConstructPBFilter()
+			if err != nil {
+				return err
+			}
+			c.setFilter(pbF)
 			return nil
 		}
 		return errors.New("'Filters' option can only be used with Get or Scan request")
