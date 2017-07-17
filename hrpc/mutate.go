@@ -230,12 +230,11 @@ func (m *Mutate) toProto() *pb.MutateRequest {
 }
 
 // ToProto converts this mutate RPC into a protobuf message
-func (m *Mutate) ToProto() (proto.Message, error) {
-	return m.toProto(), nil
+func (m *Mutate) ToProto() proto.Message {
+	return m.toProto()
 }
 
-// NewResponse creates an empty protobuf message to read the response of this
-// RPC.
+// NewResponse creates an empty protobuf message to read the response of this RPC.
 func (m *Mutate) NewResponse() proto.Message {
 	return &pb.MutateResponse{}
 }

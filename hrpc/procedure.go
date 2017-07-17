@@ -33,8 +33,8 @@ func (ps *GetProcedureState) Name() string {
 }
 
 // ToProto converts the RPC into a protobuf message
-func (ps *GetProcedureState) ToProto() (proto.Message, error) {
-	return &pb.GetProcedureResultRequest{ProcId: &ps.procID}, nil
+func (ps *GetProcedureState) ToProto() proto.Message {
+	return &pb.GetProcedureResultRequest{ProcId: &ps.procID}
 }
 
 // NewResponse creates an empty protobuf message to read the response of this RPC.

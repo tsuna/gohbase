@@ -34,14 +34,14 @@ func (dt *DeleteTable) Name() string {
 }
 
 // ToProto converts the RPC into a protobuf message
-func (dt *DeleteTable) ToProto() (proto.Message, error) {
+func (dt *DeleteTable) ToProto() proto.Message {
 	return &pb.DeleteTableRequest{
 		TableName: &pb.TableName{
 			// TODO: hadle namespaces properly
 			Namespace: []byte("default"),
 			Qualifier: dt.table,
 		},
-	}, nil
+	}
 }
 
 // NewResponse creates an empty protobuf message to read the response of this

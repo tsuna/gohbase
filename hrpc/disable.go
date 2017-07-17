@@ -34,14 +34,14 @@ func (dt *DisableTable) Name() string {
 }
 
 // ToProto converts the RPC into a protobuf message
-func (dt *DisableTable) ToProto() (proto.Message, error) {
+func (dt *DisableTable) ToProto() proto.Message {
 	return &pb.DisableTableRequest{
 		TableName: &pb.TableName{
 			// TODO: handle namespaces
 			Namespace: []byte("default"),
 			Qualifier: dt.table,
 		},
-	}, nil
+	}
 }
 
 // NewResponse creates an empty protobuf message to read the response of this

@@ -308,7 +308,7 @@ func BenchmarkMutateToProtoWithNestedMaps(b *testing.B) {
 			b.Errorf("Error creating mutate: %v", err)
 		}
 
-		if p, _ := mutate.ToProto(); p == nil {
+		if p := mutate.ToProto(); p == nil {
 			b.Fatal("got a nil proto")
 		}
 	}

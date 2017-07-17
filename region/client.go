@@ -489,10 +489,7 @@ func (c *client) sendHello(ctype ClientType) error {
 // send sends an RPC out to the wire.
 // Returns the response (for now, as the call is synchronous).
 func (c *client) send(id uint32, rpc hrpc.Call) error {
-	request, err := rpc.ToProto()
-	if err != nil {
-		return fmt.Errorf("failed to convert RPC: %s", err)
-	}
+	request := rpc.ToProto()
 
 	b := newBuffer(4)
 	defer func() { freeBuffer(b) }()
@@ -505,11 +502,11 @@ func (c *client) send(id uint32, rpc hrpc.Call) error {
 		MethodName:   proto.String(rpc.Name()),
 		RequestParam: proto.Bool(true),
 	}
-	if err = buf.EncodeMessage(header); err != nil {
+	if err := buf.EncodeMessage(header); err != nil {
 		return fmt.Errorf("failed to marshal request header: %s", err)
 	}
 
-	if err = buf.EncodeMessage(request); err != nil {
+	if err := buf.EncodeMessage(request); err != nil {
 		return fmt.Errorf("failed to marshal request: %s", err)
 	}
 
@@ -517,7 +514,7 @@ func (c *client) send(id uint32, rpc hrpc.Call) error {
 	binary.BigEndian.PutUint32(b, uint32(len(payload)))
 	b = append(b[:4], payload...)
 
-	if err = c.write(b); err != nil {
+	if err := c.write(b); err != nil {
 		return UnrecoverableError{err}
 	}
 	c.inFlightUp()

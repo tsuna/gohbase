@@ -184,7 +184,7 @@ func (s *Scan) AllowPartialResults() bool {
 }
 
 // ToProto converts this Scan into a protobuf message
-func (s *Scan) ToProto() (proto.Message, error) {
+func (s *Scan) ToProto() proto.Message {
 	scan := &pb.ScanRequest{
 		Region:       s.regionSpecifier(),
 		CloseScanner: &s.closeScanner,
@@ -197,7 +197,7 @@ func (s *Scan) ToProto() (proto.Message, error) {
 	}
 	if s.scannerID != math.MaxUint64 {
 		scan.ScannerId = &s.scannerID
-		return scan, nil
+		return scan
 	}
 	scan.Scan = &pb.Scan{
 		Column:        familiesToColumn(s.families),
@@ -225,7 +225,7 @@ func (s *Scan) ToProto() (proto.Message, error) {
 		scan.Scan.TimeRange.To = &s.toTimestamp
 	}
 	scan.Scan.Filter = s.filter
-	return scan, nil
+	return scan
 }
 
 // NewResponse creates an empty protobuf message to read the response

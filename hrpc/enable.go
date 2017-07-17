@@ -34,14 +34,14 @@ func (et *EnableTable) Name() string {
 }
 
 // ToProto converts the RPC into a protobuf message
-func (et *EnableTable) ToProto() (proto.Message, error) {
+func (et *EnableTable) ToProto() proto.Message {
 	return &pb.EnableTableRequest{
 		TableName: &pb.TableName{
 			// TODO: handle namespaces
 			Namespace: []byte("default"),
 			Qualifier: et.table,
 		},
-	}, nil
+	}
 }
 
 // NewResponse creates an empty protobuf message to read the response of this
