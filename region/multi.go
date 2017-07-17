@@ -36,7 +36,14 @@ func (m *multi) ToProto() proto.Message {
 	actionsPerReg := map[hrpc.RegionInfo][]*pb.Action{}
 
 	for i, c := range m.calls {
-		// TODO: check context of the call, maybe it's already expired
+		select {
+		case <-c.Context().Done():
+			// context has expired, don't bother sending it
+			m.calls[i] = nil
+			continue
+		default:
+		}
+
 		msg := c.ToProto()
 
 		a := &pb.Action{
@@ -139,6 +146,9 @@ func (m *multi) DeserializeCellBlocks(msg proto.Message, b []byte) (uint32, erro
 func (m *multi) returnResults(msg proto.Message, err error) {
 	if err != nil {
 		for _, c := range m.calls {
+			if c == nil {
+				continue
+			}
 			c.ResultChan() <- hrpc.RPCResult{Error: err}
 		}
 		return
@@ -156,6 +166,9 @@ func (m *multi) returnResults(msg proto.Message, err error) {
 
 			err := exceptionToError(*e.Name, string(e.Value))
 			for _, c := range m.calls {
+				if c == nil {
+					continue
+				}
 				if c.Region() == reg {
 					c.ResultChan() <- hrpc.RPCResult{Error: err}
 				}
