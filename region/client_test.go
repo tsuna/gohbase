@@ -332,7 +332,7 @@ func TestQueueRPC(t *testing.T) {
 		mockCall := mock.NewMockCall(ctrl)
 		mockCall.EXPECT().Name().Return("Get").Times(1)
 		p, payload := mockRPCProto(fmt.Sprintf("rpc_%d", i))
-		mockCall.EXPECT().ToProto().Return(p, nil).Times(1)
+		mockCall.EXPECT().ToProto().Return(p).Times(1)
 		mockCall.EXPECT().Context().Return(ctx).Times(1)
 		mockCall.EXPECT().ResultChan().Return(make(chan hrpc.RPCResult, 1)).Times(1)
 		calls[i] = mockCall
@@ -404,7 +404,7 @@ func TestUnrecoverableErrorWrite(t *testing.T) {
 	// define rpcs behaviour
 	mockCall := mock.NewMockCall(ctrl)
 	p, payload := mockRPCProto("rpc")
-	mockCall.EXPECT().ToProto().Return(p, nil).Times(1)
+	mockCall.EXPECT().ToProto().Return(p).Times(1)
 	mockCall.EXPECT().Name().Return("Get").Times(1)
 	mockCall.EXPECT().Context().Return(context.Background()).Times(1)
 	result := make(chan hrpc.RPCResult, 1)
@@ -637,15 +637,15 @@ func TestUnexpectedSendError(t *testing.T) {
 	go c.processRPCs()
 	// define rpcs behaviour
 	mockCall := mock.NewMockCall(ctrl)
-	err := errors.New("ToProto error")
-	mockCall.EXPECT().ToProto().Return(nil, err).Times(1)
+	mockCall.EXPECT().ToProto().Return(nil).Times(1)
 	mockCall.EXPECT().Context().Return(context.Background()).Times(1)
 	result := make(chan hrpc.RPCResult, 1)
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
+	mockCall.EXPECT().Name().Return("Whatever").Times(1)
 
 	c.QueueRPC(mockCall)
 	r := <-result
-	err = fmt.Errorf("failed to convert RPC: %v", err)
+	err := errors.New("failed to marshal request: proto: Marshal called with nil")
 	if diff := atest.Diff(err, r.Error); diff != "" {
 		t.Errorf("Expected: %s\nReceived: %s\nDiff:%s",
 			err, r.Error, diff)
@@ -749,7 +749,7 @@ func TestRPCContext(t *testing.T) {
 	mockCall := mock.NewMockCall(ctrl)
 	mockCall.EXPECT().Name().Return("Get").Times(1)
 	p, payload := mockRPCProto("yolo")
-	mockCall.EXPECT().ToProto().Return(p, nil).Times(1)
+	mockCall.EXPECT().ToProto().Return(p).Times(1)
 	mockCall.EXPECT().Context().Return(context.Background()).Times(1)
 	mockCall.EXPECT().ResultChan().Return(make(chan hrpc.RPCResult, 1)).Times(1)
 	mockConn.EXPECT().Write(newRPCMatcher(payload)).Times(1).Return(14+len(payload), nil)
@@ -896,7 +896,7 @@ func BenchmarkSendBatchMemory(b *testing.B) {
 	mockCall := mock.NewMockCall(ctrl)
 	mockCall.EXPECT().Name().Return("Get").AnyTimes()
 	p, _ := mockRPCProto("rpc")
-	mockCall.EXPECT().ToProto().Return(p, nil).AnyTimes()
+	mockCall.EXPECT().ToProto().Return(p).AnyTimes()
 	mockCall.EXPECT().Context().Return(ctx).AnyTimes()
 	mockConn.EXPECT().Write(gomock.Any()).AnyTimes().Return(0, nil).Do(func(buf []byte) {
 		wgWrites.Done()

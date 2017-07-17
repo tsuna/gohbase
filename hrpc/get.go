@@ -92,7 +92,7 @@ func (g *Get) ExistsOnly() {
 }
 
 // ToProto converts this RPC into a protobuf message.
-func (g *Get) ToProto() (proto.Message, error) {
+func (g *Get) ToProto() proto.Message {
 	get := &pb.GetRequest{
 		Region: g.regionSpecifier(),
 		Get: &pb.Get{
@@ -126,7 +126,7 @@ func (g *Get) ToProto() (proto.Message, error) {
 		get.Get.ExistenceOnly = proto.Bool(true)
 	}
 	get.Get.Filter = g.filter
-	return get, nil
+	return get
 }
 
 // NewResponse creates an empty protobuf message to read the response of this

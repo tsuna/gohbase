@@ -5,10 +5,11 @@ package mock
 
 import (
 	context "context"
+	reflect "reflect"
+
 	gomock "github.com/golang/mock/gomock"
 	proto "github.com/golang/protobuf/proto"
 	hrpc "github.com/tsuna/gohbase/hrpc"
-	reflect "reflect"
 )
 
 // MockCall is a mock of Call interface
@@ -129,11 +130,10 @@ func (_mr *MockCallMockRecorder) Table() *gomock.Call {
 }
 
 // ToProto mocks base method
-func (_m *MockCall) ToProto() (proto.Message, error) {
+func (_m *MockCall) ToProto() proto.Message {
 	ret := _m.ctrl.Call(_m, "ToProto")
 	ret0, _ := ret[0].(proto.Message)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // ToProto indicates an expected call of ToProto

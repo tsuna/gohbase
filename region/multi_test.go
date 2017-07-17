@@ -18,7 +18,6 @@ import (
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/test"
-	"github.com/tsuna/gohbase/test/mock"
 )
 
 type RegionActions []*pb.RegionAction
@@ -61,7 +60,6 @@ func TestMultiToProto(t *testing.T) {
 	tests := []struct {
 		calls    []hrpc.Call
 		out      *pb.MultiRequest
-		err      error
 		panicMsg string
 	}{
 		{
@@ -130,19 +128,6 @@ func TestMultiToProto(t *testing.T) {
 				},
 			},
 		},
-		{ // one batched Call's ToProto returns an error
-			calls: func() []hrpc.Call {
-				cs := make([]hrpc.Call, 2)
-				cs[0], _ = hrpc.NewGetStr(context.Background(), "reg0", "yolo")
-				cs[0].SetRegion(reg0)
-
-				mc := mock.NewMockCall(ctrl)
-				mc.EXPECT().ToProto().Return(nil, errors.New("OOOPS"))
-				cs[1] = mc
-				return cs
-			}(),
-			err: errors.New("OOOPS"),
-		},
 		{ // one batched call is not supported for batching
 			calls: func() []hrpc.Call {
 				cs := make([]hrpc.Call, 2)
@@ -170,14 +155,8 @@ func TestMultiToProto(t *testing.T) {
 				atest.ShouldPanicWith(t, tcase.panicMsg, func() { m.ToProto() })
 				return
 			}
-			p, err := m.ToProto()
-			if d := atest.Diff(tcase.err, err); d != "" {
-				t.Fatal(d)
-			}
 
-			if tcase.err != nil {
-				return
-			}
+			p := m.ToProto()
 
 			out, ok := p.(*pb.MultiRequest)
 			if !ok {

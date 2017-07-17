@@ -31,16 +31,13 @@ func (m *multi) Name() string {
 }
 
 // ToProto converts all request in multi batch to a protobuf message.
-func (m *multi) ToProto() (proto.Message, error) {
+func (m *multi) ToProto() proto.Message {
 	// aggregate calls per region
 	actionsPerReg := map[hrpc.RegionInfo][]*pb.Action{}
 
 	for i, c := range m.calls {
 		// TODO: check context of the call, maybe it's already expired
-		msg, err := c.ToProto()
-		if err != nil {
-			return nil, err
-		}
+		msg := c.ToProto()
 
 		a := &pb.Action{
 			Index: proto.Uint32(uint32(i) + 1), // +1 because 0 index means there's no index
@@ -76,7 +73,7 @@ func (m *multi) ToProto() (proto.Message, error) {
 		m.regions[i] = r
 		i++
 	}
-	return &pb.MultiRequest{RegionAction: ra}, nil
+	return &pb.MultiRequest{RegionAction: ra}
 }
 
 // NewResponse creates an empty protobuf message to read the response of this RPC.

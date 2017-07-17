@@ -53,7 +53,7 @@ func NewCheckAndPut(put *Mutate, family string,
 }
 
 // ToProto converts the RPC into a protobuf message
-func (cp *CheckAndPut) ToProto() (proto.Message, error) {
+func (cp *CheckAndPut) ToProto() proto.Message {
 	mutateRequest := cp.toProto()
 	mutateRequest.Condition = &pb.Condition{
 		Row:         cp.key,
@@ -62,5 +62,5 @@ func (cp *CheckAndPut) ToProto() (proto.Message, error) {
 		CompareType: pb.CompareType_EQUAL.Enum(),
 		Comparator:  cp.comparator,
 	}
-	return mutateRequest, nil
+	return mutateRequest
 }
