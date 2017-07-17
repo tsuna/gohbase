@@ -545,6 +545,7 @@ func TestReceiveDecodeProtobufError(t *testing.T) {
 	result := make(chan hrpc.RPCResult, 1)
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
 	mockCall.EXPECT().NewResponse().Return(&pb.MutateResponse{}).Times(1)
+	mockCall.EXPECT().Context().Return(context.Background()).Times(1)
 
 	c.sent[1] = mockCall
 	c.inFlight = 1
@@ -593,6 +594,7 @@ func TestReceiveDeserializeCellblocksError(t *testing.T) {
 	result := make(chan hrpc.RPCResult, 1)
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
 	mockCall.EXPECT().NewResponse().Return(&pb.MutateResponse{}).Times(1)
+	mockCall.EXPECT().Context().Return(context.Background()).Times(1)
 
 	c.sent[1] = callWithCellBlocksError{mockCall}
 	c.inFlight = 1

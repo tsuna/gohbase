@@ -407,6 +407,13 @@ func (c *client) receive() (err error) {
 	}
 	c.inFlightDown()
 
+	select {
+	case <-rpc.Context().Done():
+		// context has expired, don't bother deserializing
+		return
+	default:
+	}
+
 	// Here we know for sure that we got a response for rpc we asked.
 	// It's our responsibility to deliver the response or error to the
 	// caller as we unregistered the rpc.
