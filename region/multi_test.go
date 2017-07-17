@@ -128,6 +128,35 @@ func TestMultiToProto(t *testing.T) {
 				},
 			},
 		},
+		{ // one call with expired context
+			calls: func() []hrpc.Call {
+				cs := make([]hrpc.Call, 2)
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				cs[0], _ = hrpc.NewGetStr(ctx, "reg0", "call0")
+				cs[0].SetRegion(reg0)
+				cs[1], _ = hrpc.NewAppStr(context.Background(), "reg0", "call1", nil)
+				cs[1].SetRegion(reg0)
+				return cs
+			}(),
+			out: &pb.MultiRequest{
+				RegionAction: []*pb.RegionAction{
+					&pb.RegionAction{
+						Region: &pb.RegionSpecifier{
+							Type:  pb.RegionSpecifier_REGION_NAME.Enum(),
+							Value: []byte("reg0,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+						},
+						Action: []*pb.Action{
+							&pb.Action{Index: proto.Uint32(2), Mutation: &pb.MutationProto{
+								Row:        []byte("call1"),
+								MutateType: pb.MutationProto_APPEND.Enum(),
+								Durability: pb.MutationProto_USE_DEFAULT.Enum(),
+							}},
+						},
+					},
+				},
+			},
+		},
 		{ // one batched call is not supported for batching
 			calls: func() []hrpc.Call {
 				cs := make([]hrpc.Call, 2)
