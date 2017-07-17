@@ -20,7 +20,8 @@ type CheckAndPut struct {
 
 	family    []byte
 	qualifier []byte
-	value     []byte
+
+	comparator *pb.Comparator
 }
 
 // NewCheckAndPut creates a new CheckAndPut request that will compare provided
@@ -31,37 +32,35 @@ func NewCheckAndPut(put *Mutate, family string,
 	if put.mutationType != pb.MutationProto_PUT {
 		return nil, fmt.Errorf("'CheckAndPut' only takes 'Put' request")
 	}
+
+	// The condition that needs to match for the edit to be applied.
+	exp := filter.NewByteArrayComparable(expectedValue)
+	cmp, err := filter.NewBinaryComparator(exp).ConstructPBComparator()
+	if err != nil {
+		return nil, err
+	}
+
 	// CheckAndPut is not batchable as MultiResponse doesn't return Processed field
 	// for Mutate Action
 	put.setSkipBatch(true)
 
 	return &CheckAndPut{
-		Mutate:    put,
-		family:    []byte(family),
-		qualifier: []byte(qualifier),
-		value:     expectedValue,
+		Mutate:     put,
+		family:     []byte(family),
+		qualifier:  []byte(qualifier),
+		comparator: cmp,
 	}, nil
 }
 
 // ToProto converts the RPC into a protobuf message
 func (cp *CheckAndPut) ToProto() (proto.Message, error) {
-	// The condition that needs to match for the edit to be applied.
-	expectedValue := filter.NewByteArrayComparable(cp.value)
-	cmp := filter.NewBinaryComparator(expectedValue)
-
-	comparator, err := cmp.ConstructPBComparator()
-	if err != nil {
-		return nil, err
-	}
-
-	// The edit.
 	mutateRequest := cp.toProto()
 	mutateRequest.Condition = &pb.Condition{
 		Row:         cp.key,
 		Family:      cp.family,
 		Qualifier:   cp.qualifier,
 		CompareType: pb.CompareType_EQUAL.Enum(),
-		Comparator:  comparator,
+		Comparator:  cp.comparator,
 	}
 	return mutateRequest, nil
 }
