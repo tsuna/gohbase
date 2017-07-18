@@ -80,7 +80,7 @@ func TTL(t time.Duration) func(Call) error {
 		}
 
 		buf := make([]byte, 8)
-		binary.BigEndian.PutUint64(buf, (t.Seconds() * 1000))
+		binary.BigEndian.PutUint64(buf, uint64(t.Seconds()*1000))
 
 		m.ttl = buf
 
