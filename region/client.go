@@ -27,8 +27,8 @@ type ClientType string
 
 type canDeserializeCellBlocks interface {
 	// DeserializeCellBlocks populates passed protobuf message with results
-	// deserialized from the reader
-	DeserializeCellBlocks(proto.Message, []byte) error
+	// deserialized from the reader and returns number of bytes read or error.
+	DeserializeCellBlocks(proto.Message, []byte) (uint32, error)
 }
 
 var (
@@ -121,11 +121,8 @@ func (e RetryableError) Error() string {
 type client struct {
 	conn net.Conn
 
-	// Hostname or IP address of the RegionServer.
-	host string
-
-	// Port of the RegionServer.
-	port uint16
+	// Address of the RegionServer.
+	addr string
 
 	// once used for concurrent calls to fail
 	once sync.Once
@@ -152,8 +149,7 @@ type client struct {
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine
 func (c *client) QueueRPC(rpc hrpc.Call) {
-	if _, ok := rpc.(*hrpc.Mutate); ok && c.rpcQueueSize > 1 {
-		// batch mutates
+	if b, ok := rpc.(hrpc.Batchable); ok && c.rpcQueueSize > 1 && !b.SkipBatch() {
 		select {
 		case <-rpc.Context().Done():
 			// rpc timed out before being processed
@@ -176,19 +172,14 @@ func (c *client) Close() {
 	c.fail(ErrClientDead)
 }
 
-// Host returns the host that this client talks to
-func (c *client) Host() string {
-	return c.host
-}
-
-// Port returns the port that this client talks over
-func (c *client) Port() uint16 {
-	return c.port
+// Addr returns address of the region server the client is connected to
+func (c *client) Addr() string {
+	return c.addr
 }
 
 // String returns a string represintation of the current region client
 func (c *client) String() string {
-	return fmt.Sprintf("RegionClient{Host: %s, Port: %d}", c.host, c.port)
+	return fmt.Sprintf("RegionClient{Addr: %s}", c.addr)
 }
 
 func (c *client) inFlightUp() {
@@ -391,9 +382,16 @@ func (c *client) receive() error {
 			cellsLen = header.CellBlockMeta.GetLength()
 		}
 		if d, ok := rpc.(canDeserializeCellBlocks); cellsLen > 0 && ok {
-			if err = d.DeserializeCellBlocks(response, buf.Bytes()[size-cellsLen:]); err != nil {
+			b := buf.Bytes()[size-cellsLen:]
+			nread, err := d.DeserializeCellBlocks(response, b)
+			if err != nil {
 				rpc.ResultChan() <- hrpc.RPCResult{
 					Error: fmt.Errorf("failed to decode the response: %s", err)}
+				return nil
+			}
+			if int(nread) < len(b) {
+				rpc.ResultChan() <- hrpc.RPCResult{
+					Error: fmt.Errorf("short read: buffer len %d, read %d", len(b), nread)}
 				return nil
 			}
 		}

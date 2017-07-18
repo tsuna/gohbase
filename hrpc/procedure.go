@@ -7,10 +7,8 @@ package hrpc
 
 import (
 	"context"
-	"errors"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
 )
 
@@ -42,14 +40,4 @@ func (ps *GetProcedureState) ToProto() (proto.Message, error) {
 // NewResponse creates an empty protobuf message to read the response of this RPC.
 func (ps *GetProcedureState) NewResponse() proto.Message {
 	return &pb.GetProcedureResultResponse{}
-}
-
-// SetFilter always returns an error.
-func (ps *GetProcedureState) SetFilter(filter.Filter) error {
-	return errors.New("cannot set filter on admin operations")
-}
-
-// SetFamilies always returns an error.
-func (ps *GetProcedureState) SetFamilies(map[string][]string) error {
-	return errors.New("cannot set families on admin operations")
 }

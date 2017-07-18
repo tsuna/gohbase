@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/cznic/b"
 	"github.com/golang/protobuf/proto"
@@ -26,6 +28,14 @@ const (
 	defaultFlushInterval = 20 * time.Millisecond
 	defaultZkRoot        = "/hbase"
 	defaultEffectiveUser = "root"
+	// metaBurst is maxmium number of request allowed at once.
+	metaBurst = 100
+)
+
+var (
+	// metaLimit is rate at which to throttle requests to hbase:meta table.
+	// 100 request per 100 milliseconds.
+	metaLimit = 100 * rate.Every(100*time.Millisecond)
 )
 
 // Client a regular HBase client
@@ -76,6 +86,9 @@ type client struct {
 
 	// The user used when accessing regions.
 	effectiveUser string
+
+	// metaLookupLimiter is used to throttle lookups to hbase:meta table
+	metaLookupLimiter *rate.Limiter
 }
 
 // NewClient creates a new HBase client.
@@ -102,9 +115,10 @@ func newClient(zkquorum string, options ...Option) *client {
 			[]byte("hbase:meta,,1"),
 			nil,
 			nil),
-		zkRoot:        defaultZkRoot,
-		zkClient:      zk.NewClient(zkquorum),
-		effectiveUser: defaultEffectiveUser,
+		zkRoot:            defaultZkRoot,
+		zkClient:          zk.NewClient(zkquorum),
+		effectiveUser:     defaultEffectiveUser,
+		metaLookupLimiter: rate.NewLimiter(metaLimit, metaBurst),
 	}
 	for _, option := range options {
 		option(c)

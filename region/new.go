@@ -11,24 +11,21 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strconv"
 	"time"
 
 	"github.com/tsuna/gohbase/hrpc"
 )
 
 // NewClient creates a new RegionClient.
-func NewClient(ctx context.Context, host string, port uint16, ctype ClientType,
+func NewClient(ctx context.Context, addr string, ctype ClientType,
 	queueSize int, flushInterval time.Duration, effectiveUser string) (hrpc.RegionClient, error) {
-	addr := net.JoinHostPort(host, strconv.Itoa(int(port)))
 	var d net.Dialer
 	conn, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to the RegionServer at %s: %s", addr, err)
 	}
 	c := &client{
-		host:          host,
-		port:          port,
+		addr:          addr,
 		conn:          conn,
 		rpcs:          make(chan hrpc.Call),
 		done:          make(chan struct{}),
@@ -48,7 +45,10 @@ func NewClient(ctx context.Context, host string, port uint16, ctype ClientType,
 	}
 	// reset write deadline
 	conn.SetWriteDeadline(time.Time{})
-	go c.processRPCs() // Writer goroutine
+
+	if ctype == RegionClient {
+		go c.processRPCs() // Batching goroutine
+	}
 	go c.receiveRPCs() // Reader goroutine
 	return c, nil
 }

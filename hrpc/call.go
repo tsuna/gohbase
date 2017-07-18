@@ -10,9 +10,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math"
 	"sync"
-	"time"
 	"unsafe"
 
 	"github.com/golang/protobuf/proto"
@@ -42,8 +40,7 @@ type RegionInfo interface {
 // RegionClient represents HBase region client.
 type RegionClient interface {
 	Close()
-	Host() string
-	Port() uint16
+	Addr() string
 	QueueRPC(Call)
 	String() string
 }
@@ -61,8 +58,39 @@ type Call interface {
 	NewResponse() proto.Message
 	ResultChan() chan RPCResult
 	Context() context.Context
-	SetFamilies(fam map[string][]string) error
-	SetFilter(ft filter.Filter) error
+}
+
+// Batchable interface should be implemented by calls that can be batched into MultiRequest
+type Batchable interface {
+	// SkipBatch returns true if a call shouldn't be batched into MultiRequest and
+	// should be sent right away.
+	SkipBatch() bool
+
+	setSkipBatch(v bool)
+}
+
+// SkipBatch is an option for batchable requests (Get and Mutate) to tell
+// the client to skip batching and just send the request to Region Server
+// right away.
+func SkipBatch() func(Call) error {
+	return func(c Call) error {
+		if b, ok := c.(Batchable); ok {
+			b.setSkipBatch(true)
+			return nil
+		}
+		return errors.New("'SkipBatch' option only works with Get and Mutate requests")
+	}
+}
+
+// hasQueryOptions is interface that needs to be implemented by calls
+// that allow to provide Families and Filters options.
+type hasQueryOptions interface {
+	setFamilies(families map[string][]string)
+	setFilter(filter filter.Filter)
+	setTimeRangeUint64(from, to uint64)
+	setMaxVersions(versions uint32)
+	setMaxResultsPerColumnFamily(maxresults uint32)
+	setResultOffset(offset uint32)
 }
 
 // RPCResult is struct that will contain both the resulting message from an RPC
@@ -135,74 +163,6 @@ func (b *base) ResultChan() chan RPCResult {
 	}
 	b.resultchLock.Unlock()
 	return b.resultch
-}
-
-// Families is used as a parameter for request creation. Adds families constraint to a request.
-func Families(fam map[string][]string) func(Call) error {
-	return func(g Call) error {
-		return g.SetFamilies(fam)
-	}
-}
-
-// Filters is used as a parameter for request creation. Adds filters constraint to a request.
-func Filters(fl filter.Filter) func(Call) error {
-	return func(g Call) error {
-		return g.SetFilter(fl)
-	}
-}
-
-// TimeRange is used as a parameter for request creation. Adds TimeRange constraint to a request.
-// It will get values in range [from, to[ ('to' is exclusive).
-func TimeRange(from, to time.Time) func(Call) error {
-	return TimeRangeUint64(uint64(from.UnixNano()/1e6), uint64(to.UnixNano()/1e6))
-}
-
-// TimeRangeUint64 is used as a parameter for request creation.
-// Adds TimeRange constraint to a request.
-// from and to should be in milliseconds
-// // It will get values in range [from, to[ ('to' is exclusive).
-func TimeRangeUint64(from, to uint64) func(Call) error {
-	return func(g Call) error {
-		if from >= to {
-			// or equal is becuase 'to' is exclusive
-			return fmt.Errorf("'from' timestamp (%dms) is greater"+
-				" or equal to 'to' timestamp (%dms)",
-				from, to)
-		}
-		switch c := g.(type) {
-		default:
-			return errors.New("'TimeRange' option can only be used with Get or Scan queries")
-		case *Get:
-			c.fromTimestamp = from
-			c.toTimestamp = to
-		case *Scan:
-			c.fromTimestamp = from
-			c.toTimestamp = to
-		}
-		return nil
-	}
-}
-
-// MaxVersions is used as a parameter for request creation.
-// Adds MaxVersions constraint to a request.
-func MaxVersions(versions uint32) func(Call) error {
-	return func(g Call) error {
-		switch c := g.(type) {
-		default:
-			return errors.New("'MaxVersions' option can only be used with Get or Scan queries")
-		case *Get:
-			if versions > math.MaxInt32 {
-				return errors.New("'MaxVersions' exceeds supported number of versions")
-			}
-			c.maxVersions = versions
-		case *Scan:
-			if versions > math.MaxInt32 {
-				return errors.New("'MaxVersions' exceeds supported number of versions")
-			}
-			c.maxVersions = versions
-		}
-		return nil
-	}
 }
 
 // Cell is the smallest level of granularity in returned results.

@@ -9,6 +9,7 @@ package zk
 import (
 	"encoding/binary"
 	"fmt"
+	"net"
 	"path"
 	"strings"
 	"time"
@@ -53,7 +54,7 @@ const (
 
 // Client is an interface of client that retrieves meta infomation from zookeeper
 type Client interface {
-	LocateResource(ResourceName) (string, uint16, error)
+	LocateResource(ResourceName) (string, error)
 }
 
 type client struct {
@@ -67,34 +68,32 @@ func NewClient(zkquorum string) Client {
 	}
 }
 
-// LocateResource returns the location of the specified resource.
-func (c *client) LocateResource(resource ResourceName) (string, uint16, error) {
+// LocateResource returns address of the server for the specified resource.
+func (c *client) LocateResource(resource ResourceName) (string, error) {
 	conn, _, err := zk.Connect(c.zks, time.Duration(sessionTimeout)*time.Second)
 	if err != nil {
-		return "", 0, fmt.Errorf("error connecting to ZooKeeper at %v: %s", c.zks, err)
+		return "", fmt.Errorf("error connecting to ZooKeeper at %v: %s", c.zks, err)
 	}
 	defer conn.Close()
 
 	buf, _, err := conn.Get(string(resource))
 	if err != nil {
-		return "", 0,
-			fmt.Errorf("failed to read the %s znode: %s", resource, err)
+		return "", fmt.Errorf("failed to read the %s znode: %s", resource, err)
 	}
 	if len(buf) == 0 {
 		log.Fatalf("%s was empty!", resource)
 	} else if buf[0] != 0xFF {
-		return "", 0,
-			fmt.Errorf("the first byte of %s was 0x%x, not 0xFF", resource, buf[0])
+		return "", fmt.Errorf("the first byte of %s was 0x%x, not 0xFF", resource, buf[0])
 	}
 	metadataLen := binary.BigEndian.Uint32(buf[1:])
 	if metadataLen < 1 || metadataLen > 65000 {
-		return "", 0, fmt.Errorf("invalid metadata length for %s: %d", resource, metadataLen)
+		return "", fmt.Errorf("invalid metadata length for %s: %d", resource, metadataLen)
 	}
 	buf = buf[1+4+metadataLen:]
 	magic := binary.BigEndian.Uint32(buf)
 	const pbufMagic = 1346524486 // 4 bytes: "PBUF"
 	if magic != pbufMagic {
-		return "", 0, fmt.Errorf("invalid magic number for %s: %d", resource, magic)
+		return "", fmt.Errorf("invalid magic number for %s: %d", resource, magic)
 	}
 	buf = buf[4:]
 	var server *pb.ServerName
@@ -102,7 +101,7 @@ func (c *client) LocateResource(resource ResourceName) (string, uint16, error) {
 		meta := &pb.MetaRegionServer{}
 		err = proto.UnmarshalMerge(buf, meta)
 		if err != nil {
-			return "", 0,
+			return "",
 				fmt.Errorf("failed to deserialize the MetaRegionServer entry from ZK: %s", err)
 		}
 		server = meta.Server
@@ -110,10 +109,10 @@ func (c *client) LocateResource(resource ResourceName) (string, uint16, error) {
 		master := &pb.Master{}
 		err = proto.UnmarshalMerge(buf, master)
 		if err != nil {
-			return "", 0,
+			return "",
 				fmt.Errorf("failed to deserialize the Master entry from ZK: %s", err)
 		}
 		server = master.Master
 	}
-	return *server.HostName, uint16(*server.Port), nil
+	return net.JoinHostPort(*server.HostName, fmt.Sprint(*server.Port)), nil
 }

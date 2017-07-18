@@ -45,7 +45,7 @@ func TestCreateTable(t *testing.T) {
 
 	// check in hbase:meta if there's a region for the table
 	c := gohbase.NewClient(*host)
-	metaKey := testTableName + ",,"
+	metaKey := testTableName + ","
 	keyFilter := filter.NewPrefixFilter([]byte(metaKey))
 	scan, err := hrpc.NewScanStr(context.Background(), metaTableName, hrpc.Filters(keyFilter))
 	if err != nil {
@@ -66,6 +66,49 @@ func TestCreateTable(t *testing.T) {
 	}
 	if len(rsp) != 1 {
 		t.Errorf("Meta returned %s rows for prefix '%s' , want 1", len(rsp), metaKey)
+	}
+}
+
+func TestCreatePresplitTable(t *testing.T) {
+	testTableName := t.Name() + "_" + getTimestampString()
+	t.Log("testTableName=" + testTableName)
+
+	ac := gohbase.NewAdminClient(*host)
+	splitkeys := [][]byte{
+		[]byte{3},
+		[]byte("foo"),
+		[]byte("wow"),
+	}
+	crt := hrpc.NewCreateTable(context.Background(), []byte(testTableName),
+		cFamilies, hrpc.SplitKeys(splitkeys))
+
+	if err := ac.CreateTable(crt); err != nil {
+		t.Errorf("CreateTable returned an error: %v", err)
+	}
+
+	// check in hbase:meta if there's a region for the table
+	c := gohbase.NewClient(*host)
+	metaKey := testTableName + ","
+	keyFilter := filter.NewPrefixFilter([]byte(metaKey))
+	scan, err := hrpc.NewScanStr(context.Background(), metaTableName, hrpc.Filters(keyFilter))
+	if err != nil {
+		t.Fatalf("Failed to create Scan request: %s", err)
+	}
+
+	var rsp []*hrpc.Result
+	scanner := c.Scan(scan)
+	for {
+		res, err := scanner.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		rsp = append(rsp, res)
+	}
+	if len(rsp) != 4 {
+		t.Errorf("Meta returned %s rows for prefix '%s' , want 2", len(rsp), metaKey)
 	}
 }
 

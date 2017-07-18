@@ -8,39 +8,34 @@ import (
 	zk "github.com/tsuna/gohbase/zk"
 )
 
-// MockClient is a mock of Client interface
+// Mock of Client interface
 type MockClient struct {
 	ctrl     *gomock.Controller
-	recorder *MockClientMockRecorder
+	recorder *_MockClientRecorder
 }
 
-// MockClientMockRecorder is the mock recorder for MockClient
-type MockClientMockRecorder struct {
+// Recorder for MockClient (not exported)
+type _MockClientRecorder struct {
 	mock *MockClient
 }
 
-// NewMockClient creates a new mock instance
 func NewMockClient(ctrl *gomock.Controller) *MockClient {
 	mock := &MockClient{ctrl: ctrl}
-	mock.recorder = &MockClientMockRecorder{mock}
+	mock.recorder = &_MockClientRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
-func (_m *MockClient) EXPECT() *MockClientMockRecorder {
+func (_m *MockClient) EXPECT() *_MockClientRecorder {
 	return _m.recorder
 }
 
-// LocateResource mocks base method
-func (_m *MockClient) LocateResource(_param0 zk.ResourceName) (string, uint16, error) {
+func (_m *MockClient) LocateResource(_param0 zk.ResourceName) (string, error) {
 	ret := _m.ctrl.Call(_m, "LocateResource", _param0)
 	ret0, _ := ret[0].(string)
-	ret1, _ := ret[1].(uint16)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-// LocateResource indicates an expected call of LocateResource
-func (_mr *MockClientMockRecorder) LocateResource(arg0 interface{}) *gomock.Call {
+func (_mr *_MockClientRecorder) LocateResource(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "LocateResource", arg0)
 }

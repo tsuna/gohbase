@@ -11,7 +11,6 @@ import (
 	"math"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/aristanetworks/goarista/test"
 	"github.com/golang/protobuf/proto"
@@ -116,25 +115,6 @@ func TestNewScan(t *testing.T) {
 	}
 }
 
-func TestTimeRangeError(t *testing.T) {
-	key := "TestTimeRangeError"
-	table := "test"
-	_, err := hrpc.NewGetStr(context.Background(), table, key,
-		hrpc.Families(map[string][]string{"cf": nil}), hrpc.TimeRange(time.Unix(51, 0),
-			time.Unix(51, 0)))
-	expErr := "'from' timestamp (51000ms) is greater or equal to 'to' timestamp (51000ms)"
-	if err.Error() != expErr {
-		t.Errorf("Expected error: %s, Got error: %s", expErr, err)
-	}
-	_, err = hrpc.NewGetStr(context.Background(), table, key,
-		hrpc.Families(map[string][]string{"cf": nil}), hrpc.TimeRange(time.Unix(52, 0),
-			time.Unix(51, 0)))
-	expErr = "'from' timestamp (52000ms) is greater or equal to 'to' timestamp (51000ms)"
-	if err.Error() != expErr {
-		t.Errorf("Expected error: %s, Got error: %s", expErr, err)
-	}
-}
-
 var expectedCells = []*pb.Cell{
 	&pb.Cell{
 		Row:       []byte("row7"),
@@ -163,18 +143,21 @@ func TestDeserializeCellBlocksGet(t *testing.T) {
 		AssociatedCellCount: proto.Int32(1),
 	}}
 	g := &hrpc.Get{}
-	err := g.DeserializeCellBlocks(getResp, cellblock)
+	n, err := g.DeserializeCellBlocks(getResp, cellblock)
 	if err != nil {
 		t.Error(err)
 	} else if d := test.Diff(expectedCells, getResp.Result.Cell); len(d) != 0 {
 		t.Error(d)
+	}
+	if int(n) != len(cellblock) {
+		t.Errorf("expected read %d, got read %d", len(cellblock), n)
 	}
 
 	// test error case
 	getResp = &pb.GetResponse{Result: &pb.Result{
 		AssociatedCellCount: proto.Int32(1),
 	}}
-	err = g.DeserializeCellBlocks(getResp, cellblock[:10])
+	_, err = g.DeserializeCellBlocks(getResp, cellblock[:10])
 	if err == nil {
 		t.Error("expected error, got none")
 	}
@@ -187,12 +170,15 @@ func TestDeserializeCellblocksMutate(t *testing.T) {
 		AssociatedCellCount: proto.Int32(1),
 	}}
 	m := &hrpc.Mutate{}
-	err := m.DeserializeCellBlocks(mResp, cellblock)
+	n, err := m.DeserializeCellBlocks(mResp, cellblock)
 	if err != nil {
 		t.Error(err)
 	}
 	if d := test.Diff(expectedCells, mResp.Result.Cell); len(d) != 0 {
 		t.Error(d)
+	}
+	if int(n) != len(cellblock) {
+		t.Errorf("expected read %d, got read %d", len(cellblock), n)
 	}
 
 	// test error case
@@ -200,7 +186,7 @@ func TestDeserializeCellblocksMutate(t *testing.T) {
 		Cell:                expectedCells[:1],
 		AssociatedCellCount: proto.Int32(1),
 	}}
-	err = m.DeserializeCellBlocks(mResp, cellblock[:10])
+	_, err = m.DeserializeCellBlocks(mResp, cellblock[:10])
 	if err == nil {
 		t.Error("expected error, got none")
 	}
@@ -259,11 +245,14 @@ func TestDeserializeCellBlocksScan(t *testing.T) {
 		CellsPerResult:       []uint32{2, 1},
 	}
 	s := &hrpc.Scan{}
-	err := s.DeserializeCellBlocks(scanResp, cellblocks)
+	n, err := s.DeserializeCellBlocks(scanResp, cellblocks)
 	if err != nil {
 		t.Error(err)
 	} else if d := test.Diff(expectedResults, scanResp.Results); len(d) != 0 {
 		t.Error(d)
+	}
+	if int(n) != len(cellblocks) {
+		t.Errorf("expected read %d, got read %d", len(cellblock), n)
 	}
 
 	// test error case
@@ -271,7 +260,7 @@ func TestDeserializeCellBlocksScan(t *testing.T) {
 		PartialFlagPerResult: []bool{true, false},
 		CellsPerResult:       []uint32{2, 1},
 	}
-	err = s.DeserializeCellBlocks(scanResp, cellblocks[:10])
+	_, err = s.DeserializeCellBlocks(scanResp, cellblocks[:10])
 	if err == nil {
 		t.Error("expected error, got none")
 	}

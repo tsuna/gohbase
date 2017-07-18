@@ -447,8 +447,8 @@ func TestReceiveDecodeProtobufError(t *testing.T) {
 
 type callWithCellBlocksError struct{ hrpc.Call }
 
-func (cwcbe callWithCellBlocksError) DeserializeCellBlocks(proto.Message, []byte) error {
-	return errors.New("OOPS")
+func (cwcbe callWithCellBlocksError) DeserializeCellBlocks(proto.Message, []byte) (uint32, error) {
+	return 0, errors.New("OOPS")
 }
 
 func TestReceiveDeserializeCellblocksError(t *testing.T) {

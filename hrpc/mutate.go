@@ -17,7 +17,6 @@ import (
 	"unsafe"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
 )
 
@@ -64,11 +63,9 @@ type Mutate struct {
 	// columns
 	data interface{}
 
-	// timestamp to save at
-	timestamp uint64
-
-	// mutation durability
+	timestamp  uint64
 	durability DurabilityType
+	skipbatch  bool
 }
 
 // Timestamp sets timestamp for mutation queries.
@@ -252,6 +249,16 @@ func (m *Mutate) Name() string {
 // ToProto converts this mutate RPC into a protobuf message
 func (m *Mutate) ToProto() (proto.Message, error) {
 	return m.toProto()
+}
+
+// SkipBatch returns true if the Mutate request shouldn't be batched,
+// but should be sent to Region Server right away.
+func (m *Mutate) SkipBatch() bool {
+	return m.skipbatch
+}
+
+func (m *Mutate) setSkipBatch(v bool) {
+	m.skipbatch = v
 }
 
 func (m *Mutate) toProto() (*pb.MutateRequest, error) {
@@ -543,33 +550,16 @@ func (m *Mutate) NewResponse() proto.Message {
 }
 
 // DeserializeCellBlocks deserializes mutate result from cell blocks
-func (m *Mutate) DeserializeCellBlocks(pm proto.Message, b []byte) error {
+func (m *Mutate) DeserializeCellBlocks(pm proto.Message, b []byte) (uint32, error) {
 	resp := pm.(*pb.MutateResponse)
 	if resp.Result == nil {
 		// TODO: is this possible?
-		return nil
+		return 0, nil
 	}
 	cells, read, err := deserializeCellBlocks(b, uint32(resp.Result.GetAssociatedCellCount()))
 	if err != nil {
-		return err
-	}
-	if int(read) < len(b) {
-		return fmt.Errorf("short read: buffer len %d, read %d", len(b), read)
+		return 0, err
 	}
 	resp.Result.Cell = append(resp.Result.Cell, cells...)
-	return nil
-}
-
-// SetFilter always returns an error when used on Mutate objects. Do not use.
-// Exists solely so Mutate can implement the Call interface.
-func (m *Mutate) SetFilter(ft filter.Filter) error {
-	// Not allowed. Throw an error
-	return errors.New("cannot call 'SetFilter' on mutate operation")
-}
-
-// SetFamilies always returns an error when used on Mutate objects. Do not use.
-// Exists solely so Mutate can implement the Call interface.
-func (m *Mutate) SetFamilies(fam map[string][]string) error {
-	// Not allowed. Throw an error
-	return errors.New("cannot call 'SetFamilies' on mutate operation")
+	return read, nil
 }

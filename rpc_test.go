@@ -11,8 +11,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
+
+	"golang.org/x/time/rate"
 
 	atest "github.com/aristanetworks/goarista/test"
 	"github.com/cznic/b"
@@ -36,14 +41,10 @@ func newMockClient(zkClient zk.Client) *client {
 		},
 		rpcQueueSize:  defaultRPCQueueSize,
 		flushInterval: defaultFlushInterval,
-		metaRegionInfo: region.NewInfo(
-			0,
-			[]byte("hbase"),
-			[]byte("meta"),
-			[]byte("hbase:meta,,1"),
-			nil,
-			nil),
-		zkClient: zkClient,
+		metaRegionInfo: region.NewInfo(0, []byte("hbase"), []byte("meta"),
+			[]byte("hbase:meta,,1"), nil, nil),
+		zkClient:          zkClient,
+		metaLookupLimiter: rate.NewLimiter(metaLimit, metaBurst),
 	}
 }
 
@@ -52,8 +53,7 @@ func TestSendRPCSanity(t *testing.T) {
 	defer ctrl.Finish()
 	// we expect to ask zookeeper for where metaregion is
 	zkClient := mockZk.NewMockClient(ctrl)
-	zkClient.EXPECT().LocateResource(zk.Meta).Return(
-		"regionserver", uint16(1), nil).MinTimes(1)
+	zkClient.EXPECT().LocateResource(zk.Meta).Return("regionserver:1", nil).MinTimes(1)
 	c := newMockClient(zkClient)
 
 	// ask for "theKey" in table "test"
@@ -63,6 +63,7 @@ func TestSendRPCSanity(t *testing.T) {
 	mockCall.EXPECT().Key().Return([]byte("theKey")).AnyTimes()
 	mockCall.EXPECT().SetRegion(gomock.Any()).AnyTimes()
 	result := make(chan hrpc.RPCResult, 1)
+
 	// pretend that response is successful
 	expMsg := &pb.GetResponse{}
 	result <- hrpc.RPCResult{Msg: expMsg}
@@ -88,27 +89,25 @@ func TestSendRPCSanity(t *testing.T) {
 
 	// make sure those are the right clients
 	for c, rs := range c.clients.regions {
-		cAddr := fmt.Sprintf("%s:%d", c.Host(), c.Port())
-		name, ok := expClients[cAddr]
+		name, ok := expClients[c.Addr()]
 		if !ok {
-			t.Errorf("Got unexpected client %s:%d in cache", c.Host(), c.Port())
+			t.Errorf("Got unexpected client %s in cache", c.Addr())
 			continue
 		}
 		if len(rs) != 1 {
-			t.Errorf("Expected to have only 1 region in cache for client %s:%d",
-				c.Host(), c.Port())
+			t.Errorf("Expected to have only 1 region in cache for client %s", c.Addr())
 			continue
 		}
 		for r := range rs {
 			if string(r.Name()) != name {
-				t.Errorf("Unexpected name of region %q for client %s:%d, expected %q",
-					r.Name(), c.Host(), c.Port(), name)
+				t.Errorf("Unexpected name of region %q for client %s, expected %q",
+					r.Name(), c.Addr(), name)
 			}
 			// check bidirectional mapping, they have to be the same objects
 			rc := r.Client()
 			if c != rc {
-				t.Errorf("Invalid bidirectional mapping: forward=%s:%d, backward=%s:%d",
-					c.Host(), c.Port(), rc.Host(), rc.Port())
+				t.Errorf("Invalid bidirectional mapping: forward=%s, backward=%s",
+					c.Addr(), rc.Addr())
 			}
 		}
 	}
@@ -135,14 +134,7 @@ func TestReestablishRegionSplit(t *testing.T) {
 		nil,
 	)
 	rc1, err := region.NewClient(
-		context.Background(),
-		"regionserver",
-		1,
-		region.RegionClient,
-		0,
-		0,
-		"root",
-	)
+		context.Background(), "regionserver:1", region.RegionClient, 0, 0, "root")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,9 +161,8 @@ func TestReestablishRegionSplit(t *testing.T) {
 
 	// make sure those are the right clients
 	for rc, rs := range c.clients.regions {
-		cAddr := fmt.Sprintf("%s:%d", rc.Host(), rc.Port())
-		if cAddr != "regionserver:1" {
-			t.Errorf("Got unexpected client %s:%d in cache", rc.Host(), rc.Port())
+		if rc.Addr() != "regionserver:1" {
+			t.Errorf("Got unexpected client %s in cache", rc.Addr())
 			break
 		}
 
@@ -181,8 +172,8 @@ func TestReestablishRegionSplit(t *testing.T) {
 			gotRegs[string(r.Name())] = struct{}{}
 			// check that regions have correct client
 			if r.Client() != rc1 {
-				t.Errorf("Invalid bidirectional mapping: forward=%s:%d, backward=%s:%d",
-					r.Client().Host(), r.Client().Port(), rc1.Host(), rc1.Port())
+				t.Errorf("Invalid bidirectional mapping: forward=%s, backward=%s",
+					r.Client().Addr(), rc1.Addr())
 			}
 		}
 		if diff := atest.Diff(expRegs, gotRegs); diff != "" {
@@ -192,8 +183,8 @@ func TestReestablishRegionSplit(t *testing.T) {
 
 		// check that we still have the same client that we injected
 		if rc != rc1 {
-			t.Errorf("Invalid bidirectional mapping: forward=%s:%d, backward=%s:%d",
-				rc.Host(), rc.Port(), rc1.Host(), rc1.Port())
+			t.Errorf("Invalid bidirectional mapping: forward=%s, backward=%s",
+				rc.Addr(), rc1.Addr())
 		}
 	}
 
@@ -229,12 +220,52 @@ func TestReestablishRegionSplit(t *testing.T) {
 	}
 }
 
+func TestThrottleRegionLookups(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+	c := newMockClient(nil)
+	numOK := int32(0)
+
+	rc := mockRegion.NewMockRegionClient(ctrl)
+	rc.EXPECT().String().Return("mock region client").AnyTimes()
+	rc.EXPECT().QueueRPC(gomock.Any()).AnyTimes().Do(func(rpc hrpc.Call) {
+		atomic.AddInt32(&numOK, 1)
+		rpc.ResultChan() <- hrpc.RPCResult{}
+	})
+	c.metaRegionInfo.SetClient(rc)
+	c.clients.put(rc, c.metaRegionInfo)
+	ctx := context.Background()
+	table, key := []byte("yolo"), []byte("swag")
+
+	start := time.Now()
+	end := start.Add(time.Second)
+	var wg sync.WaitGroup
+	for time.Now().Before(end) {
+		wg.Add(1)
+		go func() {
+			c.metaLookup(ctx, table, key)
+			wg.Done()
+		}()
+		// this will offer ~2,000 requests per second
+		// while we only allow 100 request per 100 milliseconds
+		time.Sleep(500 * time.Microsecond)
+	}
+	wg.Wait()
+	elapsed := time.Since(start)
+	ideal := 1 + (100 * float64(elapsed) / float64(100*time.Millisecond))
+
+	// We should never get more requests than allowed.
+	if want := int32(ideal + 1); numOK > want {
+		t.Errorf("numOK = %d, want %d (ideal %f)", numOK, want, ideal)
+	}
+}
+
 func TestReestablishRegionNSRE(t *testing.T) {
 	c := newMockClient(nil)
 	origlReg := region.NewInfo(0, nil, []byte("nsre"),
 		[]byte("nsre,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."), nil, nil)
 	// inject a fake regionserver client and fake region into cache
-	rc1, err := region.NewClient(context.Background(), "regionserver", 1, region.RegionClient,
+	rc1, err := region.NewClient(context.Background(), "regionserver:1", region.RegionClient,
 		0, 0, "root")
 	if err != nil {
 		t.Fatal(err)
@@ -305,7 +336,7 @@ func TestEstablishClientConcurrent(t *testing.T) {
 		r := r
 		wg.Add(1)
 		go func() {
-			c.establishRegion(r, "regionserver", 1)
+			c.establishRegion(r, "regionserver:1")
 			wg.Done()
 		}()
 	}
@@ -322,13 +353,51 @@ func TestEstablishClientConcurrent(t *testing.T) {
 		// check that all regions have the same client set and are available
 		for _, r := range regions {
 			if r.Client() != rc {
-				t.Errorf("Region %q has unexpected client %s:%d",
-					r.Name(), r.Client().Host(), r.Client().Port())
+				t.Errorf("Region %q has unexpected client %s", r.Name(), rc.Addr())
 			}
 			if r.IsUnavailable() {
 				t.Errorf("Expected region %s to be available", r.Name())
 			}
 		}
+	}
+}
+
+func TestEstablishUnrecoverlableErrorDuringProbe(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+	c := newMockClient(nil)
+
+	rc, err := region.NewClient(
+		context.Background(), "regionserver:0", region.RegionClient, 0, 0, "root")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// pretend regionserver:0 has meta table
+	c.metaRegionInfo.SetClient(rc)
+	c.clients.put(rc, c.metaRegionInfo)
+
+	mockCall := mock.NewMockCall(ctrl)
+	mockCall.EXPECT().Context().Return(context.Background()).AnyTimes()
+	mockCall.EXPECT().Table().Return([]byte("down")).AnyTimes()
+	mockCall.EXPECT().Key().Return([]byte("yolo")).AnyTimes()
+	mockCall.EXPECT().SetRegion(gomock.Any()).AnyTimes()
+	result := make(chan hrpc.RPCResult, 1)
+	// pretend that response is successful
+	expMsg := &pb.GetResponse{}
+	result <- hrpc.RPCResult{Msg: expMsg}
+	mockCall.EXPECT().ResultChan().Return(result).Times(1)
+	msg, err := c.SendRPC(mockCall)
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err)
+	}
+	if diff := atest.Diff(expMsg, msg); diff != "" {
+		t.Errorf("Expected: %#v\nReceived: %#v\nDiff:%s",
+			expMsg, msg, diff)
+	}
+
+	if len(c.clients.regions) != 2 {
+		t.Errorf("expected to have 2 clients in cache, got %d", len(c.clients.regions))
 	}
 }
 
@@ -403,14 +472,7 @@ func TestReestablishDeadRegion(t *testing.T) {
 	// expect for it to be called
 	c := newMockClient(nil)
 	rc1, err := region.NewClient(
-		context.Background(),
-		"regionserver",
-		0,
-		region.RegionClient,
-		0,
-		0,
-		"root",
-	)
+		context.Background(), "regionserver:0", region.RegionClient, 0, 0, "root")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -474,10 +536,8 @@ func TestFindRegion(t *testing.T) {
 		},
 		{ // older region in cache
 			before: []hrpc.RegionInfo{
-				region.NewInfo(
-					1, nil, []byte("test"),
-					[]byte("test,,1.yoloyoloyoloyoloyoloyoloyoloyolo."),
-					nil, nil),
+				region.NewInfo(1, nil, []byte("test"),
+					[]byte("test,,1.yoloyoloyoloyoloyoloyoloyoloyolo."), nil, nil),
 			},
 			after:     []string{"test,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."},
 			establish: true,
@@ -485,10 +545,8 @@ func TestFindRegion(t *testing.T) {
 		},
 		{ // younger region in cache
 			before: []hrpc.RegionInfo{
-				region.NewInfo(
-					9999999999999, nil, []byte("test"),
-					[]byte("test,,9999999999999.yoloyoloyoloyoloyoloyoloyoloyolo."),
-					nil, nil),
+				region.NewInfo(9999999999999, nil, []byte("test"),
+					[]byte("test,,9999999999999.yoloyoloyoloyoloyoloyoloyoloyolo."), nil, nil),
 			},
 			after:     []string{"test,,9999999999999.yoloyoloyoloyoloyoloyoloyoloyolo."},
 			establish: false,
@@ -496,8 +554,7 @@ func TestFindRegion(t *testing.T) {
 		},
 		{ // overlapping younger region in cache, passed key is not in that region
 			before: []hrpc.RegionInfo{
-				region.NewInfo(
-					9999999999999, nil, []byte("test"),
+				region.NewInfo(9999999999999, nil, []byte("test"),
 					[]byte("test,,9999999999999.yoloyoloyoloyoloyoloyoloyoloyolo."),
 					nil, []byte("foo")),
 			},
@@ -513,14 +570,7 @@ func TestFindRegion(t *testing.T) {
 	// expect for it to be called
 	c := newMockClient(nil)
 	rc, err := region.NewClient(
-		context.Background(),
-		"regionserver",
-		0,
-		region.RegionClient,
-		0,
-		0,
-		"root",
-	)
+		context.Background(), "regionserver:0", region.RegionClient, 0, 0, "root")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -532,51 +582,86 @@ func TestFindRegion(t *testing.T) {
 	testTable := []byte("test")
 	testKey := []byte("yolo")
 	for i, tcase := range tcases {
-		c.regions.regions.Clear()
-		// set up initial cache
-		for _, region := range tcase.before {
-			c.regions.put(region)
-		}
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			c.regions.regions.Clear()
+			// set up initial cache
+			for _, region := range tcase.before {
+				c.regions.put(region)
+			}
 
-		reg, err := c.findRegion(ctx, testTable, testKey)
-		if err != tcase.err {
-			t.Errorf("Test %d: Expected error %v, got %v", i, tcase.err, err)
-		}
-		if len(tcase.regName) == 0 {
-			if reg != nil {
-				t.Errorf("Test %d: Expected nil region, got %v", i, reg)
+			reg, err := c.findRegion(ctx, testTable, testKey)
+			if err != tcase.err {
+				t.Fatalf("Expected error %v, got %v", tcase.err, err)
 			}
-		} else if string(reg.Name()) != tcase.regName {
-			t.Errorf("Test %d: Expected region with name %q, got region %v",
-				i, tcase.regName, reg)
-		}
+			if len(tcase.regName) == 0 {
+				if reg != nil {
+					t.Errorf("Expected nil region, got %v", reg)
+				}
+			} else if string(reg.Name()) != tcase.regName {
+				t.Errorf("Expected region with name %q, got region %v",
+					tcase.regName, reg)
+			}
 
-		// check cache
-		if len(tcase.after) != c.regions.regions.Len() {
-			t.Errorf("Test %d: Expected to have %d regions in cache, got %d",
-				i, len(tcase.after), c.regions.regions.Len())
-		}
-		for _, rn := range tcase.after {
-			if _, ok := c.regions.regions.Get([]byte(rn)); !ok {
-				t.Errorf("Test %d: Expected region %q to be in regions cache", i, rn)
+			// check cache
+			if len(tcase.after) != c.regions.regions.Len() {
+				t.Errorf("Test %d: Expected to have %d regions in cache, got %d",
+					len(tcase.after), c.regions.regions.Len())
 			}
-		}
-		// check client was looked up
-		if tcase.establish {
-			if ch := reg.AvailabilityChan(); ch != nil {
-				// if still establishing, wait
-				<-ch
+			for _, rn := range tcase.after {
+				if _, ok := c.regions.regions.Get([]byte(rn)); !ok {
+					t.Errorf("Expected region %q to be in regions cache", rn)
+				}
 			}
-			rc2 := reg.Client()
-			if rc2 == nil {
-				t.Errorf("Test %d: Expected region %q to establish a client", i, reg.Name())
-				continue
+			// check client was looked up
+			if tcase.establish {
+				if ch := reg.AvailabilityChan(); ch != nil {
+					// if still establishing, wait
+					<-ch
+				}
+				rc2 := reg.Client()
+				if rc2 == nil {
+					t.Errorf("Expected region %q to establish a client", reg.Name())
+					return
+				}
+				if rc2.Addr() != "regionserver:2" {
+					t.Errorf("Expected regionserver:2, got %q", rc2.Addr())
+				}
 			}
-			rsAddr := fmt.Sprintf("%s:%d", rc2.Host(), rc2.Port())
-			if rsAddr != "regionserver:2" {
-				t.Errorf("Test %d: Expected regionserver:2, got %q", i, rsAddr)
-			}
-		}
+		})
+	}
+
+}
+
+func TestErrConnotFindRegion(t *testing.T) {
+	c := newMockClient(nil)
+
+	rc, err := region.NewClient(context.Background(), "regionserver:0",
+		region.RegionClient, 0, 0, "root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// pretend regionserver:0 has meta table
+	c.metaRegionInfo.SetClient(rc)
+	c.clients.put(rc, c.metaRegionInfo)
+
+	// add young and small region to cache
+	origlReg := region.NewInfo(1434573235910, nil, []byte("test"),
+		[]byte("test,yolo,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("yolo"), nil)
+	c.regions.put(origlReg)
+	c.clients.put(rc, origlReg)
+	origlReg.SetClient(rc)
+
+	// request a key not in the "yolo" region.
+	get, err := hrpc.NewGetStr(context.Background(), "test", "meow")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// it should lookup a new older region (1434573235908) that overlaps with the one in cache.
+	// However, it shouldn't be put into cache, as it's older, resulting in a new lookup,
+	// evetually leading to ErrConnotFindRegion.
+	_, err = c.Get(get)
+	if err != ErrConnotFindRegion {
+		t.Errorf("Expected error %v, got error %v", ErrConnotFindRegion, err)
 	}
 }
 
@@ -586,7 +671,7 @@ func TestConcurrentRetryableError(t *testing.T) {
 
 	zkc := mockZk.NewMockClient(ctrl)
 	// keep failing on zookeeper lookup
-	zkc.EXPECT().LocateResource(gomock.Any()).Return("", uint16(0), ErrDeadline).AnyTimes()
+	zkc.EXPECT().LocateResource(gomock.Any()).Return("", ErrDeadline).AnyTimes()
 	c := newMockClient(zkc)
 	// create region with mock clien
 	origlReg := region.NewInfo(
@@ -608,8 +693,7 @@ func TestConcurrentRetryableError(t *testing.T) {
 	)
 	rc := mockRegion.NewMockRegionClient(ctrl)
 	rc.EXPECT().String().Return("mock region client").AnyTimes()
-	rc.EXPECT().Host().Return("host").AnyTimes()
-	rc.EXPECT().Port().Return(uint16(1234)).AnyTimes()
+	rc.EXPECT().Addr().Return("host:1234").AnyTimes()
 	origlReg.SetClient(rc)
 	whateverRegion.SetClient(rc)
 	c.regions.put(origlReg)

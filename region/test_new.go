@@ -11,16 +11,17 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 )
 
 type testClient struct {
-	host    string
-	port    uint16
+	addr    string
 	numNSRE int32
 }
 
@@ -51,6 +52,64 @@ var nsreRegion = &pb.Result{Cell: []*pb.Cell{
 		Value:     []byte("\x00\x00\x01N\x02\x92R\xb1"),
 	},
 }}
+
+// makeRegionResult returns a region that spans the whole table
+// and uses name of the table as the hostname of the regionserver
+func makeRegionResult(key []byte) *pb.GetResponse {
+	s := bytes.SplitN(key, []byte(","), 2)
+	fqtable := s[0]
+
+	row := append(fqtable, []byte(",,1434573235908.56f833d5569a27c7a43fbf547b4924a4.")...)
+	t := bytes.SplitN(fqtable, []byte{':'}, 2)
+	var namespace, table []byte
+	if len(t) == 2 {
+		namespace = t[0]
+		table = t[1]
+	} else {
+		namespace = []byte("default")
+		table = fqtable
+	}
+	regionInfo := &pb.RegionInfo{
+		RegionId: proto.Uint64(1434573235908),
+		TableName: &pb.TableName{
+			Namespace: namespace,
+			Qualifier: table,
+		},
+		Offline: proto.Bool(false),
+	}
+	regionInfoValue, err := proto.Marshal(regionInfo)
+	if err != nil {
+		panic(err)
+	}
+	regionInfoValue = append([]byte("PBUF"), regionInfoValue...)
+
+	return &pb.GetResponse{Result: &pb.Result{Cell: []*pb.Cell{
+		&pb.Cell{
+			Row:       row,
+			Family:    []byte("info"),
+			Qualifier: []byte("regioninfo"),
+			Value:     regionInfoValue,
+		},
+		&pb.Cell{
+			Row:       row,
+			Family:    []byte("info"),
+			Qualifier: []byte("seqnumDuringOpen"),
+			Value:     []byte("\x00\x00\x00\x00\x00\x00\x00\x02"),
+		},
+		&pb.Cell{
+			Row:       row,
+			Family:    []byte("info"),
+			Qualifier: []byte("server"),
+			Value:     fqtable,
+		},
+		&pb.Cell{
+			Row:       row,
+			Family:    []byte("info"),
+			Qualifier: []byte("serverstartcode"),
+			Value:     []byte("\x00\x00\x01N\x02\x92R\xb1"),
+		},
+	}}}
+}
 
 var metaRow = &pb.Result{Cell: []*pb.Cell{
 	&pb.Cell{
@@ -136,25 +195,28 @@ var test1SplitB = &pb.Result{Cell: []*pb.Cell{
 	},
 }}
 
+var m sync.RWMutex
+var clients map[string]uint32
+
+func init() {
+	clients = make(map[string]uint32)
+}
+
 // NewClient creates a new test region client.
-func NewClient(ctx context.Context, host string, port uint16, ctype ClientType,
+func NewClient(ctx context.Context, addr string, ctype ClientType,
 	queueSize int, flushInterval time.Duration, effectiveUser string) (hrpc.RegionClient, error) {
-	return &testClient{
-		host: host,
-		port: port,
-	}, nil
+	m.Lock()
+	clients[addr]++
+	m.Unlock()
+	return &testClient{addr: addr}, nil
 }
 
-func (c *testClient) Host() string {
-	return c.host
-}
-
-func (c *testClient) Port() uint16 {
-	return c.port
+func (c *testClient) Addr() string {
+	return c.addr
 }
 
 func (c *testClient) String() string {
-	return fmt.Sprintf("RegionClient{Host: %s, Port %d}", c.host, c.port)
+	return fmt.Sprintf("RegionClient{Addr: %s}", c.addr)
 }
 
 func (c *testClient) QueueRPC(call hrpc.Call) {
@@ -179,6 +241,21 @@ func (c *testClient) QueueRPC(call hrpc.Call) {
 				return
 			}
 		}
+		m.RLock()
+		i := clients[c.addr]
+		m.RUnlock()
+
+		// if we are connected to this client the first time,
+		// pretend it's down to fail the probe and start a reconnect
+		if bytes.Equal(call.Table(), []byte("down")) {
+			if i <= 1 {
+				call.ResultChan() <- hrpc.RPCResult{Error: UnrecoverableError{}}
+			} else {
+				// otherwise, the region is fine
+				call.ResultChan() <- hrpc.RPCResult{}
+			}
+			return
+		}
 	}
 	if bytes.HasSuffix(call.Key(), bytes.Repeat([]byte{0}, 17)) {
 		// meta region probe, return empty to signify that region is online
@@ -192,8 +269,7 @@ func (c *testClient) QueueRPC(call hrpc.Call) {
 	} else if bytes.HasPrefix(call.Key(), []byte("nsre,,")) {
 		call.ResultChan() <- hrpc.RPCResult{Msg: &pb.GetResponse{Result: nsreRegion}}
 	} else {
-		panic(fmt.Sprintf("unexpected call to %q: %q %s",
-			call.Table(), call.Name(), call.Key(), call.Region()))
+		call.ResultChan() <- hrpc.RPCResult{Msg: makeRegionResult(call.Key())}
 	}
 }
 
