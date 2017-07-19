@@ -23,6 +23,9 @@ type AdminClient interface {
 	EnableTable(t *hrpc.EnableTable) error
 	DisableTable(t *hrpc.DisableTable) error
 	ClusterStatus() (*pb.ClusterStatus, error)
+
+	ModifyTable(t *hrpc.ModifyTable) error
+	AddColumn(t *hrpc.AddColumn) error
 }
 
 // NewAdminClient creates an admin HBase client.
@@ -77,6 +80,34 @@ func (c *client) CreateTable(t *hrpc.CreateTable) error {
 	}
 
 	return c.checkProcedureWithBackoff(t.Context(), r.GetProcId())
+}
+
+func (c *client) ModifyTable(t *hrpc.ModifyTable) error {
+	pbmsg, err := c.SendRPC(t)
+	if err != nil {
+		return err
+	}
+
+	_, ok := pbmsg.(*pb.ModifyTableResponse)
+	if !ok {
+		return fmt.Errorf("sendRPC returned not a ModifyTableResponse")
+	}
+
+	return nil
+}
+
+func (c *client) AddColumn(t *hrpc.AddColumn) error {
+	pbmsg, err := c.SendRPC(t)
+	if err != nil {
+		return err
+	}
+
+	_, ok := pbmsg.(*pb.AddColumnResponse)
+	if !ok {
+		return fmt.Errorf("sendRPC returned not a AddColumnResponse")
+	}
+
+	return nil
 }
 
 func (c *client) DeleteTable(t *hrpc.DeleteTable) error {
