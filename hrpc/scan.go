@@ -73,6 +73,7 @@ type Scan struct {
 
 	closeScanner        bool
 	allowPartialResults bool
+	reversed            bool
 }
 
 // baseScan returns a Scan struct with default values set.
@@ -87,6 +88,7 @@ func baseScan(ctx context.Context, table []byte,
 		scannerID:     math.MaxUint64,
 		maxResultSize: DefaultMaxResultSize,
 		numberOfRows:  DefaultNumberOfRows,
+		reversed:      false,
 	}
 	err := applyOptions(s, options...)
 	if err != nil {
@@ -195,6 +197,11 @@ func (s *Scan) AllowPartialResults() bool {
 	return s.allowPartialResults
 }
 
+// Reversed returns true if scanner scans in reverse.
+func (s *Scan) Reversed() bool {
+	return s.reversed
+}
+
 // ToProto converts this Scan into a protobuf message
 func (s *Scan) ToProto() (proto.Message, error) {
 	scan := &pb.ScanRequest{
@@ -228,6 +235,9 @@ func (s *Scan) ToProto() (proto.Message, error) {
 	}
 	if s.storeOffset != 0 {
 		scan.Scan.StoreOffset = &s.storeOffset
+	}
+	if s.reversed {
+		scan.Scan.Reversed = &s.reversed
 	}
 
 	if s.fromTimestamp != MinTimestamp {
@@ -319,6 +329,19 @@ func AllowPartialResults() func(Call) error {
 			return errors.New("'AllowPartialResults' option can only be used with Scan queries")
 		}
 		scan.allowPartialResults = true
+		return nil
+	}
+}
+
+// SetReversed is an option which allows you to scan in reverse key order
+// To use it the startKey would be greater than the end key
+func SetReversed(reversed bool) func(Call) error {
+	return func(g Call) error {
+		scan, ok := g.(*Scan)
+		if !ok {
+			return errors.New("'SetReversed' option can only be used with Scan queries")
+		}
+		scan.reversed = reversed
 		return nil
 	}
 }

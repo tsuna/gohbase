@@ -273,6 +273,7 @@ func (f *fetcher) next() (*pb.ScanResponse, hrpc.RegionInfo, error) {
 			hrpc.NumberOfRows(f.rpc.NumberOfRows()),
 			hrpc.MaxResultsPerColumnFamily(f.rpc.MaxResultsPerColumnFamily()),
 			hrpc.ResultOffset(f.rpc.ResultOffset()),
+			hrpc.SetReversed(f.rpc.Reversed()),
 		)
 		if err != nil {
 			return nil, nil, err
