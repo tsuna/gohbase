@@ -358,12 +358,6 @@ func (c *client) metaLookupLimit(ctx context.Context) bool {
 func (c *client) metaLookup(ctx context.Context,
 	table, key []byte) (hrpc.RegionInfo, string, error) {
 
-	if ok := c.metaLookupLimit(ctx); !ok {
-		// we've been throttled, return to the caller so that
-		// they deal with this the way they want to
-		return nil, "", ErrMetaLookupThrottled
-	}
-
 	metaKey := createRegionSearchKey(table, key)
 	rpc, err := hrpc.NewGetBefore(ctx, metaTableName, metaKey,
 		hrpc.Families(infoFamily), hrpc.SkipBatch())
