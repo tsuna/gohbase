@@ -272,12 +272,28 @@ func (c *client) processRPCs() {
 			if m.len() == 0 {
 				continue
 			}
+
+			if log.GetLevel() == log.DebugLevel {
+				log.WithFields(log.Fields{
+					"len":  m.len(),
+					"addr": c.Addr(),
+				}).Debug("sending MultiRequest: flush interval tick")
+			}
+
 			if err := c.trySend(m); err != nil {
 				m.returnResults(nil, err)
 			}
 			m = newMulti(c.rpcQueueSize)
 		case rpc := <-c.rpcs:
 			if m.add(rpc) {
+
+				if log.GetLevel() == log.DebugLevel {
+					log.WithFields(log.Fields{
+						"len":  m.len(),
+						"addr": c.Addr(),
+					}).Debug("sending MultiRequest: batch is full")
+				}
+
 				if err := c.trySend(m); err != nil {
 					m.returnResults(nil, err)
 				}
