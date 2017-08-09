@@ -160,63 +160,57 @@ func newRPCMatcher(payload []byte) gomock.Matcher {
 	return rpcMatcher{payload: payload}
 }
 
-func TestFailSentRPCs(t *testing.T) {
+func TestProcessRPCsWithFail(t *testing.T) {
 	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 
-	queueSize := 100
-	flushInterval := 1000 * time.Second
 	mockConn := mock.NewMockConn(ctrl)
-	mockConn.EXPECT().SetReadDeadline(gomock.Any()).AnyTimes()
-	mockConn.EXPECT().Write(gomock.Any()).AnyTimes()
-	mockConn.EXPECT().Close().Times(1)
+	mockConn.EXPECT().Close()
+
+	ncalls := 100
+
 	c := &client{
-		conn:          mockConn,
-		rpcs:          make(chan hrpc.Call),
-		done:          make(chan struct{}),
-		sent:          make(map[uint32]hrpc.Call),
-		rpcQueueSize:  queueSize / 2,
-		flushInterval: flushInterval,
+		conn: mockConn,
+		rpcs: make(chan hrpc.Call),
+		done: make(chan struct{}),
+		sent: make(map[uint32]hrpc.Call),
+		// never send anything
+		rpcQueueSize:  ncalls + 1,
+		flushInterval: 1000 * time.Hour,
 	}
 
-	// define rpcs behaviour
-	var wgWrites sync.WaitGroup
-	// we send less calls then queueSize so that sendBatch isn't triggered
-	calls := make([]hrpc.Call, queueSize)
-	ctx := context.Background()
-	for i := range calls {
-		wgWrites.Add(1)
-		mockCall := mock.NewMockCall(ctrl)
-		mockCall.EXPECT().ResultChan().Return(make(chan hrpc.RPCResult, 1)).Times(1)
-		mockCall.EXPECT().Context().Return(ctx).MaxTimes(1)
-		// might not be called if failed
-		mockCall.EXPECT().ToProto().Return(&pb.GetRequest{}, nil).MaxTimes(1)
-		mockCall.EXPECT().Name().Return("Get").MaxTimes(1)
-		calls[i] = mockCall
-	}
-
-	// process rpcs and close client in the middle of it to make sure that
-	// all queued up rpcs are processed eventually
-	var wg sync.WaitGroup
-	wg.Add(1)
+	var wgProcessRPCs sync.WaitGroup
+	wgProcessRPCs.Add(1)
 	go func() {
 		c.processRPCs()
-		wg.Done()
+		wgProcessRPCs.Done()
 	}()
 
-	// queue calls
+	calls := make([]hrpc.Call, ncalls)
+	for i := range calls {
+		call, err := hrpc.NewGet(context.Background(), []byte("yolo"), []byte("swag"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		call.SetRegion(reg0)
+		calls[i] = call
+	}
+
 	for _, call := range calls {
 		c.QueueRPC(call)
 	}
-	c.Close()
-	wg.Wait()
-	if len(c.rpcs) != 0 {
-		t.Errorf("Expected all buffered rpcs to be processed, %d left", len(c.rpcs))
+
+	c.fail(errors.New("OOOPS"))
+
+	// check that all calls are not stuck and get an error
+	for _, call := range calls {
+		r := <-call.ResultChan()
+		if r.Error != ErrClientDead {
+			t.Errorf("got unexpected error %v, expected %v", r.Error, ErrClientDead)
+		}
 	}
 
-	if len(c.sent) != 0 {
-		t.Errorf("Expected all awaiting rpcs to be processed, %d left", len(c.sent))
-	}
+	wgProcessRPCs.Wait()
 }
 
 func mockRPCProto(row string) (proto.Message, []byte) {

@@ -267,6 +267,7 @@ func (c *client) processRPCs() {
 	for {
 		select {
 		case <-c.done:
+			m.returnResults(nil, ErrClientDead)
 			return
 		case <-ticker.C:
 			if m.len() == 0 {
