@@ -1616,3 +1616,62 @@ func TestMultiRequest(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestReverseScan(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+
+	baseErr := "Reverse Scan error "
+
+	values := make(map[string]map[string][]byte)
+	values["cf"] = map[string][]byte{}
+
+	// Save 500 rows
+	for i := 0; i < 500; i++ {
+		key := fmt.Sprintf("REVTEST-%03d", i)
+		values["cf"]["reversetest"] = []byte(fmt.Sprintf("%d", i))
+		putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values)
+		if err != nil {
+			t.Errorf(baseErr+"building put string: %s", err)
+
+		}
+
+		_, err = c.Put(putRequest)
+		if err != nil {
+			t.Errorf(baseErr+"saving row: %s", err)
+		}
+	}
+
+	// Read them back in reverse order
+	scanRequest, err := hrpc.NewScanRangeStr(context.Background(),
+		table,
+		"REVTEST-999",
+		"REVTEST-",
+		hrpc.Families(map[string][]string{"cf": []string{"reversetest"}}),
+		hrpc.SetReversed(true),
+	)
+	if err != nil {
+		t.Errorf(baseErr+"setting up reverse scan: %s", err)
+	}
+	i := 0
+	results := c.Scan(scanRequest)
+	for {
+		r, err := results.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			t.Errorf(baseErr+"scanning results: %s", err)
+		}
+		i++
+		expected := fmt.Sprintf("%d", 500-i)
+		if string(r.Cells[0].Value) != expected {
+			t.Errorf(baseErr + "- unexpected rowkey returned")
+		}
+	}
+	if i != 500 {
+		t.Errorf(baseErr+" expected 500 rows returned; found %d", i)
+	}
+	results.Close()
+
+}
