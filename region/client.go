@@ -62,15 +62,16 @@ var (
 )
 
 const (
+	//DefaultLookupTimeout is the default region lookup timeout
+	DefaultLookupTimeout = 30 * time.Second
+	//DefaultReadTimeout is the default region read timeout
+	DefaultReadTimeout = 30 * time.Second
 	// RegionClient is a ClientType that means this will be a normal client
 	RegionClient = ClientType("ClientService")
 
 	// MasterClient is a ClientType that means this client will talk to the
 	// master server
 	MasterClient = ClientType("MasterService")
-
-	// readTimeout is the maximum amount of time to wait for regionserver reply
-	readTimeout = 30 * time.Second
 )
 
 var bufferPool = sync.Pool{
@@ -145,6 +146,9 @@ type client struct {
 	flushInterval time.Duration
 
 	effectiveUser string
+
+	// readTimeout is the maximum amount of time to wait for regionserver reply
+	readTimeout time.Duration
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine
@@ -186,7 +190,7 @@ func (c *client) inFlightUp() {
 	c.inFlightM.Lock()
 	c.inFlight++
 	// we expect that at least the last request can be completed within readTimeout
-	c.conn.SetReadDeadline(time.Now().Add(readTimeout))
+	c.conn.SetReadDeadline(time.Now().Add(c.readTimeout))
 	c.inFlightM.Unlock()
 }
 

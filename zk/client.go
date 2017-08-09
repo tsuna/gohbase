@@ -41,8 +41,6 @@ func (r ResourceName) Prepend(prefix string) ResourceName {
 }
 
 const (
-	sessionTimeout = 30
-
 	// Meta is a ResourceName that indicates that the location of the Meta
 	// table is what will be fetched
 	Meta = ResourceName("/meta-region-server")
@@ -58,19 +56,21 @@ type Client interface {
 }
 
 type client struct {
-	zks []string
+	zks            []string
+	sessionTimeout time.Duration
 }
 
 // NewClient establishes connection to zookeeper and returns the client
-func NewClient(zkquorum string) Client {
+func NewClient(zkquorum string, st time.Duration) Client {
 	return &client{
-		zks: strings.Split(zkquorum, ","),
+		zks:            strings.Split(zkquorum, ","),
+		sessionTimeout: st,
 	}
 }
 
 // LocateResource returns address of the server for the specified resource.
 func (c *client) LocateResource(resource ResourceName) (string, error) {
-	conn, _, err := zk.Connect(c.zks, time.Duration(sessionTimeout)*time.Second)
+	conn, _, err := zk.Connect(c.zks, c.sessionTimeout)
 	if err != nil {
 		return "", fmt.Errorf("error connecting to ZooKeeper at %v: %s", c.zks, err)
 	}

@@ -805,7 +805,7 @@ func BenchmarkSetReadDeadline(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		conn.SetReadDeadline(time.Now().Add(readTimeout))
+		conn.SetReadDeadline(time.Now().Add(DefaultReadTimeout))
 	}
 	b.StopTimer()
 

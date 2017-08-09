@@ -39,14 +39,17 @@ func newAdminClient(zkquorum string, options ...Option) AdminClient {
 		rpcQueueSize:  defaultRPCQueueSize,
 		flushInterval: defaultFlushInterval,
 		// empty region in order to be able to set client to it
-		adminRegionInfo: region.NewInfo(0, nil, nil, nil, nil, nil),
-		zkClient:        zk.NewClient(zkquorum),
-		zkRoot:          defaultZkRoot,
-		effectiveUser:   defaultEffectiveUser,
+		adminRegionInfo:     region.NewInfo(0, nil, nil, nil, nil, nil),
+		zkTimeout:           defaultZkTimeout,
+		zkRoot:              defaultZkRoot,
+		effectiveUser:       defaultEffectiveUser,
+		regionLookupTimeout: region.DefaultLookupTimeout,
+		regionReadTimeout:   region.DefaultReadTimeout,
 	}
 	for _, option := range options {
 		option(c)
 	}
+	c.zkClient = zk.NewClient(zkquorum, c.zkTimeout)
 	return c
 }
 

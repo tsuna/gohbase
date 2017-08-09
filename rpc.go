@@ -53,11 +53,6 @@ const (
 	// maxSendRPCTries is the maximum number of times to try to send an RPC
 	maxSendRPCTries = 10
 
-	// How long to wait for a region lookup (either meta lookup or finding
-	// meta in ZooKeeper).  Should be greater than or equal to the ZooKeeper
-	// session timeout.
-	regionLookupTimeout = 30 * time.Second
-
 	backoffStart = 16 * time.Millisecond
 )
 
@@ -194,7 +189,7 @@ func (c *client) lookupRegion(ctx context.Context,
 	for {
 
 		// If it takes longer than regionLookupTimeout, fail so that we can sleep
-		lookupCtx, cancel := context.WithTimeout(ctx, regionLookupTimeout)
+		lookupCtx, cancel := context.WithTimeout(ctx, c.regionLookupTimeout)
 		if c.clientType == adminClient {
 			log.WithField("resource", zk.Master).Debug("looking up master")
 
@@ -597,10 +592,12 @@ func (c *client) establishRegionClient(reg hrpc.RegionInfo,
 	} else {
 		clientType = region.MasterClient
 	}
-	clientCtx, cancel := context.WithTimeout(reg.Context(), regionLookupTimeout)
+	clientCtx, cancel := context.WithTimeout(reg.Context(), c.regionLookupTimeout)
 	defer cancel()
+
 	return region.NewClient(clientCtx, addr, clientType,
-		c.rpcQueueSize, c.flushInterval, c.effectiveUser)
+		c.rpcQueueSize, c.flushInterval, c.effectiveUser,
+		c.regionReadTimeout)
 }
 
 // zkResult contains the result of a ZooKeeper lookup (when we're looking for
