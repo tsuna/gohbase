@@ -327,11 +327,7 @@ func (m *Mutate) serializeNoReflect() *pb.MutateRequest {
 		mProto.Timestamp = &m.timestamp
 	}
 
-	if m.ttl != nil && len(m.ttl) > 0 {
-		if mProto.Attribute == nil {
-			mProto.Attribute = []*pb.NameBytesPair{}
-		}
-
+	if len(m.ttl) > 0 {
 		mProto.Attribute = append(mProto.Attribute, &pb.NameBytesPair{
 			Name:  &AttributeNameTTL,
 			Value: m.ttl,
@@ -410,11 +406,7 @@ func (m *Mutate) serializeWithReflect() (*pb.MutateRequest, error) {
 		mProto.Timestamp = &m.timestamp
 	}
 
-	if m.ttl != nil && len(m.ttl) > 0 {
-		if mProto.Attribute == nil {
-			mProto.Attribute = []*pb.NameBytesPair{}
-		}
-
+	if len(m.ttl) > 0 {
 		mProto.Attribute = append(mProto.Attribute, &pb.NameBytesPair{
 			Name:  &AttributeNameTTL,
 			Value: m.ttl,
