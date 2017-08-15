@@ -219,10 +219,12 @@ func (c *client) fail(err error) {
 		// tell goroutines to stop
 		close(c.done)
 
-		c.failSentRPCs()
-		// we close connection to the regionserver,
+		// close connection to the regionserver
 		// to let it know that we can't receive anymore
+		// and fail all the rpcs being sent
 		c.conn.Close()
+
+		c.failSentRPCs()
 	})
 }
 

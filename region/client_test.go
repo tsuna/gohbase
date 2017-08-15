@@ -14,6 +14,7 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -138,6 +139,76 @@ func TestFail(t *testing.T) {
 			t.Error("expected done to be closed")
 		}
 	}
+}
+
+type mc struct {
+	*mock.MockConn
+
+	closed uint32
+}
+
+func (c *mc) Write(b []byte) (n int, err error) {
+	if v := atomic.LoadUint32(&c.closed); v != 0 {
+		return 0, errors.New("closed connection")
+	}
+	return 0, nil
+}
+
+func (c *mc) Close() error {
+	atomic.AddUint32(&c.closed, 1)
+	return nil
+}
+
+func TestQueueRPCMultiWithClose(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+
+	mockConn := mock.NewMockConn(ctrl)
+	mockConn.EXPECT().SetReadDeadline(gomock.Any()).AnyTimes()
+
+	ncalls := 1000
+
+	c := &client{
+		conn:          &mc{MockConn: mockConn},
+		rpcs:          make(chan hrpc.Call),
+		done:          make(chan struct{}),
+		sent:          make(map[uint32]hrpc.Call),
+		rpcQueueSize:  10,
+		flushInterval: 30 * time.Millisecond,
+	}
+
+	var wgProcessRPCs sync.WaitGroup
+	wgProcessRPCs.Add(1)
+	go func() {
+		c.processRPCs()
+		wgProcessRPCs.Done()
+	}()
+
+	calls := make([]hrpc.Call, ncalls)
+	for i := range calls {
+		call, err := hrpc.NewGet(context.Background(), []byte("yolo"), []byte("swag"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		call.SetRegion(reg0)
+		calls[i] = call
+	}
+
+	for _, call := range calls {
+		go c.QueueRPC(call)
+	}
+
+	c.Close()
+
+	// check that all calls are not stuck and get an error
+	for _, call := range calls {
+		r := <-call.ResultChan()
+		if r.Error == nil {
+			t.Error("got no error")
+		}
+	}
+
+	wgProcessRPCs.Wait()
 }
 
 type rpcMatcher struct {
