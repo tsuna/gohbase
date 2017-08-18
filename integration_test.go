@@ -556,6 +556,35 @@ func TestTimestampIncreasing(t *testing.T) {
 	}
 }
 
+func TestPutTTL(t *testing.T) {
+	key := "TestPutTTL"
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+
+	var ttl = 2 * time.Second
+
+	err := insertKeyValue(c, key, "cf", []byte("1"), hrpc.TTL(ttl))
+	if err != nil {
+		t.Fatalf("Put failed: %s", err)
+	}
+
+	//Wait ttl duration and try to get the value
+	time.Sleep(ttl)
+
+	get, err := hrpc.NewGetStr(context.Background(), table, key,
+		hrpc.Families(map[string][]string{"cf": nil}))
+
+	//Make sure we dont get a result back
+	res, err := c.Get(get)
+	if err != nil {
+		t.Fatalf("Get failed: %s", err)
+	}
+
+	if len(res.Cells) > 0 {
+		t.Errorf("TTL did not expire row. Expected 0 cells, got: %d", len(res.Cells))
+	}
+}
+
 func TestPutTimestamp(t *testing.T) {
 	key := "TestPutTimestamp"
 	c := gohbase.NewClient(*host)
