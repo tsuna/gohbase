@@ -18,7 +18,8 @@ import (
 
 // NewClient creates a new RegionClient.
 func NewClient(ctx context.Context, addr string, ctype ClientType,
-	queueSize int, flushInterval time.Duration, effectiveUser string) (hrpc.RegionClient, error) {
+	queueSize int, flushInterval time.Duration, effectiveUser string,
+	readTimeout time.Duration) (hrpc.RegionClient, error) {
 	var d net.Dialer
 	conn, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
@@ -33,6 +34,7 @@ func NewClient(ctx context.Context, addr string, ctype ClientType,
 		rpcQueueSize:  queueSize,
 		flushInterval: flushInterval,
 		effectiveUser: effectiveUser,
+		readTimeout:   readTimeout,
 	}
 	// time out send hello if it take long
 	// TODO: do we even need to bother, we are going to retry anyway?

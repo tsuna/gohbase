@@ -31,6 +31,9 @@ func NewCheckAndPut(put *Mutate, family string,
 	if put.mutationType != pb.MutationProto_PUT {
 		return nil, fmt.Errorf("'CheckAndPut' only takes 'Put' request")
 	}
+	// CheckAndPut is not batchable as MultiResponse doesn't return Processed field
+	// for Mutate Action
+	put.setSkipBatch(true)
 
 	return &CheckAndPut{
 		Mutate:    put,

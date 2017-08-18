@@ -62,15 +62,16 @@ var (
 )
 
 const (
+	//DefaultLookupTimeout is the default region lookup timeout
+	DefaultLookupTimeout = 30 * time.Second
+	//DefaultReadTimeout is the default region read timeout
+	DefaultReadTimeout = 30 * time.Second
 	// RegionClient is a ClientType that means this will be a normal client
 	RegionClient = ClientType("ClientService")
 
 	// MasterClient is a ClientType that means this client will talk to the
 	// master server
 	MasterClient = ClientType("MasterService")
-
-	// readTimeout is the maximum amount of time to wait for regionserver reply
-	readTimeout = 30 * time.Second
 )
 
 var bufferPool = sync.Pool{
@@ -145,22 +146,25 @@ type client struct {
 	flushInterval time.Duration
 
 	effectiveUser string
+
+	// readTimeout is the maximum amount of time to wait for regionserver reply
+	readTimeout time.Duration
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine
 func (c *client) QueueRPC(rpc hrpc.Call) {
 	if b, ok := rpc.(hrpc.Batchable); ok && c.rpcQueueSize > 1 && !b.SkipBatch() {
+		// queue up the rpc
 		select {
 		case <-rpc.Context().Done():
 			// rpc timed out before being processed
 		case <-c.done:
-			rpc.ResultChan() <- hrpc.RPCResult{Error: ErrClientDead}
+			returnResult(rpc, nil, ErrClientDead)
 		case c.rpcs <- rpc:
 		}
 	} else {
-		// send the rest of rpcs right away in the same goroutine
 		if err := c.trySend(rpc); err != nil {
-			rpc.ResultChan() <- hrpc.RPCResult{Error: err}
+			returnResult(rpc, nil, err)
 		}
 	}
 }
@@ -186,7 +190,7 @@ func (c *client) inFlightUp() {
 	c.inFlightM.Lock()
 	c.inFlight++
 	// we expect that at least the last request can be completed within readTimeout
-	c.conn.SetReadDeadline(time.Now().Add(readTimeout))
+	c.conn.SetReadDeadline(time.Now().Add(c.readTimeout))
 	c.inFlightM.Unlock()
 }
 
@@ -215,10 +219,12 @@ func (c *client) fail(err error) {
 		// tell goroutines to stop
 		close(c.done)
 
-		c.failSentRPCs()
-		// we close connection to the regionserver,
+		// close connection to the regionserver
 		// to let it know that we can't receive anymore
+		// and fail all the rpcs being sent
 		c.conn.Close()
+
+		c.failSentRPCs()
 	})
 }
 
@@ -236,7 +242,7 @@ func (c *client) failSentRPCs() {
 
 	// send error to awaiting rpcs
 	for _, rpc := range sent {
-		rpc.ResultChan() <- hrpc.RPCResult{Error: ErrClientDead}
+		returnResult(rpc, nil, ErrClientDead)
 	}
 }
 
@@ -257,21 +263,58 @@ func (c *client) unregisterRPC(id uint32) hrpc.Call {
 }
 
 func (c *client) processRPCs() {
-	batch := make([]hrpc.Call, 0, c.rpcQueueSize)
+	// TODO: flush when the size is too large
+	// TODO: use sync pool for multi
+	// TODO: if multi has only one call, send that call instead
+	m := newMulti(c.rpcQueueSize)
+
 	ticker := time.NewTicker(c.flushInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-c.done:
+			m.returnResults(nil, ErrClientDead)
 			return
 		case <-ticker.C:
-			batch = c.sendBatch(batch)
+			if m.len() == 0 {
+				continue
+			}
+
+			if log.GetLevel() == log.DebugLevel {
+				log.WithFields(log.Fields{
+					"len":  m.len(),
+					"addr": c.Addr(),
+				}).Debug("sending MultiRequest: flush interval tick")
+			}
+
+			if err := c.trySend(m); err != nil {
+				m.returnResults(nil, err)
+			}
+			m = newMulti(c.rpcQueueSize)
 		case rpc := <-c.rpcs:
-			batch = append(batch, rpc)
-			if len(batch) == c.rpcQueueSize {
-				batch = c.sendBatch(batch)
+			if m.add(rpc) {
+
+				if log.GetLevel() == log.DebugLevel {
+					log.WithFields(log.Fields{
+						"len":  m.len(),
+						"addr": c.Addr(),
+					}).Debug("sending MultiRequest: batch is full")
+				}
+
+				if err := c.trySend(m); err != nil {
+					m.returnResults(nil, err)
+				}
+				m = newMulti(c.rpcQueueSize)
 			}
 		}
+	}
+}
+
+func returnResult(c hrpc.Call, msg proto.Message, err error) {
+	if m, ok := c.(*multi); ok {
+		m.returnResults(msg, err)
+	} else {
+		c.ResultChan() <- hrpc.RPCResult{Msg: msg, Error: err}
 	}
 }
 
@@ -302,18 +345,6 @@ func (c *client) trySend(rpc hrpc.Call) error {
 		}
 		return nil
 	}
-}
-
-func (c *client) sendBatch(rpcs []hrpc.Call) []hrpc.Call {
-	for i, rpc := range rpcs {
-		if err := c.trySend(rpc); err != nil {
-			rpc.ResultChan() <- hrpc.RPCResult{Error: err}
-		}
-		// set to nil so that GC isn't blocked to clean up rpc
-		rpcs[i] = nil
-	}
-	// reset size, but preserve capacity to reuse the slice
-	return rpcs[:0]
 }
 
 func (c *client) receiveRPCs() {
@@ -373,8 +404,7 @@ func (c *client) receive() error {
 	if header.Exception == nil {
 		response = rpc.NewResponse()
 		if err = buf.DecodeMessage(response); err != nil {
-			rpc.ResultChan() <- hrpc.RPCResult{
-				Error: fmt.Errorf("failed to decode the response: %s", err)}
+			returnResult(rpc, response, fmt.Errorf("failed to decode the response: %s", err))
 			return nil
 		}
 		var cellsLen uint32
@@ -385,29 +415,34 @@ func (c *client) receive() error {
 			b := buf.Bytes()[size-cellsLen:]
 			nread, err := d.DeserializeCellBlocks(response, b)
 			if err != nil {
-				rpc.ResultChan() <- hrpc.RPCResult{
-					Error: fmt.Errorf("failed to decode the response: %s", err)}
+				returnResult(rpc, response, fmt.Errorf("failed to decode the response: %s", err))
 				return nil
 			}
 			if int(nread) < len(b) {
-				rpc.ResultChan() <- hrpc.RPCResult{
-					Error: fmt.Errorf("short read: buffer len %d, read %d", len(b), nread)}
+				returnResult(rpc, response,
+					fmt.Errorf("short read: buffer len %d, read %d", len(b), nread))
 				return nil
 			}
 		}
 	} else {
-		javaClass := *header.Exception.ExceptionClassName
-		err = fmt.Errorf("HBase Java exception %s: \n%s", javaClass, *header.Exception.StackTrace)
-		if _, ok := javaRetryableExceptions[javaClass]; ok {
-			// This is a recoverable error. The client should retry.
-			err = RetryableError{err}
-		} else if _, ok := javaUnrecoverableExceptions[javaClass]; ok {
-			// This is unrecoverable, close the client.
-			return UnrecoverableError{err}
+		err = exceptionToError(*header.Exception.ExceptionClassName, *header.Exception.StackTrace)
+		if _, ok := err.(UnrecoverableError); ok {
+			return err
 		}
 	}
-	rpc.ResultChan() <- hrpc.RPCResult{Msg: response, Error: err}
+
+	returnResult(rpc, response, err)
 	return nil
+}
+
+func exceptionToError(class, stack string) error {
+	err := fmt.Errorf("HBase Java exception %s:\n%s", class, stack)
+	if _, ok := javaRetryableExceptions[class]; ok {
+		return RetryableError{err}
+	} else if _, ok := javaUnrecoverableExceptions[class]; ok {
+		return UnrecoverableError{err}
+	}
+	return err
 }
 
 // write sends the given buffer to the RegionServer.

@@ -1529,3 +1529,119 @@ func TestMaxResultsPerColumnFamilyScan(t *testing.T) {
 	}
 
 }
+
+func TestMultiRequest(t *testing.T) {
+	// pre-populate the table
+	var (
+		getKey       = t.Name() + "_Get"
+		putKey       = t.Name() + "_Put"
+		deleteKey    = t.Name() + "_Delete"
+		appendKey    = t.Name() + "_Append"
+		incrementKey = t.Name() + "_Increment"
+	)
+	c := gohbase.NewClient(*host, gohbase.RpcQueueSize(1))
+	if err := insertKeyValue(c, getKey, "cf", []byte{1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := insertKeyValue(c, deleteKey, "cf", []byte{3}); err != nil {
+		t.Fatal(err)
+	}
+	if err := insertKeyValue(c, appendKey, "cf", []byte{4}); err != nil {
+		t.Fatal(err)
+	}
+	i, err := hrpc.NewIncStrSingle(context.Background(), table, incrementKey, "cf", "a", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = c.Increment(i)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Close()
+
+	c = gohbase.NewClient(*host, gohbase.FlushInterval(1000*time.Hour), gohbase.RpcQueueSize(5))
+	defer c.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(5)
+	go func() {
+		g, err := hrpc.NewGetStr(context.Background(), table, getKey)
+		if err != nil {
+			t.Error(err)
+		}
+		r, err := c.Get(g)
+		if err != nil {
+			t.Error(err)
+		}
+		expV := []byte{1}
+		if !bytes.Equal(r.Cells[0].Value, expV) {
+			t.Errorf("expected %v, got %v:", expV, r.Cells[0].Value)
+		}
+		wg.Done()
+	}()
+
+	go func() {
+		v := map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte{2}}}
+		p, err := hrpc.NewPutStr(context.Background(), table, putKey, v)
+		if err != nil {
+			t.Error(err)
+		}
+		r, err := c.Put(p)
+		if err != nil {
+			t.Error(err)
+		}
+		if len(r.Cells) != 0 {
+			t.Errorf("expected no cells, got %d", len(r.Cells))
+		}
+		wg.Done()
+	}()
+
+	go func() {
+		d, err := hrpc.NewDelStr(context.Background(), table, deleteKey, nil)
+		if err != nil {
+			t.Error(err)
+		}
+		r, err := c.Delete(d)
+		if err != nil {
+			t.Error(err)
+		}
+		if len(r.Cells) != 0 {
+			t.Errorf("expected no cells, got %d", len(r.Cells))
+		}
+		wg.Done()
+	}()
+
+	go func() {
+		v := map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte{4}}}
+		a, err := hrpc.NewAppStr(context.Background(), table, appendKey, v)
+		if err != nil {
+			t.Error(err)
+		}
+		r, err := c.Append(a)
+		if err != nil {
+			t.Error(err)
+		}
+		expV := []byte{4, 4}
+		if !bytes.Equal(r.Cells[0].Value, expV) {
+			t.Errorf("expected %v, got %v:", expV, r.Cells[0].Value)
+		}
+		wg.Done()
+	}()
+
+	go func() {
+		i, err := hrpc.NewIncStrSingle(context.Background(), table, incrementKey, "cf", "a", 1)
+		if err != nil {
+			t.Error(err)
+		}
+		r, err := c.Increment(i)
+		if err != nil {
+			t.Error(err)
+		}
+		if r != 6 {
+			t.Errorf("expected %d, got %d:", 6, r)
+		}
+		wg.Done()
+	}()
+
+	wg.Wait()
+}

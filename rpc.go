@@ -53,11 +53,6 @@ const (
 	// maxSendRPCTries is the maximum number of times to try to send an RPC
 	maxSendRPCTries = 10
 
-	// How long to wait for a region lookup (either meta lookup or finding
-	// meta in ZooKeeper).  Should be greater than or equal to the ZooKeeper
-	// session timeout.
-	regionLookupTimeout = 30 * time.Second
-
 	backoffStart = 16 * time.Millisecond
 )
 
@@ -194,7 +189,7 @@ func (c *client) lookupRegion(ctx context.Context,
 	for {
 
 		// If it takes longer than regionLookupTimeout, fail so that we can sleep
-		lookupCtx, cancel := context.WithTimeout(ctx, regionLookupTimeout)
+		lookupCtx, cancel := context.WithTimeout(ctx, c.regionLookupTimeout)
 		if c.clientType == adminClient {
 			log.WithField("resource", zk.Master).Debug("looking up master")
 
@@ -357,12 +352,6 @@ func (c *client) metaLookupLimit(ctx context.Context) bool {
 // metaLookup checks meta table for the region in which the given row key for the given table is.
 func (c *client) metaLookup(ctx context.Context,
 	table, key []byte) (hrpc.RegionInfo, string, error) {
-
-	if ok := c.metaLookupLimit(ctx); !ok {
-		// we've been throttled, return to the caller so that
-		// they deal with this the way they want to
-		return nil, "", ErrMetaLookupThrottled
-	}
 
 	metaKey := createRegionSearchKey(table, key)
 	rpc, err := hrpc.NewGetBefore(ctx, metaTableName, metaKey,
@@ -603,10 +592,12 @@ func (c *client) establishRegionClient(reg hrpc.RegionInfo,
 	} else {
 		clientType = region.MasterClient
 	}
-	clientCtx, cancel := context.WithTimeout(reg.Context(), regionLookupTimeout)
+	clientCtx, cancel := context.WithTimeout(reg.Context(), c.regionLookupTimeout)
 	defer cancel()
+
 	return region.NewClient(clientCtx, addr, clientType,
-		c.rpcQueueSize, c.flushInterval, c.effectiveUser)
+		c.rpcQueueSize, c.flushInterval, c.effectiveUser,
+		c.regionReadTimeout)
 }
 
 // zkResult contains the result of a ZooKeeper lookup (when we're looking for
