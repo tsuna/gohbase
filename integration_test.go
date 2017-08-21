@@ -87,6 +87,8 @@ func StopRegionServers(servers []string) {
 	exec.Command(hh+"/bin/local-regionservers.sh", servers...).Run()
 }
 func TestMain(m *testing.M) {
+	flag.Parse()
+
 	if host == nil {
 		panic("Host is not set!")
 	}
