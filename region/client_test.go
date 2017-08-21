@@ -469,6 +469,67 @@ func TestUnrecoverableErrorRead(t *testing.T) {
 	}
 }
 
+func TestUnrecoverableExceptionResponse(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+	mockConn := mock.NewMockConn(ctrl)
+	mockConn.EXPECT().SetReadDeadline(gomock.Any()).Times(2)
+	c := &client{
+		conn:          mockConn,
+		rpcs:          make(chan hrpc.Call),
+		done:          make(chan struct{}),
+		sent:          make(map[uint32]hrpc.Call),
+		rpcQueueSize:  1,
+		flushInterval: 1000 * time.Second,
+	}
+
+	rpc, err := hrpc.NewGetStr(context.Background(), "test1", "yolo")
+	if err != nil {
+		t.Fatalf("Failed to create Get request: %s", err)
+	}
+
+	c.registerRPC(rpc)
+	c.inFlightUp()
+
+	var response []byte
+	b := proto.NewBuffer(response)
+
+	err = b.EncodeMessage(&pb.ResponseHeader{
+		CallId: proto.Uint32(1),
+		Exception: &pb.ExceptionResponse{
+			ExceptionClassName: proto.String(
+				"org.apache.hadoop.hbase.regionserver.RegionServerAbortedException"),
+			StackTrace: proto.String("ooops"),
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	response = b.Bytes()
+
+	mockConn.EXPECT().Read(readBufSizeMatcher{l: 4}).Times(1).Return(4, nil).
+		Do(func(buf []byte) { binary.BigEndian.PutUint32(buf, uint32(len(response))) })
+
+	mockConn.EXPECT().Read(readBufSizeMatcher{l: len(response)}).Times(1).
+		Return(len(response), nil).Do(func(buf []byte) { copy(buf, response) })
+
+	expErr := exceptionToError(
+		"org.apache.hadoop.hbase.regionserver.RegionServerAbortedException", "ooops")
+
+	err = c.receive()
+	if _, ok := err.(UnrecoverableError); !ok {
+		if err.Error() != expErr.Error() {
+			t.Fatalf("expected UnrecoverableError with message %q, got %T: %v", expErr, err, err)
+		}
+	}
+
+	re := <-rpc.ResultChan()
+	if re.Error != err {
+		t.Errorf("expected error %v, got %v", err, re.Error)
+	}
+}
+
 func TestReceiveDecodeProtobufError(t *testing.T) {
 	ctrl := test.NewController(t)
 	defer ctrl.Finish()
@@ -497,17 +558,17 @@ func TestReceiveDecodeProtobufError(t *testing.T) {
 	mockConn.EXPECT().Read(readBufSizeMatcher{l: len(response)}).Times(1).
 		Return(len(response), nil).Do(func(buf []byte) { copy(buf, response) })
 	mockConn.EXPECT().SetReadDeadline(time.Time{}).Times(1)
+	expError := errors.New(
+		"failed to decode the response: proto: pb.MutateResponse: illegal tag 0 (wire type 0)")
 
 	err := c.receive()
-	if err != nil {
-		t.Error(err)
+	if err == nil || err.Error() != expError.Error() {
+		t.Errorf("Expected error %v, got %v", expError, err)
 	}
 
 	res := <-result
-	expError := errors.New(
-		"failed to decode the response: proto: pb.MutateResponse: illegal tag 0 (wire type 0)")
-	if res.Error == nil || res.Error.Error() != expError.Error() {
-		t.Errorf("Expected error %v, got %v", expError, res.Error)
+	if err != res.Error {
+		t.Errorf("Expected error %v, got %v", err, res.Error)
 	}
 }
 
@@ -545,16 +606,16 @@ func TestReceiveDeserializeCellblocksError(t *testing.T) {
 	mockConn.EXPECT().Read(readBufSizeMatcher{l: len(response)}).Times(1).
 		Return(len(response), nil).Do(func(buf []byte) { copy(buf, response) })
 	mockConn.EXPECT().SetReadDeadline(time.Time{}).Times(1)
+	expError := errors.New("failed to decode the response: OOPS")
 
 	err := c.receive()
-	if err != nil {
-		t.Error(err)
+	if err == nil || err.Error() != expError.Error() {
+		t.Errorf("Expected error %v, got %v", expError, err)
 	}
 
 	res := <-result
-	expError := errors.New("failed to decode the response: OOPS")
-	if res.Error == nil || res.Error.Error() != expError.Error() {
-		t.Errorf("Expected error %v, got %v", expError, res.Error)
+	if err != res.Error {
+		t.Errorf("Expected error %v, got %v", err, res.Error)
 	}
 }
 

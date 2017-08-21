@@ -353,23 +353,32 @@ func (c *client) receiveRPCs() {
 		case <-c.done:
 			return
 		default:
-			err := c.receive()
-			if _, ok := err.(UnrecoverableError); ok {
-				c.fail(err)
-				return
-			} else if err != nil {
-				log.WithFields(log.Fields{
-					"client": c,
-					"err":    err,
-				}).Errorf("error receiving rpc response")
+			if err := c.receive(); err != nil {
+				switch err.(type) {
+				case UnrecoverableError:
+					c.fail(err)
+					return
+				case RetryableError:
+					continue
+				default:
+					log.WithFields(log.Fields{
+						"client": c,
+						"err":    err,
+					}).Errorf("unexpected error receiving rpc response")
+				}
 			}
 		}
 	}
 }
 
-func (c *client) receive() error {
-	var sz [4]byte
-	err := c.readFully(sz[:])
+func (c *client) receive() (err error) {
+	var (
+		sz       [4]byte
+		header   pb.ResponseHeader
+		response proto.Message
+	)
+
+	err = c.readFully(sz[:])
 	if err != nil {
 		return UnrecoverableError{err}
 	}
@@ -384,7 +393,6 @@ func (c *client) receive() error {
 
 	buf := proto.NewBuffer(b)
 
-	var header pb.ResponseHeader
 	if err = buf.DecodeMessage(&header); err != nil {
 		return fmt.Errorf("failed to decode the response header: %s", err)
 	}
@@ -399,13 +407,16 @@ func (c *client) receive() error {
 	}
 	c.inFlightDown()
 
-	// Here we know for sure that we got a response for rpc we asked
-	var response proto.Message
+	// Here we know for sure that we got a response for rpc we asked.
+	// It's our responsibility to deliver the response or error to the
+	// caller as we unregistered the rpc.
+	defer func() { returnResult(rpc, response, err) }()
+
 	if header.Exception == nil {
 		response = rpc.NewResponse()
 		if err = buf.DecodeMessage(response); err != nil {
-			returnResult(rpc, response, fmt.Errorf("failed to decode the response: %s", err))
-			return nil
+			err = fmt.Errorf("failed to decode the response: %s", err)
+			return
 		}
 		var cellsLen uint32
 		if header.CellBlockMeta != nil {
@@ -413,26 +424,21 @@ func (c *client) receive() error {
 		}
 		if d, ok := rpc.(canDeserializeCellBlocks); cellsLen > 0 && ok {
 			b := buf.Bytes()[size-cellsLen:]
-			nread, err := d.DeserializeCellBlocks(response, b)
+			var nread uint32
+			nread, err = d.DeserializeCellBlocks(response, b)
 			if err != nil {
-				returnResult(rpc, response, fmt.Errorf("failed to decode the response: %s", err))
-				return nil
+				err = fmt.Errorf("failed to decode the response: %s", err)
+				return
 			}
 			if int(nread) < len(b) {
-				returnResult(rpc, response,
-					fmt.Errorf("short read: buffer len %d, read %d", len(b), nread))
-				return nil
+				err = fmt.Errorf("short read: buffer len %d, read %d", len(b), nread)
+				return
 			}
 		}
 	} else {
 		err = exceptionToError(*header.Exception.ExceptionClassName, *header.Exception.StackTrace)
-		if _, ok := err.(UnrecoverableError); ok {
-			return err
-		}
 	}
-
-	returnResult(rpc, response, err)
-	return nil
+	return
 }
 
 func exceptionToError(class, stack string) error {
