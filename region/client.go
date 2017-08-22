@@ -48,6 +48,7 @@ var (
 		"org.apache.hadoop.hbase.NotServingRegionException":         struct{}{},
 		"org.apache.hadoop.hbase.exceptions.RegionMovedException":   struct{}{},
 		"org.apache.hadoop.hbase.exceptions.RegionOpeningException": struct{}{},
+		"org.apache.hadoop.hbase.ipc.ServerNotRunningYetException":  struct{}{},
 	}
 
 	// javaUnrecoverableExceptions is a map where all Java exceptions that signify
@@ -57,7 +58,6 @@ var (
 	javaUnrecoverableExceptions = map[string]struct{}{
 		"org.apache.hadoop.hbase.regionserver.RegionServerAbortedException": struct{}{},
 		"org.apache.hadoop.hbase.regionserver.RegionServerStoppedException": struct{}{},
-		"org.apache.hadoop.hbase.regionserver.ServerNotRunningYetException": struct{}{},
 	}
 )
 
