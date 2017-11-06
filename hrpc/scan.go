@@ -188,7 +188,7 @@ func (s *Scan) ToProto() proto.Message {
 	scan := &pb.ScanRequest{
 		Region:       s.regionSpecifier(),
 		CloseScanner: &s.closeScanner,
-		NumberOfRows: proto.Uint32(math.MaxInt32),
+		NumberOfRows: &s.numberOfRows,
 		// tell server that we can process results that are only part of a row
 		ClientHandlesPartials: proto.Bool(true),
 		// tell server that we "handle" heartbeats by ignoring them

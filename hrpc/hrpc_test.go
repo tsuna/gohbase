@@ -87,29 +87,38 @@ func TestNewScan(t *testing.T) {
 	startb := []byte("0")
 	stopb := []byte("100")
 	scan, err := NewScan(ctx, tableb)
-	if err != nil || !confirmScanAttributes(ctx, scan, tableb, nil, nil, nil, nil) {
+	if err != nil || !confirmScanAttributes(ctx, scan, tableb, nil, nil, nil, nil,
+		DefaultNumberOfRows) {
 		t.Errorf("Scan1 didn't set attributes correctly.")
 	}
 	scan, err = NewScanRange(ctx, tableb, startb, stopb)
-	if err != nil || !confirmScanAttributes(ctx, scan, tableb, startb, stopb, nil, nil) {
+	if err != nil || !confirmScanAttributes(ctx, scan, tableb, startb, stopb, nil, nil,
+		DefaultNumberOfRows) {
 		t.Errorf("Scan2 didn't set attributes correctly.")
 	}
 	scan, err = NewScanStr(ctx, table)
-	if err != nil || !confirmScanAttributes(ctx, scan, tableb, nil, nil, nil, nil) {
+	if err != nil || !confirmScanAttributes(ctx, scan, tableb, nil, nil, nil, nil,
+		DefaultNumberOfRows) {
 		t.Errorf("Scan3 didn't set attributes correctly.")
 	}
 	scan, err = NewScanRangeStr(ctx, table, start, stop)
-	if err != nil || !confirmScanAttributes(ctx, scan, tableb, startb, stopb, nil, nil) {
+	if err != nil || !confirmScanAttributes(ctx, scan, tableb, startb, stopb, nil, nil,
+		DefaultNumberOfRows) {
 		t.Errorf("Scan4 didn't set attributes correctly.")
 	}
-	scan, err = NewScanRange(ctx, tableb, startb, stopb, Families(fam),
-		Filters(filter1))
-	if err != nil || !confirmScanAttributes(ctx, scan, tableb, startb, stopb, fam, filter1) {
+	scan, err = NewScanRange(ctx, tableb, startb, stopb, Families(fam), Filters(filter1))
+	if err != nil || !confirmScanAttributes(ctx, scan, tableb, startb, stopb, fam, filter1,
+		DefaultNumberOfRows) {
 		t.Errorf("Scan5 didn't set attributes correctly.")
 	}
 	scan, err = NewScan(ctx, tableb, Filters(filter1), Families(fam))
-	if err != nil || !confirmScanAttributes(ctx, scan, tableb, nil, nil, fam, filter1) {
+	if err != nil || !confirmScanAttributes(ctx, scan, tableb, nil, nil, fam, filter1,
+		DefaultNumberOfRows) {
 		t.Errorf("Scan6 didn't set attributes correctly.")
+	}
+	scan, err = NewScan(ctx, tableb, NumberOfRows(1))
+	if err != nil || !confirmScanAttributes(ctx, scan, tableb, nil, nil, nil, nil, 1) {
+		t.Errorf("Scan7 didn't set number of versions correctly")
 	}
 }
 
@@ -265,16 +274,16 @@ func TestDeserializeCellBlocksScan(t *testing.T) {
 }
 
 func confirmScanAttributes(ctx context.Context, s *Scan, table, start, stop []byte,
-	fam map[string][]string, filter1 filter.Filter) bool {
-	if s.Context() != ctx ||
-		!bytes.Equal(s.Table(), table) ||
-		!bytes.Equal(s.StartRow(), start) ||
-		!bytes.Equal(s.StopRow(), stop) ||
-		!reflect.DeepEqual(s.families, fam) ||
-		(filter1 != nil && s.filter == nil) {
+	fam map[string][]string, fltr filter.Filter, numberOfRows uint32) bool {
+	if fltr == nil && s.filter != nil {
 		return false
 	}
-	return true
+	return s.Context() == ctx &&
+		bytes.Equal(s.Table(), table) &&
+		bytes.Equal(s.StartRow(), start) &&
+		bytes.Equal(s.StopRow(), stop) &&
+		reflect.DeepEqual(s.families, fam) &&
+		s.numberOfRows == numberOfRows
 }
 
 func BenchmarkMutateToProtoWithNestedMaps(b *testing.B) {
