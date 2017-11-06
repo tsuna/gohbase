@@ -10,8 +10,8 @@ import (
 	"io"
 	"sync"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/cznic/b"
+	log "github.com/sirupsen/logrus"
 	"github.com/tsuna/gohbase/hrpc"
 )
 
