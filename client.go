@@ -12,9 +12,9 @@ import (
 
 	"golang.org/x/time/rate"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/cznic/b"
 	"github.com/golang/protobuf/proto"
+	log "github.com/sirupsen/logrus"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
