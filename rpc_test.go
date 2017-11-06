@@ -613,7 +613,7 @@ func TestFindRegion(t *testing.T) {
 
 			// check cache
 			if len(tcase.after) != c.regions.regions.Len() {
-				t.Errorf("Test %d: Expected to have %d regions in cache, got %d",
+				t.Errorf("Expected to have %d regions in cache, got %d",
 					len(tcase.after), c.regions.regions.Len())
 			}
 			for _, rn := range tcase.after {
