@@ -187,7 +187,6 @@ func (c *client) lookupRegion(ctx context.Context,
 	var err error
 	backoff := backoffStart
 	for {
-
 		// If it takes longer than regionLookupTimeout, fail so that we can sleep
 		lookupCtx, cancel := context.WithTimeout(ctx, c.regionLookupTimeout)
 		if c.clientType == adminClient {
@@ -249,7 +248,6 @@ func (c *client) lookupRegion(ctx context.Context,
 }
 
 func (c *client) findRegion(ctx context.Context, table, key []byte) (hrpc.RegionInfo, error) {
-
 	// The region was not in the cache, it
 	// must be looked up in the meta table
 	reg, addr, err := c.lookupRegion(ctx, table, key)
