@@ -246,7 +246,7 @@ func (m *Mutate) toProto() *pb.MutateRequest {
 
 	if len(m.ttl) > 0 {
 		mProto.Attribute = append(mProto.Attribute, &pb.NameBytesPair{
-			Name:  &AttributeNameTTL,
+			Name:  &attributeNameTTL,
 			Value: m.ttl,
 		})
 	}
