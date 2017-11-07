@@ -29,6 +29,8 @@ var (
 	// ErrUnsupportedInts is returned when this message is serialized and ints
 	// are unsupported on your platform (this will probably never happen)
 	ErrUnsupportedInts = errors.New("ints are unsupported on your platform")
+
+	attributeNameTTL = "_ttl"
 )
 
 // DurabilityType is used to set durability for Durability option
@@ -56,9 +58,27 @@ type Mutate struct {
 	// values is a map of column families to a map of column qualifiers to bytes
 	values map[string]map[string][]byte
 
+	ttl        []byte
 	timestamp  uint64
 	durability DurabilityType
 	skipbatch  bool
+}
+
+// TTL sets a time to live for mutation queries.
+func TTL(t time.Duration) func(Call) error {
+	return func(o Call) error {
+		m, ok := o.(*Mutate)
+		if !ok {
+			return errors.New("'TTL' option can only be used with mutation queries")
+		}
+
+		buf := make([]byte, 8)
+		binary.BigEndian.PutUint64(buf, uint64(t.Seconds()*1000))
+
+		m.ttl = buf
+
+		return nil
+	}
 }
 
 // Timestamp sets timestamp for mutation queries.
@@ -223,6 +243,14 @@ func (m *Mutate) toProto() *pb.MutateRequest {
 	if m.timestamp != MaxTimestamp {
 		mProto.Timestamp = &m.timestamp
 	}
+
+	if len(m.ttl) > 0 {
+		mProto.Attribute = append(mProto.Attribute, &pb.NameBytesPair{
+			Name:  &attributeNameTTL,
+			Value: m.ttl,
+		})
+	}
+
 	return &pb.MutateRequest{
 		Region:   m.regionSpecifier(),
 		Mutation: mProto,
