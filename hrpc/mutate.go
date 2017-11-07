@@ -30,7 +30,7 @@ var (
 	// are unsupported on your platform (this will probably never happen)
 	ErrUnsupportedInts = errors.New("ints are unsupported on your platform")
 
-	AttributeNameTTL = "_ttl"
+	attributeNameTTL = "_ttl"
 )
 
 // DurabilityType is used to set durability for Durability option
