@@ -212,7 +212,7 @@ func (f *fetcher) fetch() {
 	for {
 		resp, region, err := f.next()
 		if err != nil {
-			if err != ErrDeadline {
+			if err != context.Canceled || err != context.DeadlineExceeded {
 				// if the context of the scan rpc wasn't cancelled (same as calling Close()),
 				// return the error to client
 				f.trySend(nil, err)

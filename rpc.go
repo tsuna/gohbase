@@ -29,9 +29,6 @@ var (
 		"info": nil,
 	}
 
-	// ErrDeadline is returned when the deadline of a request has been exceeded
-	ErrDeadline = errors.New("deadline exceeded")
-
 	// ErrRegionUnavailable is returned when sending rpc to a region that is unavailable
 	ErrRegionUnavailable = errors.New("region unavailable")
 
@@ -84,7 +81,7 @@ func (c *client) SendRPC(rpc hrpc.Call) (proto.Message, error) {
 				// a new region or for the deadline to be exceeded.
 				select {
 				case <-rpc.Context().Done():
-					return nil, ErrDeadline
+					return nil, rpc.Context().Err()
 				case <-ch:
 				}
 			}
@@ -104,7 +101,7 @@ func sendBlocking(rc hrpc.RegionClient, rpc hrpc.Call) (hrpc.RPCResult, error) {
 	case res = <-rpc.ResultChan():
 		return res, nil
 	case <-rpc.Context().Done():
-		return res, ErrDeadline
+		return res, rpc.Context().Err()
 	}
 }
 
@@ -563,7 +560,7 @@ func sleepAndIncreaseBackoff(ctx context.Context, backoff time.Duration) (time.D
 	select {
 	case <-time.After(backoff):
 	case <-ctx.Done():
-		return 0, ErrDeadline
+		return 0, ctx.Err()
 	}
 	// TODO: Revisit how we back off here.
 	if backoff < 5000*time.Millisecond {
@@ -620,6 +617,6 @@ func (c *client) zkLookup(ctx context.Context, resource zk.ResourceName) (string
 	case res := <-reschan:
 		return res.addr, res.err
 	case <-ctx.Done():
-		return "", ErrDeadline
+		return "", ctx.Err()
 	}
 }

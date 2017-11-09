@@ -180,7 +180,7 @@ func TestGet(t *testing.T) {
 		t.Fatalf("Failed to create Get request: %s", err)
 	}
 	_, err = c.Get(get)
-	if err != gohbase.ErrDeadline {
+	if err != context.DeadlineExceeded {
 		t.Errorf("Get ignored the deadline")
 	}
 }
@@ -319,7 +319,7 @@ func TestPut(t *testing.T) {
 	ctx, _ := context.WithTimeout(context.Background(), 0)
 	putRequest, err = hrpc.NewPutStr(ctx, table, key, values)
 	_, err = c.Put(putRequest)
-	if err != gohbase.ErrDeadline {
+	if err != context.DeadlineExceeded {
 		t.Errorf("Put ignored the deadline")
 	}
 }
