@@ -93,6 +93,18 @@ func Timestamp(ts time.Time) func(Call) error {
 	}
 }
 
+// TimestampUint64 sets timestamp for mutation queries.
+func TimestampUint64(ts uint64) func(Call) error {
+	return func(o Call) error {
+		m, ok := o.(*Mutate)
+		if !ok {
+			return errors.New("'TimestampUint64' option can only be used with mutation queries")
+		}
+		m.timestamp = ts
+		return nil
+	}
+}
+
 // Durability sets durability for mutation queries.
 func Durability(d DurabilityType) func(Call) error {
 	return func(o Call) error {
