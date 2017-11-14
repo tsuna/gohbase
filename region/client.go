@@ -293,7 +293,6 @@ func (c *client) processRPCs() {
 			m = newMulti(c.rpcQueueSize)
 		case rpc := <-c.rpcs:
 			if m.add(rpc) {
-
 				if log.GetLevel() == log.DebugLevel {
 					log.WithFields(log.Fields{
 						"len":  m.len(),
@@ -331,9 +330,7 @@ func (c *client) trySend(rpc hrpc.Call) error {
 		// stop waiting for a result and return an error.
 		return nil
 	default:
-		id := c.registerRPC(rpc)
-
-		if err := c.send(id, rpc); err != nil {
+		if id, err := c.send(rpc); err != nil {
 			if _, ok := err.(UnrecoverableError); ok {
 				c.fail(err)
 			}
@@ -495,14 +492,21 @@ func (c *client) sendHello(ctype ClientType) error {
 
 // send sends an RPC out to the wire.
 // Returns the response (for now, as the call is synchronous).
-func (c *client) send(id uint32, rpc hrpc.Call) error {
-	request := rpc.ToProto()
-
+func (c *client) send(rpc hrpc.Call) (uint32, error) {
 	b := newBuffer(4)
 	defer func() { freeBuffer(b) }()
 
 	buf := proto.NewBuffer(b[4:])
 	buf.Reset()
+
+	request := rpc.ToProto()
+
+	// we have to register rpc after we marhsal because
+	// registered rpc can fail before it was even sent
+	// in all the cases where c.fail() is called.
+	// If that happens, client can retry sending the rpc
+	// again potentially changing it's contents.
+	id := c.registerRPC(rpc)
 
 	header := &pb.RequestHeader{
 		CallId:       &id,
@@ -510,11 +514,11 @@ func (c *client) send(id uint32, rpc hrpc.Call) error {
 		RequestParam: proto.Bool(true),
 	}
 	if err := buf.EncodeMessage(header); err != nil {
-		return fmt.Errorf("failed to marshal request header: %s", err)
+		return id, fmt.Errorf("failed to marshal request header: %s", err)
 	}
 
 	if err := buf.EncodeMessage(request); err != nil {
-		return fmt.Errorf("failed to marshal request: %s", err)
+		return id, fmt.Errorf("failed to marshal request: %s", err)
 	}
 
 	payload := buf.Bytes()
@@ -522,8 +526,8 @@ func (c *client) send(id uint32, rpc hrpc.Call) error {
 	b = append(b[:4], payload...)
 
 	if err := c.write(b); err != nil {
-		return UnrecoverableError{err}
+		return id, UnrecoverableError{err}
 	}
 	c.inFlightUp()
-	return nil
+	return id, nil
 }
