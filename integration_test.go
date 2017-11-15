@@ -124,7 +124,6 @@ func TestMain(m *testing.M) {
 //Test retrieval of cluster status
 func TestClusterStatus(t *testing.T) {
 	ac := gohbase.NewAdminClient(*host)
-	defer ac.(gohbase.Client).Close()
 
 	stats, err := ac.ClusterStatus()
 	if err != nil {
@@ -1005,6 +1004,44 @@ func TestCheckAndPutParallel(t *testing.T) {
 		if !first && !second {
 			t.Error("CheckAndPut: both requests cannot fail")
 		}
+	}
+}
+
+func TestClose(t *testing.T) {
+	c := gohbase.NewClient(*host)
+
+	values := map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte("1")}}
+	r, err := hrpc.NewPutStr(context.Background(), table, t.Name(), values)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = c.Put(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c.Close()
+
+	_, err = c.Put(r)
+	if err != gohbase.ErrClientClosed {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCloseWithoutMeta(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	c.Close()
+
+	values := map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte("1")}}
+	r, err := hrpc.NewPutStr(context.Background(), table, t.Name(), values)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = c.Put(r)
+	if err != gohbase.ErrClientClosed {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

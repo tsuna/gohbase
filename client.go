@@ -8,6 +8,7 @@ package gohbase
 import (
 	"encoding/binary"
 	"fmt"
+	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -101,6 +102,9 @@ type client struct {
 
 	// regionReadTimeout is the maximum amount of time to wait for regionserver reply
 	regionReadTimeout time.Duration
+
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 // NewClient creates a new HBase client.
@@ -133,6 +137,7 @@ func newClient(zkquorum string, options ...Option) *client {
 		metaLookupLimiter:   rate.NewLimiter(metaLimit, metaBurst),
 		regionLookupTimeout: region.DefaultLookupTimeout,
 		regionReadTimeout:   region.DefaultReadTimeout,
+		done:                make(chan struct{}),
 	}
 	for _, option := range options {
 		option(c)
@@ -198,17 +203,15 @@ func FlushInterval(interval time.Duration) Option {
 
 // Close closes connections to hbase master and regionservers
 func (c *client) Close() {
-	// TODO: do we need a lock for metaRegionInfo and adminRegionInfo
-	if c.clientType == adminClient {
-		if ac := c.adminRegionInfo.Client(); ac != nil {
-			ac.Close()
+	c.closeOnce.Do(func() {
+		close(c.done)
+		if c.clientType == adminClient {
+			if ac := c.adminRegionInfo.Client(); ac != nil {
+				ac.Close()
+			}
 		}
-	} else {
-		if mc := c.metaRegionInfo.Client(); mc != nil {
-			mc.Close()
-		}
-	}
-	c.clients.closeAll()
+		c.clients.closeAll()
+	})
 }
 
 func (c *client) Scan(s *hrpc.Scan) hrpc.Scanner {

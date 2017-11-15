@@ -44,6 +44,9 @@ var (
 	// ErrMetaLookupThrottled is returned when a lookup for the rpc's region
 	// has been throttled.
 	ErrMetaLookupThrottled = errors.New("lookup to hbase:meta has been throttled")
+
+	// ErrClientClosed is returned when the gohbase client has been closed
+	ErrClientClosed = errors.New("client is closed")
 )
 
 const (
@@ -82,6 +85,8 @@ func (c *client) SendRPC(rpc hrpc.Call) (proto.Message, error) {
 				select {
 				case <-rpc.Context().Done():
 					return nil, rpc.Context().Err()
+				case <-c.done:
+					return nil, ErrClientClosed
 				case <-ch:
 				}
 			}
@@ -215,6 +220,8 @@ func (c *client) lookupRegion(ctx context.Context,
 
 				return nil, "", err
 			} else if err == ErrMetaLookupThrottled {
+				return nil, "", err
+			} else if err == ErrClientClosed {
 				return nil, "", err
 			}
 		}
@@ -396,6 +403,12 @@ func fullyQualifiedTable(reg hrpc.RegionInfo) []byte {
 }
 
 func (c *client) reestablishRegion(reg hrpc.RegionInfo) {
+	select {
+	case <-c.done:
+		return
+	default:
+	}
+
 	log.WithField("region", reg).Debug("reestablishing region")
 	c.establishRegion(reg, "")
 }
@@ -481,6 +494,9 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 				// TODO: backoff might be unnecessary
 				reg = originalReg
 				continue
+			} else if err == ErrClientClosed {
+				// client has been closed
+				return
 			} else if err != nil {
 				log.WithFields(log.Fields{
 					"region":  originalReg.String(),
