@@ -10,7 +10,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"sync"
 	"unsafe"
 
 	"github.com/golang/protobuf/proto"
@@ -105,20 +104,13 @@ type RPCResult struct {
 }
 
 type base struct {
-	table []byte
-
-	key []byte
-
-	region RegionInfo
-
-	// Protects access to resultch.
-	resultchLock sync.Mutex
-
-	resultch chan RPCResult
-
-	ctx context.Context
-
+	ctx     context.Context
+	table   []byte
+	key     []byte
 	options []func(Call) error
+
+	region   RegionInfo
+	resultch chan RPCResult
 }
 
 func (b *base) Context() context.Context {
@@ -134,9 +126,8 @@ func (b *base) SetRegion(region RegionInfo) {
 }
 
 func (b *base) regionSpecifier() *pb.RegionSpecifier {
-	regionType := pb.RegionSpecifier_REGION_NAME
 	return &pb.RegionSpecifier{
-		Type:  &regionType,
+		Type:  pb.RegionSpecifier_REGION_NAME.Enum(),
 		Value: []byte(b.region.Name()),
 	}
 }
@@ -170,14 +161,6 @@ func (b *base) Key() []byte {
 }
 
 func (b *base) ResultChan() chan RPCResult {
-	b.resultchLock.Lock()
-	if b.resultch == nil {
-		// Buffered channels, so that if a writer thread sends a message (or
-		// reports an error) after the deadline it doesn't block due to the
-		// requesting thread having moved on.
-		b.resultch = make(chan RPCResult, 1)
-	}
-	b.resultchLock.Unlock()
 	return b.resultch
 }
 

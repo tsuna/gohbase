@@ -42,8 +42,9 @@ func NewCreateTable(ctx context.Context, table []byte,
 	options ...func(*CreateTable)) *CreateTable {
 	ct := &CreateTable{
 		base: base{
-			table: table,
-			ctx:   ctx,
+			table:    table,
+			ctx:      ctx,
+			resultch: make(chan RPCResult, 1),
 		},
 		families: make(map[string]map[string]string, len(families)),
 	}

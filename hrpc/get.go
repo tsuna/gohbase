@@ -33,9 +33,10 @@ func baseGet(ctx context.Context, table []byte, key []byte,
 	options ...func(Call) error) (*Get, error) {
 	g := &Get{
 		base: base{
-			key:   key,
-			table: table,
-			ctx:   ctx,
+			key:      key,
+			table:    table,
+			ctx:      ctx,
+			resultch: make(chan RPCResult, 1),
 		},
 		baseQuery: newBaseQuery(),
 	}

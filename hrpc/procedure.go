@@ -22,7 +22,10 @@ type GetProcedureState struct {
 // NewGetProcedureState creates a new GetProcedureState request. For use by the admin client.
 func NewGetProcedureState(ctx context.Context, procID uint64) *GetProcedureState {
 	return &GetProcedureState{
-		base:   base{ctx: ctx},
+		base: base{
+			ctx:      ctx,
+			resultch: make(chan RPCResult, 1),
+		},
 		procID: procID,
 	}
 }

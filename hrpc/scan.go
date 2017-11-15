@@ -80,8 +80,9 @@ func baseScan(ctx context.Context, table []byte,
 	options ...func(Call) error) (*Scan, error) {
 	s := &Scan{
 		base: base{
-			table: table,
-			ctx:   ctx,
+			table:    table,
+			ctx:      ctx,
+			resultch: make(chan RPCResult, 1),
 		},
 		baseQuery:     newBaseQuery(),
 		scannerID:     math.MaxUint64,

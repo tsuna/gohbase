@@ -22,8 +22,9 @@ type DisableTable struct {
 func NewDisableTable(ctx context.Context, table []byte) *DisableTable {
 	return &DisableTable{
 		base{
-			table: table,
-			ctx:   ctx,
+			table:    table,
+			ctx:      ctx,
+			resultch: make(chan RPCResult, 1),
 		},
 	}
 }

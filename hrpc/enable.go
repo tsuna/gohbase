@@ -22,8 +22,9 @@ type EnableTable struct {
 func NewEnableTable(ctx context.Context, table []byte) *EnableTable {
 	return &EnableTable{
 		base{
-			table: table,
-			ctx:   ctx,
+			table:    table,
+			ctx:      ctx,
+			resultch: make(chan RPCResult, 1),
 		},
 	}
 }

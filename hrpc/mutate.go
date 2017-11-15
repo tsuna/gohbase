@@ -129,9 +129,10 @@ func baseMutate(ctx context.Context, table, key string, values map[string]map[st
 	options ...func(Call) error) (*Mutate, error) {
 	m := &Mutate{
 		base: base{
-			table: []byte(table),
-			key:   []byte(key),
-			ctx:   ctx,
+			table:    []byte(table),
+			key:      []byte(key),
+			ctx:      ctx,
+			resultch: make(chan RPCResult, 1),
 		},
 		values:    values,
 		timestamp: MaxTimestamp,

@@ -16,8 +16,9 @@ type ClusterStatus struct {
 func NewClusterStatus() *ClusterStatus {
 	return &ClusterStatus{
 		base{
-			ctx:   context.Background(),
-			table: []byte{},
+			ctx:      context.Background(),
+			table:    []byte{},
+			resultch: make(chan RPCResult, 1),
 		},
 	}
 }
