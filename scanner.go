@@ -21,6 +21,9 @@ import (
 
 const noScannerID = math.MaxUint64
 
+// rowPadding used to pad the row key when constructing a row before
+var rowPadding = []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+
 type re struct {
 	rs []*pb.Result
 	e  error
@@ -64,7 +67,7 @@ func (s *scanner) shift() {
 }
 
 // coalesce combines result with partial if they belong to the same row
-// and returns the coalesed result and whether coalescing happened
+// and returns the coalesced result and whether coalescing happened
 func (s *scanner) coalesce(result, partial *pb.Result) (*pb.Result, bool) {
 	if result == nil {
 		return partial, true
@@ -294,7 +297,33 @@ func (f *fetcher) update(resp *pb.ScanResponse, region hrpc.RegionInfo) {
 	} else {
 		// we are done with this region, prepare scan for next region
 		f.scannerID = noScannerID
-		f.startRow = region.StopKey()
+
+		// Normal Scan
+		if !f.rpc.Reversed() {
+			f.startRow = region.StopKey()
+			return
+		}
+
+		// Reversed Scan
+		// return if we are at the end
+		if len(region.StartKey()) == 0 {
+			f.startRow = region.StartKey()
+			return
+		}
+
+		// create the nearest value lower than the current region startKey
+		rsk := region.StartKey()
+		// if last element is 0x0, just shorten the slice
+		if rsk[len(rsk)-1] == 0x0 {
+			f.startRow = rsk[:len(rsk)-1]
+			return
+		}
+
+		// otherwise lower the last element byte value by 1 and pad with 0xffs
+		tmp := make([]byte, len(rsk), len(rsk)+len(rowPadding))
+		copy(tmp, rsk)
+		tmp[len(tmp)-1] = tmp[len(tmp)-1] - 1
+		f.startRow = append(tmp, rowPadding...)
 	}
 }
 
@@ -319,11 +348,20 @@ func (f *fetcher) shouldClose(resp *pb.ScanResponse, region hrpc.RegionInfo) boo
 
 	// Check to see if this region is the last we should scan because:
 	// (1) it's the last region
-	if len(region.StopKey()) == 0 {
+	if len(region.StopKey()) == 0 && !f.rpc.Reversed() {
+		return true
+	}
+	if f.rpc.Reversed() && len(region.StartKey()) == 0 {
 		return true
 	}
 	// (3) because its stop_key is greater than or equal to the stop_key of this scanner,
 	// provided that (2) we're not trying to scan until the end of the table.
+	if !f.rpc.Reversed() {
+		return len(f.rpc.StopRow()) != 0 && // (2)
+			bytes.Compare(f.rpc.StopRow(), region.StopKey()) <= 0 // (3)
+	}
+
+	//  Reversed Scanner
 	return len(f.rpc.StopRow()) != 0 && // (2)
-		bytes.Compare(f.rpc.StopRow(), region.StopKey()) <= 0 // (3)
+		bytes.Compare(f.rpc.StopRow(), region.StartKey()) >= 0 // (3)
 }
