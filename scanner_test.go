@@ -513,3 +513,84 @@ func testPartialResults(t *testing.T, scan *hrpc.Scan, expected []*hrpc.Result) 
 		t.Fatal(d)
 	}
 }
+
+func TestReversedScanner(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+	c := mock.NewMockRPCClient(ctrl)
+
+	ctx := context.Background()
+	scan, err := hrpc.NewScan(ctx, table, hrpc.Reversed())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var scannerID uint64 = 42
+
+	scanner := newScanner(c, scan)
+	ctx = scanner.f.ctx
+
+	s, err := hrpc.NewScanRange(ctx, table, nil, nil, hrpc.Reversed())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.EXPECT().SendRPC(&scanMatcher{scan: s}).Do(func(rpc hrpc.Call) {
+		rpc.SetRegion(region3)
+	}).Return(&pb.ScanResponse{
+		Results: dup(resultsPB[3:4]),
+	}, nil).Times(1)
+
+	s, err = hrpc.NewScanRange(ctx, table,
+		append([]byte("fon"), rowPadding...), nil, hrpc.Reversed())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.EXPECT().SendRPC(&scanMatcher{scan: s}).Do(func(rpc hrpc.Call) {
+		rpc.SetRegion(region2)
+	}).Return(&pb.ScanResponse{
+		Results: dup(resultsPB[2:3]),
+	}, nil).Times(1)
+
+	s, err = hrpc.NewScanRange(ctx, table,
+		append([]byte("baq"), rowPadding...), nil, hrpc.Reversed())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.EXPECT().SendRPC(&scanMatcher{scan: s}).Do(func(rpc hrpc.Call) {
+		rpc.SetRegion(region1)
+	}).Return(&pb.ScanResponse{
+		MoreResultsInRegion: proto.Bool(true),
+		ScannerId:           cp(scannerID),
+		Results:             dup(resultsPB[1:2]),
+	}, nil).Times(1)
+
+	c.EXPECT().SendRPC(&scanMatcher{
+		scan: hrpc.NewScanFromID(ctx, table, scannerID, nil),
+	}).Do(func(rpc hrpc.Call) {
+		rpc.SetRegion(region1)
+	}).Return(&pb.ScanResponse{
+		Results: dup(resultsPB[:1]),
+	}, nil).Times(1)
+
+	var rs []*hrpc.Result
+	for {
+		r, err := scanner.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		rs = append(rs, r)
+	}
+
+	var expected []*hrpc.Result
+	for i := len(resultsPB) - 1; i >= 0; i-- {
+		expected = append(expected, hrpc.ToLocalResult(resultsPB[i]))
+	}
+
+	if d := atest.Diff(expected, rs); d != "" {
+		t.Fatal(d)
+	}
+
+}
