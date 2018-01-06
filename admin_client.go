@@ -7,6 +7,7 @@ package gohbase
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	log "github.com/sirupsen/logrus"
@@ -132,15 +133,18 @@ func (c *client) checkProcedureWithBackoff(ctx context.Context, procID uint64) e
 			return err
 		}
 
-		statusRes, ok := pbmsg.(*pb.GetProcedureResultResponse)
-		if !ok {
-			return fmt.Errorf("sendRPC returned not a GetProcedureResultResponse")
-		}
-
-		switch statusRes.GetState() {
+		res := pbmsg.(*pb.GetProcedureResultResponse)
+		switch res.GetState() {
 		case pb.GetProcedureResultResponse_NOT_FOUND:
 			return fmt.Errorf("procedure not found")
 		case pb.GetProcedureResultResponse_FINISHED:
+			if fe := res.Exception; fe != nil {
+				ge := fe.GenericException
+				if ge == nil {
+					return errors.New("got unexpected empty exception")
+				}
+				return fmt.Errorf("procedure exception: %s: %s", ge.GetClassName(), ge.GetMessage())
+			}
 			return nil
 		default:
 			backoff, err = sleepAndIncreaseBackoff(ctx, backoff)
