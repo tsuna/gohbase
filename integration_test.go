@@ -216,7 +216,7 @@ func TestMutateGetTableNotFound(t *testing.T) {
 	get, err := hrpc.NewGetStr(context.Background(),
 		table, key, hrpc.Families(headers))
 	if err != nil {
-		t.Fatal("NewGetStr returned an error: %v", err)
+		t.Fatalf("NewGetStr returned an error: %v", err)
 	}
 	_, err = c.Get(get)
 	if err != gohbase.TableNotFound {
@@ -225,7 +225,7 @@ func TestMutateGetTableNotFound(t *testing.T) {
 	values := map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte("1")}}
 	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values)
 	if err != nil {
-		t.Fatal("NewPutStr returned an error: %v", err)
+		t.Fatalf("NewPutStr returned an error: %v", err)
 	}
 	_, err = c.Put(putRequest)
 	if err != gohbase.TableNotFound {
