@@ -45,6 +45,7 @@ var (
 	// listed here is returned by HBase, the client should attempt to resend
 	// the RPC message, potentially via a different region client.
 	javaRetryableExceptions = map[string]struct{}{
+		"org.apache.hadoop.hbase.CallQueueTooBigException":          struct{}{},
 		"org.apache.hadoop.hbase.NotServingRegionException":         struct{}{},
 		"org.apache.hadoop.hbase.exceptions.RegionMovedException":   struct{}{},
 		"org.apache.hadoop.hbase.exceptions.RegionOpeningException": struct{}{},
