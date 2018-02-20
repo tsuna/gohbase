@@ -224,6 +224,11 @@ func (m *Mutate) setSkipBatch(v bool) {
 }
 
 func (m *Mutate) toProto() *pb.MutateRequest {
+	var ts *uint64
+	if m.timestamp != MaxTimestamp {
+		ts = &m.timestamp
+	}
+
 	// We need to convert everything in the values field
 	// to a protobuf ColumnValue
 	bytevalues := make([]*pb.MutationProto_ColumnValue, len(m.values))
@@ -237,6 +242,7 @@ func (m *Mutate) toProto() *pb.MutateRequest {
 			qualvals[j] = &pb.MutationProto_ColumnValue_QualifierValue{
 				Qualifier: []byte(k1),
 				Value:     v1,
+				Timestamp: ts,
 			}
 			if m.mutationType == pb.MutationProto_DELETE {
 				tmp := pb.MutationProto_DELETE_MULTIPLE_VERSIONS
@@ -256,9 +262,7 @@ func (m *Mutate) toProto() *pb.MutateRequest {
 		MutateType:  &m.mutationType,
 		ColumnValue: bytevalues,
 		Durability:  &durability,
-	}
-	if m.timestamp != MaxTimestamp {
-		mProto.Timestamp = &m.timestamp
+		Timestamp:   ts,
 	}
 
 	if len(m.ttl) > 0 {

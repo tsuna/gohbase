@@ -22,10 +22,13 @@ import (
 
 	"math"
 
+	atest "github.com/aristanetworks/goarista/test"
+	"github.com/golang/protobuf/proto"
 	log "github.com/sirupsen/logrus"
 	"github.com/tsuna/gohbase"
 	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/hrpc"
+	"github.com/tsuna/gohbase/pb"
 )
 
 var host = flag.String("host", "localhost", "The location where HBase is running")
@@ -479,30 +482,58 @@ func TestPutTimestamp(t *testing.T) {
 }
 
 func TestDeleteTimestamp(t *testing.T) {
-	key := "TestDeleteTimestamp"
 	c := gohbase.NewClient(*host)
 	defer c.Close()
-	var putTs uint64 = 50
-	timestamp := time.Unix(0, int64(putTs*1e6))
-	err := insertKeyValue(c, key, "cf", []byte("1"), hrpc.Timestamp(timestamp))
-	if err != nil {
-		t.Fatalf("Put failed: %s", err)
+
+	var (
+		key = t.Name()
+		ts  = uint64(50)
+	)
+
+	// insert three versions
+	if err := insertKeyValue(c, key, "cf", []byte("v1"),
+		hrpc.TimestampUint64(ts)); err != nil {
+		t.Fatal(err)
 	}
-	deleteRequest, err := hrpc.NewDelStr(context.Background(), table, key,
+
+	if err := insertKeyValue(c, key, "cf", []byte("v2"),
+		hrpc.TimestampUint64(ts+1)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := insertKeyValue(c, key, "cf", []byte("v3"),
+		hrpc.TimestampUint64(ts+2)); err != nil {
+		t.Fatal(err)
+	}
+
+	// delete at second version timestamp
+	delete, err := hrpc.NewDelStr(context.Background(), table, key,
 		map[string]map[string][]byte{"cf": map[string][]byte{"a": nil}},
-		hrpc.Timestamp(timestamp))
-	_, err = c.Delete(deleteRequest)
+		hrpc.TimestampUint64(ts+1))
+	_, err = c.Delete(delete)
 	if err != nil {
-		t.Fatalf("Delete failed: %s", err)
+		t.Fatal(err)
 	}
-	get, err := hrpc.NewGetStr(context.Background(), table, key,
-		hrpc.Families(map[string][]string{"cf": nil}))
+
+	get, err := hrpc.NewGetStr(context.Background(), table, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	rsp, err := c.Get(get)
 	if err != nil {
-		t.Fatalf("Get failed: %s", err)
+		t.Fatal(err)
 	}
-	if len(rsp.Cells) != 0 {
-		t.Errorf("Timestamp wasn't deleted, get result length: %d", len(rsp.Cells))
+	// should delete everything at and before the delete timestamp
+	if d := atest.Diff([]*hrpc.Cell{&hrpc.Cell{
+		Row:       []byte(t.Name()),
+		Family:    []byte("cf"),
+		Qualifier: []byte("a"),
+		Timestamp: proto.Uint64(ts + 2),
+		Value:     []byte("v3"),
+		CellType:  pb.CellType_PUT.Enum(),
+	}}, rsp.Cells); d != "" {
+		t.Fatalf("unexpected cells: %s", d)
 	}
 }
 
