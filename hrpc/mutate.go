@@ -6,11 +6,9 @@
 package hrpc
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -183,16 +181,12 @@ func NewAppStr(ctx context.Context, table, key string,
 
 // NewIncStrSingle creates a new Mutation request that will increment the given value
 // by amount in HBase under the given table, key, family and qualifier.
-func NewIncStrSingle(ctx context.Context, table, key string, family string,
-	qualifier string, amount int64, options ...func(Call) error) (*Mutate, error) {
+func NewIncStrSingle(ctx context.Context, table, key, family, qualifier string,
+	amount int64, options ...func(Call) error) (*Mutate, error) {
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, uint64(amount))
+	value := map[string]map[string][]byte{family: map[string][]byte{qualifier: buf}}
 
-	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, amount)
-	if err != nil {
-		return nil, fmt.Errorf("binary.Write failed: %s", err)
-	}
-
-	value := map[string]map[string][]byte{family: map[string][]byte{qualifier: buf.Bytes()}}
 	return NewIncStr(ctx, table, key, value, options...)
 }
 
