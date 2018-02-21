@@ -1,13 +1,13 @@
 language: go
 go:
-  - 1.8.x
+  - 1.10.x
   - tip
 before_install:
   - go get golang.org/x/tools/cmd/cover github.com/golang/lint/golint
   - >
-    ver=1.3.1 &&
+    ver=1.4.1 &&
     wget -nv http://www.apache.org/dist/hbase/$ver/hbase-$ver-bin.tar.gz &&
-    echo "215E29A66A0E1D5A9F319DD71008DD3B  hbase-$ver-bin.tar.gz" | md5sum --strict --check - &&
+    echo "e74ad029e9e5359936cdc7dc8b1a8a29  hbase-$ver-bin.tar.gz" | md5sum --strict --check - &&
     tar zxf hbase-$ver-bin.tar.gz --exclude=docs &&
     ln -s hbase-$ver hbase
 install:
