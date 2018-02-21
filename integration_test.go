@@ -15,6 +15,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -102,7 +103,7 @@ func TestMain(m *testing.M) {
 
 	var err error
 	for {
-		err = CreateTable(ac, table, []string{"cf", "cf2"})
+		err = CreateTable(ac, table, []string{"cf", "cf1", "cf2"})
 		if err != nil &&
 			(strings.Contains(err.Error(), "org.apache.hadoop.hbase.PleaseHoldException") ||
 				strings.Contains(err.Error(),
@@ -481,59 +482,324 @@ func TestPutTimestamp(t *testing.T) {
 	}
 }
 
-func TestDeleteTimestamp(t *testing.T) {
+// TestDelete preps state with two column families, cf1 and cf2,
+// each having 3 versions at timestamps 50, 51, 52
+func TestDelete(t *testing.T) {
 	c := gohbase.NewClient(*host)
 	defer c.Close()
 
-	var (
-		key = t.Name()
-		ts  = uint64(50)
-	)
+	ts := uint64(50)
 
-	// insert three versions
-	if err := insertKeyValue(c, key, "cf", []byte("v1"),
-		hrpc.TimestampUint64(ts)); err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		in  func(string) (*hrpc.Mutate, error)
+		out []*hrpc.Cell
+	}{
+		{
+			// delete at the second version
+			in: func(key string) (*hrpc.Mutate, error) {
+				return hrpc.NewDelStr(context.Background(), table, key,
+					map[string]map[string][]byte{"cf1": map[string][]byte{"a": nil}},
+					hrpc.TimestampUint64(ts+1))
+			},
+			// should delete everything at and before the delete timestamp
+			out: []*hrpc.Cell{
+				&hrpc.Cell{
+					Family:    []byte("cf1"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 2),
+					Value:     []byte("v3"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf1"),
+					Qualifier: []byte("b"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 2),
+					Value:     []byte("v3"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 1),
+					Value:     []byte("v2"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("b"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+			},
+		},
+		{
+			// delete at the second version
+			in: func(key string) (*hrpc.Mutate, error) {
+				return hrpc.NewDelStr(context.Background(), table, key,
+					map[string]map[string][]byte{"cf1": map[string][]byte{"a": nil}},
+					hrpc.TimestampUint64(ts+1), hrpc.DeleteOneVersion())
+			},
+			// should delete only the second version
+			out: []*hrpc.Cell{
+				&hrpc.Cell{
+					Family:    []byte("cf1"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 2),
+					Value:     []byte("v3"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf1"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf1"),
+					Qualifier: []byte("b"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 2),
+					Value:     []byte("v3"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 1),
+					Value:     []byte("v2"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("b"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+			},
+		},
+		{
+			// delete the cf1 at and before ts + 1
+			in: func(key string) (*hrpc.Mutate, error) {
+				return hrpc.NewDelStr(context.Background(), table, key,
+					map[string]map[string][]byte{"cf1": nil},
+					hrpc.TimestampUint64(ts+1))
+			},
+			// should leave cf2 untouched
+			out: []*hrpc.Cell{
+				&hrpc.Cell{
+					Family:    []byte("cf1"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 2),
+					Value:     []byte("v3"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 2),
+					Value:     []byte("v3"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 1),
+					Value:     []byte("v2"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("b"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+			},
+		},
+		{
+			// delete the whole cf1 and qualifer a in cf2
+			in: func(key string) (*hrpc.Mutate, error) {
+				return hrpc.NewDelStr(context.Background(), table, key,
+					map[string]map[string][]byte{
+						"cf1": nil,
+						"cf2": map[string][]byte{
+							"a": nil,
+						},
+					})
+			},
+			out: []*hrpc.Cell{
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("b"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+			},
+		},
+		{
+			// delete only version at ts for all qualifiers of cf1
+			in: func(key string) (*hrpc.Mutate, error) {
+				return hrpc.NewDelStr(context.Background(), table, key,
+					map[string]map[string][]byte{
+						"cf1": nil,
+					}, hrpc.TimestampUint64(ts), hrpc.DeleteOneVersion())
+			},
+			out: []*hrpc.Cell{
+				&hrpc.Cell{
+					Family:    []byte("cf1"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 2),
+					Value:     []byte("v3"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf1"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 1),
+					Value:     []byte("v2"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 2),
+					Value:     []byte("v3"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 1),
+					Value:     []byte("v2"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("b"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+			},
+		},
+		{
+			// delete the whole row
+			in: func(key string) (*hrpc.Mutate, error) {
+				return hrpc.NewDelStr(context.Background(), table, key, nil)
+			},
+			out: []*hrpc.Cell{},
+		},
+		{
+			// delete the whole row at ts
+			in: func(key string) (*hrpc.Mutate, error) {
+				return hrpc.NewDelStr(context.Background(), table, key, nil,
+					hrpc.TimestampUint64(ts+1))
+			},
+			out: []*hrpc.Cell{
+				&hrpc.Cell{
+					Family:    []byte("cf1"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 2),
+					Value:     []byte("v3"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 2),
+					Value:     []byte("v3"),
+				},
+			},
+		},
 	}
 
-	if err := insertKeyValue(c, key, "cf", []byte("v2"),
-		hrpc.TimestampUint64(ts+1)); err != nil {
-		t.Fatal(err)
-	}
+	for i, tcase := range tests {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			key := t.Name()
 
-	if err := insertKeyValue(c, key, "cf", []byte("v3"),
-		hrpc.TimestampUint64(ts+2)); err != nil {
-		t.Fatal(err)
-	}
+			// insert three versions
+			prep := func(cf string) {
+				if err := insertKeyValue(c, key, cf, []byte("v1"),
+					hrpc.TimestampUint64(ts)); err != nil {
+					t.Fatal(err)
+				}
 
-	// delete at second version timestamp
-	delete, err := hrpc.NewDelStr(context.Background(), table, key,
-		map[string]map[string][]byte{"cf": map[string][]byte{"a": nil}},
-		hrpc.TimestampUint64(ts+1))
-	_, err = c.Delete(delete)
-	if err != nil {
-		t.Fatal(err)
-	}
+				if err := insertKeyValue(c, key, cf, []byte("v2"),
+					hrpc.TimestampUint64(ts+1)); err != nil {
+					t.Fatal(err)
+				}
 
-	get, err := hrpc.NewGetStr(context.Background(), table, key)
-	if err != nil {
-		t.Fatal(err)
-	}
+				if err := insertKeyValue(c, key, cf, []byte("v3"),
+					hrpc.TimestampUint64(ts+2)); err != nil {
+					t.Fatal(err)
+				}
 
-	rsp, err := c.Get(get)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// should delete everything at and before the delete timestamp
-	if d := atest.Diff([]*hrpc.Cell{&hrpc.Cell{
-		Row:       []byte(t.Name()),
-		Family:    []byte("cf"),
-		Qualifier: []byte("a"),
-		Timestamp: proto.Uint64(ts + 2),
-		Value:     []byte("v3"),
-		CellType:  pb.CellType_PUT.Enum(),
-	}}, rsp.Cells); d != "" {
-		t.Fatalf("unexpected cells: %s", d)
+				// insert b
+				values := map[string]map[string][]byte{cf: map[string][]byte{
+					"b": []byte("v1"),
+				}}
+				put, err := hrpc.NewPutStr(context.Background(), table, key, values,
+					hrpc.TimestampUint64(ts))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err = c.Put(put); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			prep("cf1")
+			prep("cf2")
+
+			delete, err := tcase.in(key)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			_, err = c.Delete(delete)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			get, err := hrpc.NewGetStr(context.Background(), table, key,
+				hrpc.MaxVersions(math.MaxInt32))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			rsp, err := c.Get(get)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			for _, c := range tcase.out {
+				c.Row = []byte(t.Name())
+				c.CellType = pb.CellType_PUT.Enum()
+			}
+
+			if d := atest.Diff(tcase.out, rsp.Cells); d != "" {
+				t.Fatalf("unexpected cells: %s", d)
+			}
+		})
 	}
 }
 

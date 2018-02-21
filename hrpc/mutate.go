@@ -56,10 +56,11 @@ type Mutate struct {
 	// values is a map of column families to a map of column qualifiers to bytes
 	values map[string]map[string][]byte
 
-	ttl        []byte
-	timestamp  uint64
-	durability DurabilityType
-	skipbatch  bool
+	ttl              []byte
+	timestamp        uint64
+	durability       DurabilityType
+	deleteOneVersion bool
+	skipbatch        bool
 }
 
 // TTL sets a time-to-live for mutation queries.
@@ -122,6 +123,23 @@ func Durability(d DurabilityType) func(Call) error {
 	}
 }
 
+// DeleteOneVersion is a delete option that can be passed in order to delete only
+// one latest version of the specified qualifiers. Without timestamp specified,
+// it will have no effect for delete specific column families request.
+// If a Timestamp option is passed along, only the version at that timestamp will be removed
+// for delete specific column families and/or qualifier request.
+// This option cannot be used for delete entire row request.
+func DeleteOneVersion() func(Call) error {
+	return func(o Call) error {
+		m, ok := o.(*Mutate)
+		if !ok {
+			return errors.New("'DeleteOneVersion' option can only be used with mutation queries")
+		}
+		m.deleteOneVersion = true
+		return nil
+	}
+}
+
 // baseMutate returns a Mutate struct without the mutationType filled in.
 func baseMutate(ctx context.Context, table, key string, values map[string]map[string][]byte,
 	options ...func(Call) error) (*Mutate, error) {
@@ -154,14 +172,43 @@ func NewPutStr(ctx context.Context, table, key string,
 	return m, nil
 }
 
-// NewDelStr creates a new Mutation request to delete the given
-// family-column-values from the given row key of the given table.
+// NewDelStr is used to perform Delete operations on a single row.
+// To delete entire row, values should be nil.
+//
+// To delete specific families, qualifiers map should be nil:
+//  map[string]map[string][]byte{
+//		"cf1": nil,
+//		"cf2": nil,
+//  }
+//
+// To delete specific qualifiers:
+//  map[string]map[string][]byte{
+//      "cf": map[string][]byte{
+//			"q1": nil,
+//			"q2": nil,
+//		},
+//  }
+//
+// To delete all versions before and at a timestamp, pass hrpc.Timestamp() option.
+// By default all versions will be removed.
+//
+// To delete only a specific version at a timestamp, pass hrpc.DeleteOneVersion() option
+// along with a timestamp. For delete specific qualifiers request, if timestamp is not
+// passed, only the latest version will be removed. For delete specific families request,
+// the timestamp should be passed or it will have no effect as it's an expensive
+// operation to perform.
 func NewDelStr(ctx context.Context, table, key string,
 	values map[string]map[string][]byte, options ...func(Call) error) (*Mutate, error) {
 	m, err := baseMutate(ctx, table, key, values, options...)
 	if err != nil {
 		return nil, err
 	}
+
+	if len(m.values) == 0 && m.deleteOneVersion {
+		return nil, errors.New(
+			"'DeleteOneVersion' option cannot be specified for delete entire row request")
+	}
+
 	m.mutationType = pb.MutationProto_DELETE
 	return m, nil
 }
@@ -186,7 +233,6 @@ func NewIncStrSingle(ctx context.Context, table, key, family, qualifier string,
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, uint64(amount))
 	value := map[string]map[string][]byte{family: map[string][]byte{qualifier: buf}}
-
 	return NewIncStr(ctx, table, key, value, options...)
 }
 
@@ -230,16 +276,40 @@ func (m *Mutate) toProto() *pb.MutateRequest {
 	for k, v := range m.values {
 		// And likewise, each item in each column needs to be converted to a
 		// protobuf QualifierValue
+
+		// if it's a delete, figure out the type
+		var dt *pb.MutationProto_DeleteType
+		if m.mutationType == pb.MutationProto_DELETE {
+			if len(v) == 0 {
+				// delete the whole column family
+				if m.deleteOneVersion {
+					dt = pb.MutationProto_DELETE_FAMILY_VERSION.Enum()
+				} else {
+					dt = pb.MutationProto_DELETE_FAMILY.Enum()
+				}
+				// add empty qualifier
+				if v == nil {
+					v = make(map[string][]byte)
+				}
+				v[""] = nil
+			} else {
+				// delete specific qualifiers
+				if m.deleteOneVersion {
+					dt = pb.MutationProto_DELETE_ONE_VERSION.Enum()
+				} else {
+					dt = pb.MutationProto_DELETE_MULTIPLE_VERSIONS.Enum()
+				}
+			}
+		}
+
 		qvs := make([]*pb.MutationProto_ColumnValue_QualifierValue, len(v))
 		j := 0
 		for k1, v1 := range v {
 			qvs[j] = &pb.MutationProto_ColumnValue_QualifierValue{
-				Qualifier: []byte(k1),
-				Value:     v1,
-				Timestamp: ts,
-			}
-			if m.mutationType == pb.MutationProto_DELETE {
-				qvs[j].DeleteType = pb.MutationProto_DELETE_MULTIPLE_VERSIONS.Enum()
+				Qualifier:  []byte(k1),
+				Value:      v1,
+				Timestamp:  ts,
+				DeleteType: dt,
 			}
 			j++
 		}
