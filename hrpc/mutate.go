@@ -225,37 +225,36 @@ func (m *Mutate) toProto() *pb.MutateRequest {
 
 	// We need to convert everything in the values field
 	// to a protobuf ColumnValue
-	bytevalues := make([]*pb.MutationProto_ColumnValue, len(m.values))
+	cvs := make([]*pb.MutationProto_ColumnValue, len(m.values))
 	i := 0
 	for k, v := range m.values {
-		qualvals := make([]*pb.MutationProto_ColumnValue_QualifierValue, len(v))
-		j := 0
 		// And likewise, each item in each column needs to be converted to a
 		// protobuf QualifierValue
+		qvs := make([]*pb.MutationProto_ColumnValue_QualifierValue, len(v))
+		j := 0
 		for k1, v1 := range v {
-			qualvals[j] = &pb.MutationProto_ColumnValue_QualifierValue{
+			qvs[j] = &pb.MutationProto_ColumnValue_QualifierValue{
 				Qualifier: []byte(k1),
 				Value:     v1,
 				Timestamp: ts,
 			}
 			if m.mutationType == pb.MutationProto_DELETE {
-				tmp := pb.MutationProto_DELETE_MULTIPLE_VERSIONS
-				qualvals[j].DeleteType = &tmp
+				qvs[j].DeleteType = pb.MutationProto_DELETE_MULTIPLE_VERSIONS.Enum()
 			}
 			j++
 		}
-		bytevalues[i] = &pb.MutationProto_ColumnValue{
+		cvs[i] = &pb.MutationProto_ColumnValue{
 			Family:         []byte(k),
-			QualifierValue: qualvals,
+			QualifierValue: qvs,
 		}
 		i++
 	}
-	durability := pb.MutationProto_Durability(m.durability)
+
 	mProto := &pb.MutationProto{
 		Row:         m.key,
 		MutateType:  &m.mutationType,
-		ColumnValue: bytevalues,
-		Durability:  &durability,
+		ColumnValue: cvs,
+		Durability:  pb.MutationProto_Durability(m.durability).Enum(),
 		Timestamp:   ts,
 	}
 

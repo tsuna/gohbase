@@ -8,9 +8,13 @@ package hrpc
 import (
 	"bytes"
 	"context"
+	"errors"
 	"math"
 	"reflect"
+	"sort"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/aristanetworks/goarista/test"
 	"github.com/golang/protobuf/proto"
@@ -119,6 +123,375 @@ func TestNewScan(t *testing.T) {
 	scan, err = NewScan(ctx, tableb, NumberOfRows(1))
 	if err != nil || !confirmScanAttributes(ctx, scan, tableb, nil, nil, nil, nil, 1) {
 		t.Errorf("Scan7 didn't set number of versions correctly")
+	}
+}
+
+type mockRegionInfo []byte
+
+func (ri mockRegionInfo) Name() []byte {
+	return []byte(ri)
+}
+
+func (ri mockRegionInfo) IsUnavailable() bool               { return true }
+func (ri mockRegionInfo) AvailabilityChan() <-chan struct{} { return nil }
+func (ri mockRegionInfo) MarkUnavailable() bool             { return true }
+func (ri mockRegionInfo) MarkAvailable()                    {}
+func (ri mockRegionInfo) MarkDead()                         {}
+func (ri mockRegionInfo) Context() context.Context          { return nil }
+func (ri mockRegionInfo) String() string                    { return "" }
+func (ri mockRegionInfo) ID() uint64                        { return 0 }
+func (ri mockRegionInfo) StartKey() []byte                  { return nil }
+func (ri mockRegionInfo) StopKey() []byte                   { return nil }
+func (ri mockRegionInfo) Namespace() []byte                 { return nil }
+func (ri mockRegionInfo) Table() []byte                     { return nil }
+func (ri mockRegionInfo) SetClient(RegionClient)            {}
+func (ri mockRegionInfo) Client() RegionClient              { return nil }
+
+type byFamily []*pb.MutationProto_ColumnValue
+
+func (f byFamily) Len() int      { return len(f) }
+func (f byFamily) Swap(i, j int) { f[i], f[j] = f[j], f[i] }
+func (f byFamily) Less(i, j int) bool {
+	return bytes.Compare(f[i].Family, f[j].Family) < 0
+}
+
+type byQualifier []*pb.MutationProto_ColumnValue_QualifierValue
+
+func (q byQualifier) Len() int      { return len(q) }
+func (q byQualifier) Swap(i, j int) { q[i], q[j] = q[j], q[i] }
+func (q byQualifier) Less(i, j int) bool {
+	return bytes.Compare(q[i].Qualifier, q[j].Qualifier) < 0
+}
+
+func TestMutate(t *testing.T) {
+	var (
+		ctx   = context.Background()
+		table = "table"
+		key   = "key"
+		rs    = &pb.RegionSpecifier{
+			Type:  pb.RegionSpecifier_REGION_NAME.Enum(),
+			Value: []byte("region"),
+		}
+	)
+
+	tests := []struct {
+		in  func() (*Mutate, error)
+		out *pb.MutateRequest
+		err error
+	}{
+		{
+			in: func() (*Mutate, error) {
+				return NewPutStr(ctx, table, key, nil)
+			},
+			out: &pb.MutateRequest{
+				Region: rs,
+				Mutation: &pb.MutationProto{
+					Row:        []byte(key),
+					MutateType: pb.MutationProto_PUT.Enum(),
+					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
+				},
+			},
+		},
+		{
+			in: func() (*Mutate, error) {
+				return NewPutStr(ctx, table, key, nil, Durability(SkipWal))
+			},
+			out: &pb.MutateRequest{
+				Region: rs,
+				Mutation: &pb.MutationProto{
+					Row:        []byte(key),
+					MutateType: pb.MutationProto_PUT.Enum(),
+					Durability: pb.MutationProto_SKIP_WAL.Enum(),
+				},
+			},
+		},
+		{
+			in: func() (*Mutate, error) {
+				return NewPutStr(ctx, table, key, nil, Durability(DurabilityType(42)))
+			},
+			err: errors.New("invalid durability value"),
+		},
+		{
+			in: func() (*Mutate, error) {
+				return NewPutStr(ctx, table, key, nil, TTL(time.Second))
+			},
+			out: &pb.MutateRequest{
+				Region: rs,
+				Mutation: &pb.MutationProto{
+					Row:        []byte(key),
+					MutateType: pb.MutationProto_PUT.Enum(),
+					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
+					Attribute: []*pb.NameBytesPair{
+						&pb.NameBytesPair{
+							Name:  &attributeNameTTL,
+							Value: []byte("\x00\x00\x00\x00\x00\x00\x03\xe8"),
+						},
+					},
+				},
+			},
+		},
+		{
+			in: func() (*Mutate, error) {
+				return NewPutStr(ctx, table, key, map[string]map[string][]byte{
+					"cf": map[string][]byte{
+						"q": []byte("value"),
+					},
+				})
+			},
+			out: &pb.MutateRequest{
+				Region: rs,
+				Mutation: &pb.MutationProto{
+					Row:        []byte(key),
+					MutateType: pb.MutationProto_PUT.Enum(),
+					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
+					ColumnValue: []*pb.MutationProto_ColumnValue{
+						&pb.MutationProto_ColumnValue{
+							Family: []byte("cf"),
+							QualifierValue: []*pb.MutationProto_ColumnValue_QualifierValue{
+								&pb.MutationProto_ColumnValue_QualifierValue{
+									Qualifier: []byte("q"),
+									Value:     []byte("value"),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			in: func() (*Mutate, error) {
+				return NewPutStr(ctx, table, key, map[string]map[string][]byte{
+					"cf1": map[string][]byte{
+						"q1": []byte("value"),
+						"q2": []byte("value"),
+					},
+					"cf2": map[string][]byte{
+						"q1": []byte("value"),
+					},
+				})
+			},
+			out: &pb.MutateRequest{
+				Region: rs,
+				Mutation: &pb.MutationProto{
+					Row:        []byte(key),
+					MutateType: pb.MutationProto_PUT.Enum(),
+					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
+					ColumnValue: []*pb.MutationProto_ColumnValue{
+						&pb.MutationProto_ColumnValue{
+							Family: []byte("cf1"),
+							QualifierValue: []*pb.MutationProto_ColumnValue_QualifierValue{
+								&pb.MutationProto_ColumnValue_QualifierValue{
+									Qualifier: []byte("q1"),
+									Value:     []byte("value"),
+								},
+								&pb.MutationProto_ColumnValue_QualifierValue{
+									Qualifier: []byte("q2"),
+									Value:     []byte("value"),
+								},
+							},
+						},
+						&pb.MutationProto_ColumnValue{
+							Family: []byte("cf2"),
+							QualifierValue: []*pb.MutationProto_ColumnValue_QualifierValue{
+								&pb.MutationProto_ColumnValue_QualifierValue{
+									Qualifier: []byte("q1"),
+									Value:     []byte("value"),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			in: func() (*Mutate, error) {
+				return NewPutStr(ctx, table, key, map[string]map[string][]byte{
+					"cf": map[string][]byte{
+						"q": []byte("value"),
+					},
+				}, Timestamp(time.Unix(0, 42*1e6)))
+			},
+			out: &pb.MutateRequest{
+				Region: rs,
+				Mutation: &pb.MutationProto{
+					Row:        []byte(key),
+					MutateType: pb.MutationProto_PUT.Enum(),
+					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
+					Timestamp:  proto.Uint64(42),
+					ColumnValue: []*pb.MutationProto_ColumnValue{
+						&pb.MutationProto_ColumnValue{
+							Family: []byte("cf"),
+							QualifierValue: []*pb.MutationProto_ColumnValue_QualifierValue{
+								&pb.MutationProto_ColumnValue_QualifierValue{
+									Qualifier: []byte("q"),
+									Value:     []byte("value"),
+									Timestamp: proto.Uint64(42),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			in: func() (*Mutate, error) {
+				return NewPutStr(ctx, table, key, map[string]map[string][]byte{
+					"cf": map[string][]byte{
+						"q": []byte("value"),
+					},
+				}, TimestampUint64(42))
+			},
+			out: &pb.MutateRequest{
+				Region: rs,
+				Mutation: &pb.MutationProto{
+					Row:        []byte(key),
+					MutateType: pb.MutationProto_PUT.Enum(),
+					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
+					Timestamp:  proto.Uint64(42),
+					ColumnValue: []*pb.MutationProto_ColumnValue{
+						&pb.MutationProto_ColumnValue{
+							Family: []byte("cf"),
+							QualifierValue: []*pb.MutationProto_ColumnValue_QualifierValue{
+								&pb.MutationProto_ColumnValue_QualifierValue{
+									Qualifier: []byte("q"),
+									Value:     []byte("value"),
+									Timestamp: proto.Uint64(42),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			in: func() (*Mutate, error) {
+				return NewDelStr(ctx, table, key, nil)
+			},
+			out: &pb.MutateRequest{
+				Region: rs,
+				Mutation: &pb.MutationProto{
+					Row:        []byte(key),
+					MutateType: pb.MutationProto_DELETE.Enum(),
+					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
+				},
+			},
+		},
+		{
+			in: func() (*Mutate, error) {
+				return NewDelStr(ctx, table, key, map[string]map[string][]byte{
+					"cf": map[string][]byte{
+						"q": []byte("value"),
+					},
+				}, TimestampUint64(42))
+			},
+			out: &pb.MutateRequest{
+				Region: rs,
+				Mutation: &pb.MutationProto{
+					Row:        []byte(key),
+					MutateType: pb.MutationProto_DELETE.Enum(),
+					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
+					Timestamp:  proto.Uint64(42),
+					ColumnValue: []*pb.MutationProto_ColumnValue{
+						&pb.MutationProto_ColumnValue{
+							Family: []byte("cf"),
+							QualifierValue: []*pb.MutationProto_ColumnValue_QualifierValue{
+								&pb.MutationProto_ColumnValue_QualifierValue{
+									Qualifier:  []byte("q"),
+									Value:      []byte("value"),
+									Timestamp:  proto.Uint64(42),
+									DeleteType: pb.MutationProto_DELETE_MULTIPLE_VERSIONS.Enum(),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			in: func() (*Mutate, error) {
+				return NewAppStr(ctx, table, key, nil)
+			},
+			out: &pb.MutateRequest{
+				Region: rs,
+				Mutation: &pb.MutationProto{
+					Row:        []byte(key),
+					MutateType: pb.MutationProto_APPEND.Enum(),
+					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
+				},
+			},
+		},
+		{
+			in: func() (*Mutate, error) {
+				return NewIncStr(ctx, table, key, nil)
+			},
+			out: &pb.MutateRequest{
+				Region: rs,
+				Mutation: &pb.MutationProto{
+					Row:        []byte(key),
+					MutateType: pb.MutationProto_INCREMENT.Enum(),
+					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
+				},
+			},
+		},
+		{
+			in: func() (*Mutate, error) {
+				return NewIncStrSingle(ctx, table, key, "cf", "q", 1)
+			},
+			out: &pb.MutateRequest{
+				Region: rs,
+				Mutation: &pb.MutationProto{
+					Row:        []byte(key),
+					MutateType: pb.MutationProto_INCREMENT.Enum(),
+					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
+					ColumnValue: []*pb.MutationProto_ColumnValue{
+						&pb.MutationProto_ColumnValue{
+							Family: []byte("cf"),
+							QualifierValue: []*pb.MutationProto_ColumnValue_QualifierValue{
+								&pb.MutationProto_ColumnValue_QualifierValue{
+									Qualifier: []byte("q"),
+									Value:     []byte("\x00\x00\x00\x00\x00\x00\x00\x01"),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for i, tcase := range tests {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			m, err := tcase.in()
+			if d := test.Diff(tcase.err, err); d != "" {
+				t.Fatalf("unexpected error: %s", d)
+			}
+			if tcase.err != nil {
+				return
+			}
+
+			if m.Name() != "Mutate" {
+				t.Fatalf("Expected name to be 'Mutate', got %s", m.Name())
+			}
+
+			_, ok := m.NewResponse().(*pb.MutateResponse)
+			if !ok {
+				t.Fatalf("Expected response to have type 'pb.MutateResponse', got %T",
+					m.NewResponse())
+			}
+
+			m.SetRegion(mockRegionInfo([]byte("region")))
+			p := m.ToProto()
+			mr := p.(*pb.MutateRequest)
+
+			sort.Sort(byFamily(mr.Mutation.ColumnValue))
+			for _, cv := range mr.Mutation.ColumnValue {
+				sort.Sort(byQualifier(cv.QualifierValue))
+			}
+
+			if d := test.Diff(tcase.out, mr); d != "" {
+				t.Fatalf("unexpected error: %s", d)
+			}
+		})
 	}
 }
 
