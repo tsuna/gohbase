@@ -64,7 +64,8 @@ type Mutate struct {
 	skipbatch  bool
 }
 
-// TTL sets a time to live for mutation queries.
+// TTL sets a time-to-live for mutation queries.
+// The value will be in millisecond resolution.
 func TTL(t time.Duration) func(Call) error {
 	return func(o Call) error {
 		m, ok := o.(*Mutate)
@@ -73,8 +74,7 @@ func TTL(t time.Duration) func(Call) error {
 		}
 
 		buf := make([]byte, 8)
-		binary.BigEndian.PutUint64(buf, uint64(t.Seconds()*1000))
-
+		binary.BigEndian.PutUint64(buf, uint64(t.Nanoseconds()/1e6))
 		m.ttl = buf
 
 		return nil
