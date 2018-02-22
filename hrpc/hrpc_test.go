@@ -457,6 +457,125 @@ func TestMutate(t *testing.T) {
 				},
 			},
 		},
+		{
+			in: func() (*Mutate, error) {
+				return NewDelStr(ctx, table, key, map[string]map[string][]byte{
+					"cf": nil,
+				})
+			},
+			out: &pb.MutateRequest{
+				Region: rs,
+				Mutation: &pb.MutationProto{
+					Row:        []byte(key),
+					MutateType: pb.MutationProto_DELETE.Enum(),
+					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
+					ColumnValue: []*pb.MutationProto_ColumnValue{
+						&pb.MutationProto_ColumnValue{
+							Family: []byte("cf"),
+							QualifierValue: []*pb.MutationProto_ColumnValue_QualifierValue{
+								&pb.MutationProto_ColumnValue_QualifierValue{
+									Qualifier:  []byte{},
+									DeleteType: pb.MutationProto_DELETE_FAMILY.Enum(),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			in: func() (*Mutate, error) {
+				return NewDelStr(ctx, table, key, map[string]map[string][]byte{
+					"cf": nil,
+				}, TimestampUint64(42))
+			},
+			out: &pb.MutateRequest{
+				Region: rs,
+				Mutation: &pb.MutationProto{
+					Row:        []byte(key),
+					Timestamp:  proto.Uint64(42),
+					MutateType: pb.MutationProto_DELETE.Enum(),
+					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
+					ColumnValue: []*pb.MutationProto_ColumnValue{
+						&pb.MutationProto_ColumnValue{
+							Family: []byte("cf"),
+							QualifierValue: []*pb.MutationProto_ColumnValue_QualifierValue{
+								&pb.MutationProto_ColumnValue_QualifierValue{
+									Qualifier:  []byte{},
+									Timestamp:  proto.Uint64(42),
+									DeleteType: pb.MutationProto_DELETE_FAMILY.Enum(),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			in: func() (*Mutate, error) {
+				return NewDelStr(ctx, table, key, map[string]map[string][]byte{
+					"cf": nil,
+				}, TimestampUint64(42), DeleteOneVersion())
+			},
+			out: &pb.MutateRequest{
+				Region: rs,
+				Mutation: &pb.MutationProto{
+					Row:        []byte(key),
+					Timestamp:  proto.Uint64(42),
+					MutateType: pb.MutationProto_DELETE.Enum(),
+					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
+					ColumnValue: []*pb.MutationProto_ColumnValue{
+						&pb.MutationProto_ColumnValue{
+							Family: []byte("cf"),
+							QualifierValue: []*pb.MutationProto_ColumnValue_QualifierValue{
+								&pb.MutationProto_ColumnValue_QualifierValue{
+									Qualifier:  []byte{},
+									Timestamp:  proto.Uint64(42),
+									DeleteType: pb.MutationProto_DELETE_FAMILY_VERSION.Enum(),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			in: func() (*Mutate, error) {
+				return NewDelStr(ctx, table, key, map[string]map[string][]byte{
+					"cf": map[string][]byte{
+						"a": nil,
+					},
+				}, TimestampUint64(42), DeleteOneVersion())
+			},
+			out: &pb.MutateRequest{
+				Region: rs,
+				Mutation: &pb.MutationProto{
+					Row:        []byte(key),
+					Timestamp:  proto.Uint64(42),
+					MutateType: pb.MutationProto_DELETE.Enum(),
+					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
+					ColumnValue: []*pb.MutationProto_ColumnValue{
+						&pb.MutationProto_ColumnValue{
+							Family: []byte("cf"),
+							QualifierValue: []*pb.MutationProto_ColumnValue_QualifierValue{
+								&pb.MutationProto_ColumnValue_QualifierValue{
+									Qualifier:  []byte("a"),
+									Timestamp:  proto.Uint64(42),
+									DeleteType: pb.MutationProto_DELETE_ONE_VERSION.Enum(),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			in: func() (*Mutate, error) {
+				return NewDelStr(ctx, table, key, nil, DeleteOneVersion())
+			},
+			err: errors.New(
+				"'DeleteOneVersion' option cannot be specified for delete entire row request"),
+		},
 	}
 
 	for i, tcase := range tests {
