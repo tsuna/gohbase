@@ -13,39 +13,23 @@ import (
 	"github.com/tsuna/gohbase/pb"
 )
 
-// CreateTable represents a CreateTable HBase call
-type CreateTable struct {
+// AddColumn represents a AddColumn HBase call
+type AddColumn struct {
 	base
 
 	families  map[string]map[string]string
-	splitKeys [][]byte
 }
 
-var defaultAttributes = map[string]string{
-	"BLOOMFILTER":         "ROW",
-	"VERSIONS":            "3",
-	"IN_MEMORY":           "false",
-	"KEEP_DELETED_CELLS":  "false",
-	"DATA_BLOCK_ENCODING": "FAST_DIFF",
-	"TTL":               "2147483647",
-	"COMPRESSION":       "NONE",
-	"MIN_VERSIONS":      "0",
-	"BLOCKCACHE":        "true",
-	"BLOCKSIZE":         "65536",
-	"REPLICATION_SCOPE": "0",
-}
-
-// NewCreateTable creates a new CreateTable request that will create the given
+// NewAddColumn creates a new AddColumn request that will create the given
 // table in HBase. 'families' is a map of column family name to its attributes.
 // For use by the admin client.
-func NewCreateTable(ctx context.Context, table []byte,
+func NewAddColumn(ctx context.Context, table []byte,
 	families map[string]map[string]string,
-	options ...func(*CreateTable)) *CreateTable {
-	ct := &CreateTable{
+	options ...func(*AddColumn)) *AddColumn {
+	ct := &AddColumn{
 		base: base{
-			table:    table,
-			ctx:      ctx,
-			resultch: make(chan RPCResult, 1),
+			table: table,
+			ctx:   ctx,
 		},
 		families: make(map[string]map[string]string, len(families)),
 	}
@@ -65,20 +49,13 @@ func NewCreateTable(ctx context.Context, table []byte,
 	return ct
 }
 
-// SplitKeys will return an option that will set the split keys for the created table
-func SplitKeys(sk [][]byte) func(*CreateTable) {
-	return func(ct *CreateTable) {
-		ct.splitKeys = sk
-	}
-}
-
 // Name returns the name of this RPC call.
-func (ct *CreateTable) Name() string {
-	return "CreateTable"
+func (ct *AddColumn) Name() string {
+	return "AddColumn"
 }
 
 // ToProto converts the RPC into a protobuf message
-func (ct *CreateTable) ToProto() proto.Message {
+func (ct *AddColumn) ToProto() (proto.Message, error) {
 	pbFamilies := make([]*pb.ColumnFamilySchema, 0, len(ct.families))
 	for family, attrs := range ct.families {
 		f := &pb.ColumnFamilySchema{
@@ -100,21 +77,17 @@ func (ct *CreateTable) ToProto() proto.Message {
 		namespace = table[:i]
 		table = table[i+1:]
 	}
-	return &pb.CreateTableRequest{
-		TableSchema: &pb.TableSchema{
-			TableName: &pb.TableName{
-				// TODO: handle namespaces
+	return &pb.AddColumnRequest{
+		TableName: &pb.TableName{
 				Namespace: namespace,
 				Qualifier: table,
-			},
-			ColumnFamilies: pbFamilies,
 		},
-		SplitKeys: ct.splitKeys,
-	}
+		ColumnFamilies: pbFamilies[0],
+	}, nil
 }
 
 // NewResponse creates an empty protobuf message to read the response of this
 // RPC.
-func (ct *CreateTable) NewResponse() proto.Message {
-	return &pb.CreateTableResponse{}
+func (ct *AddColumn) NewResponse() proto.Message {
+	return &pb.AddColumnResponse{}
 }
