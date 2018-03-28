@@ -141,12 +141,12 @@ func DeleteOneVersion() func(Call) error {
 }
 
 // baseMutate returns a Mutate struct without the mutationType filled in.
-func baseMutate(ctx context.Context, table, key string, values map[string]map[string][]byte,
+func baseMutate(ctx context.Context, table, key []byte, values map[string]map[string][]byte,
 	options ...func(Call) error) (*Mutate, error) {
 	m := &Mutate{
 		base: base{
-			table:    []byte(table),
-			key:      []byte(key),
+			table:    table,
+			key:      key,
 			ctx:      ctx,
 			resultch: make(chan RPCResult, 1),
 		},
@@ -164,7 +164,7 @@ func baseMutate(ctx context.Context, table, key string, values map[string]map[st
 // family-column-values in the given row key of the given table.
 func NewPutStr(ctx context.Context, table, key string,
 	values map[string]map[string][]byte, options ...func(Call) error) (*Mutate, error) {
-	m, err := baseMutate(ctx, table, key, values, options...)
+	m, err := baseMutate(ctx, []byte(table), []byte(key), values, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +199,7 @@ func NewPutStr(ctx context.Context, table, key string,
 // operation to perform.
 func NewDelStr(ctx context.Context, table, key string,
 	values map[string]map[string][]byte, options ...func(Call) error) (*Mutate, error) {
-	m, err := baseMutate(ctx, table, key, values, options...)
+	m, err := baseMutate(ctx, []byte(table), []byte(key), values, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +218,7 @@ func NewDelStr(ctx context.Context, table, key string,
 // needed), in given row key of the given table.
 func NewAppStr(ctx context.Context, table, key string,
 	values map[string]map[string][]byte, options ...func(Call) error) (*Mutate, error) {
-	m, err := baseMutate(ctx, table, key, values, options...)
+	m, err := baseMutate(ctx, []byte(table), []byte(key), values, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +240,7 @@ func NewIncStrSingle(ctx context.Context, table, key, family, qualifier string,
 // in HBase under the given table and key.
 func NewIncStr(ctx context.Context, table, key string,
 	values map[string]map[string][]byte, options ...func(Call) error) (*Mutate, error) {
-	m, err := baseMutate(ctx, table, key, values, options...)
+	m, err := baseMutate(ctx, []byte(table), []byte(key), values, options...)
 	if err != nil {
 		return nil, err
 	}
