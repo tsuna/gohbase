@@ -581,9 +581,8 @@ func sleepAndIncreaseBackoff(ctx context.Context, backoff time.Duration) (time.D
 	// TODO: Revisit how we back off here.
 	if backoff < 5000*time.Millisecond {
 		return backoff * 2, nil
-	} else {
-		return backoff + 5000*time.Millisecond, nil
 	}
+	return backoff + 5000*time.Millisecond, nil
 }
 
 func (c *client) establishRegionClient(reg hrpc.RegionInfo,
