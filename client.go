@@ -58,6 +58,7 @@ type RPCClient interface {
 	SendRPC(rpc hrpc.Call) (proto.Message, error)
 }
 
+// Option is a function used to configure optional config items for a Client.
 type Option func(*client)
 
 // A Client provides access to an HBase cluster.
