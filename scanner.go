@@ -13,8 +13,8 @@ import (
 	"math"
 	"sync"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/golang/protobuf/proto"
+	log "github.com/sirupsen/logrus"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 )
@@ -212,7 +212,7 @@ func (f *fetcher) fetch() {
 	for {
 		resp, region, err := f.next()
 		if err != nil {
-			if err != ErrDeadline {
+			if err != context.Canceled || err != context.DeadlineExceeded {
 				// if the context of the scan rpc wasn't cancelled (same as calling Close()),
 				// return the error to client
 				f.trySend(nil, err)
@@ -259,20 +259,12 @@ func (f *fetcher) next() (*pb.ScanResponse, hrpc.RegionInfo, error) {
 	var err error
 	if f.scannerID == noScannerID {
 		// starting to scan on a new region
-		from, to := f.rpc.TimeRange()
 		rpc, err = hrpc.NewScanRange(
 			f.ctx,
 			f.rpc.Table(),
 			f.startRow,
 			f.rpc.StopRow(),
-			hrpc.Families(f.rpc.Families()),
-			hrpc.Filters(f.rpc.Filter()),
-			hrpc.TimeRangeUint64(from, to),
-			hrpc.MaxVersions(f.rpc.MaxVersions()),
-			hrpc.MaxResultSize(f.rpc.MaxResultSize()),
-			hrpc.NumberOfRows(f.rpc.NumberOfRows()),
-			hrpc.MaxResultsPerColumnFamily(f.rpc.MaxResultsPerColumnFamily()),
-			hrpc.ResultOffset(f.rpc.ResultOffset()),
+			f.rpc.Options()...,
 		)
 		if err != nil {
 			return nil, nil, err

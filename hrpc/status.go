@@ -16,8 +16,9 @@ type ClusterStatus struct {
 func NewClusterStatus() *ClusterStatus {
 	return &ClusterStatus{
 		base{
-			ctx:   context.Background(),
-			table: []byte{},
+			ctx:      context.Background(),
+			table:    []byte{},
+			resultch: make(chan RPCResult, 1),
 		},
 	}
 }
@@ -28,8 +29,8 @@ func (c *ClusterStatus) Name() string {
 }
 
 // ToProto returns the Protobuf message to be sent
-func (c *ClusterStatus) ToProto() (proto.Message, error) {
-	return &pb.GetClusterStatusRequest{}, nil
+func (c *ClusterStatus) ToProto() proto.Message {
+	return &pb.GetClusterStatusRequest{}
 }
 
 // NewResponse returns the empty protobuf response

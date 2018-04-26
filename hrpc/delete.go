@@ -6,6 +6,7 @@
 package hrpc
 
 import (
+	"bytes"
 	"context"
 
 	"github.com/golang/protobuf/proto"
@@ -22,8 +23,9 @@ type DeleteTable struct {
 func NewDeleteTable(ctx context.Context, table []byte) *DeleteTable {
 	return &DeleteTable{
 		base{
-			table: table,
-			ctx:   ctx,
+			table:    table,
+			ctx:      ctx,
+			resultch: make(chan RPCResult, 1),
 		},
 	}
 }
@@ -34,14 +36,21 @@ func (dt *DeleteTable) Name() string {
 }
 
 // ToProto converts the RPC into a protobuf message
-func (dt *DeleteTable) ToProto() (proto.Message, error) {
+func (dt *DeleteTable) ToProto() proto.Message {
+	namespace := []byte("default")
+	table := dt.table
+	i := bytes.Index(table, []byte(":"))
+	if i > -1 {
+		namespace = table[:i]
+		table = table[i+1:]
+	}
+
 	return &pb.DeleteTableRequest{
 		TableName: &pb.TableName{
-			// TODO: hadle namespaces properly
-			Namespace: []byte("default"),
-			Qualifier: dt.table,
+			Namespace: namespace,
+			Qualifier: table,
 		},
-	}, nil
+	}
 }
 
 // NewResponse creates an empty protobuf message to read the response of this

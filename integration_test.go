@@ -15,6 +15,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -22,10 +23,13 @@ import (
 
 	"math"
 
-	log "github.com/Sirupsen/logrus"
+	atest "github.com/aristanetworks/goarista/test"
+	"github.com/golang/protobuf/proto"
+	log "github.com/sirupsen/logrus"
 	"github.com/tsuna/gohbase"
 	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/hrpc"
+	"github.com/tsuna/gohbase/pb"
 )
 
 var host = flag.String("host", "localhost", "The location where HBase is running")
@@ -87,6 +91,8 @@ func StopRegionServers(servers []string) {
 	exec.Command(hh+"/bin/local-regionservers.sh", servers...).Run()
 }
 func TestMain(m *testing.M) {
+	flag.Parse()
+
 	if host == nil {
 		panic("Host is not set!")
 	}
@@ -97,7 +103,7 @@ func TestMain(m *testing.M) {
 
 	var err error
 	for {
-		err = CreateTable(ac, table, []string{"cf", "cf2"})
+		err = CreateTable(ac, table, []string{"cf", "cf1", "cf2"})
 		if err != nil &&
 			(strings.Contains(err.Error(), "org.apache.hadoop.hbase.PleaseHoldException") ||
 				strings.Contains(err.Error(),
@@ -122,7 +128,6 @@ func TestMain(m *testing.M) {
 //Test retrieval of cluster status
 func TestClusterStatus(t *testing.T) {
 	ac := gohbase.NewAdminClient(*host)
-	defer ac.(gohbase.Client).Close()
 
 	stats, err := ac.ClusterStatus()
 	if err != nil {
@@ -178,7 +183,7 @@ func TestGet(t *testing.T) {
 		t.Fatalf("Failed to create Get request: %s", err)
 	}
 	_, err = c.Get(get)
-	if err != gohbase.ErrDeadline {
+	if err != context.DeadlineExceeded {
 		t.Errorf("Get ignored the deadline")
 	}
 }
@@ -215,7 +220,7 @@ func TestMutateGetTableNotFound(t *testing.T) {
 	get, err := hrpc.NewGetStr(context.Background(),
 		table, key, hrpc.Families(headers))
 	if err != nil {
-		t.Fatal("NewGetStr returned an error: %v", err)
+		t.Fatalf("NewGetStr returned an error: %v", err)
 	}
 	_, err = c.Get(get)
 	if err != gohbase.TableNotFound {
@@ -224,7 +229,7 @@ func TestMutateGetTableNotFound(t *testing.T) {
 	values := map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte("1")}}
 	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values)
 	if err != nil {
-		t.Fatal("NewPutStr returned an error: %v", err)
+		t.Fatalf("NewPutStr returned an error: %v", err)
 	}
 	_, err = c.Put(putRequest)
 	if err != gohbase.TableNotFound {
@@ -317,111 +322,9 @@ func TestPut(t *testing.T) {
 	ctx, _ := context.WithTimeout(context.Background(), 0)
 	putRequest, err = hrpc.NewPutStr(ctx, table, key, values)
 	_, err = c.Put(putRequest)
-	if err != gohbase.ErrDeadline {
+	if err != context.DeadlineExceeded {
 		t.Errorf("Put ignored the deadline")
 	}
-}
-
-func TestPutReflection(t *testing.T) {
-	key := "row2.25"
-	number := 150
-	data := struct {
-		AnInt       int        `hbase:"cf:a"`
-		AnInt8      int8       `hbase:"cf:b"`
-		AnInt16     int16      `hbase:"cf:c"`
-		AnInt32     int32      `hbase:"cf:d"`
-		AnInt64     int64      `hbase:"cf:e"`
-		AnUInt      uint       `hbase:"cf:f"`
-		AnUInt8     uint8      `hbase:"cf:g"`
-		AnUInt16    uint16     `hbase:"cf:h"`
-		AnUInt32    uint32     `hbase:"cf:i"`
-		AnUInt64    uint64     `hbase:"cf:j"`
-		AFloat32    float32    `hbase:"cf:k"`
-		AFloat64    float64    `hbase:"cf:l"`
-		AComplex64  complex64  `hbase:"cf:m"`
-		AComplex128 complex128 `hbase:"cf:n"`
-		APointer    *int       `hbase:"cf:o"`
-		AnArray     [6]uint8   `hbase:"cf:p"`
-		ASlice      []uint8    `hbase:"cf:q"`
-		AString     string     `hbase:"cf:r"`
-	}{
-		AnInt:       10,
-		AnInt8:      20,
-		AnInt16:     30,
-		AnInt32:     40,
-		AnInt64:     50,
-		AnUInt:      60,
-		AnUInt8:     70,
-		AnUInt16:    80,
-		AnUInt32:    90,
-		AnUInt64:    100,
-		AFloat32:    110,
-		AFloat64:    120,
-		AComplex64:  130,
-		AComplex128: 140,
-		APointer:    &number,
-		AnArray:     [6]uint8{4, 8, 15, 26, 23, 42},
-		ASlice:      []uint8{1, 1, 3, 5, 8, 13, 21, 34, 55},
-		AString:     "This is a test string.",
-	}
-
-	if host == nil {
-		t.Fatal("Host is not set!")
-	}
-
-	c := gohbase.NewClient(*host)
-	defer c.Close()
-	putRequest, err := hrpc.NewPutStrRef(context.Background(), table, key, data)
-	if err != nil {
-		t.Errorf("NewPutStrRef returned an error: %v", err)
-	}
-
-	_, err = c.Put(putRequest)
-	if err != nil {
-		t.Errorf("Put returned an error: %v", err)
-	}
-
-	headers := map[string][]string{"cf": nil}
-	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
-	if err != nil {
-		t.Fatalf("Failed to create Get request: %s", err)
-	}
-	rsp, err := c.Get(get)
-	if err != nil {
-		t.Errorf("Get returned an error: %v", err)
-	}
-
-	expected := map[string][]byte{
-		"a": []byte{10},
-		"b": []byte{20},
-		"c": []byte{30, 0},
-		"d": []byte{40, 0, 0, 0},
-		"e": []byte{50, 0, 0, 0, 0, 0, 0, 0},
-		"f": []byte{60},
-		"g": []byte{70},
-		"h": []byte{80, 0},
-		"i": []byte{90, 0, 0, 0},
-		"j": []byte{100, 0, 0, 0, 0, 0, 0, 0},
-		"k": []byte{0, 0, 220, 66},
-		"l": []byte{0, 0, 0, 0, 0, 0, 94, 64},
-		"m": []byte{0, 0, 2, 67, 0, 0, 0, 0},
-		"n": []byte{0, 0, 0, 0, 0, 128, 97, 64, 0, 0, 0, 0, 0, 0, 0, 0},
-		"o": []byte{150},
-		"p": []byte{4, 8, 15, 26, 23, 42},
-		"q": []byte{1, 1, 3, 5, 8, 13, 21, 34, 55},
-		"r": []byte("This is a test string."),
-	}
-
-	for _, cell := range rsp.Cells {
-		want, ok := expected[string(cell.Qualifier)]
-		if !ok {
-			t.Errorf("Unexpected qualifier: %q in %#v", cell.Qualifier, rsp)
-		} else if !bytes.Equal(cell.Value, want) {
-			t.Errorf("qualifier %q didn't match: wanted %q, but got %q",
-				cell.Qualifier, want, cell.Value)
-		}
-	}
-
 }
 
 func TestPutMultipleCells(t *testing.T) {
@@ -579,31 +482,324 @@ func TestPutTimestamp(t *testing.T) {
 	}
 }
 
-func TestDeleteTimestamp(t *testing.T) {
-	key := "TestDeleteTimestamp"
+// TestDelete preps state with two column families, cf1 and cf2,
+// each having 3 versions at timestamps 50, 51, 52
+func TestDelete(t *testing.T) {
 	c := gohbase.NewClient(*host)
 	defer c.Close()
-	var putTs uint64 = 50
-	timestamp := time.Unix(0, int64(putTs*1e6))
-	err := insertKeyValue(c, key, "cf", []byte("1"), hrpc.Timestamp(timestamp))
-	if err != nil {
-		t.Fatalf("Put failed: %s", err)
+
+	ts := uint64(50)
+
+	tests := []struct {
+		in  func(string) (*hrpc.Mutate, error)
+		out []*hrpc.Cell
+	}{
+		{
+			// delete at the second version
+			in: func(key string) (*hrpc.Mutate, error) {
+				return hrpc.NewDelStr(context.Background(), table, key,
+					map[string]map[string][]byte{"cf1": map[string][]byte{"a": nil}},
+					hrpc.TimestampUint64(ts+1))
+			},
+			// should delete everything at and before the delete timestamp
+			out: []*hrpc.Cell{
+				&hrpc.Cell{
+					Family:    []byte("cf1"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 2),
+					Value:     []byte("v3"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf1"),
+					Qualifier: []byte("b"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 2),
+					Value:     []byte("v3"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 1),
+					Value:     []byte("v2"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("b"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+			},
+		},
+		{
+			// delete at the second version
+			in: func(key string) (*hrpc.Mutate, error) {
+				return hrpc.NewDelStr(context.Background(), table, key,
+					map[string]map[string][]byte{"cf1": map[string][]byte{"a": nil}},
+					hrpc.TimestampUint64(ts+1), hrpc.DeleteOneVersion())
+			},
+			// should delete only the second version
+			out: []*hrpc.Cell{
+				&hrpc.Cell{
+					Family:    []byte("cf1"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 2),
+					Value:     []byte("v3"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf1"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf1"),
+					Qualifier: []byte("b"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 2),
+					Value:     []byte("v3"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 1),
+					Value:     []byte("v2"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("b"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+			},
+		},
+		{
+			// delete the cf1 at and before ts + 1
+			in: func(key string) (*hrpc.Mutate, error) {
+				return hrpc.NewDelStr(context.Background(), table, key,
+					map[string]map[string][]byte{"cf1": nil},
+					hrpc.TimestampUint64(ts+1))
+			},
+			// should leave cf2 untouched
+			out: []*hrpc.Cell{
+				&hrpc.Cell{
+					Family:    []byte("cf1"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 2),
+					Value:     []byte("v3"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 2),
+					Value:     []byte("v3"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 1),
+					Value:     []byte("v2"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("b"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+			},
+		},
+		{
+			// delete the whole cf1 and qualifer a in cf2
+			in: func(key string) (*hrpc.Mutate, error) {
+				return hrpc.NewDelStr(context.Background(), table, key,
+					map[string]map[string][]byte{
+						"cf1": nil,
+						"cf2": map[string][]byte{
+							"a": nil,
+						},
+					})
+			},
+			out: []*hrpc.Cell{
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("b"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+			},
+		},
+		{
+			// delete only version at ts for all qualifiers of cf1
+			in: func(key string) (*hrpc.Mutate, error) {
+				return hrpc.NewDelStr(context.Background(), table, key,
+					map[string]map[string][]byte{
+						"cf1": nil,
+					}, hrpc.TimestampUint64(ts), hrpc.DeleteOneVersion())
+			},
+			out: []*hrpc.Cell{
+				&hrpc.Cell{
+					Family:    []byte("cf1"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 2),
+					Value:     []byte("v3"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf1"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 1),
+					Value:     []byte("v2"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 2),
+					Value:     []byte("v3"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 1),
+					Value:     []byte("v2"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("b"),
+					Timestamp: proto.Uint64(ts),
+					Value:     []byte("v1"),
+				},
+			},
+		},
+		{
+			// delete the whole row
+			in: func(key string) (*hrpc.Mutate, error) {
+				return hrpc.NewDelStr(context.Background(), table, key, nil)
+			},
+			out: []*hrpc.Cell{},
+		},
+		{
+			// delete the whole row at ts
+			in: func(key string) (*hrpc.Mutate, error) {
+				return hrpc.NewDelStr(context.Background(), table, key, nil,
+					hrpc.TimestampUint64(ts+1))
+			},
+			out: []*hrpc.Cell{
+				&hrpc.Cell{
+					Family:    []byte("cf1"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 2),
+					Value:     []byte("v3"),
+				},
+				&hrpc.Cell{
+					Family:    []byte("cf2"),
+					Qualifier: []byte("a"),
+					Timestamp: proto.Uint64(ts + 2),
+					Value:     []byte("v3"),
+				},
+			},
+		},
 	}
-	deleteRequest, err := hrpc.NewDelStr(context.Background(), table, key,
-		map[string]map[string][]byte{"cf": map[string][]byte{"a": nil}},
-		hrpc.Timestamp(timestamp))
-	_, err = c.Delete(deleteRequest)
-	if err != nil {
-		t.Fatalf("Delete failed: %s", err)
-	}
-	get, err := hrpc.NewGetStr(context.Background(), table, key,
-		hrpc.Families(map[string][]string{"cf": nil}))
-	rsp, err := c.Get(get)
-	if err != nil {
-		t.Fatalf("Get failed: %s", err)
-	}
-	if len(rsp.Cells) != 0 {
-		t.Errorf("Timestamp wasn't deleted, get result length: %d", len(rsp.Cells))
+
+	for i, tcase := range tests {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			key := t.Name()
+
+			// insert three versions
+			prep := func(cf string) {
+				if err := insertKeyValue(c, key, cf, []byte("v1"),
+					hrpc.TimestampUint64(ts)); err != nil {
+					t.Fatal(err)
+				}
+
+				if err := insertKeyValue(c, key, cf, []byte("v2"),
+					hrpc.TimestampUint64(ts+1)); err != nil {
+					t.Fatal(err)
+				}
+
+				if err := insertKeyValue(c, key, cf, []byte("v3"),
+					hrpc.TimestampUint64(ts+2)); err != nil {
+					t.Fatal(err)
+				}
+
+				// insert b
+				values := map[string]map[string][]byte{cf: map[string][]byte{
+					"b": []byte("v1"),
+				}}
+				put, err := hrpc.NewPutStr(context.Background(), table, key, values,
+					hrpc.TimestampUint64(ts))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err = c.Put(put); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			prep("cf1")
+			prep("cf2")
+
+			delete, err := tcase.in(key)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			_, err = c.Delete(delete)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			get, err := hrpc.NewGetStr(context.Background(), table, key,
+				hrpc.MaxVersions(math.MaxInt32))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			rsp, err := c.Get(get)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			for _, c := range tcase.out {
+				c.Row = []byte(t.Name())
+				c.CellType = pb.CellType_PUT.Enum()
+			}
+
+			if d := atest.Diff(tcase.out, rsp.Cells); d != "" {
+				t.Fatalf("unexpected cells: %s", d)
+			}
+		})
 	}
 }
 
@@ -767,6 +963,35 @@ func TestScanTimeRangeVersions(t *testing.T) {
 	}
 	if len(rsp[1].Cells) != 1 {
 		t.Fatalf("Expected versions: %d, Got versions: %d", 2, len(rsp[0].Cells))
+	}
+}
+
+func TestPutTTL(t *testing.T) {
+	key := "TestPutTTL"
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+
+	var ttl = 2 * time.Second
+
+	err := insertKeyValue(c, key, "cf", []byte("1"), hrpc.TTL(ttl))
+	if err != nil {
+		t.Fatalf("Put failed: %s", err)
+	}
+
+	//Wait ttl duration and try to get the value
+	time.Sleep(ttl)
+
+	get, err := hrpc.NewGetStr(context.Background(), table, key,
+		hrpc.Families(map[string][]string{"cf": nil}))
+
+	//Make sure we dont get a result back
+	res, err := c.Get(get)
+	if err != nil {
+		t.Fatalf("Get failed: %s", err)
+	}
+
+	if len(res.Cells) > 0 {
+		t.Errorf("TTL did not expire row. Expected 0 cells, got: %d", len(res.Cells))
 	}
 }
 
@@ -1076,6 +1301,44 @@ func TestCheckAndPutParallel(t *testing.T) {
 		if !first && !second {
 			t.Error("CheckAndPut: both requests cannot fail")
 		}
+	}
+}
+
+func TestClose(t *testing.T) {
+	c := gohbase.NewClient(*host)
+
+	values := map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte("1")}}
+	r, err := hrpc.NewPutStr(context.Background(), table, t.Name(), values)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = c.Put(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c.Close()
+
+	_, err = c.Put(r)
+	if err != gohbase.ErrClientClosed {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCloseWithoutMeta(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	c.Close()
+
+	values := map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte("1")}}
+	r, err := hrpc.NewPutStr(context.Background(), table, t.Name(), values)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = c.Put(r)
+	if err != gohbase.ErrClientClosed {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -1441,15 +1704,6 @@ func TestMaxResultsPerColumnFamilyScan(t *testing.T) {
 	if err != nil {
 		t.Errorf(baseErr+"building scan request: %s", err)
 	}
-	if scanRequest.MaxResultsPerColumnFamily() != 2 {
-		t.Error(baseErr + " unable to retrieve MaxResultsPerColumnFamily from scan request")
-	}
-	if scanRequest.ResultOffset() != 10 {
-		t.Error(baseErr + " unable to retrieve ResultOffset from scan request")
-	}
-	if scanRequest.MaxResultSize() != 1 {
-		t.Error(baseErr + " unable to retrieve MaxResultSize from scan request")
-	}
 
 	result = c.Scan(scanRequest)
 	resultCnt = 0
@@ -1499,4 +1753,120 @@ func TestMaxResultsPerColumnFamilyScan(t *testing.T) {
 		t.Error(baseErr + "- out of range column result parameter accepted")
 	}
 
+}
+
+func TestMultiRequest(t *testing.T) {
+	// pre-populate the table
+	var (
+		getKey       = t.Name() + "_Get"
+		putKey       = t.Name() + "_Put"
+		deleteKey    = t.Name() + "_Delete"
+		appendKey    = t.Name() + "_Append"
+		incrementKey = t.Name() + "_Increment"
+	)
+	c := gohbase.NewClient(*host, gohbase.RpcQueueSize(1))
+	if err := insertKeyValue(c, getKey, "cf", []byte{1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := insertKeyValue(c, deleteKey, "cf", []byte{3}); err != nil {
+		t.Fatal(err)
+	}
+	if err := insertKeyValue(c, appendKey, "cf", []byte{4}); err != nil {
+		t.Fatal(err)
+	}
+	i, err := hrpc.NewIncStrSingle(context.Background(), table, incrementKey, "cf", "a", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = c.Increment(i)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Close()
+
+	c = gohbase.NewClient(*host, gohbase.FlushInterval(1000*time.Hour), gohbase.RpcQueueSize(5))
+	defer c.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(5)
+	go func() {
+		g, err := hrpc.NewGetStr(context.Background(), table, getKey)
+		if err != nil {
+			t.Error(err)
+		}
+		r, err := c.Get(g)
+		if err != nil {
+			t.Error(err)
+		}
+		expV := []byte{1}
+		if !bytes.Equal(r.Cells[0].Value, expV) {
+			t.Errorf("expected %v, got %v:", expV, r.Cells[0].Value)
+		}
+		wg.Done()
+	}()
+
+	go func() {
+		v := map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte{2}}}
+		p, err := hrpc.NewPutStr(context.Background(), table, putKey, v)
+		if err != nil {
+			t.Error(err)
+		}
+		r, err := c.Put(p)
+		if err != nil {
+			t.Error(err)
+		}
+		if len(r.Cells) != 0 {
+			t.Errorf("expected no cells, got %d", len(r.Cells))
+		}
+		wg.Done()
+	}()
+
+	go func() {
+		d, err := hrpc.NewDelStr(context.Background(), table, deleteKey, nil)
+		if err != nil {
+			t.Error(err)
+		}
+		r, err := c.Delete(d)
+		if err != nil {
+			t.Error(err)
+		}
+		if len(r.Cells) != 0 {
+			t.Errorf("expected no cells, got %d", len(r.Cells))
+		}
+		wg.Done()
+	}()
+
+	go func() {
+		v := map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte{4}}}
+		a, err := hrpc.NewAppStr(context.Background(), table, appendKey, v)
+		if err != nil {
+			t.Error(err)
+		}
+		r, err := c.Append(a)
+		if err != nil {
+			t.Error(err)
+		}
+		expV := []byte{4, 4}
+		if !bytes.Equal(r.Cells[0].Value, expV) {
+			t.Errorf("expected %v, got %v:", expV, r.Cells[0].Value)
+		}
+		wg.Done()
+	}()
+
+	go func() {
+		i, err := hrpc.NewIncStrSingle(context.Background(), table, incrementKey, "cf", "a", 1)
+		if err != nil {
+			t.Error(err)
+		}
+		r, err := c.Increment(i)
+		if err != nil {
+			t.Error(err)
+		}
+		if r != 6 {
+			t.Errorf("expected %d, got %d:", 6, r)
+		}
+		wg.Done()
+	}()
+
+	wg.Wait()
 }

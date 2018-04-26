@@ -7,9 +7,10 @@ package gohbase
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
@@ -26,6 +27,9 @@ type AdminClient interface {
 
 	ModifyTable(t *hrpc.ModifyTable) error
 	AddColumn(t *hrpc.AddColumn) error
+	GetTableNames(t *hrpc.GetTableNames) ([]*pb.TableName, error)
+	ListTableNamesByNamespace(t *hrpc.ListTableNamesByNamespace) ([]*pb.TableName, error)
+	ListTableDescriptorsByNamespace(t *hrpc.ListTableDescriptorsByNamespace) ([]*pb.TableSchema, error)
 }
 
 // NewAdminClient creates an admin HBase client.
@@ -42,14 +46,17 @@ func newAdminClient(zkquorum string, options ...Option) AdminClient {
 		rpcQueueSize:  defaultRPCQueueSize,
 		flushInterval: defaultFlushInterval,
 		// empty region in order to be able to set client to it
-		adminRegionInfo: region.NewInfo(0, nil, nil, nil, nil, nil),
-		zkClient:        zk.NewClient(zkquorum),
-		zkRoot:          defaultZkRoot,
-		effectiveUser:   defaultEffectiveUser,
+		adminRegionInfo:     region.NewInfo(0, nil, nil, nil, nil, nil),
+		zkTimeout:           defaultZkTimeout,
+		zkRoot:              defaultZkRoot,
+		effectiveUser:       defaultEffectiveUser,
+		regionLookupTimeout: region.DefaultLookupTimeout,
+		regionReadTimeout:   region.DefaultReadTimeout,
 	}
 	for _, option := range options {
 		option(c)
 	}
+	c.zkClient = zk.NewClient(zkquorum, c.zkTimeout)
 	return c
 }
 
@@ -80,6 +87,48 @@ func (c *client) CreateTable(t *hrpc.CreateTable) error {
 	}
 
 	return c.checkProcedureWithBackoff(t.Context(), r.GetProcId())
+}
+
+func (c *client) GetTableNames(t *hrpc.GetTableNames) ([]*pb.TableName, error) {
+	pbmsg, err := c.SendRPC(t)
+	if err != nil {
+		return nil, err
+	}
+
+	r, ok := pbmsg.(*pb.GetTableNamesResponse)
+	if !ok {
+		return nil, fmt.Errorf("sendRPC returned not a GetTableNamesResponse")
+	}
+
+	return r.GetTableNames(), nil
+}
+
+func (c *client) ListTableNamesByNamespace(t *hrpc.ListTableNamesByNamespace) ([]*pb.TableName, error) {
+	pbmsg, err := c.SendRPC(t)
+	if err != nil {
+		return nil, err
+	}
+
+	r, ok := pbmsg.(*pb.ListTableNamesByNamespaceResponse)
+	if !ok {
+		return nil, fmt.Errorf("sendRPC returned not a GetTableNamesResponse")
+	}
+
+	return r.GetTableName(), nil
+}
+
+func (c *client) ListTableDescriptorsByNamespace(t *hrpc.ListTableDescriptorsByNamespace) ([]*pb.TableSchema, error) {
+	pbmsg, err := c.SendRPC(t)
+	if err != nil {
+		return nil, err
+	}
+
+	r, ok := pbmsg.(*pb.ListTableDescriptorsByNamespaceResponse)
+	if !ok {
+		return nil, fmt.Errorf("sendRPC returned not a GetTableNamesResponse")
+	}
+
+	return r.GetTableSchema(), nil
 }
 
 func (c *client) ModifyTable(t *hrpc.ModifyTable) error {
@@ -160,15 +209,22 @@ func (c *client) checkProcedureWithBackoff(ctx context.Context, procID uint64) e
 			return err
 		}
 
-		statusRes, ok := pbmsg.(*pb.GetProcedureResultResponse)
+		res, ok := pbmsg.(*pb.GetProcedureResultResponse)
 		if !ok {
 			return fmt.Errorf("sendRPC returned not a GetProcedureResultResponse")
 		}
 
-		switch statusRes.GetState() {
+		switch res.GetState() {
 		case pb.GetProcedureResultResponse_NOT_FOUND:
 			return fmt.Errorf("procedure not found")
 		case pb.GetProcedureResultResponse_FINISHED:
+			if fe := res.Exception; fe != nil {
+				ge := fe.GenericException
+				if ge == nil {
+					return errors.New("got unexpected empty exception")
+				}
+				return fmt.Errorf("procedure exception: %s: %s", ge.GetClassName(), ge.GetMessage())
+			}
 			return nil
 		default:
 			backoff, err = sleepAndIncreaseBackoff(ctx, backoff)

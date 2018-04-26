@@ -80,8 +80,9 @@ func baseScan(ctx context.Context, table []byte,
 	options ...func(Call) error) (*Scan, error) {
 	s := &Scan{
 		base: base{
-			table: table,
-			ctx:   ctx,
+			table:    table,
+			ctx:      ctx,
+			resultch: make(chan RPCResult, 1),
 		},
 		baseQuery:     newBaseQuery(),
 		scannerID:     math.MaxUint64,
@@ -150,8 +151,7 @@ func NewScanFromID(ctx context.Context, table []byte, scannerID uint64, startRow
 // NewCloseFromID creates a new Scan request that will close the scanner for
 // the given scanner ID.  This is an internal method, users are not expected
 // to deal with scanner IDs.
-func NewCloseFromID(ctx context.Context, table []byte,
-	scannerID uint64, startRow []byte) *Scan {
+func NewCloseFromID(ctx context.Context, table []byte, scannerID uint64, startRow []byte) *Scan {
 	scan, _ := baseScan(ctx, table)
 	scan.scannerID = scannerID
 	scan.closeScanner = true
@@ -179,28 +179,17 @@ func (s *Scan) IsClosing() bool {
 	return s.closeScanner
 }
 
-// MaxResultSize returns Maximum number of bytes fetched when calling a scanner's next method.
-func (s *Scan) MaxResultSize() uint64 {
-	return s.maxResultSize
-}
-
-// NumberOfRows returns maximum number of rows that will be fetched
-// with each scan request to regionserver.
-func (s *Scan) NumberOfRows() uint32 {
-	return s.numberOfRows
-}
-
 // AllowPartialResults returns true if client handles partials.
 func (s *Scan) AllowPartialResults() bool {
 	return s.allowPartialResults
 }
 
 // ToProto converts this Scan into a protobuf message
-func (s *Scan) ToProto() (proto.Message, error) {
+func (s *Scan) ToProto() proto.Message {
 	scan := &pb.ScanRequest{
 		Region:       s.regionSpecifier(),
 		CloseScanner: &s.closeScanner,
-		NumberOfRows: proto.Uint32(math.MaxInt32),
+		NumberOfRows: &s.numberOfRows,
 		// tell server that we can process results that are only part of a row
 		ClientHandlesPartials: proto.Bool(true),
 		// tell server that we "handle" heartbeats by ignoring them
@@ -209,7 +198,7 @@ func (s *Scan) ToProto() (proto.Message, error) {
 	}
 	if s.scannerID != math.MaxUint64 {
 		scan.ScannerId = &s.scannerID
-		return scan, nil
+		return scan
 	}
 	scan.Scan = &pb.Scan{
 		Column:        familiesToColumn(s.families),
@@ -236,15 +225,8 @@ func (s *Scan) ToProto() (proto.Message, error) {
 	if s.toTimestamp != MaxTimestamp {
 		scan.Scan.TimeRange.To = &s.toTimestamp
 	}
-
-	if s.filter != nil {
-		pbFilter, err := s.filter.ConstructPBFilter()
-		if err != nil {
-			return nil, err
-		}
-		scan.Scan.Filter = pbFilter
-	}
-	return scan, nil
+	scan.Scan.Filter = s.filter
+	return scan
 }
 
 // NewResponse creates an empty protobuf message to read the response

@@ -10,11 +10,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"sync"
 	"unsafe"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
 )
 
@@ -52,12 +50,17 @@ type Call interface {
 	Key() []byte
 	Region() RegionInfo
 	SetRegion(region RegionInfo)
-	ToProto() (proto.Message, error)
+	ToProto() proto.Message
 	// Returns a newly created (default-state) protobuf in which to store the
 	// response of this call.
 	NewResponse() proto.Message
 	ResultChan() chan RPCResult
 	Context() context.Context
+}
+
+type withOptions interface {
+	Options() []func(Call) error
+	setOptions([]func(Call) error)
 }
 
 // Batchable interface should be implemented by calls that can be batched into MultiRequest
@@ -86,7 +89,7 @@ func SkipBatch() func(Call) error {
 // that allow to provide Families and Filters options.
 type hasQueryOptions interface {
 	setFamilies(families map[string][]string)
-	setFilter(filter filter.Filter)
+	setFilter(filter *pb.Filter)
 	setTimeRangeUint64(from, to uint64)
 	setMaxVersions(versions uint32)
 	setMaxResultsPerColumnFamily(maxresults uint32)
@@ -101,18 +104,13 @@ type RPCResult struct {
 }
 
 type base struct {
-	table []byte
+	ctx     context.Context
+	table   []byte
+	key     []byte
+	options []func(Call) error
 
-	key []byte
-
-	region RegionInfo
-
-	// Protects access to resultch.
-	resultchLock sync.Mutex
-
+	region   RegionInfo
 	resultch chan RPCResult
-
-	ctx context.Context
 }
 
 func (b *base) Context() context.Context {
@@ -128,14 +126,23 @@ func (b *base) SetRegion(region RegionInfo) {
 }
 
 func (b *base) regionSpecifier() *pb.RegionSpecifier {
-	regionType := pb.RegionSpecifier_REGION_NAME
 	return &pb.RegionSpecifier{
-		Type:  &regionType,
+		Type:  pb.RegionSpecifier_REGION_NAME.Enum(),
 		Value: []byte(b.region.Name()),
 	}
 }
 
+func (b *base) setOptions(options []func(Call) error) {
+	b.options = options
+}
+
+// Options returns all the options passed to this call
+func (b *base) Options() []func(Call) error {
+	return b.options
+}
+
 func applyOptions(call Call, options ...func(Call) error) error {
+	call.(withOptions).setOptions(options)
 	for _, option := range options {
 		err := option(call)
 		if err != nil {
@@ -154,14 +161,6 @@ func (b *base) Key() []byte {
 }
 
 func (b *base) ResultChan() chan RPCResult {
-	b.resultchLock.Lock()
-	if b.resultch == nil {
-		// Buffered channels, so that if a writer thread sends a message (or
-		// reports an error) after the deadline it doesn't block due to the
-		// requesting thread having moved on.
-		b.resultch = make(chan RPCResult, 1)
-	}
-	b.resultchLock.Unlock()
 	return b.resultch
 }
 

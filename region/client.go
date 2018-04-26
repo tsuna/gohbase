@@ -15,7 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
@@ -45,9 +45,11 @@ var (
 	// listed here is returned by HBase, the client should attempt to resend
 	// the RPC message, potentially via a different region client.
 	javaRetryableExceptions = map[string]struct{}{
+		"org.apache.hadoop.hbase.CallQueueTooBigException":          struct{}{},
 		"org.apache.hadoop.hbase.NotServingRegionException":         struct{}{},
 		"org.apache.hadoop.hbase.exceptions.RegionMovedException":   struct{}{},
 		"org.apache.hadoop.hbase.exceptions.RegionOpeningException": struct{}{},
+		"org.apache.hadoop.hbase.ipc.ServerNotRunningYetException":  struct{}{},
 	}
 
 	// javaUnrecoverableExceptions is a map where all Java exceptions that signify
@@ -57,20 +59,20 @@ var (
 	javaUnrecoverableExceptions = map[string]struct{}{
 		"org.apache.hadoop.hbase.regionserver.RegionServerAbortedException": struct{}{},
 		"org.apache.hadoop.hbase.regionserver.RegionServerStoppedException": struct{}{},
-		"org.apache.hadoop.hbase.regionserver.ServerNotRunningYetException": struct{}{},
 	}
 )
 
 const (
+	//DefaultLookupTimeout is the default region lookup timeout
+	DefaultLookupTimeout = 30 * time.Second
+	//DefaultReadTimeout is the default region read timeout
+	DefaultReadTimeout = 30 * time.Second
 	// RegionClient is a ClientType that means this will be a normal client
 	RegionClient = ClientType("ClientService")
 
 	// MasterClient is a ClientType that means this client will talk to the
 	// master server
 	MasterClient = ClientType("MasterService")
-
-	// readTimeout is the maximum amount of time to wait for regionserver reply
-	readTimeout = 30 * time.Second
 )
 
 var bufferPool = sync.Pool{
@@ -145,22 +147,25 @@ type client struct {
 	flushInterval time.Duration
 
 	effectiveUser string
+
+	// readTimeout is the maximum amount of time to wait for regionserver reply
+	readTimeout time.Duration
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine
 func (c *client) QueueRPC(rpc hrpc.Call) {
 	if b, ok := rpc.(hrpc.Batchable); ok && c.rpcQueueSize > 1 && !b.SkipBatch() {
+		// queue up the rpc
 		select {
 		case <-rpc.Context().Done():
 			// rpc timed out before being processed
 		case <-c.done:
-			rpc.ResultChan() <- hrpc.RPCResult{Error: ErrClientDead}
+			returnResult(rpc, nil, ErrClientDead)
 		case c.rpcs <- rpc:
 		}
 	} else {
-		// send the rest of rpcs right away in the same goroutine
 		if err := c.trySend(rpc); err != nil {
-			rpc.ResultChan() <- hrpc.RPCResult{Error: err}
+			returnResult(rpc, nil, err)
 		}
 	}
 }
@@ -186,7 +191,7 @@ func (c *client) inFlightUp() {
 	c.inFlightM.Lock()
 	c.inFlight++
 	// we expect that at least the last request can be completed within readTimeout
-	c.conn.SetReadDeadline(time.Now().Add(readTimeout))
+	c.conn.SetReadDeadline(time.Now().Add(c.readTimeout))
 	c.inFlightM.Unlock()
 }
 
@@ -215,10 +220,12 @@ func (c *client) fail(err error) {
 		// tell goroutines to stop
 		close(c.done)
 
-		c.failSentRPCs()
-		// we close connection to the regionserver,
+		// close connection to the regionserver
 		// to let it know that we can't receive anymore
+		// and fail all the rpcs being sent
 		c.conn.Close()
+
+		c.failSentRPCs()
 	})
 }
 
@@ -236,7 +243,7 @@ func (c *client) failSentRPCs() {
 
 	// send error to awaiting rpcs
 	for _, rpc := range sent {
-		rpc.ResultChan() <- hrpc.RPCResult{Error: ErrClientDead}
+		returnResult(rpc, nil, ErrClientDead)
 	}
 }
 
@@ -257,21 +264,57 @@ func (c *client) unregisterRPC(id uint32) hrpc.Call {
 }
 
 func (c *client) processRPCs() {
-	batch := make([]hrpc.Call, 0, c.rpcQueueSize)
+	// TODO: flush when the size is too large
+	// TODO: use sync pool for multi
+	// TODO: if multi has only one call, send that call instead
+	m := newMulti(c.rpcQueueSize)
+
 	ticker := time.NewTicker(c.flushInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-c.done:
+			m.returnResults(nil, ErrClientDead)
 			return
 		case <-ticker.C:
-			batch = c.sendBatch(batch)
+			if m.len() == 0 {
+				continue
+			}
+
+			if log.GetLevel() == log.DebugLevel {
+				log.WithFields(log.Fields{
+					"len":  m.len(),
+					"addr": c.Addr(),
+				}).Debug("sending MultiRequest: flush interval tick")
+			}
+
+			if err := c.trySend(m); err != nil {
+				m.returnResults(nil, err)
+			}
+			m = newMulti(c.rpcQueueSize)
 		case rpc := <-c.rpcs:
-			batch = append(batch, rpc)
-			if len(batch) == c.rpcQueueSize {
-				batch = c.sendBatch(batch)
+			if m.add(rpc) {
+				if log.GetLevel() == log.DebugLevel {
+					log.WithFields(log.Fields{
+						"len":  m.len(),
+						"addr": c.Addr(),
+					}).Debug("sending MultiRequest: batch is full")
+				}
+
+				if err := c.trySend(m); err != nil {
+					m.returnResults(nil, err)
+				}
+				m = newMulti(c.rpcQueueSize)
 			}
 		}
+	}
+}
+
+func returnResult(c hrpc.Call, msg proto.Message, err error) {
+	if m, ok := c.(*multi); ok {
+		m.returnResults(msg, err)
+	} else {
+		c.ResultChan() <- hrpc.RPCResult{Msg: msg, Error: err}
 	}
 }
 
@@ -288,9 +331,7 @@ func (c *client) trySend(rpc hrpc.Call) error {
 		// stop waiting for a result and return an error.
 		return nil
 	default:
-		id := c.registerRPC(rpc)
-
-		if err := c.send(id, rpc); err != nil {
+		if id, err := c.send(rpc); err != nil {
 			if _, ok := err.(UnrecoverableError); ok {
 				c.fail(err)
 			}
@@ -304,41 +345,38 @@ func (c *client) trySend(rpc hrpc.Call) error {
 	}
 }
 
-func (c *client) sendBatch(rpcs []hrpc.Call) []hrpc.Call {
-	for i, rpc := range rpcs {
-		if err := c.trySend(rpc); err != nil {
-			rpc.ResultChan() <- hrpc.RPCResult{Error: err}
-		}
-		// set to nil so that GC isn't blocked to clean up rpc
-		rpcs[i] = nil
-	}
-	// reset size, but preserve capacity to reuse the slice
-	return rpcs[:0]
-}
-
 func (c *client) receiveRPCs() {
 	for {
 		select {
 		case <-c.done:
 			return
 		default:
-			err := c.receive()
-			if _, ok := err.(UnrecoverableError); ok {
-				c.fail(err)
-				return
-			} else if err != nil {
-				log.WithFields(log.Fields{
-					"client": c,
-					"err":    err,
-				}).Errorf("error receiving rpc response")
+			if err := c.receive(); err != nil {
+				switch err.(type) {
+				case UnrecoverableError:
+					c.fail(err)
+					return
+				case RetryableError:
+					continue
+				default:
+					log.WithFields(log.Fields{
+						"client": c,
+						"err":    err,
+					}).Errorf("unexpected error receiving rpc response")
+				}
 			}
 		}
 	}
 }
 
-func (c *client) receive() error {
-	var sz [4]byte
-	err := c.readFully(sz[:])
+func (c *client) receive() (err error) {
+	var (
+		sz       [4]byte
+		header   pb.ResponseHeader
+		response proto.Message
+	)
+
+	err = c.readFully(sz[:])
 	if err != nil {
 		return UnrecoverableError{err}
 	}
@@ -353,7 +391,6 @@ func (c *client) receive() error {
 
 	buf := proto.NewBuffer(b)
 
-	var header pb.ResponseHeader
 	if err = buf.DecodeMessage(&header); err != nil {
 		return fmt.Errorf("failed to decode the response header: %s", err)
 	}
@@ -368,14 +405,23 @@ func (c *client) receive() error {
 	}
 	c.inFlightDown()
 
-	// Here we know for sure that we got a response for rpc we asked
-	var response proto.Message
+	select {
+	case <-rpc.Context().Done():
+		// context has expired, don't bother deserializing
+		return
+	default:
+	}
+
+	// Here we know for sure that we got a response for rpc we asked.
+	// It's our responsibility to deliver the response or error to the
+	// caller as we unregistered the rpc.
+	defer func() { returnResult(rpc, response, err) }()
+
 	if header.Exception == nil {
 		response = rpc.NewResponse()
 		if err = buf.DecodeMessage(response); err != nil {
-			rpc.ResultChan() <- hrpc.RPCResult{
-				Error: fmt.Errorf("failed to decode the response: %s", err)}
-			return nil
+			err = fmt.Errorf("failed to decode the response: %s", err)
+			return
 		}
 		var cellsLen uint32
 		if header.CellBlockMeta != nil {
@@ -383,31 +429,31 @@ func (c *client) receive() error {
 		}
 		if d, ok := rpc.(canDeserializeCellBlocks); cellsLen > 0 && ok {
 			b := buf.Bytes()[size-cellsLen:]
-			nread, err := d.DeserializeCellBlocks(response, b)
+			var nread uint32
+			nread, err = d.DeserializeCellBlocks(response, b)
 			if err != nil {
-				rpc.ResultChan() <- hrpc.RPCResult{
-					Error: fmt.Errorf("failed to decode the response: %s", err)}
-				return nil
+				err = fmt.Errorf("failed to decode the response: %s", err)
+				return
 			}
 			if int(nread) < len(b) {
-				rpc.ResultChan() <- hrpc.RPCResult{
-					Error: fmt.Errorf("short read: buffer len %d, read %d", len(b), nread)}
-				return nil
+				err = fmt.Errorf("short read: buffer len %d, read %d", len(b), nread)
+				return
 			}
 		}
 	} else {
-		javaClass := *header.Exception.ExceptionClassName
-		err = fmt.Errorf("HBase Java exception %s: \n%s", javaClass, *header.Exception.StackTrace)
-		if _, ok := javaRetryableExceptions[javaClass]; ok {
-			// This is a recoverable error. The client should retry.
-			err = RetryableError{err}
-		} else if _, ok := javaUnrecoverableExceptions[javaClass]; ok {
-			// This is unrecoverable, close the client.
-			return UnrecoverableError{err}
-		}
+		err = exceptionToError(*header.Exception.ExceptionClassName, *header.Exception.StackTrace)
 	}
-	rpc.ResultChan() <- hrpc.RPCResult{Msg: response, Error: err}
-	return nil
+	return
+}
+
+func exceptionToError(class, stack string) error {
+	err := fmt.Errorf("HBase Java exception %s:\n%s", class, stack)
+	if _, ok := javaRetryableExceptions[class]; ok {
+		return RetryableError{err}
+	} else if _, ok := javaUnrecoverableExceptions[class]; ok {
+		return UnrecoverableError{err}
+	}
+	return err
 }
 
 // write sends the given buffer to the RegionServer.
@@ -447,38 +493,42 @@ func (c *client) sendHello(ctype ClientType) error {
 
 // send sends an RPC out to the wire.
 // Returns the response (for now, as the call is synchronous).
-func (c *client) send(id uint32, rpc hrpc.Call) error {
-	request, err := rpc.ToProto()
-	if err != nil {
-		return fmt.Errorf("failed to convert RPC: %s", err)
-	}
-
+func (c *client) send(rpc hrpc.Call) (uint32, error) {
 	b := newBuffer(4)
 	defer func() { freeBuffer(b) }()
 
 	buf := proto.NewBuffer(b[4:])
 	buf.Reset()
 
+	request := rpc.ToProto()
+
+	// we have to register rpc after we marhsal because
+	// registered rpc can fail before it was even sent
+	// in all the cases where c.fail() is called.
+	// If that happens, client can retry sending the rpc
+	// again potentially changing it's contents.
+	id := c.registerRPC(rpc)
+
 	header := &pb.RequestHeader{
 		CallId:       &id,
 		MethodName:   proto.String(rpc.Name()),
 		RequestParam: proto.Bool(true),
 	}
-	if err = buf.EncodeMessage(header); err != nil {
-		return fmt.Errorf("failed to marshal request header: %s", err)
+	if err := buf.EncodeMessage(header); err != nil {
+		return id, fmt.Errorf("failed to marshal request header: %s", err)
 	}
 
-	if err = buf.EncodeMessage(request); err != nil {
-		return fmt.Errorf("failed to marshal request: %s", err)
+	if err := buf.EncodeMessage(request); err != nil {
+		return id, fmt.Errorf("failed to marshal request: %s", err)
 	}
 
 	payload := buf.Bytes()
 	binary.BigEndian.PutUint32(b, uint32(len(payload)))
 	b = append(b[:4], payload...)
 
-	if err = c.write(b); err != nil {
-		return UnrecoverableError{err}
+	if err := c.write(b); err != nil {
+		return id, UnrecoverableError{err}
 	}
 	c.inFlightUp()
-	return nil
+	return id, nil
 }

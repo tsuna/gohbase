@@ -55,7 +55,7 @@ func (ct *AddColumn) Name() string {
 }
 
 // ToProto converts the RPC into a protobuf message
-func (ct *AddColumn) ToProto() (proto.Message, error) {
+func (ct *AddColumn) ToProto() proto.Message {
 	pbFamilies := make([]*pb.ColumnFamilySchema, 0, len(ct.families))
 	for family, attrs := range ct.families {
 		f := &pb.ColumnFamilySchema{
@@ -83,7 +83,7 @@ func (ct *AddColumn) ToProto() (proto.Message, error) {
 				Qualifier: table,
 		},
 		ColumnFamilies: pbFamilies[0],
-	}, nil
+	}
 }
 
 // NewResponse creates an empty protobuf message to read the response of this

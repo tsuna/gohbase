@@ -204,7 +204,8 @@ func init() {
 
 // NewClient creates a new test region client.
 func NewClient(ctx context.Context, addr string, ctype ClientType,
-	queueSize int, flushInterval time.Duration, effectiveUser string) (hrpc.RegionClient, error) {
+	queueSize int, flushInterval time.Duration, effectiveUser string,
+	readTimeout time.Duration) (hrpc.RegionClient, error) {
 	m.Lock()
 	clients[addr]++
 	m.Unlock()

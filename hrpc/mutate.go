@@ -6,15 +6,10 @@
 package hrpc
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
-	"reflect"
-	"strings"
 	"time"
-	"unsafe"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
@@ -32,6 +27,8 @@ var (
 	// ErrUnsupportedInts is returned when this message is serialized and ints
 	// are unsupported on your platform (this will probably never happen)
 	ErrUnsupportedInts = errors.New("ints are unsupported on your platform")
+
+	attributeNameTTL = "_ttl"
 )
 
 // DurabilityType is used to set durability for Durability option
@@ -59,16 +56,35 @@ type Mutate struct {
 	// values is a map of column families to a map of column qualifiers to bytes
 	values map[string]map[string][]byte
 
-	// data is a struct passed in that has fields tagged to represent HBase
-	// columns
-	data interface{}
+	ttl              []byte
+	timestamp        uint64
+	durability       DurabilityType
+	deleteOneVersion bool
+	skipbatch        bool
+}
 
-	timestamp  uint64
-	durability DurabilityType
-	skipbatch  bool
+// TTL sets a time-to-live for mutation queries.
+// The value will be in millisecond resolution.
+func TTL(t time.Duration) func(Call) error {
+	return func(o Call) error {
+		m, ok := o.(*Mutate)
+		if !ok {
+			return errors.New("'TTL' option can only be used with mutation queries")
+		}
+
+		buf := make([]byte, 8)
+		binary.BigEndian.PutUint64(buf, uint64(t.Nanoseconds()/1e6))
+		m.ttl = buf
+
+		return nil
+	}
 }
 
 // Timestamp sets timestamp for mutation queries.
+// The time object passed will be rounded to a millisecond resolution, as by default,
+// if no timestamp is provided, HBase sets it to current time in milliseconds.
+// In order to have custom time precision, use TimestampUint64 call option for
+// mutation requests and corresponding TimeRangeUint64 for retrieval requests.
 func Timestamp(ts time.Time) func(Call) error {
 	return func(o Call) error {
 		m, ok := o.(*Mutate)
@@ -76,6 +92,18 @@ func Timestamp(ts time.Time) func(Call) error {
 			return errors.New("'Timestamp' option can only be used with mutation queries")
 		}
 		m.timestamp = uint64(ts.UnixNano() / 1e6)
+		return nil
+	}
+}
+
+// TimestampUint64 sets timestamp for mutation queries.
+func TimestampUint64(ts uint64) func(Call) error {
+	return func(o Call) error {
+		m, ok := o.(*Mutate)
+		if !ok {
+			return errors.New("'TimestampUint64' option can only be used with mutation queries")
+		}
+		m.timestamp = ts
 		return nil
 	}
 }
@@ -95,17 +123,34 @@ func Durability(d DurabilityType) func(Call) error {
 	}
 }
 
+// DeleteOneVersion is a delete option that can be passed in order to delete only
+// one latest version of the specified qualifiers. Without timestamp specified,
+// it will have no effect for delete specific column families request.
+// If a Timestamp option is passed along, only the version at that timestamp will be removed
+// for delete specific column families and/or qualifier request.
+// This option cannot be used for delete entire row request.
+func DeleteOneVersion() func(Call) error {
+	return func(o Call) error {
+		m, ok := o.(*Mutate)
+		if !ok {
+			return errors.New("'DeleteOneVersion' option can only be used with mutation queries")
+		}
+		m.deleteOneVersion = true
+		return nil
+	}
+}
+
 // baseMutate returns a Mutate struct without the mutationType filled in.
 func baseMutate(ctx context.Context, table, key string, values map[string]map[string][]byte,
-	data interface{}, options ...func(Call) error) (*Mutate, error) {
+	options ...func(Call) error) (*Mutate, error) {
 	m := &Mutate{
 		base: base{
-			table: []byte(table),
-			key:   []byte(key),
-			ctx:   ctx,
+			table:    []byte(table),
+			key:      []byte(key),
+			ctx:      ctx,
+			resultch: make(chan RPCResult, 1),
 		},
 		values:    values,
-		data:      data,
 		timestamp: MaxTimestamp,
 	}
 	err := applyOptions(m, options...)
@@ -119,7 +164,7 @@ func baseMutate(ctx context.Context, table, key string, values map[string]map[st
 // family-column-values in the given row key of the given table.
 func NewPutStr(ctx context.Context, table, key string,
 	values map[string]map[string][]byte, options ...func(Call) error) (*Mutate, error) {
-	m, err := baseMutate(ctx, table, key, values, nil, options...)
+	m, err := baseMutate(ctx, table, key, values, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -127,46 +172,43 @@ func NewPutStr(ctx context.Context, table, key string,
 	return m, nil
 }
 
-// NewPutStrRef creates a new Mutation request to insert the given
-// data structure in the given row key of the given table.  The `data'
-// argument must be a string with fields defined using the "hbase" tag.
-func NewPutStrRef(ctx context.Context, table, key string, data interface{},
-	options ...func(Call) error) (*Mutate, error) {
-	if !isAStruct(data) {
-		return nil, ErrNotAStruct
-	}
-	m, err := baseMutate(ctx, table, key, nil, data, options...)
-	if err != nil {
-		return nil, err
-	}
-	m.mutationType = pb.MutationProto_PUT
-	return m, nil
-}
-
-// NewDelStr creates a new Mutation request to delete the given
-// family-column-values from the given row key of the given table.
+// NewDelStr is used to perform Delete operations on a single row.
+// To delete entire row, values should be nil.
+//
+// To delete specific families, qualifiers map should be nil:
+//  map[string]map[string][]byte{
+//		"cf1": nil,
+//		"cf2": nil,
+//  }
+//
+// To delete specific qualifiers:
+//  map[string]map[string][]byte{
+//      "cf": map[string][]byte{
+//			"q1": nil,
+//			"q2": nil,
+//		},
+//  }
+//
+// To delete all versions before and at a timestamp, pass hrpc.Timestamp() option.
+// By default all versions will be removed.
+//
+// To delete only a specific version at a timestamp, pass hrpc.DeleteOneVersion() option
+// along with a timestamp. For delete specific qualifiers request, if timestamp is not
+// passed, only the latest version will be removed. For delete specific families request,
+// the timestamp should be passed or it will have no effect as it's an expensive
+// operation to perform.
 func NewDelStr(ctx context.Context, table, key string,
 	values map[string]map[string][]byte, options ...func(Call) error) (*Mutate, error) {
-	m, err := baseMutate(ctx, table, key, values, nil, options...)
+	m, err := baseMutate(ctx, table, key, values, options...)
 	if err != nil {
 		return nil, err
 	}
-	m.mutationType = pb.MutationProto_DELETE
-	return m, nil
-}
 
-// NewDelStrRef creates a new Mutation request to delete the given
-// data structure from the given row key of the given table.  The `data'
-// argument must be a string with fields defined using the "hbase" tag.
-func NewDelStrRef(ctx context.Context, table, key string, data interface{},
-	options ...func(Call) error) (*Mutate, error) {
-	if !isAStruct(data) {
-		return nil, ErrNotAStruct
+	if len(m.values) == 0 && m.deleteOneVersion {
+		return nil, errors.New(
+			"'DeleteOneVersion' option cannot be specified for delete entire row request")
 	}
-	m, err := baseMutate(ctx, table, key, nil, data, options...)
-	if err != nil {
-		return nil, err
-	}
+
 	m.mutationType = pb.MutationProto_DELETE
 	return m, nil
 }
@@ -176,22 +218,7 @@ func NewDelStrRef(ctx context.Context, table, key string, data interface{},
 // needed), in given row key of the given table.
 func NewAppStr(ctx context.Context, table, key string,
 	values map[string]map[string][]byte, options ...func(Call) error) (*Mutate, error) {
-	m, err := baseMutate(ctx, table, key, values, nil, options...)
-	if err != nil {
-		return nil, err
-	}
-	m.mutationType = pb.MutationProto_APPEND
-	return m, nil
-}
-
-// NewAppStrRef creates a new Mutation request that will append the given values
-// to their existing values in HBase under the given table and key.
-func NewAppStrRef(ctx context.Context, table, key string, data interface{},
-	options ...func(Call) error) (*Mutate, error) {
-	if !isAStruct(data) {
-		return nil, ErrNotAStruct
-	}
-	m, err := baseMutate(ctx, table, key, nil, data, options...)
+	m, err := baseMutate(ctx, table, key, values, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -201,16 +228,11 @@ func NewAppStrRef(ctx context.Context, table, key string, data interface{},
 
 // NewIncStrSingle creates a new Mutation request that will increment the given value
 // by amount in HBase under the given table, key, family and qualifier.
-func NewIncStrSingle(ctx context.Context, table, key string, family string,
-	qualifier string, amount int64, options ...func(Call) error) (*Mutate, error) {
-
-	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, amount)
-	if err != nil {
-		return nil, fmt.Errorf("binary.Write failed: %s", err)
-	}
-
-	value := map[string]map[string][]byte{family: map[string][]byte{qualifier: buf.Bytes()}}
+func NewIncStrSingle(ctx context.Context, table, key, family, qualifier string,
+	amount int64, options ...func(Call) error) (*Mutate, error) {
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, uint64(amount))
+	value := map[string]map[string][]byte{family: map[string][]byte{qualifier: buf}}
 	return NewIncStr(ctx, table, key, value, options...)
 }
 
@@ -218,22 +240,7 @@ func NewIncStrSingle(ctx context.Context, table, key string, family string,
 // in HBase under the given table and key.
 func NewIncStr(ctx context.Context, table, key string,
 	values map[string]map[string][]byte, options ...func(Call) error) (*Mutate, error) {
-	m, err := baseMutate(ctx, table, key, values, nil, options...)
-	if err != nil {
-		return nil, err
-	}
-	m.mutationType = pb.MutationProto_INCREMENT
-	return m, nil
-}
-
-// NewIncStrRef creates a new Mutation request that will increment the given values
-// in HBase under the given table and key.
-func NewIncStrRef(ctx context.Context, table, key string, data interface{},
-	options ...func(Call) error) (*Mutate, error) {
-	if !isAStruct(data) {
-		return nil, ErrNotAStruct
-	}
-	m, err := baseMutate(ctx, table, key, nil, data, options...)
+	m, err := baseMutate(ctx, table, key, values, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -246,11 +253,6 @@ func (m *Mutate) Name() string {
 	return "Mutate"
 }
 
-// ToProto converts this mutate RPC into a protobuf message
-func (m *Mutate) ToProto() (proto.Message, error) {
-	return m.toProto()
-}
-
 // SkipBatch returns true if the Mutate request shouldn't be batched,
 // but should be sent to Region Server right away.
 func (m *Mutate) SkipBatch() bool {
@@ -261,290 +263,90 @@ func (m *Mutate) setSkipBatch(v bool) {
 	m.skipbatch = v
 }
 
-func (m *Mutate) toProto() (*pb.MutateRequest, error) {
-	if m.data == nil {
-		return m.serializeNoReflect(), nil
+func (m *Mutate) toProto() *pb.MutateRequest {
+	var ts *uint64
+	if m.timestamp != MaxTimestamp {
+		ts = &m.timestamp
 	}
-	return m.serializeWithReflect()
-}
 
-func (m *Mutate) serializeNoReflect() *pb.MutateRequest {
 	// We need to convert everything in the values field
 	// to a protobuf ColumnValue
-	bytevalues := make([]*pb.MutationProto_ColumnValue, len(m.values))
+	cvs := make([]*pb.MutationProto_ColumnValue, len(m.values))
 	i := 0
 	for k, v := range m.values {
-		qualvals := make([]*pb.MutationProto_ColumnValue_QualifierValue, len(v))
-		j := 0
 		// And likewise, each item in each column needs to be converted to a
 		// protobuf QualifierValue
-		for k1, v1 := range v {
-			qualvals[j] = &pb.MutationProto_ColumnValue_QualifierValue{
-				Qualifier: []byte(k1),
-				Value:     v1,
+
+		// if it's a delete, figure out the type
+		var dt *pb.MutationProto_DeleteType
+		if m.mutationType == pb.MutationProto_DELETE {
+			if len(v) == 0 {
+				// delete the whole column family
+				if m.deleteOneVersion {
+					dt = pb.MutationProto_DELETE_FAMILY_VERSION.Enum()
+				} else {
+					dt = pb.MutationProto_DELETE_FAMILY.Enum()
+				}
+				// add empty qualifier
+				if v == nil {
+					v = make(map[string][]byte)
+				}
+				v[""] = nil
+			} else {
+				// delete specific qualifiers
+				if m.deleteOneVersion {
+					dt = pb.MutationProto_DELETE_ONE_VERSION.Enum()
+				} else {
+					dt = pb.MutationProto_DELETE_MULTIPLE_VERSIONS.Enum()
+				}
 			}
-			if m.mutationType == pb.MutationProto_DELETE {
-				tmp := pb.MutationProto_DELETE_MULTIPLE_VERSIONS
-				qualvals[j].DeleteType = &tmp
+		}
+
+		qvs := make([]*pb.MutationProto_ColumnValue_QualifierValue, len(v))
+		j := 0
+		for k1, v1 := range v {
+			qvs[j] = &pb.MutationProto_ColumnValue_QualifierValue{
+				Qualifier:  []byte(k1),
+				Value:      v1,
+				Timestamp:  ts,
+				DeleteType: dt,
 			}
 			j++
 		}
-		bytevalues[i] = &pb.MutationProto_ColumnValue{
+		cvs[i] = &pb.MutationProto_ColumnValue{
 			Family:         []byte(k),
-			QualifierValue: qualvals,
+			QualifierValue: qvs,
 		}
 		i++
 	}
-	durability := pb.MutationProto_Durability(m.durability)
+
 	mProto := &pb.MutationProto{
 		Row:         m.key,
 		MutateType:  &m.mutationType,
-		ColumnValue: bytevalues,
-		Durability:  &durability,
+		ColumnValue: cvs,
+		Durability:  pb.MutationProto_Durability(m.durability).Enum(),
+		Timestamp:   ts,
 	}
-	if m.timestamp != MaxTimestamp {
-		mProto.Timestamp = &m.timestamp
+
+	if len(m.ttl) > 0 {
+		mProto.Attribute = append(mProto.Attribute, &pb.NameBytesPair{
+			Name:  &attributeNameTTL,
+			Value: m.ttl,
+		})
 	}
+
 	return &pb.MutateRequest{
 		Region:   m.regionSpecifier(),
 		Mutation: mProto,
 	}
 }
 
-// serializeWithReflect is a helper function for Serialize. It is used when
-// there is a struct with tagged fields to be serialized.
-func (m *Mutate) serializeWithReflect() (*pb.MutateRequest, error) {
-	typeOf := reflect.TypeOf(m.data)
-	valueOf := reflect.Indirect(reflect.ValueOf(m.data))
-
-	columns := make(map[string][]*pb.MutationProto_ColumnValue_QualifierValue)
-
-	for i := 0; i < typeOf.NumField(); i++ {
-		field := typeOf.Field(i)
-		if field.PkgPath != "" {
-			// This is an unexported field of the struct, so we're going to
-			// ignore it
-			continue
-		}
-
-		tagval := field.Tag.Get("hbase")
-		if tagval == "" {
-			// If the tag is empty, we're going to ignore this field
-			continue
-		}
-		cnames := strings.SplitN(tagval, ":", 2)
-		if len(cnames) != 2 {
-			// If the tag doesn't contain a colon, it's set improperly
-			return nil, fmt.Errorf("invalid column family and column qualifier: \"%s\"", cnames)
-		}
-		cfamily := cnames[0]
-		cqualifier := cnames[1]
-
-		binaryValue, err := valueToBytes(valueOf.Field(i))
-		if err != nil {
-			return nil, err
-		}
-
-		qualVal := &pb.MutationProto_ColumnValue_QualifierValue{
-			Qualifier: []byte(cqualifier),
-			Value:     binaryValue,
-		}
-
-		if m.mutationType == pb.MutationProto_DELETE {
-			tmp := pb.MutationProto_DELETE_MULTIPLE_VERSIONS
-			qualVal.DeleteType = &tmp
-		}
-		columns[cfamily] = append(columns[cfamily], qualVal)
-	}
-
-	pbcolumns := make([]*pb.MutationProto_ColumnValue, 0, len(columns))
-	for k, v := range columns {
-		colval := &pb.MutationProto_ColumnValue{
-			Family:         []byte(k),
-			QualifierValue: v,
-		}
-		pbcolumns = append(pbcolumns, colval)
-
-	}
-	durability := pb.MutationProto_Durability(m.durability)
-	mProto := &pb.MutationProto{
-		Row:         m.key,
-		MutateType:  &m.mutationType,
-		ColumnValue: pbcolumns,
-		Durability:  &durability,
-	}
-	if m.timestamp != MaxTimestamp {
-		mProto.Timestamp = &m.timestamp
-	}
-	return &pb.MutateRequest{
-		Region:   m.regionSpecifier(),
-		Mutation: mProto,
-	}, nil
+// ToProto converts this mutate RPC into a protobuf message
+func (m *Mutate) ToProto() proto.Message {
+	return m.toProto()
 }
 
-// valueToBytes will convert a given value from the reflect package into its
-// underlying bytes
-func valueToBytes(val reflect.Value) ([]byte, error) {
-	switch val.Kind() {
-	case reflect.Bool:
-		if val.Bool() {
-			return []byte{1}, nil
-		}
-		return []byte{0}, nil
-
-	case reflect.Uint:
-		switch unsafe.Sizeof(unsafe.Pointer(val.UnsafeAddr())) {
-		case 8:
-			var x uint8
-			return valueToBytes(val.Convert(reflect.TypeOf(x)))
-		case 16:
-			var x uint16
-			return valueToBytes(val.Convert(reflect.TypeOf(x)))
-		case 32:
-			var x uint32
-			return valueToBytes(val.Convert(reflect.TypeOf(x)))
-		case 64:
-			var x uint64
-			return valueToBytes(val.Convert(reflect.TypeOf(x)))
-		default:
-			return nil, ErrUnsupportedUints
-		}
-
-	case reflect.Int:
-		switch unsafe.Sizeof(unsafe.Pointer(val.UnsafeAddr())) {
-		case 8:
-			var x uint8
-			return valueToBytes(val.Convert(reflect.TypeOf(x)))
-		case 16:
-			var x uint16
-			return valueToBytes(val.Convert(reflect.TypeOf(x)))
-		case 32:
-			var x uint32
-			return valueToBytes(val.Convert(reflect.TypeOf(x)))
-		case 64:
-			var x uint64
-			return valueToBytes(val.Convert(reflect.TypeOf(x)))
-		default:
-			return nil, ErrUnsupportedInts
-		}
-
-	case reflect.Int8:
-		var x int8
-		x = val.Interface().(int8)
-		memory := (*(*[1]byte)(unsafe.Pointer(&x)))[:]
-		return copyOf(memory), nil
-	case reflect.Uint8:
-		var x uint8
-		x = val.Interface().(uint8)
-		memory := (*(*[1]byte)(unsafe.Pointer(&x)))[:]
-		return copyOf(memory), nil
-
-	case reflect.Int16:
-		var x int16
-		x = val.Interface().(int16)
-		memory := (*(*[2]byte)(unsafe.Pointer(&x)))[:]
-		return copyOf(memory), nil
-	case reflect.Uint16:
-		var x uint16
-		x = val.Interface().(uint16)
-		memory := (*(*[2]byte)(unsafe.Pointer(&x)))[:]
-		return copyOf(memory), nil
-
-	case reflect.Int32:
-		var x int32
-		x = val.Interface().(int32)
-		memory := (*(*[4]byte)(unsafe.Pointer(&x)))[:]
-		return copyOf(memory), nil
-	case reflect.Uint32:
-		var x uint32
-		x = val.Interface().(uint32)
-		memory := (*(*[4]byte)(unsafe.Pointer(&x)))[:]
-		return copyOf(memory), nil
-	case reflect.Float32:
-		var x float32
-		x = val.Interface().(float32)
-		memory := (*(*[4]byte)(unsafe.Pointer(&x)))[:]
-		return copyOf(memory), nil
-
-	case reflect.Int64:
-		var x int64
-		x = val.Interface().(int64)
-		memory := (*(*[8]byte)(unsafe.Pointer(&x)))[:]
-		return copyOf(memory), nil
-	case reflect.Uint64:
-		var x uint64
-		x = val.Interface().(uint64)
-		memory := (*(*[8]byte)(unsafe.Pointer(&x)))[:]
-		return copyOf(memory), nil
-	case reflect.Float64:
-		var x float64
-		x = val.Interface().(float64)
-		memory := (*(*[8]byte)(unsafe.Pointer(&x)))[:]
-		return copyOf(memory), nil
-	case reflect.Complex64:
-		var x complex64
-		x = val.Interface().(complex64)
-		memory := (*(*[8]byte)(unsafe.Pointer(&x)))[:]
-		return copyOf(memory), nil
-
-	case reflect.Complex128:
-		var x complex128
-		x = val.Interface().(complex128)
-		memory := (*(*[16]byte)(unsafe.Pointer(&x)))[:]
-		return copyOf(memory), nil
-
-	case reflect.Ptr:
-		return valueToBytes(val.Elem())
-
-	case reflect.Array, reflect.Slice:
-		if val.Len() == 0 {
-			return []byte{}, nil
-		}
-		kind := val.Index(0).Kind()
-		if kind == reflect.Array || kind == reflect.Slice || kind == reflect.String {
-			// We won't be able to deserialize this later into the correct types, since
-			// arrays/slices/strings don't have a defined size.
-			return nil, fmt.Errorf("slices and arrays of type %s is unsupported",
-				val.Index(0).Type().Name())
-		}
-		var allbytes []byte
-		for i := 0; i < val.Len(); i++ {
-			morebytes, err := valueToBytes(val.Index(i))
-			if err != nil {
-				return nil, err
-			}
-			allbytes = append(allbytes, morebytes...)
-		}
-		return allbytes, nil
-
-	case reflect.String:
-		return []byte(val.String()), nil
-
-		// Unhandled types, left here for easy reference
-		//case reflect.Invalid:
-		//case reflect.Chan:
-		//case reflect.Func:
-		//case reflect.Interface:
-		//case reflect.Struct:
-		//case reflect.Map:
-		//case reflect.Uintptr:
-		//case reflect.UnsafePointer:
-	}
-	return nil, fmt.Errorf("unsupported type %s, %d", val.Type().Name(), val.Kind())
-}
-
-func copyOf(memory []byte) []byte {
-	memcpy := make([]byte, len(memory))
-	copy(memcpy, memory)
-	return memcpy
-}
-
-func isAStruct(data interface{}) bool {
-	return reflect.TypeOf(data).Kind() == reflect.Struct
-}
-
-// NewResponse creates an empty protobuf message to read the response of this
-// RPC.
+// NewResponse creates an empty protobuf message to read the response of this RPC.
 func (m *Mutate) NewResponse() proto.Message {
 	return &pb.MutateResponse{}
 }

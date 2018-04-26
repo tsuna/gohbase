@@ -65,7 +65,7 @@ func TestCreateTable(t *testing.T) {
 		rsp = append(rsp, res)
 	}
 	if len(rsp) != 1 {
-		t.Errorf("Meta returned %s rows for prefix '%s' , want 1", len(rsp), metaKey)
+		t.Errorf("Meta returned %d rows for prefix '%s' , want 1", len(rsp), metaKey)
 	}
 }
 
@@ -108,7 +108,7 @@ func TestCreatePresplitTable(t *testing.T) {
 		rsp = append(rsp, res)
 	}
 	if len(rsp) != 4 {
-		t.Errorf("Meta returned %s rows for prefix '%s' , want 2", len(rsp), metaKey)
+		t.Errorf("Meta returned %d rows for prefix '%s' , want 2", len(rsp), metaKey)
 	}
 }
 

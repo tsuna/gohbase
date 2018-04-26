@@ -35,6 +35,8 @@ var defaultAttributes = map[string]string{
 	"REPLICATION_SCOPE": "0",
 }
 
+// get namespace, table from base
+
 // NewCreateTable creates a new CreateTable request that will create the given
 // table in HBase. 'families' is a map of column family name to its attributes.
 // For use by the admin client.
@@ -43,8 +45,9 @@ func NewCreateTable(ctx context.Context, table []byte,
 	options ...func(*CreateTable)) *CreateTable {
 	ct := &CreateTable{
 		base: base{
-			table: table,
-			ctx:   ctx,
+			table:    table,
+			ctx:      ctx,
+			resultch: make(chan RPCResult, 1),
 		},
 		families: make(map[string]map[string]string, len(families)),
 	}
@@ -77,7 +80,7 @@ func (ct *CreateTable) Name() string {
 }
 
 // ToProto converts the RPC into a protobuf message
-func (ct *CreateTable) ToProto() (proto.Message, error) {
+func (ct *CreateTable) ToProto() proto.Message {
 	pbFamilies := make([]*pb.ColumnFamilySchema, 0, len(ct.families))
 	for family, attrs := range ct.families {
 		f := &pb.ColumnFamilySchema{
@@ -109,7 +112,7 @@ func (ct *CreateTable) ToProto() (proto.Message, error) {
 			ColumnFamilies: pbFamilies,
 		},
 		SplitKeys: ct.splitKeys,
-	}, nil
+	}
 }
 
 // NewResponse creates an empty protobuf message to read the response of this

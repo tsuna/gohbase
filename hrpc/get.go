@@ -33,9 +33,10 @@ func baseGet(ctx context.Context, table []byte, key []byte,
 	options ...func(Call) error) (*Get, error) {
 	g := &Get{
 		base: base{
-			key:   key,
-			table: table,
-			ctx:   ctx,
+			key:      key,
+			table:    table,
+			ctx:      ctx,
+			resultch: make(chan RPCResult, 1),
 		},
 		baseQuery: newBaseQuery(),
 	}
@@ -92,7 +93,7 @@ func (g *Get) ExistsOnly() {
 }
 
 // ToProto converts this RPC into a protobuf message.
-func (g *Get) ToProto() (proto.Message, error) {
+func (g *Get) ToProto() proto.Message {
 	get := &pb.GetRequest{
 		Region: g.regionSpecifier(),
 		Get: &pb.Get{
@@ -125,14 +126,8 @@ func (g *Get) ToProto() (proto.Message, error) {
 	if g.existsOnly {
 		get.Get.ExistenceOnly = proto.Bool(true)
 	}
-	if g.filter != nil {
-		pbFilter, err := g.filter.ConstructPBFilter()
-		if err != nil {
-			return nil, err
-		}
-		get.Get.Filter = pbFilter
-	}
-	return get, nil
+	get.Get.Filter = g.filter
+	return get
 }
 
 // NewResponse creates an empty protobuf message to read the response of this
