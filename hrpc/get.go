@@ -16,16 +16,10 @@ import (
 type Get struct {
 	base
 	baseQuery
-
-	// Return the row for the given key or, if this key doesn't exist,
-	// whichever key happens to be right before.
-	closestBefore bool
-
 	// Don't return any KeyValue, just say whether the row key exists in the
 	// table or not.
 	existsOnly bool
-
-	skipbatch bool
+	skipbatch  bool
 }
 
 // baseGet returns a Get struct with default values set.
@@ -57,18 +51,6 @@ func NewGet(ctx context.Context, table, key []byte,
 func NewGetStr(ctx context.Context, table, key string,
 	options ...func(Call) error) (*Get, error) {
 	return NewGet(ctx, []byte(table), []byte(key), options...)
-}
-
-// NewGetBefore creates a new Get request for the row with a key equal to or
-// immediately less than the given key, in the given table.
-func NewGetBefore(ctx context.Context, table, key []byte,
-	options ...func(Call) error) (*Get, error) {
-	g, err := baseGet(ctx, table, key, options...)
-	if err != nil {
-		return nil, err
-	}
-	g.closestBefore = true
-	return g, nil
 }
 
 // Name returns the name of this RPC call.
@@ -119,9 +101,6 @@ func (g *Get) ToProto() proto.Message {
 	}
 	if g.toTimestamp != MaxTimestamp {
 		get.Get.TimeRange.To = &g.toTimestamp
-	}
-	if g.closestBefore {
-		get.Get.ClosestRowBefore = proto.Bool(true)
 	}
 	if g.existsOnly {
 		get.Get.ExistenceOnly = proto.Bool(true)
