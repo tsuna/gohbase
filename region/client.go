@@ -50,6 +50,8 @@ var (
 		"org.apache.hadoop.hbase.exceptions.RegionMovedException":   struct{}{},
 		"org.apache.hadoop.hbase.exceptions.RegionOpeningException": struct{}{},
 		"org.apache.hadoop.hbase.ipc.ServerNotRunningYetException":  struct{}{},
+		"org.apache.hadoop.hbase.quotas.RpcThrottlingException":     struct{}{},
+		"org.apache.hadoop.hbase.RetryImmediatelyException":         struct{}{},
 	}
 
 	// javaUnrecoverableExceptions is a map where all Java exceptions that signify
