@@ -14,7 +14,6 @@ import (
 	"sync"
 
 	"github.com/golang/protobuf/proto"
-	log "github.com/sirupsen/logrus"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 )
@@ -246,15 +245,11 @@ func (f *fetcher) fetch() {
 	// TODO: add a deadline
 	rpc := hrpc.NewCloseFromID(context.Background(),
 		f.rpc.Table(), f.scannerID, f.startRow)
-	if _, err := f.SendRPC(rpc); err != nil {
-		// the best we can do in this case is log. If the request fails,
-		// the scanner lease will expired and it will be closed automatically
-		// by hbase anyway.
-		log.WithFields(log.Fields{
-			"err":       err,
-			"scannerID": f.scannerID,
-		}).Error("failed to close scanner")
-	}
+
+	// If the request fails, the scanner lease will be expired
+	// and it will be closed automatically by hbase.
+	// No need to bother clients about that.
+	f.SendRPC(rpc)
 }
 
 func (f *fetcher) next() (*pb.ScanResponse, hrpc.RegionInfo, error) {

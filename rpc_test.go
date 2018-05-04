@@ -69,7 +69,7 @@ func TestSendRPCSanity(t *testing.T) {
 	result := make(chan hrpc.RPCResult, 1)
 
 	// pretend that response is successful
-	expMsg := &pb.GetResponse{}
+	expMsg := &pb.ScanResponse{}
 	result <- hrpc.RPCResult{Msg: expMsg}
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
 	msg, err := c.SendRPC(mockCall)

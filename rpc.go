@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"time"
 
@@ -356,19 +357,28 @@ func (c *client) metaLookup(ctx context.Context,
 	table, key []byte) (hrpc.RegionInfo, string, error) {
 
 	metaKey := createRegionSearchKey(table, key)
-	rpc, err := hrpc.NewGetBefore(ctx, metaTableName, metaKey,
-		hrpc.Families(infoFamily), hrpc.SkipBatch())
+	rpc, err := hrpc.NewScanRange(ctx, metaTableName, metaKey, table,
+		hrpc.Families(infoFamily),
+		hrpc.Reversed(),
+		hrpc.NumberOfRows(1))
 	if err != nil {
 		return nil, "", err
 	}
 
-	resp, err := c.Get(rpc)
-	if err != nil {
-		return nil, "", err
-	}
-
-	if len(resp.Cells) == 0 {
+	scanner := c.Scan(rpc)
+	resp, err := scanner.Next()
+	// TODO: the scanner might quietly fetch one
+	// more row before we close.
+	// Need to implement Limit(int) to avoid this behavior.
+	// There's a server side support for limit starting hbase 2.0
+	// otherwise we need to add tricky code on client side which might
+	// introduce unnecessary complexity.
+	scanner.Close()
+	if err == io.EOF {
 		return nil, "", TableNotFound
+	}
+	if err != nil {
+		return nil, "", err
 	}
 
 	reg, addr, err := region.ParseRegionInfo(resp)

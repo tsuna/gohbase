@@ -55,7 +55,7 @@ var nsreRegion = &pb.Result{Cell: []*pb.Cell{
 
 // makeRegionResult returns a region that spans the whole table
 // and uses name of the table as the hostname of the regionserver
-func makeRegionResult(key []byte) *pb.GetResponse {
+func makeRegionResult(key []byte) *pb.ScanResponse {
 	s := bytes.SplitN(key, []byte(","), 2)
 	fqtable := s[0]
 
@@ -83,32 +83,33 @@ func makeRegionResult(key []byte) *pb.GetResponse {
 	}
 	regionInfoValue = append([]byte("PBUF"), regionInfoValue...)
 
-	return &pb.GetResponse{Result: &pb.Result{Cell: []*pb.Cell{
-		&pb.Cell{
-			Row:       row,
-			Family:    []byte("info"),
-			Qualifier: []byte("regioninfo"),
-			Value:     regionInfoValue,
-		},
-		&pb.Cell{
-			Row:       row,
-			Family:    []byte("info"),
-			Qualifier: []byte("seqnumDuringOpen"),
-			Value:     []byte("\x00\x00\x00\x00\x00\x00\x00\x02"),
-		},
-		&pb.Cell{
-			Row:       row,
-			Family:    []byte("info"),
-			Qualifier: []byte("server"),
-			Value:     fqtable,
-		},
-		&pb.Cell{
-			Row:       row,
-			Family:    []byte("info"),
-			Qualifier: []byte("serverstartcode"),
-			Value:     []byte("\x00\x00\x01N\x02\x92R\xb1"),
-		},
-	}}}
+	return &pb.ScanResponse{Results: []*pb.Result{
+		&pb.Result{Cell: []*pb.Cell{
+			&pb.Cell{
+				Row:       row,
+				Family:    []byte("info"),
+				Qualifier: []byte("regioninfo"),
+				Value:     regionInfoValue,
+			},
+			&pb.Cell{
+				Row:       row,
+				Family:    []byte("info"),
+				Qualifier: []byte("seqnumDuringOpen"),
+				Value:     []byte("\x00\x00\x00\x00\x00\x00\x00\x02"),
+			},
+			&pb.Cell{
+				Row:       row,
+				Family:    []byte("info"),
+				Qualifier: []byte("server"),
+				Value:     fqtable,
+			},
+			&pb.Cell{
+				Row:       row,
+				Family:    []byte("info"),
+				Qualifier: []byte("serverstartcode"),
+				Value:     []byte("\x00\x00\x01N\x02\x92R\xb1"),
+			},
+		}}}}
 }
 
 var metaRow = &pb.Result{Cell: []*pb.Cell{
@@ -264,11 +265,14 @@ func (c *testClient) QueueRPC(call hrpc.Call) {
 		return
 	}
 	if bytes.HasPrefix(call.Key(), []byte("test,")) {
-		call.ResultChan() <- hrpc.RPCResult{Msg: &pb.GetResponse{Result: metaRow}}
+		call.ResultChan() <- hrpc.RPCResult{Msg: &pb.ScanResponse{
+			Results: []*pb.Result{metaRow}}}
 	} else if bytes.HasPrefix(call.Key(), []byte("test1,,")) {
-		call.ResultChan() <- hrpc.RPCResult{Msg: &pb.GetResponse{Result: test1SplitA}}
+		call.ResultChan() <- hrpc.RPCResult{Msg: &pb.ScanResponse{
+			Results: []*pb.Result{test1SplitA}}}
 	} else if bytes.HasPrefix(call.Key(), []byte("nsre,,")) {
-		call.ResultChan() <- hrpc.RPCResult{Msg: &pb.GetResponse{Result: nsreRegion}}
+		call.ResultChan() <- hrpc.RPCResult{Msg: &pb.ScanResponse{
+			Results: []*pb.Result{nsreRegion}}}
 	} else {
 		call.ResultChan() <- hrpc.RPCResult{Msg: makeRegionResult(call.Key())}
 	}
