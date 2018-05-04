@@ -358,11 +358,6 @@ func (c *client) receiveRPCs() {
 					return
 				case RetryableError:
 					continue
-				default:
-					log.WithFields(log.Fields{
-						"client": c,
-						"err":    err,
-					}).Errorf("unexpected error receiving rpc response")
 				}
 			}
 		}
