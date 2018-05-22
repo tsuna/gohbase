@@ -367,12 +367,6 @@ func (c *client) metaLookup(ctx context.Context,
 
 	scanner := c.Scan(rpc)
 	resp, err := scanner.Next()
-	// TODO: the scanner might quietly fetch one
-	// more row before we close.
-	// Need to implement Limit(int) to avoid this behavior.
-	// There's a server side support for limit starting hbase 2.0
-	// otherwise we need to add tricky code on client side which might
-	// introduce unnecessary complexity.
 	scanner.Close()
 	if err == io.EOF {
 		return nil, "", TableNotFound

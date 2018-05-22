@@ -675,6 +675,44 @@ func TestErrConnotFindRegion(t *testing.T) {
 	}
 }
 
+func TestMetaLookupTableNotFound(t *testing.T) {
+	c := newMockClient(nil)
+
+	rc, err := region.NewClient(context.Background(), "regionserver:0",
+		region.RegionClient, 0, 0, "root", region.DefaultReadTimeout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// pretend regionserver:0 has meta table
+	c.metaRegionInfo.SetClient(rc)
+	c.clients.put(rc, c.metaRegionInfo)
+
+	_, _, err = c.metaLookup(context.Background(), []byte("tablenotfound"), []byte(t.Name()))
+	if err != TableNotFound {
+		t.Errorf("Expected error %v, got error %v", TableNotFound, err)
+	}
+}
+
+func TestMetaLookupCanceledContext(t *testing.T) {
+	c := newMockClient(nil)
+
+	rc, err := region.NewClient(context.Background(), "regionserver:0",
+		region.RegionClient, 0, 0, "root", region.DefaultReadTimeout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// pretend regionserver:0 has meta table
+	c.metaRegionInfo.SetClient(rc)
+	c.clients.put(rc, c.metaRegionInfo)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, _, err = c.metaLookup(ctx, []byte("tablenotfound"), []byte(t.Name()))
+	if err != context.Canceled {
+		t.Errorf("Expected error %v, got error %v", context.Canceled, err)
+	}
+}
+
 func TestConcurrentRetryableError(t *testing.T) {
 	ctrl := test.NewController(t)
 	defer ctrl.Finish()

@@ -23,35 +23,79 @@ const noScannerID = math.MaxUint64
 // rowPadding used to pad the row key when constructing a row before
 var rowPadding = []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 
-type re struct {
-	rs []*pb.Result
-	e  error
-}
-
 type scanner struct {
-	f         fetcher
-	once      sync.Once
-	cancel    context.CancelFunc
-	resultsCh chan re
+	RPCClient
+	// rpc is original scan query
+	rpc *hrpc.Scan
+	// scannerID is the id of scanner on current region
+	scannerID uint64
+	// startRow is the start row in the current region
+	startRow []byte
 	// resultsM protext results slice for concurrent calls to Next()
 	resultsM sync.Mutex
 	results  []*pb.Result
+	closed   bool
+}
+
+func (s *scanner) Close() error {
+	if s.closed {
+		return errors.New("scanner has already been closed")
+	}
+	s.closed = true
+	if s.scannerID != noScannerID {
+		go func() {
+			// if we are closing in the middle of scanning a region,
+			// send a close scanner request
+			// TODO: add a deadline
+			rpc := hrpc.NewCloseFromID(context.Background(),
+				s.rpc.Table(), s.scannerID, s.startRow)
+
+			// If the request fails, the scanner lease will be expired
+			// and it will be closed automatically by hbase.
+			// No need to bother clients about that.
+			s.SendRPC(rpc)
+		}()
+	}
+	return nil
+}
+
+func (s *scanner) fetch() ([]*pb.Result, error) {
+	// keep looping until we have error, some non-empty result or until close
+	for {
+		resp, region, err := s.request()
+		if err != nil {
+			s.Close()
+			return nil, err
+		}
+
+		s.update(resp, region)
+
+		if s.shouldClose(resp, region) {
+			s.Close()
+		}
+
+		if rs := resp.Results; len(rs) > 0 {
+			return rs, nil
+		} else if s.closed {
+			return nil, io.EOF
+		}
+	}
 }
 
 func (s *scanner) peek() (*pb.Result, error) {
-	if s.f.ctx.Err() != nil {
-		return nil, io.EOF
-	}
 	if len(s.results) == 0 {
-		re, ok := <-s.resultsCh
-		if !ok {
+		if s.closed {
+			// done scanning
 			return nil, io.EOF
 		}
-		if re.e != nil {
-			return nil, re.e
+
+		rs, err := s.fetch()
+		if err != nil {
+			return nil, err
 		}
-		// fetcher never returns empty results
-		s.results = re.rs
+
+		// fetch cannot return zero results
+		s.results = rs
 	}
 	return s.results[0], nil
 }
@@ -91,19 +135,11 @@ func (s *scanner) coalesce(result, partial *pb.Result) (*pb.Result, bool) {
 }
 
 func newScanner(c RPCClient, rpc *hrpc.Scan) *scanner {
-	ctx, cancel := context.WithCancel(rpc.Context())
-	resultsCh := make(chan re)
 	return &scanner{
-		resultsCh: resultsCh,
-		cancel:    cancel,
-		f: fetcher{
-			RPCClient: c,
-			rpc:       rpc,
-			ctx:       ctx,
-			resultsCh: resultsCh,
-			startRow:  rpc.StartRow(),
-			scannerID: noScannerID,
-		},
+		RPCClient: c,
+		rpc:       rpc,
+		startRow:  rpc.StartRow(),
+		scannerID: noScannerID,
 	}
 }
 
@@ -114,39 +150,34 @@ func toLocalResult(r *pb.Result) *hrpc.Result {
 	return hrpc.ToLocalResult(r)
 }
 
-// Next returns a row at a time.
-// Once all rows are returned, subsequent calls will return nil and io.EOF.
-//
-// In case of an error or Close() was called, only the first call to Next() will
-// return partial result (could be not a complete row) and the actual error,
-// the subsequent calls will return nil and io.EOF.
-//
-// In case a scan rpc has an expired context, partial result and io.EOF will be
-// returned. Clients should check the error of the context they passed if they
-// want to if the scanner was closed because of the deadline.
-//
-// This method is thread safe.
 func (s *scanner) Next() (*hrpc.Result, error) {
-	s.once.Do(func() {
-		go s.f.fetch()
-	})
+	var (
+		result, partial *pb.Result
+		err             error
+	)
 
 	s.resultsM.Lock()
 
-	if s.f.rpc.AllowPartialResults() {
+	select {
+	case <-s.rpc.Context().Done():
+		s.resultsM.Unlock()
+		s.Close()
+		return nil, s.rpc.Context().Err()
+	default:
+	}
+
+	if s.rpc.AllowPartialResults() {
 		// if client handles partials, just return it
-		r, err := s.peek()
+		result, err := s.peek()
 		if err != nil {
 			s.resultsM.Unlock()
 			return nil, err
 		}
 		s.shift()
 		s.resultsM.Unlock()
-		return toLocalResult(r), nil
+		return toLocalResult(result), nil
 	}
 
-	var result, partial *pb.Result
-	var err error
 	for {
 		partial, err = s.peek()
 		if err == io.EOF && result != nil {
@@ -174,105 +205,30 @@ func (s *scanner) Next() (*hrpc.Result, error) {
 	}
 }
 
-// Close should be called if it is desired to stop scanning before getting all of results.
-// If you call Next() after calling Close() you might still get buffered results.
-// Othwerwise, in case all results have been delivered or in case of an error, the Scanner
-// will be closed automatically.
-func (s *scanner) Close() error {
-	s.cancel()
-	return nil
-}
+func (s *scanner) request() (*pb.ScanResponse, hrpc.RegionInfo, error) {
+	var (
+		rpc *hrpc.Scan
+		err error
+	)
 
-type fetcher struct {
-	RPCClient
-	resultsCh chan<- re
-	// rpc is original scan query
-	rpc *hrpc.Scan
-	ctx context.Context
-	// scannerID is the id of scanner on current region
-	scannerID uint64
-	// startRow is the start row in the current region
-	startRow []byte
-}
-
-// trySend sends results and error to results channel. Returns true if scanner is done.
-func (f *fetcher) trySend(rs []*pb.Result, err error) bool {
-	if err == nil && len(rs) == 0 {
-		return false
-	}
-	select {
-	case <-f.ctx.Done():
-		return true
-	case f.resultsCh <- re{rs: rs, e: err}:
-		return false
-	}
-}
-
-// fetch scans results from appropriate region, sends them to client and updates
-// the fetcher for the next scan
-func (f *fetcher) fetch() {
-	for {
-		resp, region, err := f.next()
-		if err != nil {
-			if err != context.Canceled || err != context.DeadlineExceeded {
-				// if the context of the scan rpc wasn't cancelled (same as calling Close()),
-				// return the error to client
-				f.trySend(nil, err)
-			}
-			break
-		}
-
-		f.update(resp, region)
-
-		if f.trySend(resp.Results, nil) {
-			break
-		}
-
-		if f.shouldClose(resp, region) {
-			break
-		}
-	}
-
-	close(f.resultsCh)
-
-	if f.scannerID == noScannerID {
-		// scanner is automatically closed by hbase
-		return
-	}
-
-	// if we are closing in the middle of scanning a region,
-	// send a close scanner request
-	// TODO: add a deadline
-	rpc := hrpc.NewCloseFromID(context.Background(),
-		f.rpc.Table(), f.scannerID, f.startRow)
-
-	// If the request fails, the scanner lease will be expired
-	// and it will be closed automatically by hbase.
-	// No need to bother clients about that.
-	f.SendRPC(rpc)
-}
-
-func (f *fetcher) next() (*pb.ScanResponse, hrpc.RegionInfo, error) {
-	var rpc *hrpc.Scan
-	var err error
-	if f.scannerID == noScannerID {
+	if s.scannerID == noScannerID {
 		// starting to scan on a new region
 		rpc, err = hrpc.NewScanRange(
-			f.ctx,
-			f.rpc.Table(),
-			f.startRow,
-			f.rpc.StopRow(),
-			f.rpc.Options()...,
+			s.rpc.Context(),
+			s.rpc.Table(),
+			s.startRow,
+			s.rpc.StopRow(),
+			s.rpc.Options()...,
 		)
 		if err != nil {
 			return nil, nil, err
 		}
 	} else {
 		// continuing to scan current region
-		rpc = hrpc.NewScanFromID(f.ctx, f.rpc.Table(), f.scannerID, f.startRow)
+		rpc = hrpc.NewScanFromID(s.rpc.Context(), s.rpc.Table(), s.scannerID, s.startRow)
 	}
 
-	res, err := f.SendRPC(rpc)
+	res, err := s.SendRPC(rpc)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -283,26 +239,26 @@ func (f *fetcher) next() (*pb.ScanResponse, hrpc.RegionInfo, error) {
 	return scanres, rpc.Region(), nil
 }
 
-// update updates the fetcher for the next scan request
-func (f *fetcher) update(resp *pb.ScanResponse, region hrpc.RegionInfo) {
+// update updates the scanner for the next scan request
+func (s *scanner) update(resp *pb.ScanResponse, region hrpc.RegionInfo) {
 	if resp.GetMoreResultsInRegion() {
 		if resp.ScannerId != nil {
-			f.scannerID = resp.GetScannerId()
+			s.scannerID = resp.GetScannerId()
 		}
 	} else {
 		// we are done with this region, prepare scan for next region
-		f.scannerID = noScannerID
+		s.scannerID = noScannerID
 
 		// Normal Scan
-		if !f.rpc.Reversed() {
-			f.startRow = region.StopKey()
+		if !s.rpc.Reversed() {
+			s.startRow = region.StopKey()
 			return
 		}
 
 		// Reversed Scan
 		// return if we are at the end
 		if len(region.StartKey()) == 0 {
-			f.startRow = region.StartKey()
+			s.startRow = region.StartKey()
 			return
 		}
 
@@ -310,7 +266,7 @@ func (f *fetcher) update(resp *pb.ScanResponse, region hrpc.RegionInfo) {
 		rsk := region.StartKey()
 		// if last element is 0x0, just shorten the slice
 		if rsk[len(rsk)-1] == 0x0 {
-			f.startRow = rsk[:len(rsk)-1]
+			s.startRow = rsk[:len(rsk)-1]
 			return
 		}
 
@@ -318,45 +274,38 @@ func (f *fetcher) update(resp *pb.ScanResponse, region hrpc.RegionInfo) {
 		tmp := make([]byte, len(rsk), len(rsk)+len(rowPadding))
 		copy(tmp, rsk)
 		tmp[len(tmp)-1] = tmp[len(tmp)-1] - 1
-		f.startRow = append(tmp, rowPadding...)
+		s.startRow = append(tmp, rowPadding...)
 	}
 }
 
 // shouldClose check if this scanner should be closed and should stop fetching new results
-func (f *fetcher) shouldClose(resp *pb.ScanResponse, region hrpc.RegionInfo) bool {
-	select {
-	case <-f.ctx.Done():
-		// scanner has been asked to close
-		return true
-	default:
-	}
-
+func (s *scanner) shouldClose(resp *pb.ScanResponse, region hrpc.RegionInfo) bool {
 	if resp.MoreResults != nil && !*resp.MoreResults {
 		// the filter for the whole scan has been exhausted, close the scanner
 		return true
 	}
 
-	if f.scannerID != noScannerID {
+	if s.scannerID != noScannerID {
 		// not done with this region yet
 		return false
 	}
 
 	// Check to see if this region is the last we should scan because:
 	// (1) it's the last region
-	if len(region.StopKey()) == 0 && !f.rpc.Reversed() {
+	if len(region.StopKey()) == 0 && !s.rpc.Reversed() {
 		return true
 	}
-	if f.rpc.Reversed() && len(region.StartKey()) == 0 {
+	if s.rpc.Reversed() && len(region.StartKey()) == 0 {
 		return true
 	}
 	// (3) because its stop_key is greater than or equal to the stop_key of this scanner,
 	// provided that (2) we're not trying to scan until the end of the table.
-	if !f.rpc.Reversed() {
-		return len(f.rpc.StopRow()) != 0 && // (2)
-			bytes.Compare(f.rpc.StopRow(), region.StopKey()) <= 0 // (3)
+	if !s.rpc.Reversed() {
+		return len(s.rpc.StopRow()) != 0 && // (2)
+			bytes.Compare(s.rpc.StopRow(), region.StopKey()) <= 0 // (3)
 	}
 
 	//  Reversed Scanner
-	return len(f.rpc.StopRow()) != 0 && // (2)
-		bytes.Compare(f.rpc.StopRow(), region.StartKey()) >= 0 // (3)
+	return len(s.rpc.StopRow()) != 0 && // (2)
+		bytes.Compare(s.rpc.StopRow(), region.StartKey()) >= 0 // (3)
 }

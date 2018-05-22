@@ -1013,7 +1013,7 @@ func checkResultRow(t *testing.T, res *hrpc.Result, expectedRow string, err, exp
 }
 
 func TestScannerClose(t *testing.T) {
-	key := "TestScannerClose"
+	key := t.Name()
 	c := gohbase.NewClient(*host)
 	defer c.Close()
 
@@ -1055,7 +1055,7 @@ func TestScannerClose(t *testing.T) {
 }
 
 func TestScannerContextCancel(t *testing.T) {
-	key := "TestScanner"
+	key := t.Name()
 	c := gohbase.NewClient(*host)
 	defer c.Close()
 
@@ -1086,11 +1086,8 @@ func TestScannerContextCancel(t *testing.T) {
 
 	cancel()
 
-	// make sure we get io.EOF eventually
-	for {
-		if _, err = scanner.Next(); err == io.EOF {
-			break
-		}
+	if _, err = scanner.Next(); err != context.Canceled {
+		t.Fatalf("unexpected error %v, expected %v", err, context.Canceled)
 	}
 }
 

@@ -262,9 +262,7 @@ func (c *testClient) QueueRPC(call hrpc.Call) {
 	if bytes.HasSuffix(call.Key(), bytes.Repeat([]byte{0}, 17)) {
 		// meta region probe, return empty to signify that region is online
 		call.ResultChan() <- hrpc.RPCResult{}
-		return
-	}
-	if bytes.HasPrefix(call.Key(), []byte("test,")) {
+	} else if bytes.HasPrefix(call.Key(), []byte("test,")) {
 		call.ResultChan() <- hrpc.RPCResult{Msg: &pb.ScanResponse{
 			Results: []*pb.Result{metaRow}}}
 	} else if bytes.HasPrefix(call.Key(), []byte("test1,,")) {
@@ -273,6 +271,11 @@ func (c *testClient) QueueRPC(call hrpc.Call) {
 	} else if bytes.HasPrefix(call.Key(), []byte("nsre,,")) {
 		call.ResultChan() <- hrpc.RPCResult{Msg: &pb.ScanResponse{
 			Results: []*pb.Result{nsreRegion}}}
+	} else if bytes.HasPrefix(call.Key(), []byte("tablenotfound,")) {
+		call.ResultChan() <- hrpc.RPCResult{Msg: &pb.ScanResponse{
+			Results:     []*pb.Result{},
+			MoreResults: proto.Bool(false),
+		}}
 	} else {
 		call.ResultChan() <- hrpc.RPCResult{Msg: makeRegionResult(call.Key())}
 	}

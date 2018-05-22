@@ -38,15 +38,11 @@ const (
 // otherwise Close method should be called.
 type Scanner interface {
 	// Next returns a row at a time.
-	// Once all rows are returned, subsequent calls will return nil and io.EOF.
+	// Once all rows are returned, subsequent calls will return io.EOF error.
 	//
-	// In case of an error or Close() was called, only the first call to Next() will
-	// return partial result (could be not a complete row) and the actual error,
-	// the subsequent calls will return nil and io.EOF.
-	//
-	// In case a scan rpc has an expired context, partial result and io.EOF will be
-	// returned. Clients should check the error of the context they passed if they
-	// want to if the scanner was closed because of the deadline.
+	// In case of an error, only the first call to Next() will return partial
+	// result (could be not a complete row) and the actual error,
+	// the subsequent calls will return io.EOF error.
 	//
 	// This method is thread safe.
 	Next() (*Result, error)
