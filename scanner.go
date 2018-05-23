@@ -11,7 +11,6 @@ import (
 	"errors"
 	"io"
 	"math"
-	"sync"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
@@ -31,8 +30,6 @@ type scanner struct {
 	scannerID uint64
 	// startRow is the start row in the current region
 	startRow []byte
-	// resultsM protext results slice for concurrent calls to Next()
-	resultsM sync.Mutex
 	results  []*pb.Result
 	closed   bool
 }
@@ -156,11 +153,8 @@ func (s *scanner) Next() (*hrpc.Result, error) {
 		err             error
 	)
 
-	s.resultsM.Lock()
-
 	select {
 	case <-s.rpc.Context().Done():
-		s.resultsM.Unlock()
 		s.Close()
 		return nil, s.rpc.Context().Err()
 	default:
@@ -170,11 +164,9 @@ func (s *scanner) Next() (*hrpc.Result, error) {
 		// if client handles partials, just return it
 		result, err := s.peek()
 		if err != nil {
-			s.resultsM.Unlock()
 			return nil, err
 		}
 		s.shift()
-		s.resultsM.Unlock()
 		return toLocalResult(result), nil
 	}
 
@@ -183,12 +175,10 @@ func (s *scanner) Next() (*hrpc.Result, error) {
 		if err == io.EOF && result != nil {
 			// no more results, return what we have. Next call to the Next() will get EOF
 			result.Partial = proto.Bool(false)
-			s.resultsM.Unlock()
 			return toLocalResult(result), nil
 		}
 		if err != nil {
 			// return whatever we have so far and the error
-			s.resultsM.Unlock()
 			return toLocalResult(result), err
 		}
 
@@ -199,7 +189,6 @@ func (s *scanner) Next() (*hrpc.Result, error) {
 		}
 		if !result.GetPartial() {
 			// if not partial anymore, return it
-			s.resultsM.Unlock()
 			return toLocalResult(result), nil
 		}
 	}

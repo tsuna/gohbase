@@ -43,8 +43,6 @@ type Scanner interface {
 	// In case of an error, only the first call to Next() will return partial
 	// result (could be not a complete row) and the actual error,
 	// the subsequent calls will return io.EOF error.
-	//
-	// This method is thread safe.
 	Next() (*Result, error)
 
 	// Close should be called if it is desired to stop scanning before getting all of results.
