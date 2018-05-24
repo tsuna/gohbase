@@ -168,6 +168,10 @@ func (b *base) ResultChan() chan RPCResult {
 // Represents a single cell in HBase (a row will have one cell for every qualifier).
 type Cell pb.Cell
 
+func (c *Cell) String() string {
+	return (*pb.Cell)(c).String()
+}
+
 // cellFromCellBlock deserializes a cell from a reader
 func cellFromCellBlock(b []byte) (*pb.Cell, uint32, error) {
 	if len(b) < 4 {
