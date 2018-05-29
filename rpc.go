@@ -331,8 +331,8 @@ func createRegionSearchKey(table, key []byte) []byte {
 }
 
 // lookupLimit throttles lookups to hbase:meta to metaLookupLimit requests
-// per metaLookupInterval. It returns true if we were lucky enough to
-// reserve right away and false otherwise.
+// per metaLookupInterval. It returns nil if we were lucky enough to
+// reserve right away and errMetaLookupThrottled or context's error otherwise.
 func (c *client) metaLookupLimit(ctx context.Context) error {
 	r := c.metaLookupLimiter.Reserve()
 	if !r.OK() {
