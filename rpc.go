@@ -359,10 +359,6 @@ func (c *client) metaLookupLimit(ctx context.Context) error {
 // metaLookup checks meta table for the region in which the given row key for the given table is.
 func (c *client) metaLookup(ctx context.Context,
 	table, key []byte) (hrpc.RegionInfo, string, error) {
-	if err := c.metaLookupLimit(ctx); err != nil {
-		return nil, "", err
-	}
-
 	metaKey := createRegionSearchKey(table, key)
 	rpc, err := hrpc.NewScanRange(ctx, metaTableName, metaKey, table,
 		hrpc.Families(infoFamily),
