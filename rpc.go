@@ -42,12 +42,12 @@ var (
 	// inconsistency.
 	ErrConnotFindRegion = errors.New("cannot find region for the rpc")
 
-	// ErrMetaLookupThrottled is returned when a lookup for the rpc's region
-	// has been throttled.
-	ErrMetaLookupThrottled = errors.New("lookup to hbase:meta has been throttled")
-
 	// ErrClientClosed is returned when the gohbase client has been closed
 	ErrClientClosed = errors.New("client is closed")
+
+	// errMetaLookupThrottled is returned when a lookup for the rpc's region
+	// has been throttled.
+	errMetaLookupThrottled = errors.New("lookup to hbase:meta has been throttled")
 )
 
 const (
@@ -66,7 +66,7 @@ func (c *client) SendRPC(rpc hrpc.Call) (proto.Message, error) {
 			reg, err = c.findRegion(rpc.Context(), rpc.Table(), rpc.Key())
 			if err == ErrRegionUnavailable {
 				continue
-			} else if err == ErrMetaLookupThrottled {
+			} else if err == errMetaLookupThrottled {
 				// lookup for region has been throttled, check the cache
 				// again but don't count this as SendRPC try as there
 				// might be just too many request going on at a time.
@@ -220,7 +220,7 @@ func (c *client) lookupRegion(ctx context.Context,
 				}).Debug("hbase:meta does not know about this table/key")
 
 				return nil, "", err
-			} else if err == ErrMetaLookupThrottled {
+			} else if err == errMetaLookupThrottled {
 				return nil, "", err
 			} else if err == ErrClientClosed {
 				return nil, "", err
@@ -333,7 +333,7 @@ func createRegionSearchKey(table, key []byte) []byte {
 // lookupLimit throttles lookups to hbase:meta to metaLookupLimit requests
 // per metaLookupInterval. It returns true if we were lucky enough to
 // reserve right away and false otherwise.
-func (c *client) metaLookupLimit(ctx context.Context) bool {
+func (c *client) metaLookupLimit(ctx context.Context) error {
 	r := c.metaLookupLimiter.Reserve()
 	if !r.OK() {
 		panic("wtf: cannot reserve a meta lookup")
@@ -341,20 +341,27 @@ func (c *client) metaLookupLimit(ctx context.Context) bool {
 
 	delay := r.Delay()
 	if delay <= 0 {
-		return true
+		return nil
 	}
 
-	// wait until it's our turn or passed context has expired
-	ctx, cancel := context.WithTimeout(ctx, delay)
-	<-ctx.Done()
-	cancel()
-
-	return false
+	// We've been rate limitted
+	t := time.NewTimer(delay)
+	defer t.Stop()
+	select {
+	case <-t.C:
+		return errMetaLookupThrottled
+	case <-ctx.Done():
+		r.Cancel()
+		return ctx.Err()
+	}
 }
 
 // metaLookup checks meta table for the region in which the given row key for the given table is.
 func (c *client) metaLookup(ctx context.Context,
 	table, key []byte) (hrpc.RegionInfo, string, error) {
+	if err := c.metaLookupLimit(ctx); err != nil {
+		return nil, "", err
+	}
 
 	metaKey := createRegionSearchKey(table, key)
 	rpc, err := hrpc.NewScanRange(ctx, metaTableName, metaKey, table,
@@ -493,7 +500,7 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 				}).Info("region became dead while establishing client for it")
 
 				return
-			} else if err == ErrMetaLookupThrottled {
+			} else if err == errMetaLookupThrottled {
 				// We've been throttled, backoff and retry the lookup
 				// TODO: backoff might be unnecessary
 				reg = originalReg

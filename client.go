@@ -32,12 +32,8 @@ const (
 	defaultEffectiveUser = "root"
 	// metaBurst is maxmium number of request allowed at once.
 	metaBurst = 100
-)
-
-var (
 	// metaLimit is rate at which to throttle requests to hbase:meta table.
-	// 100 request per 100 milliseconds.
-	metaLimit = 100 * rate.Every(100*time.Millisecond)
+	metaLimit = rate.Limit(1000)
 )
 
 // Client a regular HBase client
