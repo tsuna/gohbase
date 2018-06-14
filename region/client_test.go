@@ -665,13 +665,18 @@ func TestProcessRPCs(t *testing.T) {
 	defer ctrl.Finish()
 
 	tests := []struct {
-		qsize    int
-		interval time.Duration
-		ncalls   int
-		nsent    int
+		qsize      int
+		interval   time.Duration
+		ncalls     int
+		minsent    int
+		maxsent    int
+		concurrent bool
 	}{
-		{qsize: 100000, interval: 30 * time.Millisecond, ncalls: 100, nsent: 1},
-		{qsize: 2, interval: 1000 * time.Hour, ncalls: 100, nsent: 50},
+		{qsize: 100000, interval: 30 * time.Millisecond, ncalls: 100,
+			minsent: 1, maxsent: 1},
+		{qsize: 2, interval: 1000 * time.Hour, ncalls: 100, minsent: 50, maxsent: 50},
+		{qsize: 100, interval: 0 * time.Millisecond, ncalls: 1000,
+			minsent: 10, maxsent: 700, concurrent: true},
 	}
 
 	for i, tcase := range tests {
@@ -695,13 +700,17 @@ func TestProcessRPCs(t *testing.T) {
 				wgProcessRPCs.Done()
 			}()
 
+			var sent int32
 			var wgWrite sync.WaitGroup
-			wgWrite.Add(tcase.nsent)
-			mockConn.EXPECT().Write(gomock.Any()).
-				Times(tcase.nsent).Return(42, nil).Do(func(buf []byte) {
-				wgWrite.Done() // test will timeout if some rpcs are never processed
+			wgWrite.Add(tcase.minsent)
+			mockConn.EXPECT().Write(gomock.Any()).MinTimes(tcase.minsent).
+				MaxTimes(tcase.maxsent).Return(42, nil).Do(func(buf []byte) {
+				if atomic.AddInt32(&sent, 1) <= int32(tcase.minsent) {
+					wgWrite.Done() // test will timeout if didn't get at least minsent
+				}
 			})
-			mockConn.EXPECT().SetReadDeadline(gomock.Any()).Times(tcase.nsent)
+			mockConn.EXPECT().SetReadDeadline(gomock.Any()).
+				MinTimes(tcase.minsent).MaxTimes(tcase.maxsent)
 
 			calls := make([]hrpc.Call, tcase.ncalls)
 			for i := range calls {
@@ -713,17 +722,31 @@ func TestProcessRPCs(t *testing.T) {
 				calls[i] = call
 			}
 
-			for _, call := range calls {
-				c.QueueRPC(call)
+			if tcase.concurrent {
+				var wg sync.WaitGroup
+				for _, call := range calls {
+					wg.Add(1)
+					go func(call hrpc.Call) {
+						c.QueueRPC(call)
+						wg.Done()
+					}(call)
+				}
+				wg.Wait()
+			} else {
+				for _, call := range calls {
+					c.QueueRPC(call)
+				}
 			}
 
 			wgWrite.Wait()
 
 			c.Close()
 			wgProcessRPCs.Wait()
+			t.Log("num batches sent", sent)
 
-			if int(c.inFlight) != tcase.nsent {
-				t.Errorf("expected %d in-flight rpcs, got %d", tcase.nsent, c.inFlight)
+			if f := int(c.inFlight); f < tcase.minsent || f > tcase.maxsent {
+				t.Errorf("expected [%d:%d] in-flight rpcs, got %d",
+					tcase.minsent, tcase.maxsent, c.inFlight)
 			}
 		})
 	}

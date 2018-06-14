@@ -11,8 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/time/rate"
-
 	"github.com/cznic/b"
 	"github.com/golang/protobuf/proto"
 	log "github.com/sirupsen/logrus"
@@ -20,6 +18,7 @@ import (
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
 	"github.com/tsuna/gohbase/zk"
+	"golang.org/x/time/rate"
 )
 
 const (
@@ -30,10 +29,10 @@ const (
 	defaultZkRoot        = "/hbase"
 	defaultZkTimeout     = 30 * time.Second
 	defaultEffectiveUser = "root"
-	// metaBurst is maxmium number of request allowed at once.
-	metaBurst = 100
+	// metaBurst is maximum number of request allowed at once.
+	metaBurst = 10
 	// metaLimit is rate at which to throttle requests to hbase:meta table.
-	metaLimit = rate.Limit(1000)
+	metaLimit = rate.Limit(100)
 )
 
 // Client a regular HBase client

@@ -270,45 +270,81 @@ func (c *client) processRPCs() {
 	// TODO: use sync pool for multi
 	// TODO: if multi has only one call, send that call instead
 	m := newMulti(c.rpcQueueSize)
+	defer func() {
+		m.returnResults(nil, ErrClientDead)
+	}()
 
-	ticker := time.NewTicker(c.flushInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-c.done:
-			m.returnResults(nil, ErrClientDead)
-			return
-		case <-ticker.C:
-			if m.len() == 0 {
-				continue
-			}
-
-			if log.GetLevel() == log.DebugLevel {
-				log.WithFields(log.Fields{
-					"len":  m.len(),
-					"addr": c.Addr(),
-				}).Debug("sending MultiRequest: flush interval tick")
-			}
-
-			if err := c.trySend(m); err != nil {
-				m.returnResults(nil, err)
-			}
-			m = newMulti(c.rpcQueueSize)
-		case rpc := <-c.rpcs:
-			if m.add(rpc) {
-				if log.GetLevel() == log.DebugLevel {
-					log.WithFields(log.Fields{
-						"len":  m.len(),
-						"addr": c.Addr(),
-					}).Debug("sending MultiRequest: batch is full")
-				}
-
-				if err := c.trySend(m); err != nil {
-					m.returnResults(nil, err)
-				}
-				m = newMulti(c.rpcQueueSize)
-			}
+	flush := func() {
+		if log.GetLevel() == log.DebugLevel {
+			log.WithFields(log.Fields{
+				"len":  m.len(),
+				"addr": c.Addr(),
+			}).Debug("flushing MultiRequest")
 		}
+		if err := c.trySend(m); err != nil {
+			m.returnResults(nil, err)
+		}
+		m = newMulti(c.rpcQueueSize)
+	}
+
+	for {
+		// first loop is to accomodate request heavy workload
+		// it will batch as long as conccurent writers are sending
+		// new rpcs or until multi is filled up
+		for {
+			select {
+			case <-c.done:
+				return
+			case rpc := <-c.rpcs:
+				// have things queued up, batch them
+				if !m.add(rpc) {
+					// can still put more rpcs into batch
+					continue
+				}
+			default:
+				// no more rpcs queued up
+			}
+			break
+		}
+
+		if l := m.len(); l == 0 {
+			// wait for the next batch
+			select {
+			case <-c.done:
+				return
+			case rpc := <-c.rpcs:
+				m.add(rpc)
+			}
+			continue
+		} else if l == c.rpcQueueSize || c.flushInterval == 0 {
+			// batch is full, flush
+			flush()
+			continue
+		}
+
+		// second loop is to accomodate less frequent callers
+		// that would like to maximize their batches at the expense
+		// of waiting for flushInteval
+		timer := time.NewTimer(c.flushInterval)
+		for {
+			select {
+			case <-c.done:
+				return
+			case <-timer.C:
+				// time to flush
+			case rpc := <-c.rpcs:
+				if !m.add(rpc) {
+					// can still put more rpcs into batch
+					continue
+				}
+				// batch is full
+				if !timer.Stop() {
+					<-timer.C
+				}
+			}
+			break
+		}
+		flush()
 	}
 }
 
