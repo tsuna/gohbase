@@ -134,16 +134,6 @@ func NewScanRangeStr(ctx context.Context, table, startRow, stopRow string,
 	return NewScanRange(ctx, []byte(table), []byte(startRow), []byte(stopRow), options...)
 }
 
-// NewScanFromID creates a new Scan request that will return additional
-// results from the given scanner ID.  This is an internal method, users
-// are not expected to deal with scanner IDs.
-func NewScanFromID(ctx context.Context, table []byte, scannerID uint64, startRow []byte) *Scan {
-	scan, _ := baseScan(ctx, table)
-	scan.scannerID = scannerID
-	scan.key = startRow
-	return scan
-}
-
 // NewCloseFromID creates a new Scan request that will close the scanner for
 // the given scanner ID.  This is an internal method, users are not expected
 // to deal with scanner IDs.
@@ -183,6 +173,12 @@ func (s *Scan) AllowPartialResults() bool {
 // Reversed returns true if scanner scans in reverse.
 func (s *Scan) Reversed() bool {
 	return s.reversed
+}
+
+// NumberOfRows returns how many rows this scan
+// fetches from regionserver in a single response.
+func (s *Scan) NumberOfRows() uint32 {
+	return s.numberOfRows
 }
 
 // ToProto converts this Scan into a protobuf message
@@ -257,6 +253,19 @@ func (s *Scan) DeserializeCellBlocks(m proto.Message, b []byte) (uint32, error) 
 		readLen += l
 	}
 	return readLen, nil
+}
+
+// ScannerID is an option for scan requests.
+// This is an internal option to fetch the next set of results for an ongoing scan.
+func ScannerID(id uint64) func(Call) error {
+	return func(s Call) error {
+		scan, ok := s.(*Scan)
+		if !ok {
+			return errors.New("'ScannerID' option can only be used with Scan queries")
+		}
+		scan.scannerID = id
+		return nil
+	}
 }
 
 // MaxResultSize is an option for scan requests.

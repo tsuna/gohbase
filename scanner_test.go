@@ -98,7 +98,7 @@ func TestScanner(t *testing.T) {
 	defer ctrl.Finish()
 	c := mock.NewMockRPCClient(ctrl)
 
-	scan, err := hrpc.NewScan(context.Background(), table)
+	scan, err := hrpc.NewScan(context.Background(), table, hrpc.NumberOfRows(2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,8 @@ func TestScanner(t *testing.T) {
 	var scannerID uint64 = 42
 	scanner := newScanner(c, scan)
 
-	s, err := hrpc.NewScanRange(scan.Context(), table, nil, nil)
+	s, err := hrpc.NewScanRange(scan.Context(), table, nil, nil,
+		hrpc.NumberOfRows(2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,8 +119,14 @@ func TestScanner(t *testing.T) {
 		Results:             dup(resultsPB[:1]),
 	}, nil).Times(1)
 
+	s, err = hrpc.NewScanRange(scan.Context(), table, nil, nil,
+		hrpc.ScannerID(scannerID), hrpc.NumberOfRows(2))
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	c.EXPECT().SendRPC(&scanMatcher{
-		scan: hrpc.NewScanFromID(scan.Context(), table, scannerID, nil),
+		scan: s,
 	}).Do(func(rpc hrpc.Call) {
 		rpc.SetRegion(region1)
 	}).Return(&pb.ScanResponse{
@@ -128,7 +135,8 @@ func TestScanner(t *testing.T) {
 
 	scannerID++
 
-	s, err = hrpc.NewScanRange(scan.Context(), table, []byte("bar"), nil)
+	s, err = hrpc.NewScanRange(scan.Context(), table,
+		[]byte("bar"), nil, hrpc.NumberOfRows(2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +149,8 @@ func TestScanner(t *testing.T) {
 
 	scannerID++
 
-	s, err = hrpc.NewScanRange(scan.Context(), table, []byte("foo"), nil)
+	s, err = hrpc.NewScanRange(scan.Context(), table, []byte("foo"), nil,
+		hrpc.NumberOfRows(2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -309,7 +318,12 @@ func testErrorScanFromID(t *testing.T, scan *hrpc.Scan, out []*hrpc.Result) {
 	}, nil).Times(1)
 
 	outErr := errors.New("WTF")
-	sid := hrpc.NewScanFromID(scan.Context(), table, scannerID, nil)
+
+	sid, err := hrpc.NewScanRange(scan.Context(), table, nil, nil,
+		hrpc.ScannerID(scannerID))
+	if err != nil {
+		t.Fatal(err)
+	}
 	c.EXPECT().SendRPC(&scanMatcher{scan: sid}).Do(func(rpc hrpc.Call) {
 		rpc.SetRegion(region1)
 	}).Return(nil, outErr).Times(1)
@@ -406,14 +420,15 @@ func testPartialResults(t *testing.T, scan *hrpc.Scan, expected []*hrpc.Result) 
 		var s *hrpc.Scan
 		var err error
 		if partial.scanFromID {
-			s = hrpc.NewScanFromID(ctx, table, scannerID, partial.region.StartKey())
+			s, err = hrpc.NewScanRange(ctx, table, partial.region.StartKey(), nil,
+				hrpc.ScannerID(scannerID))
 		} else {
 			s, err = hrpc.NewScanRange(ctx, table, partial.region.StartKey(), nil,
 				scan.Options()...)
-			if err != nil {
-				t.Fatal(err)
-			}
 			scannerID++
+		}
+		if err != nil {
+			t.Fatal(err)
 		}
 
 		c.EXPECT().SendRPC(&scanMatcher{scan: s}).Do(func(rpc hrpc.Call) {
@@ -492,8 +507,12 @@ func TestReversedScanner(t *testing.T) {
 		Results:             dup(resultsPB[1:2]),
 	}, nil).Times(1)
 
+	s, err = hrpc.NewScanRange(ctx, table, nil, nil, hrpc.ScannerID(scannerID))
+	if err != nil {
+		t.Fatal(err)
+	}
 	c.EXPECT().SendRPC(&scanMatcher{
-		scan: hrpc.NewScanFromID(ctx, table, scannerID, nil),
+		scan: s,
 	}).Do(func(rpc hrpc.Call) {
 		rpc.SetRegion(region1)
 	}).Return(&pb.ScanResponse{

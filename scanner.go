@@ -207,14 +207,18 @@ func (s *scanner) request() (*pb.ScanResponse, hrpc.RegionInfo, error) {
 			s.rpc.Table(),
 			s.startRow,
 			s.rpc.StopRow(),
-			s.rpc.Options()...,
-		)
-		if err != nil {
-			return nil, nil, err
-		}
+			s.rpc.Options()...)
 	} else {
 		// continuing to scan current region
-		rpc = hrpc.NewScanFromID(s.rpc.Context(), s.rpc.Table(), s.scannerID, s.startRow)
+		rpc, err = hrpc.NewScanRange(s.rpc.Context(),
+			s.rpc.Table(),
+			s.startRow,
+			nil,
+			hrpc.ScannerID(s.scannerID),
+			hrpc.NumberOfRows(s.rpc.NumberOfRows()))
+	}
+	if err != nil {
+		return nil, nil, err
 	}
 
 	res, err := s.SendRPC(rpc)
