@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 
@@ -44,8 +45,14 @@ func (s *scanner) Close() error {
 			// if we are closing in the middle of scanning a region,
 			// send a close scanner request
 			// TODO: add a deadline
-			rpc := hrpc.NewCloseFromID(context.Background(),
-				s.rpc.Table(), s.scannerID, s.startRow)
+			rpc, err := hrpc.NewScanRange(context.Background(),
+				s.rpc.Table(), s.startRow, nil,
+				hrpc.ScannerID(s.scannerID),
+				hrpc.CloseScanner(),
+				hrpc.NumberOfRows(0))
+			if err != nil {
+				panic(fmt.Sprintf("should not happen: %s", err))
+			}
 
 			// If the request fails, the scanner lease will be expired
 			// and it will be closed automatically by hbase.

@@ -328,11 +328,17 @@ func testErrorScanFromID(t *testing.T, scan *hrpc.Scan, out []*hrpc.Result) {
 		rpc.SetRegion(region1)
 	}).Return(nil, outErr).Times(1)
 
+	sid, err = hrpc.NewScanRange(context.Background(), table, nil, nil,
+		hrpc.ScannerID(scannerID), hrpc.CloseScanner(), hrpc.NumberOfRows(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	// expect scan close rpc to be sent
 	c.EXPECT().SendRPC(&scanMatcher{
-		scan: hrpc.NewCloseFromID(context.Background(), table, scannerID, nil),
+		scan: sid,
 	}).Return(nil, nil).Times(1).Do(func(rpc hrpc.Call) { wg.Done() })
 
 	var r *hrpc.Result

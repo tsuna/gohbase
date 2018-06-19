@@ -134,17 +134,6 @@ func NewScanRangeStr(ctx context.Context, table, startRow, stopRow string,
 	return NewScanRange(ctx, []byte(table), []byte(startRow), []byte(stopRow), options...)
 }
 
-// NewCloseFromID creates a new Scan request that will close the scanner for
-// the given scanner ID.  This is an internal method, users are not expected
-// to deal with scanner IDs.
-func NewCloseFromID(ctx context.Context, table []byte, scannerID uint64, startRow []byte) *Scan {
-	scan, _ := baseScan(ctx, table)
-	scan.scannerID = scannerID
-	scan.closeScanner = true
-	scan.key = startRow
-	return scan
-}
-
 // Name returns the name of this RPC call.
 func (s *Scan) Name() string {
 	return "Scan"
@@ -268,6 +257,21 @@ func ScannerID(id uint64) func(Call) error {
 	}
 }
 
+// CloseScanner is an option for scan requests.
+// Closes scanner after the first result is returned.  This is an internal option
+// but could be useful if you know that your scan result fits into one response
+// in order to save an extra request.
+func CloseScanner() func(Call) error {
+	return func(s Call) error {
+		scan, ok := s.(*Scan)
+		if !ok {
+			return errors.New("'Close' option can only be used with Scan queries")
+		}
+		scan.closeScanner = true
+		return nil
+	}
+}
+
 // MaxResultSize is an option for scan requests.
 // Maximum number of bytes fetched when calling a scanner's next method.
 // MaxResultSize takes priority over NumberOfRows.
@@ -294,9 +298,6 @@ func NumberOfRows(n uint32) func(Call) error {
 		scan, ok := g.(*Scan)
 		if !ok {
 			return errors.New("'NumberOfRows' option can only be used with Scan queries")
-		}
-		if n == 0 {
-			return errors.New("'NumberOfRows' option must be greater than 0")
 		}
 		scan.numberOfRows = n
 		return nil
