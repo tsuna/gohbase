@@ -70,7 +70,8 @@ func (c *client) ClusterStatus() (*pb.ClusterStatus, error) {
 	return r.GetClusterStatus(), nil
 }
 
-func (c *client) ListTableNamesByNamespace(t *hrpc.ListTableNamesByNamespace) ([]*pb.TableName, error) {
+func (c *client) ListTableNamesByNamespace(
+	t *hrpc.ListTableNamesByNamespace) ([]*pb.TableName, error) {
 	pbmsg, err := c.SendRPC(t)
 	if err != nil {
 		return nil, err

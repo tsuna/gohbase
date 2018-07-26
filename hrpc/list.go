@@ -20,7 +20,8 @@ type ListTableNamesByNamespace struct {
 
 // NewListTableNamesByNamespace creates a new ListTableNamesByNamespace request that will list the
 // tables for the given HBase namespace
-func NewListTableNamesByNamespace(ctx context.Context, namespace string) *ListTableNamesByNamespace {
+func NewListTableNamesByNamespace(
+	ctx context.Context, namespace string) *ListTableNamesByNamespace {
 	return &ListTableNamesByNamespace{
 		base: base{
 			ctx:      ctx,
