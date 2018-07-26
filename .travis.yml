@@ -4,9 +4,9 @@ go:
 before_install:
   - go get golang.org/x/tools/cmd/cover github.com/golang/lint/golint
   - >
-    ver=1.4.4 &&
+    ver=1.4.5 &&
     wget -nv http://www.apache.org/dist/hbase/$ver/hbase-$ver-bin.tar.gz &&
-    echo "83DF3A60E937FBE38201AF249A638027541372764C05199EC64AB2220040C6A75BE4EFE7EE952FF6A9689478CDB05B860243403FB6366DB211B85CA5B1DB11C8  hbase-$ver-bin.tar.gz" | sha512sum --strict --check - &&
+    echo "1C34A448DF4E102E7964C6D884C2B1E535DD0CAAE67E6B1592DB2B108A6D3A0FB2D841F7677EB5C38EB6D78F342CB42F8CE90AA6D62A53623C7270234E8C95EE  hbase-$ver-bin.tar.gz" | sha512sum --strict --check - &&
     tar zxf hbase-$ver-bin.tar.gz --exclude=docs &&
     ln -s hbase-$ver hbase
 install:
