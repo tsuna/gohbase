@@ -24,6 +24,7 @@ type AdminClient interface {
 	EnableTable(t *hrpc.EnableTable) error
 	DisableTable(t *hrpc.DisableTable) error
 	ClusterStatus() (*pb.ClusterStatus, error)
+	ListTableNamesByNamespace(*hrpc.ListTableNamesByNamespace) ([]*pb.TableName, error)
 }
 
 // NewAdminClient creates an admin HBase client.
@@ -67,6 +68,19 @@ func (c *client) ClusterStatus() (*pb.ClusterStatus, error) {
 	}
 
 	return r.GetClusterStatus(), nil
+}
+
+func (c *client) ListTableNamesByNamespace(t *hrpc.ListTableNamesByNamespace) ([]*pb.TableName, error) {
+	pbmsg, err := c.SendRPC(t)
+	if err != nil {
+		return nil, err
+	}
+
+	r, ok := pbmsg.(*pb.ListTableNamesByNamespaceResponse)
+	if !ok {
+		return nil, fmt.Errorf("sendRPC returned not a ListTableNamesByNamespaceResponse")
+	}
+	return r.GetTableName(), nil
 }
 
 func (c *client) CreateTable(t *hrpc.CreateTable) error {
