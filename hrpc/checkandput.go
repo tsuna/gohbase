@@ -18,10 +18,10 @@ import (
 type CheckAndPut struct {
 	*Mutate
 
-	family    []byte
-	qualifier []byte
-
-	comparator *pb.Comparator
+	family      []byte
+	qualifier   []byte
+	compareType *pb.CompareType
+	comparator  *pb.Comparator
 }
 
 // NewCheckAndPut creates a new CheckAndPut request that will compare provided
@@ -45,11 +45,17 @@ func NewCheckAndPut(put *Mutate, family string,
 	put.setSkipBatch(true)
 
 	return &CheckAndPut{
-		Mutate:     put,
-		family:     []byte(family),
-		qualifier:  []byte(qualifier),
-		comparator: cmp,
+		Mutate:      put,
+		family:      []byte(family),
+		qualifier:   []byte(qualifier),
+		compareType: pb.CompareType_EQUAL.Enum(),
+		comparator:  cmp,
 	}, nil
+}
+
+//SetCompareType changes the compare type from the default compare type EQUALS
+func (cp *CheckAndPut) SetCompareType(compareType *pb.CompareType) {
+	cp.compareType = compareType
 }
 
 // ToProto converts the RPC into a protobuf message
@@ -59,7 +65,7 @@ func (cp *CheckAndPut) ToProto() proto.Message {
 		Row:         cp.key,
 		Family:      cp.family,
 		Qualifier:   cp.qualifier,
-		CompareType: pb.CompareType_EQUAL.Enum(),
+		CompareType: cp.compareType, //pb.CompareType_EQUAL.Enum(),
 		Comparator:  cp.comparator,
 	}
 	return mutateRequest

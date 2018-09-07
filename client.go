@@ -45,6 +45,8 @@ type Client interface {
 	Increment(i *hrpc.Mutate) (int64, error)
 	CheckAndPut(p *hrpc.Mutate, family string, qualifier string,
 		expectedValue []byte) (bool, error)
+	CheckAndPutExt(p *hrpc.Mutate, family string, qualifier string, expectedValue []byte,
+		compareType *pb.CompareType) (bool, error)
 	Close()
 }
 
@@ -271,10 +273,18 @@ func (c *client) mutate(m *hrpc.Mutate) (*hrpc.Result, error) {
 
 func (c *client) CheckAndPut(p *hrpc.Mutate, family string,
 	qualifier string, expectedValue []byte) (bool, error) {
+	return c.CheckAndPutExt(p, family, qualifier, expectedValue, pb.CompareType_EQUAL.Enum())
+}
+
+//CheckAndPutExt is an extention to CheckAndPut that allows using different kind of comparators
+func (c *client) CheckAndPutExt(p *hrpc.Mutate, family string,
+	qualifier string, expectedValue []byte, compareType *pb.CompareType) (bool, error) {
 	cas, err := hrpc.NewCheckAndPut(p, family, qualifier, expectedValue)
 	if err != nil {
 		return false, err
 	}
+
+	cas.SetCompareType(compareType)
 
 	pbmsg, err := c.SendRPC(cas)
 	if err != nil {
