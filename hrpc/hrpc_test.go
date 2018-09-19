@@ -165,28 +165,34 @@ func (q byQualifier) Less(i, j int) bool {
 
 func TestMutate(t *testing.T) {
 	var (
-		ctx   = context.Background()
-		table = "table"
-		key   = "key"
-		rs    = &pb.RegionSpecifier{
+		ctx      = context.Background()
+		tableStr = "table"
+		keyStr   = "key"
+		table    = []byte("table")
+		key      = []byte("key")
+		rs       = &pb.RegionSpecifier{
 			Type:  pb.RegionSpecifier_REGION_NAME.Enum(),
 			Value: []byte("region"),
 		}
 	)
 
 	tests := []struct {
-		in  func() (*Mutate, error)
-		out *pb.MutateRequest
-		err error
+		in    func() (*Mutate, error)
+		inStr func() (*Mutate, error)
+		out   *pb.MutateRequest
+		err   error
 	}{
 		{
 			in: func() (*Mutate, error) {
-				return NewPutStr(ctx, table, key, nil)
+				return NewPut(ctx, table, key, nil)
+			},
+			inStr: func() (*Mutate, error) {
+				return NewPutStr(ctx, tableStr, keyStr, nil)
 			},
 			out: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:        []byte(key),
+					Row:        key,
 					MutateType: pb.MutationProto_PUT.Enum(),
 					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
 				},
@@ -194,12 +200,15 @@ func TestMutate(t *testing.T) {
 		},
 		{
 			in: func() (*Mutate, error) {
-				return NewPutStr(ctx, table, key, nil, Durability(SkipWal))
+				return NewPut(ctx, table, key, nil, Durability(SkipWal))
+			},
+			inStr: func() (*Mutate, error) {
+				return NewPutStr(ctx, tableStr, keyStr, nil, Durability(SkipWal))
 			},
 			out: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:        []byte(key),
+					Row:        key,
 					MutateType: pb.MutationProto_PUT.Enum(),
 					Durability: pb.MutationProto_SKIP_WAL.Enum(),
 				},
@@ -207,13 +216,19 @@ func TestMutate(t *testing.T) {
 		},
 		{
 			in: func() (*Mutate, error) {
-				return NewPutStr(ctx, table, key, nil, Durability(DurabilityType(42)))
+				return NewPut(ctx, table, key, nil, Durability(DurabilityType(42)))
+			},
+			inStr: func() (*Mutate, error) {
+				return NewPutStr(ctx, tableStr, keyStr, nil, Durability(DurabilityType(42)))
 			},
 			err: errors.New("invalid durability value"),
 		},
 		{
 			in: func() (*Mutate, error) {
-				return NewPutStr(ctx, table, key, nil, TTL(time.Second))
+				return NewPut(ctx, table, key, nil, TTL(time.Second))
+			},
+			inStr: func() (*Mutate, error) {
+				return NewPutStr(ctx, tableStr, keyStr, nil, TTL(time.Second))
 			},
 			out: &pb.MutateRequest{
 				Region: rs,
@@ -232,7 +247,14 @@ func TestMutate(t *testing.T) {
 		},
 		{
 			in: func() (*Mutate, error) {
-				return NewPutStr(ctx, table, key, map[string]map[string][]byte{
+				return NewPut(ctx, table, key, map[string]map[string][]byte{
+					"cf": map[string][]byte{
+						"q": []byte("value"),
+					},
+				})
+			},
+			inStr: func() (*Mutate, error) {
+				return NewPutStr(ctx, tableStr, keyStr, map[string]map[string][]byte{
 					"cf": map[string][]byte{
 						"q": []byte("value"),
 					},
@@ -260,7 +282,18 @@ func TestMutate(t *testing.T) {
 		},
 		{
 			in: func() (*Mutate, error) {
-				return NewPutStr(ctx, table, key, map[string]map[string][]byte{
+				return NewPut(ctx, table, key, map[string]map[string][]byte{
+					"cf1": map[string][]byte{
+						"q1": []byte("value"),
+						"q2": []byte("value"),
+					},
+					"cf2": map[string][]byte{
+						"q1": []byte("value"),
+					},
+				})
+			},
+			inStr: func() (*Mutate, error) {
+				return NewPutStr(ctx, tableStr, keyStr, map[string]map[string][]byte{
 					"cf1": map[string][]byte{
 						"q1": []byte("value"),
 						"q2": []byte("value"),
@@ -305,7 +338,14 @@ func TestMutate(t *testing.T) {
 		},
 		{
 			in: func() (*Mutate, error) {
-				return NewPutStr(ctx, table, key, map[string]map[string][]byte{
+				return NewPut(ctx, table, key, map[string]map[string][]byte{
+					"cf": map[string][]byte{
+						"q": []byte("value"),
+					},
+				}, Timestamp(time.Unix(0, 42*1e6)))
+			},
+			inStr: func() (*Mutate, error) {
+				return NewPutStr(ctx, tableStr, keyStr, map[string]map[string][]byte{
 					"cf": map[string][]byte{
 						"q": []byte("value"),
 					},
@@ -335,7 +375,14 @@ func TestMutate(t *testing.T) {
 		},
 		{
 			in: func() (*Mutate, error) {
-				return NewPutStr(ctx, table, key, map[string]map[string][]byte{
+				return NewPut(ctx, table, key, map[string]map[string][]byte{
+					"cf": map[string][]byte{
+						"q": []byte("value"),
+					},
+				}, TimestampUint64(42))
+			},
+			inStr: func() (*Mutate, error) {
+				return NewPutStr(ctx, tableStr, keyStr, map[string]map[string][]byte{
 					"cf": map[string][]byte{
 						"q": []byte("value"),
 					},
@@ -365,7 +412,10 @@ func TestMutate(t *testing.T) {
 		},
 		{
 			in: func() (*Mutate, error) {
-				return NewDelStr(ctx, table, key, nil)
+				return NewDel(ctx, table, key, nil)
+			},
+			inStr: func() (*Mutate, error) {
+				return NewDelStr(ctx, tableStr, keyStr, nil)
 			},
 			out: &pb.MutateRequest{
 				Region: rs,
@@ -378,7 +428,14 @@ func TestMutate(t *testing.T) {
 		},
 		{
 			in: func() (*Mutate, error) {
-				return NewDelStr(ctx, table, key, map[string]map[string][]byte{
+				return NewDel(ctx, table, key, map[string]map[string][]byte{
+					"cf": map[string][]byte{
+						"q": []byte("value"),
+					},
+				}, TimestampUint64(42))
+			},
+			inStr: func() (*Mutate, error) {
+				return NewDelStr(ctx, tableStr, keyStr, map[string]map[string][]byte{
 					"cf": map[string][]byte{
 						"q": []byte("value"),
 					},
@@ -409,7 +466,10 @@ func TestMutate(t *testing.T) {
 		},
 		{
 			in: func() (*Mutate, error) {
-				return NewAppStr(ctx, table, key, nil)
+				return NewApp(ctx, table, key, nil)
+			},
+			inStr: func() (*Mutate, error) {
+				return NewAppStr(ctx, tableStr, keyStr, nil)
 			},
 			out: &pb.MutateRequest{
 				Region: rs,
@@ -422,7 +482,10 @@ func TestMutate(t *testing.T) {
 		},
 		{
 			in: func() (*Mutate, error) {
-				return NewIncStr(ctx, table, key, nil)
+				return NewInc(ctx, table, key, nil)
+			},
+			inStr: func() (*Mutate, error) {
+				return NewIncStr(ctx, tableStr, keyStr, nil)
 			},
 			out: &pb.MutateRequest{
 				Region: rs,
@@ -435,7 +498,10 @@ func TestMutate(t *testing.T) {
 		},
 		{
 			in: func() (*Mutate, error) {
-				return NewIncStrSingle(ctx, table, key, "cf", "q", 1)
+				return NewIncSingle(ctx, table, key, "cf", "q", 1)
+			},
+			inStr: func() (*Mutate, error) {
+				return NewIncStrSingle(ctx, tableStr, keyStr, "cf", "q", 1)
 			},
 			out: &pb.MutateRequest{
 				Region: rs,
@@ -459,7 +525,12 @@ func TestMutate(t *testing.T) {
 		},
 		{
 			in: func() (*Mutate, error) {
-				return NewDelStr(ctx, table, key, map[string]map[string][]byte{
+				return NewDel(ctx, table, key, map[string]map[string][]byte{
+					"cf": nil,
+				})
+			},
+			inStr: func() (*Mutate, error) {
+				return NewDelStr(ctx, tableStr, keyStr, map[string]map[string][]byte{
 					"cf": nil,
 				})
 			},
@@ -485,7 +556,12 @@ func TestMutate(t *testing.T) {
 		},
 		{
 			in: func() (*Mutate, error) {
-				return NewDelStr(ctx, table, key, map[string]map[string][]byte{
+				return NewDel(ctx, table, key, map[string]map[string][]byte{
+					"cf": nil,
+				}, TimestampUint64(42))
+			},
+			inStr: func() (*Mutate, error) {
+				return NewDelStr(ctx, tableStr, keyStr, map[string]map[string][]byte{
 					"cf": nil,
 				}, TimestampUint64(42))
 			},
@@ -513,7 +589,12 @@ func TestMutate(t *testing.T) {
 		},
 		{
 			in: func() (*Mutate, error) {
-				return NewDelStr(ctx, table, key, map[string]map[string][]byte{
+				return NewDel(ctx, table, key, map[string]map[string][]byte{
+					"cf": nil,
+				}, TimestampUint64(42), DeleteOneVersion())
+			},
+			inStr: func() (*Mutate, error) {
+				return NewDelStr(ctx, tableStr, keyStr, map[string]map[string][]byte{
 					"cf": nil,
 				}, TimestampUint64(42), DeleteOneVersion())
 			},
@@ -541,7 +622,14 @@ func TestMutate(t *testing.T) {
 		},
 		{
 			in: func() (*Mutate, error) {
-				return NewDelStr(ctx, table, key, map[string]map[string][]byte{
+				return NewDel(ctx, table, key, map[string]map[string][]byte{
+					"cf": map[string][]byte{
+						"a": nil,
+					},
+				}, TimestampUint64(42), DeleteOneVersion())
+			},
+			inStr: func() (*Mutate, error) {
+				return NewDelStr(ctx, tableStr, keyStr, map[string]map[string][]byte{
 					"cf": map[string][]byte{
 						"a": nil,
 					},
@@ -571,11 +659,39 @@ func TestMutate(t *testing.T) {
 		},
 		{
 			in: func() (*Mutate, error) {
-				return NewDelStr(ctx, table, key, nil, DeleteOneVersion())
+				return NewDel(ctx, table, key, nil, DeleteOneVersion())
+			},
+			inStr: func() (*Mutate, error) {
+				return NewDelStr(ctx, tableStr, keyStr, nil, DeleteOneVersion())
 			},
 			err: errors.New(
 				"'DeleteOneVersion' option cannot be specified for delete entire row request"),
 		},
+	}
+
+	run := func(t *testing.T, i int, m *Mutate) {
+		if m.Name() != "Mutate" {
+			t.Fatalf("Expected name to be 'Mutate', got %s", m.Name())
+		}
+
+		_, ok := m.NewResponse().(*pb.MutateResponse)
+		if !ok {
+			t.Fatalf("Expected response to have type 'pb.MutateResponse', got %T",
+				m.NewResponse())
+		}
+
+		m.SetRegion(mockRegionInfo([]byte("region")))
+		p := m.ToProto()
+		mr := p.(*pb.MutateRequest)
+
+		sort.Sort(byFamily(mr.Mutation.ColumnValue))
+		for _, cv := range mr.Mutation.ColumnValue {
+			sort.Sort(byQualifier(cv.QualifierValue))
+		}
+
+		if d := test.Diff(tests[i].out, mr); d != "" {
+			t.Fatalf("unexpected error: %s", d)
+		}
 	}
 
 	for i, tcase := range tests {
@@ -587,29 +703,17 @@ func TestMutate(t *testing.T) {
 			if tcase.err != nil {
 				return
 			}
-
-			if m.Name() != "Mutate" {
-				t.Fatalf("Expected name to be 'Mutate', got %s", m.Name())
-			}
-
-			_, ok := m.NewResponse().(*pb.MutateResponse)
-			if !ok {
-				t.Fatalf("Expected response to have type 'pb.MutateResponse', got %T",
-					m.NewResponse())
-			}
-
-			m.SetRegion(mockRegionInfo([]byte("region")))
-			p := m.ToProto()
-			mr := p.(*pb.MutateRequest)
-
-			sort.Sort(byFamily(mr.Mutation.ColumnValue))
-			for _, cv := range mr.Mutation.ColumnValue {
-				sort.Sort(byQualifier(cv.QualifierValue))
-			}
-
-			if d := test.Diff(tcase.out, mr); d != "" {
+			run(t, i, m)
+		})
+		t.Run(strconv.Itoa(i)+" str", func(t *testing.T) {
+			m, err := tcase.inStr()
+			if d := test.Diff(tcase.err, err); d != "" {
 				t.Fatalf("unexpected error: %s", d)
 			}
+			if tcase.err != nil {
+				return
+			}
+			run(t, i, m)
 		})
 	}
 }

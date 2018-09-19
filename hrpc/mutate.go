@@ -160,11 +160,11 @@ func baseMutate(ctx context.Context, table, key []byte, values map[string]map[st
 	return m, nil
 }
 
-// NewPutStr creates a new Mutation request to insert the given
+// NewPut creates a new Mutation request to insert the given
 // family-column-values in the given row key of the given table.
-func NewPutStr(ctx context.Context, table, key string,
+func NewPut(ctx context.Context, table, key []byte,
 	values map[string]map[string][]byte, options ...func(Call) error) (*Mutate, error) {
-	m, err := baseMutate(ctx, []byte(table), []byte(key), values, options...)
+	m, err := baseMutate(ctx, table, key, values, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +172,13 @@ func NewPutStr(ctx context.Context, table, key string,
 	return m, nil
 }
 
-// NewDelStr is used to perform Delete operations on a single row.
+// NewPutStr is just like NewPut but takes table and key as strings.
+func NewPutStr(ctx context.Context, table, key string,
+	values map[string]map[string][]byte, options ...func(Call) error) (*Mutate, error) {
+	return NewPut(ctx, []byte(table), []byte(key), values, options...)
+}
+
+// NewDel is used to perform Delete operations on a single row.
 // To delete entire row, values should be nil.
 //
 // To delete specific families, qualifiers map should be nil:
@@ -197,9 +203,9 @@ func NewPutStr(ctx context.Context, table, key string,
 // passed, only the latest version will be removed. For delete specific families request,
 // the timestamp should be passed or it will have no effect as it's an expensive
 // operation to perform.
-func NewDelStr(ctx context.Context, table, key string,
+func NewDel(ctx context.Context, table, key []byte,
 	values map[string]map[string][]byte, options ...func(Call) error) (*Mutate, error) {
-	m, err := baseMutate(ctx, []byte(table), []byte(key), values, options...)
+	m, err := baseMutate(ctx, table, key, values, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -213,12 +219,18 @@ func NewDelStr(ctx context.Context, table, key string,
 	return m, nil
 }
 
-// NewAppStr creates a new Mutation request to append the given
+// NewDelStr is just like NewDel but takes table and key as strings.
+func NewDelStr(ctx context.Context, table, key string,
+	values map[string]map[string][]byte, options ...func(Call) error) (*Mutate, error) {
+	return NewDel(ctx, []byte(table), []byte(key), values, options...)
+}
+
+// NewApp creates a new Mutation request to append the given
 // family-column-values into the existing cells in HBase (or create them if
 // needed), in given row key of the given table.
-func NewAppStr(ctx context.Context, table, key string,
+func NewApp(ctx context.Context, table, key []byte,
 	values map[string]map[string][]byte, options ...func(Call) error) (*Mutate, error) {
-	m, err := baseMutate(ctx, []byte(table), []byte(key), values, options...)
+	m, err := baseMutate(ctx, table, key, values, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -226,26 +238,44 @@ func NewAppStr(ctx context.Context, table, key string,
 	return m, nil
 }
 
-// NewIncStrSingle creates a new Mutation request that will increment the given value
+// NewAppStr is just like NewApp but takes table and key as strings.
+func NewAppStr(ctx context.Context, table, key string,
+	values map[string]map[string][]byte, options ...func(Call) error) (*Mutate, error) {
+	return NewApp(ctx, []byte(table), []byte(key), values, options...)
+}
+
+// NewIncSingle creates a new Mutation request that will increment the given value
 // by amount in HBase under the given table, key, family and qualifier.
-func NewIncStrSingle(ctx context.Context, table, key, family, qualifier string,
+func NewIncSingle(ctx context.Context, table, key []byte, family, qualifier string,
 	amount int64, options ...func(Call) error) (*Mutate, error) {
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, uint64(amount))
 	value := map[string]map[string][]byte{family: map[string][]byte{qualifier: buf}}
-	return NewIncStr(ctx, table, key, value, options...)
+	return NewInc(ctx, table, key, value, options...)
 }
 
-// NewIncStr creates a new Mutation request that will increment the given values
+// NewIncStrSingle is just like NewIncSingle but takes table and key as strings.
+func NewIncStrSingle(ctx context.Context, table, key, family, qualifier string,
+	amount int64, options ...func(Call) error) (*Mutate, error) {
+	return NewIncSingle(ctx, []byte(table), []byte(key), family, qualifier, amount, options...)
+}
+
+// NewInc creates a new Mutation request that will increment the given values
 // in HBase under the given table and key.
-func NewIncStr(ctx context.Context, table, key string,
+func NewInc(ctx context.Context, table, key []byte,
 	values map[string]map[string][]byte, options ...func(Call) error) (*Mutate, error) {
-	m, err := baseMutate(ctx, []byte(table), []byte(key), values, options...)
+	m, err := baseMutate(ctx, table, key, values, options...)
 	if err != nil {
 		return nil, err
 	}
 	m.mutationType = pb.MutationProto_INCREMENT
 	return m, nil
+}
+
+// NewIncStr is just like NewInc but takes table and key as strings.
+func NewIncStr(ctx context.Context, table, key string,
+	values map[string]map[string][]byte, options ...func(Call) error) (*Mutate, error) {
+	return NewInc(ctx, []byte(table), []byte(key), values, options...)
 }
 
 // Name returns the name of this RPC call.
