@@ -10,6 +10,7 @@ package gohbase_test
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"io"
@@ -1191,6 +1192,136 @@ func TestIncrementParallel(t *testing.T) {
 
 	if result != int64(numParallel+1) {
 		t.Fatalf("Increment's result is %d, want %d", result, numParallel+1)
+	}
+}
+
+func TestIncrementMultiColumn(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+	key := "row103"
+
+	converseFun := func(result *hrpc.Result) map[string]map[string]uint64 {
+		resultsValues := make(map[string]map[string]uint64)
+		for _, cell := range result.Cells {
+			cf := string(cell.Family)
+			col := string(cell.Qualifier)
+			if _, exist := resultsValues[cf]; !exist {
+				resultsValues[cf] = make(map[string]uint64)
+			}
+			val := binary.BigEndian.Uint64(cell.Value)
+			resultsValues[cf][col] = uint64(val)
+		}
+		return resultsValues
+	}
+
+	buf1 := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf1, uint64(1))
+
+	buf2 := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf2, uint64(1))
+
+	values := map[string]map[string][]byte{"cf": map[string][]byte{"a": buf1, "b": buf2}}
+
+	// test incrementMultiColumn
+	incRequest, err := hrpc.NewIncStr(context.Background(), table, key, values)
+	result, err := c.IncrementMultiColumn(incRequest)
+	if err != nil {
+		t.Fatalf("Increment returned an error: %v", err)
+	}
+
+	resultsValues := converseFun(result)
+
+	if len(resultsValues["cf"]) != 2 {
+		t.Fatalf("Len of IncrementMultiColumn's result is %d, want 2", len(resultsValues["cf"]))
+	}
+
+	if resultsValues["cf"]["a"] != 1 {
+		t.Fatalf("IncrementMultiColumn's result is %d, want 1", resultsValues["cf"]["a"])
+	}
+	if resultsValues["cf"]["b"] != 1 {
+		t.Fatalf("IncrementMultiColumn's result is %d, want 1", resultsValues["cf"]["b"])
+	}
+
+	binary.BigEndian.PutUint64(buf1, uint64(5))
+	binary.BigEndian.PutUint64(buf2, uint64(5))
+	values = map[string]map[string][]byte{"cf": map[string][]byte{"a": buf1, "b": buf2}}
+
+	incRequest, err = hrpc.NewIncStr(context.Background(), table, key, values)
+	result, err = c.IncrementMultiColumn(incRequest)
+	if err != nil {
+		t.Fatalf("IncrementMultiColumn returned an error: %v", err)
+	}
+
+	resultsValues = converseFun(result)
+
+	if resultsValues["cf"]["a"] != 6 {
+		t.Fatalf("IncrementMultiColumn's result is %d, want 1", resultsValues["cf"]["a"])
+	}
+	if resultsValues["cf"]["b"] != 6 {
+		t.Fatalf("IncrementMultiColumn's result is %d, want 1", resultsValues["cf"]["b"])
+	}
+}
+
+func TestIncrementMultiColumnParallel(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+	key := "row103.5"
+
+	numParallel := 10
+
+	converseFun := func(result *hrpc.Result) map[string]map[string]uint64 {
+		resultsValues := make(map[string]map[string]uint64)
+		for _, cell := range result.Cells {
+			cf := string(cell.Family)
+			col := string(cell.Qualifier)
+			if _, exist := resultsValues[cf]; !exist {
+				resultsValues[cf] = make(map[string]uint64)
+			}
+			val := binary.BigEndian.Uint64(cell.Value)
+			resultsValues[cf][col] = uint64(val)
+		}
+		return resultsValues
+	}
+
+	// test incrementMultiColumn
+	var wg sync.WaitGroup
+	for i := 0; i < numParallel; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			buf1 := make([]byte, 8)
+			binary.BigEndian.PutUint64(buf1, uint64(1))
+			buf2 := make([]byte, 8)
+			binary.BigEndian.PutUint64(buf2, uint64(1))
+			values := map[string]map[string][]byte{"cf": map[string][]byte{"a": buf1, "b": buf2}}
+			incRequest, err := hrpc.NewIncStr(context.Background(), table, key, values)
+			_, err = c.IncrementMultiColumn(incRequest)
+			if err != nil {
+				t.Errorf("IncrementMultiColumn returned an error: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	// do one more to check if there's a correct value
+	buf1 := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf1, uint64(1))
+	buf2 := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf2, uint64(1))
+	values := map[string]map[string][]byte{"cf": map[string][]byte{"a": buf1, "b": buf2}}
+	incRequest, err := hrpc.NewIncStr(context.Background(), table, key, values)
+	result, err := c.IncrementMultiColumn(incRequest)
+	if err != nil {
+		t.Fatalf("IncrementMultiColumn returned an error: %v", err)
+	}
+
+	resultsValues := converseFun(result)
+
+	if resultsValues["cf"]["a"] != uint64(numParallel+1) {
+		t.Fatalf("IncrementMultiColumn's result is %d, want 1", resultsValues["cf"]["a"])
+	}
+	if resultsValues["cf"]["b"] != uint64(numParallel+1) {
+		t.Fatalf("IncrementMultiColumn's result is %d, want 1", resultsValues["cf"]["b"])
 	}
 }
 
