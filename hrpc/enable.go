@@ -9,7 +9,7 @@ import (
 	"context"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/tsuna/gohbase/pb"
+	"github.com/reborn-go/gohbase/pb"
 )
 
 // EnableTable represents a EnableTable HBase call

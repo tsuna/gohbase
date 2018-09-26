@@ -9,8 +9,8 @@ import (
 	"fmt"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/tsuna/gohbase/filter"
-	"github.com/tsuna/gohbase/pb"
+	"github.com/reborn-go/gohbase/filter"
+	"github.com/reborn-go/gohbase/pb"
 )
 
 // CheckAndPut performs a provided Put operation if the value specified

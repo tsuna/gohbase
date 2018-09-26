@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/tsuna/gohbase/hrpc"
-	"github.com/tsuna/gohbase/pb"
+	"github.com/reborn-go/gohbase/hrpc"
+	"github.com/reborn-go/gohbase/pb"
 )
 
 type testClient struct {
