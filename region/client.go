@@ -267,7 +267,6 @@ func (c *client) unregisterRPC(id uint32) hrpc.Call {
 
 func (c *client) processRPCs() {
 	// TODO: flush when the size is too large
-	// TODO: use sync pool for multi
 	// TODO: if multi has only one call, send that call instead
 	m := newMulti(c.rpcQueueSize)
 	defer func() {
