@@ -9,20 +9,37 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 )
 
+var multiPool = sync.Pool{
+	New: func() interface{} {
+		return &multi{}
+	},
+}
+
+func freeMulti(m *multi) {
+	m.calls = m.calls[:0]
+	m.regions = m.regions[:0]
+	m.size = 0
+	multiPool.Put(m)
+}
+
 type multi struct {
+	size  int
 	calls []hrpc.Call
 	// regions preserves the order of regions to match against RegionActionResults
 	regions []hrpc.RegionInfo
 }
 
 func newMulti(queueSize int) *multi {
-	return &multi{calls: make([]hrpc.Call, 0, queueSize)}
+	m := multiPool.Get().(*multi)
+	m.size = queueSize
+	return m
 }
 
 // Name returns the name of this RPC call.
@@ -144,6 +161,8 @@ func (m *multi) DeserializeCellBlocks(msg proto.Message, b []byte) (uint32, erro
 }
 
 func (m *multi) returnResults(msg proto.Message, err error) {
+	defer freeMulti(m)
+
 	if err != nil {
 		for _, c := range m.calls {
 			if c == nil {
@@ -210,7 +229,7 @@ func (m *multi) returnResults(msg proto.Message, err error) {
 // add adds the call and returns wether the batch is full.
 func (m *multi) add(call hrpc.Call) bool {
 	m.calls = append(m.calls, call)
-	return len(m.calls) == cap(m.calls)
+	return len(m.calls) == m.size
 }
 
 // len returns number of batched calls.
