@@ -35,30 +35,32 @@ type scanner struct {
 	closed   bool
 }
 
+func (s *scanner) closeRegionScanner(table, startRow []byte, scannerID uint64) {
+	// if we are closing in the middle of scanning a region,
+	// send a close scanner request
+	// TODO: add a deadline
+	rpc, err := hrpc.NewScanRange(context.Background(),
+		table, startRow, nil,
+		hrpc.ScannerID(scannerID),
+		hrpc.CloseScanner(),
+		hrpc.NumberOfRows(0))
+	if err != nil {
+		panic(fmt.Sprintf("should not happen: %s", err))
+	}
+
+	// If the request fails, the scanner lease will be expired
+	// and it will be closed automatically by hbase.
+	// No need to bother clients about that.
+	s.SendRPC(rpc)
+}
+
 func (s *scanner) Close() error {
 	if s.closed {
 		return errors.New("scanner has already been closed")
 	}
 	s.closed = true
-	if s.scannerID != noScannerID {
-		go func() {
-			// if we are closing in the middle of scanning a region,
-			// send a close scanner request
-			// TODO: add a deadline
-			rpc, err := hrpc.NewScanRange(context.Background(),
-				s.rpc.Table(), s.startRow, nil,
-				hrpc.ScannerID(s.scannerID),
-				hrpc.CloseScanner(),
-				hrpc.NumberOfRows(0))
-			if err != nil {
-				panic(fmt.Sprintf("should not happen: %s", err))
-			}
-
-			// If the request fails, the scanner lease will be expired
-			// and it will be closed automatically by hbase.
-			// No need to bother clients about that.
-			s.SendRPC(rpc)
-		}()
+	if s.scannerID != noScannerID && !s.rpc.IsClosing() {
+		go s.closeRegionScanner(s.rpc.Table(), s.startRow, s.scannerID)
 	}
 	return nil
 }
@@ -241,12 +243,18 @@ func (s *scanner) request() (*pb.ScanResponse, hrpc.RegionInfo, error) {
 
 // update updates the scanner for the next scan request
 func (s *scanner) update(resp *pb.ScanResponse, region hrpc.RegionInfo) {
+	if s.scannerID == noScannerID && resp.ScannerId != nil {
+		s.scannerID = resp.GetScannerId()
+	}
 	if resp.GetMoreResultsInRegion() {
 		if resp.ScannerId != nil {
 			s.scannerID = resp.GetScannerId()
 		}
 	} else {
 		// we are done with this region, prepare scan for next region
+		if !s.rpc.IsClosing() {
+			go s.closeRegionScanner(s.rpc.Table(), s.startRow, s.scannerID)
+		}
 		s.scannerID = noScannerID
 
 		// Normal Scan
