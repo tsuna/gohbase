@@ -2,7 +2,7 @@ language: go
 go:
   - 1.10.x
 before_install:
-  - go get golang.org/x/tools/cmd/cover github.com/golang/lint/golint
+  - go get golang.org/x/tools/cmd/cover golang.org/x/lint/golint
   - >
     ver=1.4.4 &&
     wget -nv http://www.apache.org/dist/hbase/$ver/hbase-$ver-bin.tar.gz &&
