@@ -346,7 +346,6 @@ func RowPrefixFilter(rowPrefix []byte) func(Call) error {
 			// Essentially we are treating it like an 'unsigned very very long' and doing +1 manually.
 			// Search for the place where the trailing 0xFFs start
 			offset := len(rowKeyPrefix)
-
 			for {
 				if offset > 0 {
 					if rowKeyPrefix[offset-1] != byte(0xFF) {
