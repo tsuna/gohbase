@@ -7,7 +7,7 @@ updated=false
 for attempt in 1 2 3; do
   if ( go list -f '{{join .Imports "\n"}}' ./... && go list -f '{{join .TestImports "\n"}}' ./...; ) \
     | sort -u \
-    | fgrep -v github.com/tsuna/gohbase \
+    | fgrep -v github.com/reborn-go/gohbase \
     | xargs go get -d -f -u -v; then
     updated=true
     break
