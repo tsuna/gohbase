@@ -361,7 +361,8 @@ func RowPrefixFilter(rowPrefix []byte) func(Call) error {
 				return []byte{}
 			}
 
-			newStopRow := rowKeyPrefix[0:offset]
+			newStopRow := make([]byte, offset)
+			copy(newStopRow, rowKeyPrefix[0:offset])
 			// And increment the last one
 			newStopRow[len(newStopRow)-1]++
 			return newStopRow
