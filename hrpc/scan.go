@@ -335,7 +335,7 @@ func Reversed() func(Call) error {
 // RowPrefixFilter is an option for scan requests.
 // Set a filter (using stopRow and startRow) so the result set only contains rows
 // where the rowKey starts with the specified prefix.
-func RowPrefixFilter(rowPrefix []byte) func(Call) error {
+func RowPrefixFilter(rowPrefix string) func(Call) error {
 	return func(g Call) error {
 		scan, ok := g.(*Scan)
 		if !ok {
@@ -367,6 +367,7 @@ func RowPrefixFilter(rowPrefix []byte) func(Call) error {
 			newStopRow[len(newStopRow)-1]++
 			return newStopRow
 		}
+		rowPrefix := []byte(rowPrefix)
 		if len(rowPrefix) != 0 {
 			scan.startRow = rowPrefix
 			scan.stopRow = calculateTheClosestNextRowKeyForPrefix(rowPrefix)
