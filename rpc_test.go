@@ -74,7 +74,7 @@ func TestSendRPCSanity(t *testing.T) {
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
 	msg, err := c.SendRPC(mockCall)
 	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
+		t.Fatal(err)
 	}
 	if diff := atest.Diff(expMsg, msg); diff != "" {
 		t.Errorf("Expected: %#v\nReceived: %#v\nDiff:%s",
@@ -368,7 +368,7 @@ func TestEstablishClientConcurrent(t *testing.T) {
 	}
 }
 
-func TestEstablishUnrecoverlableErrorDuringProbe(t *testing.T) {
+func TestEstablishServerErrorDuringProbe(t *testing.T) {
 	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 	c := newMockClient(nil)
@@ -446,15 +446,17 @@ func TestSendRPCToRegionClientDownDelayed(t *testing.T) {
 		c.clients.put(rc2, origlReg)
 		origlReg.SetClient(rc2)
 
-		// return UnrecoverableError from QueueRPC, to emulate dead client
-		result <- hrpc.RPCResult{Error: region.UnrecoverableError{}}
+		// return ServerError from QueueRPC, to emulate dead client
+		result <- hrpc.RPCResult{Error: region.ServerError{}}
 	})
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		_, err := c.sendRPCToRegion(mockCall, origlReg)
-		if err != ErrRegionUnavailable {
+		switch err.(type) {
+		case region.ServerError, region.NotServingRegionError:
+		default:
 			t.Errorf("Got unexpected error: %v", err)
 		}
 		wg.Done()
@@ -755,7 +757,7 @@ func TestConcurrentRetryableError(t *testing.T) {
 		mockCall.EXPECT().SetRegion(origlReg).AnyTimes()
 		mockCall.EXPECT().Context().Return(context.Background()).AnyTimes()
 		result := make(chan hrpc.RPCResult, 1)
-		result <- hrpc.RPCResult{Error: region.RetryableError{}}
+		result <- hrpc.RPCResult{Error: region.NotServingRegionError{}}
 		mockCall.EXPECT().ResultChan().Return(result).AnyTimes()
 		calls[i] = mockCall
 	}
@@ -765,7 +767,7 @@ func TestConcurrentRetryableError(t *testing.T) {
 		wg.Add(1)
 		go func(mockCall hrpc.Call) {
 			_, err := c.sendRPCToRegion(mockCall, origlReg)
-			if err != ErrRegionUnavailable {
+			if _, ok := err.(region.NotServingRegionError); !ok {
 				t.Errorf("Got unexpected error: %v", err)
 			}
 			wg.Done()

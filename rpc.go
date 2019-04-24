@@ -30,9 +30,6 @@ var (
 		"info": nil,
 	}
 
-	// ErrRegionUnavailable is returned when sending rpc to a region that is unavailable
-	ErrRegionUnavailable = errors.New("region unavailable")
-
 	// TableNotFound is returned when attempting to access a table that
 	// doesn't exist on this cluster.
 	TableNotFound = errors.New("table not found")
@@ -59,8 +56,9 @@ const (
 
 func (c *client) SendRPC(rpc hrpc.Call) (proto.Message, error) {
 	var (
-		err error
-		reg hrpc.RegionInfo
+		err     error
+		reg     hrpc.RegionInfo
+		backoff = backoffStart
 	)
 	for i := 0; i < maxFindRegionTries; i++ {
 		// Check the cache for a region that can handle this request
@@ -89,8 +87,13 @@ func (c *client) SendRPC(rpc hrpc.Call) (proto.Message, error) {
 
 	for {
 		msg, err := c.sendRPCToRegion(rpc, reg)
-		switch err {
-		case ErrRegionUnavailable:
+		switch err.(type) {
+		case region.RetryableError:
+			backoff, err = sleepAndIncreaseBackoff(rpc.Context(), backoff)
+			if err != nil {
+				return msg, err
+			}
+		case region.ServerError, region.NotServingRegionError:
 			if ch := reg.AvailabilityChan(); ch != nil {
 				// The region is unavailable. Wait for it to become available,
 				// a new region or for the deadline to be exceeded.
@@ -123,7 +126,7 @@ func sendBlocking(rc hrpc.RegionClient, rpc hrpc.Call) (hrpc.RPCResult, error) {
 
 func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Message, error) {
 	if reg.IsUnavailable() {
-		return nil, ErrRegionUnavailable
+		return nil, region.NotServingRegionError{}
 	}
 	rpc.SetRegion(reg)
 
@@ -137,7 +140,7 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 			// unavailable, start a goroutine to reestablish a connection
 			go c.reestablishRegion(reg)
 		}
-		return nil, ErrRegionUnavailable
+		return nil, region.NotServingRegionError{}
 	}
 	res, err := sendBlocking(client, rpc)
 	if err != nil {
@@ -145,7 +148,7 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 	}
 	// Check for errors
 	switch res.Error.(type) {
-	case region.RetryableError:
+	case region.NotServingRegionError:
 		// There's an error specific to this region, but
 		// our region client is fine. Mark this region as
 		// unavailable (as opposed to all regions sharing
@@ -154,8 +157,7 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 		if reg.MarkUnavailable() {
 			go c.reestablishRegion(reg)
 		}
-		return nil, ErrRegionUnavailable
-	case region.UnrecoverableError:
+	case region.ServerError:
 		// If it was an unrecoverable error, the region client is
 		// considered dead.
 		if reg == c.adminRegionInfo {
@@ -168,15 +170,8 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 		} else {
 			c.clientDown(client)
 		}
-
-		// Fall through to the case of the region being unavailable,
-		// which will result in blocking until it's available again.
-		return nil, ErrRegionUnavailable
-	default:
-		// RPC was successfully sent, or an unknown type of error
-		// occurred. In either case, return the results.
-		return res.Msg, res.Error
 	}
+	return res.Msg, res.Error
 }
 
 // clientDown removes client from cache and marks
@@ -458,7 +453,7 @@ func isRegionEstablished(rc hrpc.RegionClient, reg hrpc.RegionInfo) error {
 	}
 
 	switch res.Error.(type) {
-	case region.RetryableError, region.UnrecoverableError:
+	case region.ServerError, region.NotServingRegionError, region.RetryableError:
 		return res.Error
 	default:
 		return nil
@@ -566,7 +561,7 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 				reg.SetClient(client)
 				reg.MarkAvailable()
 				return
-			} else if _, ok := err.(region.UnrecoverableError); ok {
+			} else if _, ok := err.(region.ServerError); ok {
 				// the client we got died
 				c.clientDown(client)
 			}

@@ -28,16 +28,16 @@ func (a RegionActions) Less(i, j int) bool {
 	return bytes.Compare(a[i].Region.Value, a[j].Region.Value) < 0
 }
 
-func (e RetryableError) Equal(other interface{}) bool {
-	oe, ok := other.(RetryableError)
+func (e NotServingRegionError) Equal(other interface{}) bool {
+	oe, ok := other.(NotServingRegionError)
 	if !ok {
 		return false
 	}
 	return atest.DeepEqual(e.error, oe.error)
 }
 
-func (e UnrecoverableError) Equal(other interface{}) bool {
-	oe, ok := other.(UnrecoverableError)
+func (e ServerError) Equal(other interface{}) bool {
+	oe, ok := other.(ServerError)
 	if !ok {
 		return false
 	}
@@ -352,12 +352,12 @@ func TestMultiReturnResults(t *testing.T) {
 				hrpc.RPCResult{Msg: &pb.GetResponse{Result: &pb.Result{
 					Cell: []*pb.Cell{&pb.Cell{Row: []byte("call0")}},
 				}}},
-				hrpc.RPCResult{Error: RetryableError{errors.New("HBase Java " +
+				hrpc.RPCResult{Error: NotServingRegionError{errors.New("HBase Java " +
 					"exception org.apache.hadoop.hbase.NotServingRegionException:\nYOLO")}},
 				hrpc.RPCResult{Msg: &pb.MutateResponse{Result: &pb.Result{
 					Cell: []*pb.Cell{&pb.Cell{Row: []byte("call2")}},
 				}}},
-				hrpc.RPCResult{Error: RetryableError{errors.New("HBase Java " +
+				hrpc.RPCResult{Error: NotServingRegionError{errors.New("HBase Java " +
 					"exception org.apache.hadoop.hbase.NotServingRegionException:\nYOLO")}},
 			},
 		},
@@ -408,10 +408,10 @@ func TestMultiReturnResults(t *testing.T) {
 				cs[1].SetRegion(reg1)
 				return cs
 			}(),
-			err: UnrecoverableError{errors.New("OOOPS")},
+			err: ServerError{errors.New("OOOPS")},
 			out: []hrpc.RPCResult{
-				hrpc.RPCResult{Error: UnrecoverableError{errors.New("OOOPS")}},
-				hrpc.RPCResult{Error: UnrecoverableError{errors.New("OOOPS")}},
+				hrpc.RPCResult{Error: ServerError{errors.New("OOOPS")}},
+				hrpc.RPCResult{Error: ServerError{errors.New("OOOPS")}},
 			},
 		},
 		{ // non-MultiResponse

@@ -38,27 +38,32 @@ var (
 
 	// ErrClientDead is returned to rpcs when Close() is called or when client
 	// died because of failed send or receive
-	ErrClientDead = UnrecoverableError{errors.New("client is dead")}
+	ErrClientDead = ServerError{errors.New("client is dead")}
 
-	// javaRetryableExceptions is a map where all Java exceptions that signify
-	// the RPC should be sent again are listed (as keys). If a Java exception
-	// listed here is returned by HBase, the client should attempt to resend
-	// the RPC message, potentially via a different region client.
+	// If a Java exception listed here is returned by HBase, the client should
+	// reestablish region and attempt to resend the RPC message, potentially via
+	// a different region client.
+	javaRegionExceptions = map[string]struct{}{
+		"org.apache.hadoop.hbase.NotServingRegionException":       struct{}{},
+		"org.apache.hadoop.hbase.exceptions.RegionMovedException": struct{}{},
+	}
+
+	// If a Java exception listed here is returned by HBase, the client should
+	// backoff and resend the RPC message to the same region and region server
 	javaRetryableExceptions = map[string]struct{}{
 		"org.apache.hadoop.hbase.CallQueueTooBigException":          struct{}{},
-		"org.apache.hadoop.hbase.NotServingRegionException":         struct{}{},
-		"org.apache.hadoop.hbase.exceptions.RegionMovedException":   struct{}{},
 		"org.apache.hadoop.hbase.exceptions.RegionOpeningException": struct{}{},
 		"org.apache.hadoop.hbase.ipc.ServerNotRunningYetException":  struct{}{},
 		"org.apache.hadoop.hbase.quotas.RpcThrottlingException":     struct{}{},
 		"org.apache.hadoop.hbase.RetryImmediatelyException":         struct{}{},
+		"org.apache.hadoop.hbase.RegionTooBusyException":            struct{}{},
 	}
 
-	// javaUnrecoverableExceptions is a map where all Java exceptions that signify
+	// javaServerExceptions is a map where all Java exceptions that signify
 	// the RPC should be sent again are listed (as keys). If a Java exception
 	// listed here is returned by HBase, the RegionClient will be closed and a new
 	// one should be established.
-	javaUnrecoverableExceptions = map[string]struct{}{
+	javaServerExceptions = map[string]struct{}{
 		"org.apache.hadoop.hbase.regionserver.RegionServerAbortedException": struct{}{},
 		"org.apache.hadoop.hbase.regionserver.RegionServerStoppedException": struct{}{},
 	}
@@ -100,25 +105,42 @@ func freeBuffer(b []byte) {
 	bufferPool.Put(b[:0])
 }
 
-// UnrecoverableError is an error that this region.Client can't recover from.
+// ServerError is an error that this region.Client can't recover from.
 // The connection to the RegionServer has to be closed and all queued and
 // outstanding RPCs will be failed / retried.
-type UnrecoverableError struct {
+type ServerError struct {
 	error
 }
 
-func (e UnrecoverableError) Error() string {
-	return e.error.Error()
+func formatErr(e interface{}, err error) string {
+	if err == nil {
+		return fmt.Sprintf("%T", e)
+	}
+	return fmt.Sprintf("%T: %s", e, err.Error())
 }
 
-// RetryableError is an error that indicates the RPC should be retried because
-// the error is transient (e.g. a region being momentarily unavailable).
+func (e ServerError) Error() string {
+	return formatErr(e, e.error)
+}
+
+// RetryableError is an error that indicates the RPC should be retried after backoff
+// because the error is transient (e.g. a region being momentarily unavailable).
 type RetryableError struct {
 	error
 }
 
 func (e RetryableError) Error() string {
-	return e.error.Error()
+	return formatErr(e, e.error)
+}
+
+// NotServingRegionError is an error that indicates the client should
+// reestablish the region and retry the RPC potentially via a different client
+type NotServingRegionError struct {
+	error
+}
+
+func (e NotServingRegionError) Error() string {
+	return formatErr(e, e.error)
 }
 
 // client manages a connection to a RegionServer.
@@ -369,7 +391,7 @@ func (c *client) trySend(rpc hrpc.Call) error {
 		return nil
 	default:
 		if id, err := c.send(rpc); err != nil {
-			if _, ok := err.(UnrecoverableError); ok {
+			if _, ok := err.(ServerError); ok {
 				c.fail(err)
 			}
 			if r := c.unregisterRPC(id); r != nil {
@@ -390,11 +412,9 @@ func (c *client) receiveRPCs() {
 		default:
 			if err := c.receive(); err != nil {
 				switch err.(type) {
-				case UnrecoverableError:
+				case ServerError:
 					c.fail(err)
 					return
-				case RetryableError:
-					continue
 				}
 			}
 		}
@@ -410,7 +430,7 @@ func (c *client) receive() (err error) {
 
 	err = c.readFully(sz[:])
 	if err != nil {
-		return UnrecoverableError{err}
+		return ServerError{err}
 	}
 
 	size := binary.BigEndian.Uint32(sz[:])
@@ -418,7 +438,7 @@ func (c *client) receive() (err error) {
 
 	err = c.readFully(b)
 	if err != nil {
-		return UnrecoverableError{err}
+		return ServerError{err}
 	}
 
 	buf := proto.NewBuffer(b)
@@ -482,8 +502,10 @@ func exceptionToError(class, stack string) error {
 	err := fmt.Errorf("HBase Java exception %s:\n%s", class, stack)
 	if _, ok := javaRetryableExceptions[class]; ok {
 		return RetryableError{err}
-	} else if _, ok := javaUnrecoverableExceptions[class]; ok {
-		return UnrecoverableError{err}
+	} else if _, ok := javaRegionExceptions[class]; ok {
+		return NotServingRegionError{err}
+	} else if _, ok := javaServerExceptions[class]; ok {
+		return ServerError{err}
 	}
 	return err
 }
@@ -559,7 +581,7 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 	b = append(b[:4], payload...)
 
 	if err := c.write(b); err != nil {
-		return id, UnrecoverableError{err}
+		return id, ServerError{err}
 	}
 	c.inFlightUp()
 	return id, nil

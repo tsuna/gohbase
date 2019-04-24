@@ -28,9 +28,9 @@ import (
 )
 
 func TestErrors(t *testing.T) {
-	ue := UnrecoverableError{fmt.Errorf("oops")}
-	if ue.Error() != "oops" {
-		t.Errorf("Wrong error message. Got %q, wanted %q", ue, "oops")
+	ue := ServerError{fmt.Errorf("oops")}
+	if ue.Error() != "region.ServerError: oops" {
+		t.Errorf("Wrong error message. Got %q, wanted %q", ue, "region.ServerError: oops")
 	}
 }
 
@@ -371,9 +371,9 @@ func TestQueueRPC(t *testing.T) {
 			mockCall.EXPECT().ResultChan().Return(result).Times(1)
 			c.QueueRPC(mockCall)
 			r := <-result
-			err, ok := r.Error.(UnrecoverableError)
+			err, ok := r.Error.(ServerError)
 			if !ok {
-				t.Errorf("Expected UnrecoverableError error")
+				t.Errorf("Expected ServerError error")
 				return
 			}
 			if diff := atest.Diff(ErrClientDead.error, err.error); diff != "" {
@@ -386,7 +386,7 @@ func TestQueueRPC(t *testing.T) {
 	wgProcessRPCs.Wait()
 }
 
-func TestUnrecoverableErrorWrite(t *testing.T) {
+func TestServerErrorWrite(t *testing.T) {
 	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 
@@ -427,7 +427,7 @@ func TestUnrecoverableErrorWrite(t *testing.T) {
 	}
 }
 
-func TestUnrecoverableErrorRead(t *testing.T) {
+func TestServerErrorRead(t *testing.T) {
 	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 
@@ -469,7 +469,7 @@ func TestUnrecoverableErrorRead(t *testing.T) {
 	}
 }
 
-func TestUnrecoverableExceptionResponse(t *testing.T) {
+func TestServerErrorExceptionResponse(t *testing.T) {
 	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 	mockConn := mock.NewMockConn(ctrl)
@@ -518,9 +518,9 @@ func TestUnrecoverableExceptionResponse(t *testing.T) {
 		"org.apache.hadoop.hbase.regionserver.RegionServerAbortedException", "ooops")
 
 	err = c.receive()
-	if _, ok := err.(UnrecoverableError); !ok {
+	if _, ok := err.(ServerError); !ok {
 		if err.Error() != expErr.Error() {
-			t.Fatalf("expected UnrecoverableError with message %q, got %T: %v", expErr, err, err)
+			t.Fatalf("expected ServerError with message %q, got %T: %v", expErr, err, err)
 		}
 	}
 

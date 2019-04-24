@@ -239,7 +239,7 @@ func (c *testClient) QueueRPC(call hrpc.Call) {
 		if bytes.Equal(call.Table(), []byte("nsre")) {
 			i := atomic.AddInt32(&c.numNSRE, 1)
 			if i <= 3 {
-				call.ResultChan() <- hrpc.RPCResult{Error: RetryableError{}}
+				call.ResultChan() <- hrpc.RPCResult{Error: NotServingRegionError{}}
 				return
 			}
 		}
@@ -251,7 +251,7 @@ func (c *testClient) QueueRPC(call hrpc.Call) {
 		// pretend it's down to fail the probe and start a reconnect
 		if bytes.Equal(call.Table(), []byte("down")) {
 			if i <= 1 {
-				call.ResultChan() <- hrpc.RPCResult{Error: UnrecoverableError{}}
+				call.ResultChan() <- hrpc.RPCResult{Error: ServerError{}}
 			} else {
 				// otherwise, the region is fine
 				call.ResultChan() <- hrpc.RPCResult{}
