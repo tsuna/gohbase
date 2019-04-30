@@ -560,7 +560,8 @@ func TestReceiveDecodeProtobufError(t *testing.T) {
 		Return(len(response), nil).Do(func(buf []byte) { copy(buf, response) })
 	mockConn.EXPECT().SetReadDeadline(time.Time{}).Times(1)
 	expError := errors.New(
-		"failed to decode the response: proto: pb.MutateResponse: illegal tag 0 (wire type 0)")
+		"region.RetryableError: failed to decode the response: " +
+			"proto: pb.MutateResponse: illegal tag 0 (wire type 0)")
 
 	err := c.receive()
 	if err == nil || err.Error() != expError.Error() {
@@ -608,7 +609,7 @@ func TestReceiveDeserializeCellblocksError(t *testing.T) {
 	mockConn.EXPECT().Read(readBufSizeMatcher{l: len(response)}).Times(1).
 		Return(len(response), nil).Do(func(buf []byte) { copy(buf, response) })
 	mockConn.EXPECT().SetReadDeadline(time.Time{}).Times(1)
-	expError := errors.New("failed to decode the response: OOPS")
+	expError := errors.New("region.RetryableError: failed to decode the response: OOPS")
 
 	err := c.receive()
 	if err == nil || err.Error() != expError.Error() {

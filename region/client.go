@@ -34,7 +34,7 @@ type canDeserializeCellBlocks interface {
 var (
 	// ErrMissingCallID is used when HBase sends us a response message for a
 	// request that we didn't send
-	ErrMissingCallID = errors.New("got a response with a nonsensical call ID")
+	ErrMissingCallID = ServerError{errors.New("got a response with a nonsensical call ID")}
 
 	// ErrClientClosed is returned to rpcs when Close() is called or when client
 	// died because of failed send or receive
@@ -413,11 +413,13 @@ func (c *client) receiveRPCs() {
 			return
 		default:
 			if err := c.receive(); err != nil {
-				switch err.(type) {
-				case ServerError:
+				if _, ok := err.(ServerError); ok {
+					// fail the client and let the callers establish a new one
 					c.fail(err)
 					return
 				}
+				// in other cases we consider that the region client is healthy
+				// and return the error to caller to let them retry
 			}
 		}
 	}
@@ -446,7 +448,7 @@ func (c *client) receive() (err error) {
 	buf := proto.NewBuffer(b)
 
 	if err = buf.DecodeMessage(&header); err != nil {
-		return fmt.Errorf("failed to decode the response header: %s", err)
+		return ServerError{fmt.Errorf("failed to decode the response header: %s", err)}
 	}
 	if header.CallId == nil {
 		return ErrMissingCallID
@@ -455,7 +457,7 @@ func (c *client) receive() (err error) {
 	callID := *header.CallId
 	rpc := c.unregisterRPC(callID)
 	if rpc == nil {
-		return fmt.Errorf("got a response with an unexpected call ID: %d", callID)
+		return ServerError{fmt.Errorf("got a response with an unexpected call ID: %d", callID)}
 	}
 	c.inFlightDown()
 
@@ -471,31 +473,32 @@ func (c *client) receive() (err error) {
 	// caller as we unregistered the rpc.
 	defer func() { returnResult(rpc, response, err) }()
 
-	if header.Exception == nil {
-		response = rpc.NewResponse()
-		if err = buf.DecodeMessage(response); err != nil {
-			err = fmt.Errorf("failed to decode the response: %s", err)
+	if header.Exception != nil {
+		err = exceptionToError(*header.Exception.ExceptionClassName, *header.Exception.StackTrace)
+		return
+	}
+
+	response = rpc.NewResponse()
+	if err = buf.DecodeMessage(response); err != nil {
+		err = RetryableError{fmt.Errorf("failed to decode the response: %s", err)}
+		return
+	}
+	var cellsLen uint32
+	if header.CellBlockMeta != nil {
+		cellsLen = header.CellBlockMeta.GetLength()
+	}
+	if d, ok := rpc.(canDeserializeCellBlocks); cellsLen > 0 && ok {
+		b := buf.Bytes()[size-cellsLen:]
+		var nread uint32
+		nread, err = d.DeserializeCellBlocks(response, b)
+		if err != nil {
+			err = RetryableError{fmt.Errorf("failed to decode the response: %s", err)}
 			return
 		}
-		var cellsLen uint32
-		if header.CellBlockMeta != nil {
-			cellsLen = header.CellBlockMeta.GetLength()
+		if int(nread) < len(b) {
+			err = RetryableError{fmt.Errorf("short read: buffer len %d, read %d", len(b), nread)}
+			return
 		}
-		if d, ok := rpc.(canDeserializeCellBlocks); cellsLen > 0 && ok {
-			b := buf.Bytes()[size-cellsLen:]
-			var nread uint32
-			nread, err = d.DeserializeCellBlocks(response, b)
-			if err != nil {
-				err = fmt.Errorf("failed to decode the response: %s", err)
-				return
-			}
-			if int(nread) < len(b) {
-				err = fmt.Errorf("short read: buffer len %d, read %d", len(b), nread)
-				return
-			}
-		}
-	} else {
-		err = exceptionToError(*header.Exception.ExceptionClassName, *header.Exception.StackTrace)
 	}
 	return
 }
