@@ -558,7 +558,6 @@ func TestFindRegion(t *testing.T) {
 			},
 			after:     []string{"test,,9999999999999.yoloyoloyoloyoloyoloyoloyoloyolo."},
 			establish: false,
-			err:       ErrRegionUnavailable,
 		},
 		{ // overlapping younger region in cache, passed key is not in that region
 			before: []hrpc.RegionInfo{
@@ -568,7 +567,6 @@ func TestFindRegion(t *testing.T) {
 			},
 			after:     []string{"test,,9999999999999.yoloyoloyoloyoloyoloyoloyoloyolo."},
 			establish: false,
-			err:       ErrRegionUnavailable,
 		},
 	}
 
@@ -641,7 +639,7 @@ func TestFindRegion(t *testing.T) {
 
 }
 
-func TestErrConnotFindRegion(t *testing.T) {
+func TestErrCannotFindRegion(t *testing.T) {
 	c := newMockClient(nil)
 
 	rc, err := region.NewClient(context.Background(), "regionserver:0",
@@ -667,10 +665,10 @@ func TestErrConnotFindRegion(t *testing.T) {
 	}
 	// it should lookup a new older region (1434573235908) that overlaps with the one in cache.
 	// However, it shouldn't be put into cache, as it's older, resulting in a new lookup,
-	// evetually leading to ErrConnotFindRegion.
+	// evetually leading to ErrCannotFindRegion.
 	_, err = c.Get(get)
-	if err != ErrConnotFindRegion {
-		t.Errorf("Expected error %v, got error %v", ErrConnotFindRegion, err)
+	if err != ErrCannotFindRegion {
+		t.Errorf("Expected error %v, got error %v", ErrCannotFindRegion, err)
 	}
 }
 

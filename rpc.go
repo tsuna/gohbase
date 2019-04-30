@@ -40,7 +40,7 @@ var (
 	// ErrCannotFindRegion is returned when it took too many tries to find a
 	// region for the request. It's likely that hbase:meta has overlaps or some other
 	// inconsistency.
-	ErrConnotFindRegion = errors.New("cannot find region for the rpc")
+	ErrCannotFindRegion = errors.New("cannot find region for the rpc")
 
 	// ErrClientClosed is returned when the gohbase client has been closed
 	ErrClientClosed = errors.New("client is closed")
@@ -51,32 +51,43 @@ var (
 )
 
 const (
-	// maxSendRPCTries is the maximum number of times to try to send an RPC
-	maxSendRPCTries = 10
+	// maxFindRegionTries is the maximum number of times to try to send an RPC
+	maxFindRegionTries = 10
 
 	backoffStart = 16 * time.Millisecond
 )
 
 func (c *client) SendRPC(rpc hrpc.Call) (proto.Message, error) {
-	var err error
-	for i := 0; i < maxSendRPCTries; i++ {
+	var (
+		err error
+		reg hrpc.RegionInfo
+	)
+	for i := 0; i < maxFindRegionTries; i++ {
 		// Check the cache for a region that can handle this request
-		reg := c.getRegionFromCache(rpc.Table(), rpc.Key())
-		if reg == nil {
-			reg, err = c.findRegion(rpc.Context(), rpc.Table(), rpc.Key())
-			if err == ErrRegionUnavailable {
-				continue
-			} else if err == errMetaLookupThrottled {
-				// lookup for region has been throttled, check the cache
-				// again but don't count this as SendRPC try as there
-				// might be just too many request going on at a time.
-				i--
-				continue
-			} else if err != nil {
-				return nil, err
-			}
+		reg = c.getRegionFromCache(rpc.Table(), rpc.Key())
+		if reg != nil {
+			break
 		}
 
+		reg, err = c.findRegion(rpc.Context(), rpc.Table(), rpc.Key())
+		if reg != nil {
+			break
+		}
+
+		if err == errMetaLookupThrottled {
+			// lookup for region has been throttled, check the cache
+			// again but don't count this as SendRPC try as there
+			// might be just too many request going on at a time.
+			i--
+		} else if err != nil {
+			return nil, err
+		}
+	}
+	if reg == nil {
+		return nil, ErrCannotFindRegion
+	}
+
+	for {
 		msg, err := c.sendRPCToRegion(rpc, reg)
 		switch err {
 		case ErrRegionUnavailable:
@@ -95,7 +106,6 @@ func (c *client) SendRPC(rpc hrpc.Call) (proto.Message, error) {
 			return msg, err
 		}
 	}
-	return nil, ErrConnotFindRegion
 }
 
 func sendBlocking(rc hrpc.RegionClient, rpc hrpc.Call) (hrpc.RPCResult, error) {
@@ -270,7 +280,7 @@ func (c *client) findRegion(ctx context.Context, table, key []byte) (hrpc.Region
 		overlaps, replaced := c.regions.put(reg)
 		if !replaced {
 			// the same or younger regions are already in cache, retry looking up in cache
-			return nil, ErrRegionUnavailable
+			return nil, nil
 		}
 
 		// otherwise, new region in cache, delete overlaps from client's cache
