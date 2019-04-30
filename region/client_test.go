@@ -276,8 +276,8 @@ func TestProcessRPCsWithFail(t *testing.T) {
 	// check that all calls are not stuck and get an error
 	for _, call := range calls {
 		r := <-call.ResultChan()
-		if r.Error != ErrClientDead {
-			t.Errorf("got unexpected error %v, expected %v", r.Error, ErrClientDead)
+		if r.Error != ErrClientClosed {
+			t.Errorf("got unexpected error %v, expected %v", r.Error, ErrClientClosed)
 		}
 	}
 
@@ -376,9 +376,9 @@ func TestQueueRPC(t *testing.T) {
 				t.Errorf("Expected ServerError error")
 				return
 			}
-			if diff := atest.Diff(ErrClientDead.error, err.error); diff != "" {
+			if diff := atest.Diff(ErrClientClosed.error, err.error); diff != "" {
 				t.Errorf("Expected: %s\nReceived: %s\nDiff:%s",
-					ErrClientDead.error, err.error, diff)
+					ErrClientClosed.error, err.error, diff)
 			}
 		}()
 	}
@@ -418,7 +418,7 @@ func TestServerErrorWrite(t *testing.T) {
 	// check that processRPCs exists
 	c.processRPCs()
 	r := <-result
-	if diff := atest.Diff(ErrClientDead.Error(), r.Error.Error()); diff != "" {
+	if diff := atest.Diff(ErrClientClosed.Error(), r.Error.Error()); diff != "" {
 		t.Errorf("Expected: %s\nReceived: %s\nDiff:%s",
 			expErr, r.Error, diff)
 	}
@@ -463,9 +463,9 @@ func TestServerErrorRead(t *testing.T) {
 		t.Errorf("Expected all awaiting rpcs to be processed, %d left", len(c.sent))
 	}
 	r := <-result
-	if diff := atest.Diff(ErrClientDead.Error(), r.Error.Error()); diff != "" {
+	if diff := atest.Diff(ErrClientClosed.Error(), r.Error.Error()); diff != "" {
 		t.Errorf("Expected: %s\nReceived: %s\nDiff:%s",
-			ErrClientDead, r.Error, diff)
+			ErrClientClosed, r.Error, diff)
 	}
 }
 

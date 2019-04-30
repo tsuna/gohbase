@@ -36,9 +36,9 @@ var (
 	// request that we didn't send
 	ErrMissingCallID = errors.New("got a response with a nonsensical call ID")
 
-	// ErrClientDead is returned to rpcs when Close() is called or when client
+	// ErrClientClosed is returned to rpcs when Close() is called or when client
 	// died because of failed send or receive
-	ErrClientDead = ServerError{errors.New("client is dead")}
+	ErrClientClosed = ServerError{errors.New("client is closed")}
 
 	// If a Java exception listed here is returned by HBase, the client should
 	// reestablish region and attempt to resend the RPC message, potentially via
@@ -184,7 +184,7 @@ func (c *client) QueueRPC(rpc hrpc.Call) {
 		case <-rpc.Context().Done():
 			// rpc timed out before being processed
 		case <-c.done:
-			returnResult(rpc, nil, ErrClientDead)
+			returnResult(rpc, nil, ErrClientClosed)
 		case c.rpcs <- rpc:
 		}
 	} else {
@@ -198,7 +198,7 @@ func (c *client) QueueRPC(rpc hrpc.Call) {
 // All queued and outstanding RPCs, if any, will be failed as if a connection
 // error had happened.
 func (c *client) Close() {
-	c.fail(ErrClientDead)
+	c.fail(ErrClientClosed)
 }
 
 // Addr returns address of the region server the client is connected to
@@ -232,10 +232,12 @@ func (c *client) inFlightDown() {
 
 func (c *client) fail(err error) {
 	c.once.Do(func() {
-		log.WithFields(log.Fields{
-			"client": c,
-			"err":    err,
-		}).Error("error occured, closing region client")
+		if err != ErrClientClosed {
+			log.WithFields(log.Fields{
+				"client": c,
+				"err":    err,
+			}).Error("error occured, closing region client")
+		}
 
 		// we don't close c.rpcs channel to make it block in select of QueueRPC
 		// and avoid dealing with synchronization of closing it while someone
@@ -267,7 +269,7 @@ func (c *client) failSentRPCs() {
 
 	// send error to awaiting rpcs
 	for _, rpc := range sent {
-		returnResult(rpc, nil, ErrClientDead)
+		returnResult(rpc, nil, ErrClientClosed)
 	}
 }
 
@@ -292,7 +294,7 @@ func (c *client) processRPCs() {
 	// TODO: if multi has only one call, send that call instead
 	m := newMulti(c.rpcQueueSize)
 	defer func() {
-		m.returnResults(nil, ErrClientDead)
+		m.returnResults(nil, ErrClientClosed)
 	}()
 
 	flush := func() {
@@ -383,7 +385,7 @@ func (c *client) trySend(rpc hrpc.Call) error {
 		// An unrecoverable error has occured,
 		// region client has been stopped,
 		// don't send rpcs
-		return ErrClientDead
+		return ErrClientClosed
 	case <-rpc.Context().Done():
 		// If the deadline has been exceeded, don't bother sending the
 		// request. The function that placed the RPC in our queue should
