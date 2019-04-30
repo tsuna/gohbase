@@ -160,7 +160,7 @@ func TestReestablishRegionSplit(t *testing.T) {
 	}
 
 	expRegs := map[string]struct{}{
-		"hbase:meta,,1":                                          struct{}{},
+		"hbase:meta,,1": struct{}{},
 		"test1,,1480547738107.825c5c7e480c76b73d6d2bad5d3f7bb8.": struct{}{},
 	}
 
