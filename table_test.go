@@ -9,6 +9,7 @@ package gohbase_test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -193,5 +194,5 @@ func TestEnableTable(t *testing.T) {
 }
 
 func getTimestampString() string {
-	return time.Now().Format("20060102150405")
+	return fmt.Sprintf("%d", time.Now().UnixNano())
 }

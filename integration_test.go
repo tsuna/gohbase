@@ -34,7 +34,11 @@ import (
 
 var host = flag.String("host", "localhost", "The location where HBase is running")
 
-const table = "test1"
+var table string
+
+func init() {
+	table = fmt.Sprintf("gohbase_test_%d", time.Now().UnixNano())
+}
 
 // CreateTable creates the given table with the given families
 func CreateTable(client gohbase.AdminClient, table string, cFamilies []string) error {
