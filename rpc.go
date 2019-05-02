@@ -54,25 +54,16 @@ const (
 	backoffStart = 16 * time.Millisecond
 )
 
-func (c *client) SendRPC(rpc hrpc.Call) (proto.Message, error) {
-	var (
-		err     error
-		reg     hrpc.RegionInfo
-		backoff = backoffStart
-	)
+func (c *client) getRegionForRpc(rpc hrpc.Call) (hrpc.RegionInfo, error) {
 	for i := 0; i < maxFindRegionTries; i++ {
 		// Check the cache for a region that can handle this request
-		reg = c.getRegionFromCache(rpc.Table(), rpc.Key())
-		if reg != nil {
-			break
+		if reg := c.getRegionFromCache(rpc.Table(), rpc.Key()); reg != nil {
+			return reg, nil
 		}
 
-		reg, err = c.findRegion(rpc.Context(), rpc.Table(), rpc.Key())
-		if reg != nil {
-			break
-		}
-
-		if err == errMetaLookupThrottled {
+		if reg, err := c.findRegion(rpc.Context(), rpc.Table(), rpc.Key()); reg != nil {
+			return reg, nil
+		} else if err == errMetaLookupThrottled {
 			// lookup for region has been throttled, check the cache
 			// again but don't count this as SendRPC try as there
 			// might be just too many request going on at a time.
@@ -81,10 +72,16 @@ func (c *client) SendRPC(rpc hrpc.Call) (proto.Message, error) {
 			return nil, err
 		}
 	}
-	if reg == nil {
-		return nil, ErrCannotFindRegion
+	return nil, ErrCannotFindRegion
+}
+
+func (c *client) SendRPC(rpc hrpc.Call) (proto.Message, error) {
+	reg, err := c.getRegionForRpc(rpc)
+	if err != nil {
+		return nil, err
 	}
 
+	backoff := backoffStart
 	for {
 		msg, err := c.sendRPCToRegion(rpc, reg)
 		switch err.(type) {
@@ -103,6 +100,14 @@ func (c *client) SendRPC(rpc hrpc.Call) (proto.Message, error) {
 				case <-c.done:
 					return nil, ErrClientClosed
 				case <-ch:
+				}
+			}
+			if reg.Context().Err() != nil {
+				// region is dead because it was split or merged,
+				// lookup a new one and retry
+				reg, err = c.getRegionForRpc(rpc)
+				if err != nil {
+					return nil, err
 				}
 			}
 		default:
