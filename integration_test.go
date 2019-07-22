@@ -1965,3 +1965,21 @@ func TestReverseScan(t *testing.T) {
 	results.Close()
 
 }
+
+// Test snapshot creation
+func TestSnapshot(t *testing.T) {
+	ac := gohbase.NewAdminClient(*host)
+
+	name := "snapshot-" + table
+
+	sn := hrpc.NewSnapshot(context.Background(), name, table)
+	err := ac.CreateSnapshot(sn)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = ac.DeleteSnapshot(sn)
+	if err != nil {
+		t.Fatal(err)
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/tsuna/gohbase/hrpc"
@@ -23,6 +24,8 @@ type AdminClient interface {
 	DeleteTable(t *hrpc.DeleteTable) error
 	EnableTable(t *hrpc.EnableTable) error
 	DisableTable(t *hrpc.DisableTable) error
+	CreateSnapshot(t *hrpc.Snapshot) error
+	DeleteSnapshot(t *hrpc.Snapshot) error
 	ClusterStatus() (*pb.ClusterStatus, error)
 }
 
@@ -153,4 +156,64 @@ func (c *client) checkProcedureWithBackoff(ctx context.Context, procID uint64) e
 			}
 		}
 	}
+}
+
+// CreateSnapshot creates a snapshot in HBase.
+//
+// If a context happens during creation, no cleanup is done.
+func (c *client) CreateSnapshot(t *hrpc.Snapshot) error {
+	const snaphotValidateInterval time.Duration = time.Second / 2
+
+	pbmsg, err := c.SendRPC(t)
+	if err != nil {
+		return err
+	}
+
+	_, ok := pbmsg.(*pb.SnapshotResponse)
+	if !ok {
+		return errors.New("sendPRC returned not a SnapshotResponse")
+	}
+
+	ticker := time.NewTicker(snaphotValidateInterval)
+	defer ticker.Stop()
+	check := hrpc.NewSnapshotDone(t)
+	ctx := t.Context()
+
+	for {
+		select {
+		case <-ticker.C:
+			pbmsgs, err := c.SendRPC(check)
+			if err != nil {
+				return err
+			}
+
+			r, ok := pbmsgs.(*pb.IsSnapshotDoneResponse)
+			if !ok {
+				return errors.New("sendPRC returned not a IsSnapshotDoneResponse")
+			}
+
+			if r.GetDone() {
+				return nil
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+// DeleteSnapshot deletes a snapshot in HBase.
+func (c *client) DeleteSnapshot(t *hrpc.Snapshot) error {
+	rt := hrpc.NewDeleteSnapshot(t)
+
+	pbmsg, err := c.SendRPC(rt)
+	if err != nil {
+		return err
+	}
+
+	_, ok := pbmsg.(*pb.DeleteSnapshotResponse)
+	if !ok {
+		return errors.New("sendPRC returned not a DeleteSnapshotResponse")
+	}
+
+	return nil
 }
