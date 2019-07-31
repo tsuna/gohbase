@@ -26,6 +26,7 @@ type AdminClient interface {
 	DisableTable(t *hrpc.DisableTable) error
 	CreateSnapshot(t *hrpc.Snapshot) error
 	DeleteSnapshot(t *hrpc.Snapshot) error
+	ListSnapshots(t *hrpc.ListSnapshots) ([]*pb.SnapshotDescription, error)
 	ClusterStatus() (*pb.ClusterStatus, error)
 }
 
@@ -204,7 +205,6 @@ func (c *client) CreateSnapshot(t *hrpc.Snapshot) error {
 // DeleteSnapshot deletes a snapshot in HBase.
 func (c *client) DeleteSnapshot(t *hrpc.Snapshot) error {
 	rt := hrpc.NewDeleteSnapshot(t)
-
 	pbmsg, err := c.SendRPC(rt)
 	if err != nil {
 		return err
@@ -216,4 +216,19 @@ func (c *client) DeleteSnapshot(t *hrpc.Snapshot) error {
 	}
 
 	return nil
+}
+
+func (c *client) ListSnapshots(t *hrpc.ListSnapshots) ([]*pb.SnapshotDescription, error) {
+	pbmsg, err := c.SendRPC(t)
+	if err != nil {
+		return nil, err
+	}
+
+	r, ok := pbmsg.(*pb.GetCompletedSnapshotsResponse)
+	if !ok {
+		return nil, errors.New("sendPRC returned not a GetCompletedSnapshotsResponse")
+	}
+
+	return r.GetSnapshots(), nil
+
 }

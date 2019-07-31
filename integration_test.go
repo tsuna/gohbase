@@ -1975,7 +1975,22 @@ func TestSnapshot(t *testing.T) {
 	sn := hrpc.NewSnapshot(context.Background(), name, table)
 	err := ac.CreateSnapshot(sn)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+	}
+
+	ls := hrpc.NewListSnapshots(context.Background())
+	snaps, err := ac.ListSnapshots(ls)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(snaps) != 1 {
+		t.Errorf("expection 1 snapshot, got %v", len(snaps))
+	}
+
+	gotName := snaps[0].GetName()
+	if gotName != name {
+		t.Errorf("expection snapshot name to be %v got %v", name, gotName)
 	}
 
 	err = ac.DeleteSnapshot(sn)
