@@ -111,7 +111,7 @@ func (sr *Snapshot) Name() string {
 	return "Snapshot"
 }
 
-// ToProto converts the RPC into a protobuf message
+// ToProto converts the RPC into a protobuf message.
 func (sr *Snapshot) ToProto() proto.Message {
 	return &pb.SnapshotRequest{Snapshot: sr.snap.ToProto()}
 }
@@ -122,13 +122,13 @@ func (sr *Snapshot) NewResponse() proto.Message {
 	return &pb.SnapshotResponse{}
 }
 
-// SnapshotDone represents an IsSnapshotDone HBase call
+// SnapshotDone represents an IsSnapshotDone HBase call.
 type SnapshotDone struct {
 	*Snapshot
 }
 
-// NewSnapshotDone creates a new SnapshotDone request that will request a
-// new snapshot in HBase.
+// NewSnapshotDone creates a new SnapshotDone request that will check if
+// the given snapshot has been complete.
 func NewSnapshotDone(t *Snapshot) *SnapshotDone {
 	return &SnapshotDone{t}
 }
@@ -144,13 +144,13 @@ func (sr *SnapshotDone) NewResponse() proto.Message {
 	return &pb.IsSnapshotDoneResponse{}
 }
 
-// DeleteSnapshot represents a DeleteSnapshot HBase call
+// DeleteSnapshot represents a DeleteSnapshot HBase call.
 type DeleteSnapshot struct {
 	*Snapshot
 }
 
-// NewDeleteSnapshot creates a new DeleteSnapshot request that will request a
-// new snapshot in HBase.
+// NewDeleteSnapshot creates a new DeleteSnapshot request that will delete
+// the given snapshot.
 func NewDeleteSnapshot(t *Snapshot) *DeleteSnapshot {
 	return &DeleteSnapshot{t}
 }
@@ -164,4 +164,37 @@ func (sr *DeleteSnapshot) Name() string {
 // RPC.
 func (sr *DeleteSnapshot) NewResponse() proto.Message {
 	return &pb.DeleteSnapshotResponse{}
+}
+
+// ListSnapshots represents a new GetCompletedSnapshots request that will
+// list all snapshots.
+type ListSnapshots struct {
+	base
+}
+
+// NewListSnapshots creates a new GetCompletedSnapshots request that will
+// list all snapshots.
+func NewListSnapshots(ctx context.Context) *ListSnapshots {
+	return &ListSnapshots{
+		base{
+			ctx:      ctx,
+			resultch: make(chan RPCResult, 1),
+		},
+	}
+}
+
+// Name returns the name of this RPC call.
+func (sr *ListSnapshots) Name() string {
+	return "GetCompletedSnapshots"
+}
+
+// NewResponse creates an empty protobuf message to read the response of this
+// RPC.
+func (sr *ListSnapshots) NewResponse() proto.Message {
+	return &pb.GetCompletedSnapshotsResponse{}
+}
+
+// ToProto converts the RPC into a protobuf message.
+func (sr *ListSnapshots) ToProto() proto.Message {
+	return &pb.GetCompletedSnapshotsRequest{}
 }
