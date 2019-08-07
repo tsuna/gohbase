@@ -18,6 +18,12 @@ import (
 	"github.com/tsuna/gohbase/zk"
 )
 
+const (
+	// snapshotValidateInterval specifies the amount of time to wait before
+	// polling the hbase server about the status of a snapshot operation.
+	snaphotValidateInterval time.Duration = time.Second / 2
+)
+
 // AdminClient to perform admistrative operations with HMaster
 type AdminClient interface {
 	CreateTable(t *hrpc.CreateTable) error
@@ -27,6 +33,7 @@ type AdminClient interface {
 	CreateSnapshot(t *hrpc.Snapshot) error
 	DeleteSnapshot(t *hrpc.Snapshot) error
 	ListSnapshots(t *hrpc.ListSnapshots) ([]*pb.SnapshotDescription, error)
+	RestoreSnapshot(t *hrpc.Snapshot) error
 	ClusterStatus() (*pb.ClusterStatus, error)
 }
 
@@ -163,7 +170,6 @@ func (c *client) checkProcedureWithBackoff(ctx context.Context, procID uint64) e
 //
 // If a context happens during creation, no cleanup is done.
 func (c *client) CreateSnapshot(t *hrpc.Snapshot) error {
-	const snaphotValidateInterval time.Duration = time.Second / 2
 
 	pbmsg, err := c.SendRPC(t)
 	if err != nil {
@@ -231,4 +237,18 @@ func (c *client) ListSnapshots(t *hrpc.ListSnapshots) ([]*pb.SnapshotDescription
 
 	return r.GetSnapshots(), nil
 
+}
+
+func (c *client) RestoreSnapshot(t *hrpc.Snapshot) error {
+	rt := hrpc.NewRestoreSnapshot(t)
+	pbmsg, err := c.SendRPC(rt)
+	if err != nil {
+		return err
+	}
+
+	_, ok := pbmsg.(*pb.RestoreSnapshotResponse)
+	if !ok {
+		return errors.New("sendPRC returned not a RestoreSnapshotResponse")
+	}
+	return nil
 }

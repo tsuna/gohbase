@@ -147,3 +147,17 @@ func (mr *MockAdminClientMockRecorder) ListSnapshots(arg0 interface{}) *gomock.C
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSnapshots", reflect.TypeOf((*MockAdminClient)(nil).ListSnapshots), arg0)
 }
+
+// RestoreSnapshot mocks base method
+func (m *MockAdminClient) RestoreSnapshot(arg0 *hrpc.Snapshot) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RestoreSnapshot", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RestoreSnapshot indicates an expected call of RestoreSnapshot
+func (mr *MockAdminClientMockRecorder) RestoreSnapshot(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestoreSnapshot", reflect.TypeOf((*MockAdminClient)(nil).RestoreSnapshot), arg0)
+}
