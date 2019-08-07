@@ -1439,6 +1439,18 @@ func insertKeyValue(c gohbase.Client, key, columnFamily string, value []byte,
 	return err
 }
 
+func deleteKeyValue(c gohbase.Client, key, columnFamily string, value []byte,
+	options ...func(hrpc.Call) error) error {
+	values := map[string]map[string][]byte{columnFamily: map[string][]byte{}}
+	values[columnFamily]["a"] = value
+	d, err := hrpc.NewDel(context.Background(), []byte(table), []byte(key), values)
+	if err != nil {
+		return err
+	}
+	_, err = c.Delete(d)
+	return err
+}
+
 func TestMaxResultsPerColumnFamilyGet(t *testing.T) {
 	c := gohbase.NewClient(*host)
 	defer c.Close()
@@ -1978,6 +1990,13 @@ func TestSnapshot(t *testing.T) {
 		t.Error(err)
 	}
 
+	defer func() {
+		err = ac.DeleteSnapshot(sn)
+		if err != nil {
+			t.Error(err)
+		}
+	}()
+
 	ls := hrpc.NewListSnapshots(context.Background())
 	snaps, err := ac.ListSnapshots(ls)
 	if err != nil {
@@ -1992,9 +2011,86 @@ func TestSnapshot(t *testing.T) {
 	if gotName != name {
 		t.Errorf("expection snapshot name to be %v got %v", name, gotName)
 	}
+}
 
-	err = ac.DeleteSnapshot(sn)
-	if err != nil {
+// Test snapshot restoration
+func TestRestoreSnapshot(t *testing.T) {
+	// Prochedure for this test is roughly:
+	// - Create some data in a table.
+	// - Create a snapshot.
+	// - Remove all data.
+	// - Restore snapshot.
+	// - Ensure data is there.
+
+	var (
+		key  = t.Name() + "_Get"
+		name = "snapshot-" + table
+	)
+
+	c := gohbase.NewClient(*host, gohbase.RpcQueueSize(1))
+	if err := insertKeyValue(c, key, "cf", []byte{1}); err != nil {
 		t.Fatal(err)
+	}
+
+	ac := gohbase.NewAdminClient(*host)
+
+	sn := hrpc.NewSnapshot(context.Background(), name, table)
+	err := ac.CreateSnapshot(sn)
+	if err != nil {
+		t.Error(err)
+	}
+
+	defer func() {
+		err = ac.DeleteSnapshot(sn)
+		if err != nil {
+			t.Error(err)
+		}
+	}()
+
+	if err := deleteKeyValue(c, key, "cf", []byte{1}); err != nil {
+		t.Error(err)
+	}
+
+	g, err := hrpc.NewGetStr(context.Background(), table, key)
+	if err != nil {
+		t.Error(err)
+	}
+
+	r, err := c.Get(g)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(r.Cells) != 0 {
+		t.Fatalf("expected no cells in table %s key %s", table, key)
+	}
+
+	c.Close()
+
+	td := hrpc.NewDisableTable(context.Background(), []byte(table))
+	if err := ac.DisableTable(td); err != nil {
+		t.Error(err)
+	}
+
+	err = ac.RestoreSnapshot(sn)
+	if err != nil {
+		t.Error(err)
+	}
+
+	te := hrpc.NewEnableTable(context.Background(), []byte(table))
+	if err := ac.EnableTable(te); err != nil {
+		t.Error(err)
+	}
+
+	c = gohbase.NewClient(*host, gohbase.RpcQueueSize(1))
+
+	r, err = c.Get(g)
+	if err != nil {
+		t.Error(err)
+	}
+
+	expV := []byte{1}
+	if !bytes.Equal(r.Cells[0].Value, expV) {
+		t.Errorf("expected %v, got %v:", expV, r.Cells[0].Value)
 	}
 }

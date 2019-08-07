@@ -198,3 +198,47 @@ func (sr *ListSnapshots) NewResponse() proto.Message {
 func (sr *ListSnapshots) ToProto() proto.Message {
 	return &pb.GetCompletedSnapshotsRequest{}
 }
+
+// RestoreSnapshot represents a RestoreSnapshot HBase call.
+type RestoreSnapshot struct {
+	*Snapshot
+}
+
+// NewRestoreSnapshot creates a new RestoreSnapshot request that will delete
+// the given snapshot.
+func NewRestoreSnapshot(t *Snapshot) *RestoreSnapshot {
+	return &RestoreSnapshot{t}
+}
+
+// Name returns the name of this RPC call.
+func (sr *RestoreSnapshot) Name() string {
+	return "RestoreSnapshot"
+}
+
+// NewResponse creates an empty protobuf message to read the response of this
+// RPC.
+func (sr *RestoreSnapshot) NewResponse() proto.Message {
+	return &pb.RestoreSnapshotResponse{}
+}
+
+// RestoreSnapshotDone represents an IsRestoreSnapshotDone HBase call.
+type RestoreSnapshotDone struct {
+	*Snapshot
+}
+
+// NewRestoreSnapshotDone creates a new RestoreSnapshotDone request that will check if
+// the given snapshot has been complete.
+func NewRestoreSnapshotDone(t *Snapshot) *RestoreSnapshotDone {
+	return &RestoreSnapshotDone{t}
+}
+
+// Name returns the name of this RPC call.
+func (sr *RestoreSnapshotDone) Name() string {
+	return "IsRestoreSnapshotDone"
+}
+
+// NewResponse creates an empty protobuf message to read the response of this
+// RPC.
+func (sr *RestoreSnapshotDone) NewResponse() proto.Message {
+	return &pb.IsRestoreSnapshotDoneResponse{}
+}
