@@ -93,8 +93,9 @@ type Snapshot struct {
 
 // NewSnapshot creates a new Snapshot request that will request a
 // new snapshot in HBase.
-func NewSnapshot(ctx context.Context, name string, table string) *Snapshot {
-	return &Snapshot{
+func NewSnapshot(ctx context.Context, name string, table string,
+	opts ...func(Call) error) (*Snapshot, error) {
+	sn := &Snapshot{
 		base{
 			table:    []byte(table),
 			ctx:      ctx,
@@ -104,6 +105,10 @@ func NewSnapshot(ctx context.Context, name string, table string) *Snapshot {
 			name: name, table: table,
 		},
 	}
+	if err := applyOptions(sn, opts...); err != nil {
+		return nil, err
+	}
+	return sn, nil
 }
 
 // Name returns the name of this RPC call.

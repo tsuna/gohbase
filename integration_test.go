@@ -1978,21 +1978,124 @@ func TestReverseScan(t *testing.T) {
 
 }
 
+func TestListTableNames(t *testing.T) {
+	// Initialize our tables
+	ac := gohbase.NewAdminClient(*host)
+	tables := []string{
+		table + "_MATCH1",
+		table + "_MATCH2",
+		table + "nomatch",
+	}
+
+	for _, tn := range tables {
+		// Since this test is called by TestMain which waits for hbase init
+		// there is no need to wait here.
+		err := CreateTable(ac, tn, []string{"cf"})
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	defer func() {
+		for _, tn := range tables {
+			err := DeleteTable(ac, tn)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}()
+
+	m1 := []byte(table + "_MATCH1")
+	m2 := []byte(table + "_MATCH2")
+	tcases := []struct {
+		desc      string
+		regex     string
+		namespace string
+		sys       bool
+
+		match []*pb.TableName
+	}{
+		{
+			desc:  "match all",
+			regex: ".*",
+			match: []*pb.TableName{
+				&pb.TableName{Qualifier: []byte(table)},
+				&pb.TableName{Qualifier: m1},
+				&pb.TableName{Qualifier: m2},
+				&pb.TableName{Qualifier: []byte(table + "nomatch")},
+			},
+		},
+		{
+			desc:  "match_some",
+			regex: ".*_MATCH.*",
+			match: []*pb.TableName{
+				&pb.TableName{Qualifier: m1},
+				&pb.TableName{Qualifier: m2},
+			},
+		},
+		{
+			desc: "match_none",
+		},
+		{
+			desc:      "match meta",
+			regex:     ".*meta.*",
+			namespace: "hbase",
+			sys:       true,
+			match: []*pb.TableName{
+				&pb.TableName{Qualifier: []byte("meta")},
+			},
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.desc, func(t *testing.T) {
+			tn, err := hrpc.NewListTableNames(
+				context.Background(),
+				hrpc.ListRegex(tcase.regex),
+				hrpc.ListSysTables(tcase.sys),
+				hrpc.ListNamespace(tcase.namespace),
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			names, err := ac.ListTableNames(tn)
+			if err != nil {
+				t.Error(err)
+			}
+
+			if len(names) != len(tcase.match) {
+				t.Errorf("expected %v, got %v", tcase.match, names)
+			}
+
+			for i, m := range tcase.match {
+				want := string(m.Qualifier)
+				got := string(tcase.match[i].Qualifier)
+				if want != got {
+					t.Errorf("index %d: expected: %v, got %v", i, want, got)
+				}
+			}
+		})
+	}
+
+}
+
 // Test snapshot creation
 func TestSnapshot(t *testing.T) {
 	ac := gohbase.NewAdminClient(*host)
 
 	name := "snapshot-" + table
 
-	sn := hrpc.NewSnapshot(context.Background(), name, table)
-	err := ac.CreateSnapshot(sn)
+	sn, err := hrpc.NewSnapshot(context.Background(), name, table)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err = ac.CreateSnapshot(sn); err != nil {
 		t.Error(err)
 	}
 
 	defer func() {
-		err = ac.DeleteSnapshot(sn)
-		if err != nil {
+		if err = ac.DeleteSnapshot(sn); err != nil {
 			t.Error(err)
 		}
 	}()
@@ -2034,9 +2137,11 @@ func TestRestoreSnapshot(t *testing.T) {
 
 	ac := gohbase.NewAdminClient(*host)
 
-	sn := hrpc.NewSnapshot(context.Background(), name, table)
-	err := ac.CreateSnapshot(sn)
+	sn, err := hrpc.NewSnapshot(context.Background(), name, table)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ac.CreateSnapshot(sn); err != nil {
 		t.Error(err)
 	}
 
@@ -2072,8 +2177,7 @@ func TestRestoreSnapshot(t *testing.T) {
 		t.Error(err)
 	}
 
-	err = ac.RestoreSnapshot(sn)
-	if err != nil {
+	if err = ac.RestoreSnapshot(sn); err != nil {
 		t.Error(err)
 	}
 

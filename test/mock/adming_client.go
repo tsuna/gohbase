@@ -148,6 +148,21 @@ func (mr *MockAdminClientMockRecorder) ListSnapshots(arg0 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSnapshots", reflect.TypeOf((*MockAdminClient)(nil).ListSnapshots), arg0)
 }
 
+// ListTableNames mocks base method
+func (m *MockAdminClient) ListTableNames(arg0 *hrpc.ListTableNames) ([]*pb.TableName, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListTableNames", arg0)
+	ret0, _ := ret[0].([]*pb.TableName)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListTableNames indicates an expected call of ListTableNames
+func (mr *MockAdminClientMockRecorder) ListTableNames(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTableNames", reflect.TypeOf((*MockAdminClient)(nil).ListTableNames), arg0)
+}
+
 // RestoreSnapshot mocks base method
 func (m *MockAdminClient) RestoreSnapshot(arg0 *hrpc.Snapshot) error {
 	m.ctrl.T.Helper()
