@@ -35,6 +35,7 @@ type AdminClient interface {
 	ListSnapshots(t *hrpc.ListSnapshots) ([]*pb.SnapshotDescription, error)
 	RestoreSnapshot(t *hrpc.Snapshot) error
 	ClusterStatus() (*pb.ClusterStatus, error)
+	ListTableNames(t *hrpc.ListTableNames) ([]*pb.TableName, error)
 }
 
 // NewAdminClient creates an admin HBase client.
@@ -251,4 +252,18 @@ func (c *client) RestoreSnapshot(t *hrpc.Snapshot) error {
 		return errors.New("sendPRC returned not a RestoreSnapshotResponse")
 	}
 	return nil
+}
+
+func (c *client) ListTableNames(t *hrpc.ListTableNames) ([]*pb.TableName, error) {
+	pbmsg, err := c.SendRPC(t)
+	if err != nil {
+		return nil, err
+	}
+
+	res, ok := pbmsg.(*pb.GetTableNamesResponse)
+	if !ok {
+		return nil, errors.New("sendPRC returned not a GetTableNamesResponse")
+	}
+
+	return res.GetTableNames(), nil
 }
