@@ -30,6 +30,7 @@ type AdminClient interface {
 	DeleteTable(t *hrpc.DeleteTable) error
 	EnableTable(t *hrpc.EnableTable) error
 	DisableTable(t *hrpc.DisableTable) error
+	GetTableNames(t *hrpc.GetTableNames) ([]*pb.TableName, error)
 	CreateSnapshot(t *hrpc.Snapshot) error
 	DeleteSnapshot(t *hrpc.Snapshot) error
 	ListSnapshots(t *hrpc.ListSnapshots) ([]*pb.SnapshotDescription, error)
@@ -78,6 +79,20 @@ func (c *client) ClusterStatus() (*pb.ClusterStatus, error) {
 	}
 
 	return r.GetClusterStatus(), nil
+}
+
+func (c *client) GetTableNames(t *hrpc.GetTableNames) ([]*pb.TableName, error) {
+	pbmsg, err := c.SendRPC(t)
+	if err != nil {
+		return nil, err
+	}
+
+	r, ok := pbmsg.(*pb.GetTableNamesResponse)
+	if !ok {
+		return nil, fmt.Errorf("sendRPC returned not a GetTableNamesResponse")
+	}
+
+	return r.GetTableNames(), nil
 }
 
 func (c *client) CreateTable(t *hrpc.CreateTable) error {
