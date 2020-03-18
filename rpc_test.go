@@ -35,7 +35,7 @@ import (
 
 func newMockClient(zkClient zk.Client) *client {
 	return &client{
-		clientType: standardClient,
+		clientType: region.RegionClient,
 		regions:    keyRegionCache{regions: b.TreeNew(region.CompareGeneric)},
 		clients: clientRegionCache{
 			regions: make(map[hrpc.RegionClient]map[hrpc.RegionInfo]struct{}),

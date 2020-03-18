@@ -202,7 +202,7 @@ func (c *client) lookupRegion(ctx context.Context,
 	for {
 		// If it takes longer than regionLookupTimeout, fail so that we can sleep
 		lookupCtx, cancel := context.WithTimeout(ctx, c.regionLookupTimeout)
-		if c.clientType == adminClient {
+		if c.clientType == region.MasterClient {
 			log.WithField("resource", zk.Master).Debug("looking up master")
 
 			addr, err = c.zkLookup(lookupCtx, zk.Master)
@@ -299,7 +299,7 @@ func (c *client) findRegion(ctx context.Context, table, key []byte) (hrpc.Region
 
 // Searches in the regions cache for the region hosting the given row.
 func (c *client) getRegionFromCache(table, key []byte) hrpc.RegionInfo {
-	if c.clientType == adminClient {
+	if c.clientType == region.MasterClient {
 		return c.adminRegionInfo
 	} else if bytes.Equal(table, metaTableName) {
 		return c.metaRegionInfo
@@ -604,7 +604,7 @@ func sleepAndIncreaseBackoff(ctx context.Context, backoff time.Duration) (time.D
 
 func (c *client) establishRegionClient(reg hrpc.RegionInfo,
 	addr string) (hrpc.RegionClient, error) {
-	if c.clientType != adminClient {
+	if c.clientType != region.MasterClient {
 		// if rpc is not for hbasemaster, check if client for regionserver
 		// already exists
 		if client := c.clients.checkForClient(addr); client != nil {
@@ -613,16 +613,10 @@ func (c *client) establishRegionClient(reg hrpc.RegionInfo,
 		}
 	}
 
-	var clientType region.ClientType
-	if c.clientType == standardClient {
-		clientType = region.RegionClient
-	} else {
-		clientType = region.MasterClient
-	}
 	clientCtx, cancel := context.WithTimeout(reg.Context(), c.regionLookupTimeout)
 	defer cancel()
 
-	return region.NewClient(clientCtx, addr, clientType,
+	return region.NewClient(clientCtx, addr, c.clientType,
 		c.rpcQueueSize, c.flushInterval, c.effectiveUser,
 		c.regionReadTimeout)
 }

@@ -48,7 +48,7 @@ func newAdminClient(zkquorum string, options ...Option) AdminClient {
 		"Host": zkquorum,
 	}).Debug("Creating new admin client.")
 	c := &client{
-		clientType:    adminClient,
+		clientType:    region.MasterClient,
 		rpcQueueSize:  defaultRPCQueueSize,
 		flushInterval: defaultFlushInterval,
 		// empty region in order to be able to set client to it

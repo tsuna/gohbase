@@ -22,8 +22,6 @@ import (
 )
 
 const (
-	standardClient = iota
-	adminClient
 	defaultRPCQueueSize  = 100
 	defaultFlushInterval = 20 * time.Millisecond
 	defaultZkRoot        = "/hbase"
@@ -58,7 +56,7 @@ type Option func(*client)
 
 // A Client provides access to an HBase cluster.
 type client struct {
-	clientType int
+	clientType region.ClientType
 
 	regions keyRegionCache
 
@@ -113,7 +111,7 @@ func newClient(zkquorum string, options ...Option) *client {
 		"Host": zkquorum,
 	}).Debug("Creating new client.")
 	c := &client{
-		clientType: standardClient,
+		clientType: region.RegionClient,
 		regions:    keyRegionCache{regions: b.TreeNew(region.CompareGeneric)},
 		clients: clientRegionCache{
 			regions: make(map[hrpc.RegionClient]map[hrpc.RegionInfo]struct{}),
@@ -201,7 +199,7 @@ func FlushInterval(interval time.Duration) Option {
 func (c *client) Close() {
 	c.closeOnce.Do(func() {
 		close(c.done)
-		if c.clientType == adminClient {
+		if c.clientType == region.MasterClient {
 			if ac := c.adminRegionInfo.Client(); ac != nil {
 				ac.Close()
 			}
