@@ -17,40 +17,52 @@ import (
 )
 
 // NewClient creates a new RegionClient.
-func NewClient(ctx context.Context, addr string, ctype ClientType,
-	queueSize int, flushInterval time.Duration, effectiveUser string,
-	readTimeout time.Duration) (hrpc.RegionClient, error) {
-	var d net.Dialer
-	conn, err := d.DialContext(ctx, "tcp", addr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to the RegionServer at %s: %s", addr, err)
-	}
-	c := &client{
+func NewClient(addr string, ctype ClientType, queueSize int, flushInterval time.Duration,
+	effectiveUser string, readTimeout time.Duration) hrpc.RegionClient {
+	return &client{
 		addr:          addr,
-		conn:          conn,
-		rpcs:          make(chan hrpc.Call),
-		done:          make(chan struct{}),
-		sent:          make(map[uint32]hrpc.Call),
+		ctype:         ctype,
 		rpcQueueSize:  queueSize,
 		flushInterval: flushInterval,
 		effectiveUser: effectiveUser,
 		readTimeout:   readTimeout,
+		rpcs:          make(chan hrpc.Call),
+		done:          make(chan struct{}),
+		sent:          make(map[uint32]hrpc.Call),
 	}
-	// time out send hello if it take long
-	// TODO: do we even need to bother, we are going to retry anyway?
-	if deadline, ok := ctx.Deadline(); ok {
-		conn.SetWriteDeadline(deadline)
-	}
-	if err := c.sendHello(ctype); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to send hello to the RegionServer at %s: %s", addr, err)
-	}
-	// reset write deadline
-	conn.SetWriteDeadline(time.Time{})
+}
 
-	if ctype == RegionClient {
-		go c.processRPCs() // Batching goroutine
+func (c *client) Dial(ctx context.Context) error {
+	c.dialOnce.Do(func() {
+		var d net.Dialer
+		var err error
+		c.conn, err = d.DialContext(ctx, "tcp", c.addr)
+		if err != nil {
+			c.fail(fmt.Errorf("failed to dial RegionServer: %s", err))
+			return
+		}
+
+		// time out send hello if it take long
+		if deadline, ok := ctx.Deadline(); ok {
+			c.conn.SetWriteDeadline(deadline)
+		}
+		if err := c.sendHello(); err != nil {
+			c.fail(fmt.Errorf("failed to send hello to RegionServer: %s", err))
+			return
+		}
+		// reset write deadline
+		c.conn.SetWriteDeadline(time.Time{})
+
+		if c.ctype == RegionClient {
+			go c.processRPCs() // Batching goroutine
+		}
+		go c.receiveRPCs() // Reader goroutine
+	})
+
+	select {
+	case <-c.done:
+		return ErrClientClosed
+	default:
+		return nil
 	}
-	go c.receiveRPCs() // Reader goroutine
-	return c, nil
 }

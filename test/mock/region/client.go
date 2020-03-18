@@ -5,6 +5,7 @@
 package mock
 
 import (
+	context "context"
 	gomock "github.com/golang/mock/gomock"
 	hrpc "github.com/tsuna/gohbase/hrpc"
 	reflect "reflect"
@@ -57,6 +58,20 @@ func (m *MockRegionClient) Close() {
 func (mr *MockRegionClientMockRecorder) Close() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockRegionClient)(nil).Close))
+}
+
+// Dial mocks base method
+func (m *MockRegionClient) Dial(arg0 context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Dial", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Dial indicates an expected call of Dial
+func (mr *MockRegionClientMockRecorder) Dial(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dial", reflect.TypeOf((*MockRegionClient)(nil).Dial), arg0)
 }
 
 // QueueRPC mocks base method

@@ -545,19 +545,32 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 			}
 		}
 
-		// connect to the region's regionserver
-		client, err := c.establishRegionClient(reg, addr)
+		var client hrpc.RegionClient
+		if reg == c.adminRegionInfo {
+			// admin region is used for talking to master, so it only has one connection to
+			// master that we don't add to the cache
+			// TODO: consider combining this case with the regular regionserver path
+			client = region.NewClient(addr, c.clientType, c.rpcQueueSize, c.flushInterval,
+				c.effectiveUser, c.regionReadTimeout)
+		} else {
+			client = c.clients.put(addr, reg, func() hrpc.RegionClient {
+				return region.NewClient(addr, c.clientType, c.rpcQueueSize, c.flushInterval,
+					c.effectiveUser, c.regionReadTimeout)
+			})
+		}
+
+		// connect to the region's regionserver.
+		// only the first caller to Dial gets to actually connect, other concurrent calls
+		// will block until connected or an error.
+		dialCtx, cancel := context.WithTimeout(reg.Context(), c.regionLookupTimeout)
+		err = client.Dial(dialCtx)
+		cancel()
+
 		if err == nil {
 			if reg == c.adminRegionInfo {
 				reg.SetClient(client)
 				reg.MarkAvailable()
 				return
-			}
-
-			if existing := c.clients.put(client, reg); existing != client {
-				// a client for this regionserver is already in cache, discard this one.
-				client.Close()
-				client = existing
 			}
 
 			if err = isRegionEstablished(client, reg); err == nil {
@@ -575,6 +588,7 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 			reg.MarkAvailable()
 			return
 		}
+
 		log.WithFields(log.Fields{
 			"region":  reg,
 			"backoff": backoff,
@@ -600,25 +614,6 @@ func sleepAndIncreaseBackoff(ctx context.Context, backoff time.Duration) (time.D
 		return backoff * 2, nil
 	}
 	return backoff + 5000*time.Millisecond, nil
-}
-
-func (c *client) establishRegionClient(reg hrpc.RegionInfo,
-	addr string) (hrpc.RegionClient, error) {
-	if c.clientType != region.MasterClient {
-		// if rpc is not for hbasemaster, check if client for regionserver
-		// already exists
-		if client := c.clients.checkForClient(addr); client != nil {
-			// There's already a client
-			return client, nil
-		}
-	}
-
-	clientCtx, cancel := context.WithTimeout(reg.Context(), c.regionLookupTimeout)
-	defer cancel()
-
-	return region.NewClient(clientCtx, addr, c.clientType,
-		c.rpcQueueSize, c.flushInterval, c.effectiveUser,
-		c.regionReadTimeout)
 }
 
 // zkResult contains the result of a ZooKeeper lookup (when we're looking for

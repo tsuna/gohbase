@@ -23,14 +23,16 @@ type clientRegionCache struct {
 	regions map[hrpc.RegionClient]map[hrpc.RegionInfo]struct{}
 }
 
-// put caches client and associates a region with it. Returns a client that is in cache.
+// put associates a region with client for provided addrss. It returns the client if it's already
+// in cache or otherwise instantiates a new one by calling newClient.
 // TODO: obvious place for optimization (use map with address as key to lookup exisiting clients)
-func (rcc *clientRegionCache) put(c hrpc.RegionClient, r hrpc.RegionInfo) hrpc.RegionClient {
+func (rcc *clientRegionCache) put(addr string, r hrpc.RegionInfo,
+	newClient func() hrpc.RegionClient) hrpc.RegionClient {
 	rcc.m.Lock()
 	for existingClient, regions := range rcc.regions {
 		// check if client already exists, checking by host and port
 		// because concurrent callers might try to put the same client
-		if c.Addr() == existingClient.Addr() {
+		if addr == existingClient.Addr() {
 			// check client already knows about the region, checking
 			// by pointer is enough because we make sure that there are
 			// no regions with the same name around
@@ -40,14 +42,14 @@ func (rcc *clientRegionCache) put(c hrpc.RegionClient, r hrpc.RegionInfo) hrpc.R
 			rcc.m.Unlock()
 
 			log.WithFields(log.Fields{
-				"existingClient": existingClient,
-				"client":         c,
+				"client": existingClient,
 			}).Debug("region client is already in client's cache")
 			return existingClient
 		}
 	}
 
 	// no such client yet
+	c := newClient()
 	rcc.regions[c] = map[hrpc.RegionInfo]struct{}{r: struct{}{}}
 	rcc.m.Unlock()
 
@@ -88,21 +90,6 @@ func (rcc *clientRegionCache) clientDown(c hrpc.RegionClient) map[hrpc.RegionInf
 		log.WithField("client", c).Info("removed region client")
 	}
 	return downregions
-}
-
-// TODO: obvious place for optimization (use map with address as key to lookup exisiting clients)
-func (rcc *clientRegionCache) checkForClient(addr string) hrpc.RegionClient {
-	rcc.m.RLock()
-
-	for client := range rcc.regions {
-		if client.Addr() == addr {
-			rcc.m.RUnlock()
-			return client
-		}
-	}
-
-	rcc.m.RUnlock()
-	return nil
 }
 
 // key -> region cache.

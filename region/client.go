@@ -148,10 +148,13 @@ type client struct {
 	conn net.Conn
 
 	// Address of the RegionServer.
-	addr string
+	addr  string
+	ctype ClientType
 
-	// once used for concurrent calls to fail
-	once sync.Once
+	// dialOnce used for concurrent calls to Dial
+	dialOnce sync.Once
+	// failOnce used for concurrent calls to fail
+	failOnce sync.Once
 
 	rpcs chan hrpc.Call
 	done chan struct{}
@@ -169,7 +172,6 @@ type client struct {
 
 	rpcQueueSize  int
 	flushInterval time.Duration
-
 	effectiveUser string
 
 	// readTimeout is the maximum amount of time to wait for regionserver reply
@@ -231,7 +233,7 @@ func (c *client) inFlightDown() {
 }
 
 func (c *client) fail(err error) {
-	c.once.Do(func() {
+	c.failOnce.Do(func() {
 		if err != ErrClientClosed {
 			log.WithFields(log.Fields{
 				"client": c,
@@ -528,12 +530,12 @@ func (c *client) readFully(buf []byte) error {
 }
 
 // sendHello sends the "hello" message needed when opening a new connection.
-func (c *client) sendHello(ctype ClientType) error {
+func (c *client) sendHello() error {
 	connHeader := &pb.ConnectionHeader{
 		UserInfo: &pb.UserInformation{
 			EffectiveUser: proto.String(c.effectiveUser),
 		},
-		ServiceName:         proto.String(string(ctype)),
+		ServiceName:         proto.String(string(c.ctype)),
 		CellBlockCodecClass: proto.String("org.apache.hadoop.hbase.codec.KeyValueCodec"),
 	}
 	data, err := proto.Marshal(connHeader)

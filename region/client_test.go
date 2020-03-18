@@ -72,6 +72,7 @@ func TestSendHello(t *testing.T) {
 	c := &client{
 		conn:          mockConn,
 		effectiveUser: "root",
+		ctype:         RegionClient,
 	}
 
 	// check if it's sending the right "hello" for RegionClient
@@ -83,12 +84,13 @@ func TestSendHello(t *testing.T) {
 				expected, buf, diff)
 		}
 	})
-	err := c.sendHello(RegionClient)
+	err := c.sendHello()
 	if err != nil {
 		t.Errorf("Wasn't expecting error, but got one: %#v", err)
 	}
 
 	// check if it sends the right "hello" for MasterClient
+	c.ctype = MasterClient
 	mockConn.EXPECT().Write(gomock.Any()).Return(78, nil).Times(1).Do(func(buf []byte) {
 		expected := []byte("HBas\x00P\x00\x00\x00D\n\x06\n\x04root\x12\rMasterService\x1a+" +
 			"org.apache.hadoop.hbase.codec.KeyValueCodec")
@@ -97,7 +99,7 @@ func TestSendHello(t *testing.T) {
 				expected, buf, diff)
 		}
 	})
-	err = c.sendHello(MasterClient)
+	err = c.sendHello()
 	if err != nil {
 		t.Errorf("Was expecting error, but got one: %#v", err)
 	}

@@ -37,6 +37,9 @@ type RegionInfo interface {
 
 // RegionClient represents HBase region client.
 type RegionClient interface {
+	// Dial connects and bootstraps region client. Only the first caller to Dial gets to
+	// actually connect, other concurrent callers will block until connected or an error.
+	Dial(context.Context) error
 	Close()
 	Addr() string
 	QueueRPC(Call)
