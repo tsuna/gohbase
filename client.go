@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cznic/b"
 	"github.com/golang/protobuf/proto"
 	log "github.com/sirupsen/logrus"
 	"github.com/tsuna/gohbase/hrpc"
@@ -19,6 +18,7 @@ import (
 	"github.com/tsuna/gohbase/region"
 	"github.com/tsuna/gohbase/zk"
 	"golang.org/x/time/rate"
+	"modernc.org/b"
 )
 
 const (

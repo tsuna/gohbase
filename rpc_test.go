@@ -19,7 +19,6 @@ import (
 	"golang.org/x/time/rate"
 
 	atest "github.com/aristanetworks/goarista/test"
-	"github.com/cznic/b"
 	"github.com/golang/mock/gomock"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
@@ -29,6 +28,7 @@ import (
 	mockRegion "github.com/tsuna/gohbase/test/mock/region"
 	mockZk "github.com/tsuna/gohbase/test/mock/zk"
 	"github.com/tsuna/gohbase/zk"
+	"modernc.org/b"
 )
 
 func newRegionClientFn(addr string) func() hrpc.RegionClient {

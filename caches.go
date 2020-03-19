@@ -10,9 +10,9 @@ import (
 	"io"
 	"sync"
 
-	"github.com/cznic/b"
 	log "github.com/sirupsen/logrus"
 	"github.com/tsuna/gohbase/hrpc"
+	"modernc.org/b"
 )
 
 // clientRegionCache is client -> region cache. Used to quickly
