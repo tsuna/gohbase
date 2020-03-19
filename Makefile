@@ -20,15 +20,15 @@ jenkins: check integration
 
 COVER_PKGS := `find ./* -name '*_test.go' ! -path "./test/mock/*" | xargs -I{} dirname {} | sort -u`
 COVER_MODE := count
-coverdata:
+integration_cover:
 	echo 'mode: $(COVER_MODE)' >coverage.out
 	for dir in $(COVER_PKGS); do \
-	  $(GO) test -covermode=$(COVER_MODE) -coverprofile=cov.out-t $$dir || exit; \
+	  $(GO) test -covermode=$(COVER_MODE) -race -timeout=$(INTEGRATION_TIMEOUT) -tags=integration -coverprofile=cov.out-t $$dir || exit; \
 	  tail -n +2 cov.out-t >> coverage.out && \
 	  rm cov.out-t; \
 	done;
 
-coverage: coverdata
+coverage: integration_cover
 	$(GO) tool cover -html=coverage.out
 	rm -f coverage.out
 
@@ -51,4 +51,4 @@ test:
 integration:
 	$(GO) test $(GOTEST_FLAGS) -race -timeout=$(INTEGRATION_TIMEOUT) -tags=integration ./...
 
-.PHONY: all check coverage coverdata fmtcheck install integration jenkins lint test vet
+.PHONY: all check coverage integration_cover fmtcheck install integration jenkins lint test vet

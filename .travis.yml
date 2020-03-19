@@ -11,10 +11,10 @@ before_install:
     ln -s hbase-$ver hbase
 install:
   - ./install_ci.sh
+script:
+  - make check
+  - make integration_cover GOTEST_FLAGS=-v
 after_success:
-  - make coverdata
   - bash <(curl -s https://codecov.io/bash)
 before_script:
   - hbase/bin/hbase-daemon.sh --config hbase/conf start master
-script:
-  - make -j4 jenkins GOTEST_FLAGS=-v
