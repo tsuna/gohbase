@@ -99,6 +99,9 @@ type client struct {
 
 	done      chan struct{}
 	closeOnce sync.Once
+
+	newRegionClientFn func(string, region.ClientType, int, time.Duration,
+		string, time.Duration) hrpc.RegionClient
 }
 
 // NewClient creates a new HBase client.
@@ -132,6 +135,7 @@ func newClient(zkquorum string, options ...Option) *client {
 		regionLookupTimeout: region.DefaultLookupTimeout,
 		regionReadTimeout:   region.DefaultReadTimeout,
 		done:                make(chan struct{}),
+		newRegionClientFn:   region.NewClient,
 	}
 	for _, option := range options {
 		option(c)

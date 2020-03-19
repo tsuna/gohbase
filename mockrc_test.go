@@ -3,9 +3,7 @@
 // Use of this source code is governed by the Apache License 2.0
 // that can be found in the COPYING file.
 
-// +build testing
-
-package region
+package gohbase
 
 import (
 	"bytes"
@@ -18,6 +16,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
+	"github.com/tsuna/gohbase/region"
 )
 
 type testClient struct {
@@ -203,9 +202,9 @@ func init() {
 	clients = make(map[string]uint32)
 }
 
-// NewClient creates a new test region client.
-func NewClient(addr string, ctype ClientType, queueSize int, flushInterval time.Duration,
-	effectiveUser string, readTimeout time.Duration) hrpc.RegionClient {
+func newMockRegionClient(addr string, ctype region.ClientType, queueSize int,
+	flushInterval time.Duration, effectiveUser string,
+	readTimeout time.Duration) hrpc.RegionClient {
 	m.Lock()
 	clients[addr]++
 	m.Unlock()
@@ -242,7 +241,7 @@ func (c *testClient) QueueRPC(call hrpc.Call) {
 		if bytes.Equal(call.Table(), []byte("nsre")) {
 			i := atomic.AddInt32(&c.numNSRE, 1)
 			if i <= 3 {
-				call.ResultChan() <- hrpc.RPCResult{Error: NotServingRegionError{}}
+				call.ResultChan() <- hrpc.RPCResult{Error: region.NotServingRegionError{}}
 				return
 			}
 		}
@@ -254,7 +253,7 @@ func (c *testClient) QueueRPC(call hrpc.Call) {
 		// pretend it's down to fail the probe and start a reconnect
 		if bytes.Equal(call.Table(), []byte("down")) {
 			if i <= 1 {
-				call.ResultChan() <- hrpc.RPCResult{Error: ServerError{}}
+				call.ResultChan() <- hrpc.RPCResult{Error: region.ServerError{}}
 			} else {
 				// otherwise, the region is fine
 				call.ResultChan() <- hrpc.RPCResult{}

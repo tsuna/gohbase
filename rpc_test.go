@@ -3,8 +3,6 @@
 // Use of this source code is governed by the Apache License 2.0
 // that can be found in the COPYING file.
 
-// +build testing,!integration
-
 package gohbase
 
 import (
@@ -35,7 +33,7 @@ import (
 
 func newRegionClientFn(addr string) func() hrpc.RegionClient {
 	return func() hrpc.RegionClient {
-		return region.NewClient(addr, region.RegionClient,
+		return newMockRegionClient(addr, region.RegionClient,
 			0, 0, "root", region.DefaultReadTimeout)
 	}
 }
@@ -56,6 +54,7 @@ func newMockClient(zkClient zk.Client) *client {
 		metaLookupLimiter:   rate.NewLimiter(metaLimit, metaBurst),
 		regionLookupTimeout: region.DefaultLookupTimeout,
 		regionReadTimeout:   region.DefaultReadTimeout,
+		newRegionClientFn:   newMockRegionClient,
 	}
 }
 

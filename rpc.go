@@ -550,11 +550,11 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 			// admin region is used for talking to master, so it only has one connection to
 			// master that we don't add to the cache
 			// TODO: consider combining this case with the regular regionserver path
-			client = region.NewClient(addr, c.clientType, c.rpcQueueSize, c.flushInterval,
+			client = c.newRegionClientFn(addr, c.clientType, c.rpcQueueSize, c.flushInterval,
 				c.effectiveUser, c.regionReadTimeout)
 		} else {
 			client = c.clients.put(addr, reg, func() hrpc.RegionClient {
-				return region.NewClient(addr, c.clientType, c.rpcQueueSize, c.flushInterval,
+				return c.newRegionClientFn(addr, c.clientType, c.rpcQueueSize, c.flushInterval,
 					c.effectiveUser, c.regionReadTimeout)
 			})
 		}

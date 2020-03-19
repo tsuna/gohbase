@@ -15,7 +15,7 @@ all: install
 install:
 	$(GO) install ./...
 
-check: vet fmtcheck lint test
+check: vet fmtcheck lint
 jenkins: check integration
 
 COVER_PKGS := `find ./* -name '*_test.go' ! -path "./test/mock/*" | xargs -I{} dirname {} | sort -u`
@@ -23,7 +23,7 @@ COVER_MODE := count
 coverdata:
 	echo 'mode: $(COVER_MODE)' >coverage.out
 	for dir in $(COVER_PKGS); do \
-	  $(GO) test -covermode=$(COVER_MODE) -tags=testing -coverprofile=cov.out-t $$dir || exit; \
+	  $(GO) test -covermode=$(COVER_MODE) -coverprofile=cov.out-t $$dir || exit; \
 	  tail -n +2 cov.out-t >> coverage.out && \
 	  rm cov.out-t; \
 	done;
@@ -46,9 +46,9 @@ lint:
 # lint.  See https://github.com/golang/lint/issues/65
 
 test:
-	$(GO) test $(GOTEST_FLAGS) -race -timeout=$(TEST_TIMEOUT) -tags=testing ./...
+	$(GO) test $(GOTEST_FLAGS) -race -timeout=$(TEST_TIMEOUT) ./...
 
 integration:
-	$(GO) test $(GOTEST_FLAGS) -race -timeout=$(INTEGRATION_TIMEOUT) -tags=integration
+	$(GO) test $(GOTEST_FLAGS) -race -timeout=$(INTEGRATION_TIMEOUT) -tags=integration ./...
 
 .PHONY: all check coverage coverdata fmtcheck install integration jenkins lint test vet
