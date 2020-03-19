@@ -649,9 +649,9 @@ func TestClientCachePut(t *testing.T) {
 		t.Errorf("Expected 1 client in cache, got %d", len(client.clients.regions))
 	}
 
-	if len(client.clients.regions[regClient]) != 1 {
+	if len(client.clients.regions[regClient.Addr()]) != 1 {
 		t.Errorf("Expected 1 region for client in cache, got %d",
-			len(client.clients.regions[regClient]))
+			len(client.clients.regions[regClient.Addr()]))
 	}
 
 	// try putting client with the same host port
@@ -676,8 +676,8 @@ func TestClientCachePut(t *testing.T) {
 		t.Errorf("Expected 1 client in cache, got %d", len(client.clients.regions))
 	}
 
-	if len(client.clients.regions[regClient]) != 2 {
+	if len(client.clients.regions[regClient.Addr()]) != 2 {
 		t.Errorf("Expected 2 regions for client in cache, got %d",
-			len(client.clients.regions[regClient]))
+			len(client.clients.regions[regClient.Addr()]))
 	}
 }

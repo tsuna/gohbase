@@ -114,7 +114,8 @@ func newClient(zkquorum string, options ...Option) *client {
 		clientType: region.RegionClient,
 		regions:    keyRegionCache{regions: b.TreeNew(region.CompareGeneric)},
 		clients: clientRegionCache{
-			regions: make(map[hrpc.RegionClient]map[hrpc.RegionInfo]struct{}),
+			regionClients: make(map[string]hrpc.RegionClient),
+			regions:       make(map[string]map[hrpc.RegionInfo]struct{}),
 		},
 		rpcQueueSize:  defaultRPCQueueSize,
 		flushInterval: defaultFlushInterval,
