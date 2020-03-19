@@ -10,11 +10,6 @@ GOTEST_FLAGS := -v
 
 GOLINT := golint
 
-all: install
-
-install:
-	$(GO) install ./...
-
 check: vet fmtcheck lint
 jenkins: check integration
 
@@ -51,4 +46,4 @@ test:
 integration:
 	$(GO) test $(GOTEST_FLAGS) -race -timeout=$(INTEGRATION_TIMEOUT) -tags=integration ./...
 
-.PHONY: all check coverage integration_cover fmtcheck install integration jenkins lint test vet
+.PHONY: check coverage integration_cover fmtcheck integration jenkins lint test vet
