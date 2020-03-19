@@ -12,11 +12,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"testing"
-	"time"
-
-	"golang.org/x/time/rate"
 
 	atest "github.com/aristanetworks/goarista/test"
 	"github.com/golang/mock/gomock"
@@ -51,7 +47,6 @@ func newMockClient(zkClient zk.Client) *client {
 			[]byte("hbase:meta,,1"), nil, nil),
 		zkTimeout:           defaultZkTimeout,
 		zkClient:            zkClient,
-		metaLookupLimiter:   rate.NewLimiter(metaLimit, metaBurst),
 		regionLookupTimeout: region.DefaultLookupTimeout,
 		regionReadTimeout:   region.DefaultReadTimeout,
 		newRegionClientFn:   newMockRegionClient,
@@ -227,50 +222,6 @@ func TestReestablishRegionSplit(t *testing.T) {
 
 	if origlReg.Client() != nil {
 		t.Error("Expected original region to have no client")
-	}
-}
-
-func TestThrottleRegionLookups(t *testing.T) {
-	t.Skip("throttling is broken")
-	ctrl := test.NewController(t)
-	defer ctrl.Finish()
-	c := newMockClient(nil)
-	numOK := int32(0)
-
-	rc := c.clients.put("regionserver:1", c.metaRegionInfo, func() hrpc.RegionClient {
-		rc := mockRegion.NewMockRegionClient(ctrl)
-		rc.EXPECT().String().Return("mock region client").AnyTimes()
-		rc.EXPECT().QueueRPC(gomock.Any()).AnyTimes().Do(func(rpc hrpc.Call) {
-			atomic.AddInt32(&numOK, 1)
-			rpc.ResultChan() <- hrpc.RPCResult{}
-		})
-		return rc
-	})
-	c.metaRegionInfo.SetClient(rc)
-
-	ctx := context.Background()
-	table, key := []byte("yolo"), []byte("swag")
-
-	start := time.Now()
-	end := start.Add(time.Second)
-	var wg sync.WaitGroup
-	for time.Now().Before(end) {
-		wg.Add(1)
-		go func() {
-			c.metaLookup(ctx, table, key)
-			wg.Done()
-		}()
-		// this will offer ~2,000 requests per second
-		// while we only allow 100 request per 100 milliseconds
-		time.Sleep(500 * time.Microsecond)
-	}
-	wg.Wait()
-	elapsed := time.Since(start)
-	ideal := 1 + (100 * float64(elapsed) / float64(100*time.Millisecond))
-
-	// We should never get more requests than allowed.
-	if want := int32(ideal + 1); numOK > want {
-		t.Errorf("numOK = %d, want %d (ideal %f)", numOK, want, ideal)
 	}
 }
 

@@ -41,10 +41,6 @@ var (
 
 	// ErrClientClosed is returned when the gohbase client has been closed
 	ErrClientClosed = errors.New("client is closed")
-
-	// errMetaLookupThrottled is returned when a lookup for the rpc's region
-	// has been throttled.
-	errMetaLookupThrottled = errors.New("lookup to hbase:meta has been throttled")
 )
 
 const (
@@ -63,11 +59,6 @@ func (c *client) getRegionForRpc(rpc hrpc.Call) (hrpc.RegionInfo, error) {
 
 		if reg, err := c.findRegion(rpc.Context(), rpc.Table(), rpc.Key()); reg != nil {
 			return reg, nil
-		} else if err == errMetaLookupThrottled {
-			// lookup for region has been throttled, check the cache
-			// again but don't count this as SendRPC try as there
-			// might be just too many request going on at a time.
-			i--
 		} else if err != nil {
 			return nil, err
 		}
@@ -230,8 +221,6 @@ func (c *client) lookupRegion(ctx context.Context,
 				}).Debug("hbase:meta does not know about this table/key")
 
 				return nil, "", err
-			} else if err == errMetaLookupThrottled {
-				return nil, "", err
 			} else if err == ErrClientClosed {
 				return nil, "", err
 			}
@@ -338,32 +327,6 @@ func createRegionSearchKey(table, key []byte) []byte {
 	// we'll find it.
 	metaKey = append(metaKey, ':')
 	return metaKey
-}
-
-// lookupLimit throttles lookups to hbase:meta to metaLookupLimit requests
-// per metaLookupInterval. It returns nil if we were lucky enough to
-// reserve right away and errMetaLookupThrottled or context's error otherwise.
-func (c *client) metaLookupLimit(ctx context.Context) error {
-	r := c.metaLookupLimiter.Reserve()
-	if !r.OK() {
-		panic("wtf: cannot reserve a meta lookup")
-	}
-
-	delay := r.Delay()
-	if delay <= 0 {
-		return nil
-	}
-
-	// We've been rate limitted
-	t := time.NewTimer(delay)
-	defer t.Stop()
-	select {
-	case <-t.C:
-		return errMetaLookupThrottled
-	case <-ctx.Done():
-		r.Cancel()
-		return ctx.Err()
-	}
 }
 
 // metaLookup checks meta table for the region in which the given row key for the given table is.
@@ -506,11 +469,6 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 				}).Info("region became dead while establishing client for it")
 
 				return
-			} else if err == errMetaLookupThrottled {
-				// We've been throttled, backoff and retry the lookup
-				// TODO: backoff might be unnecessary
-				reg = originalReg
-				continue
 			} else if err == ErrClientClosed {
 				// client has been closed
 				return

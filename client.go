@@ -17,7 +17,6 @@ import (
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
 	"github.com/tsuna/gohbase/zk"
-	"golang.org/x/time/rate"
 	"modernc.org/b"
 )
 
@@ -27,10 +26,6 @@ const (
 	defaultZkRoot        = "/hbase"
 	defaultZkTimeout     = 30 * time.Second
 	defaultEffectiveUser = "root"
-	// metaBurst is maximum number of request allowed at once.
-	metaBurst = 10
-	// metaLimit is rate at which to throttle requests to hbase:meta table.
-	metaLimit = rate.Limit(100)
 )
 
 // Client a regular HBase client
@@ -86,9 +81,6 @@ type client struct {
 	// The user used when accessing regions.
 	effectiveUser string
 
-	// metaLookupLimiter is used to throttle lookups to hbase:meta table
-	metaLookupLimiter *rate.Limiter
-
 	// How long to wait for a region lookup (either meta lookup or finding
 	// meta in ZooKeeper).  Should be greater than or equal to the ZooKeeper
 	// session timeout.
@@ -131,7 +123,6 @@ func newClient(zkquorum string, options ...Option) *client {
 		zkRoot:              defaultZkRoot,
 		zkTimeout:           defaultZkTimeout,
 		effectiveUser:       defaultEffectiveUser,
-		metaLookupLimiter:   rate.NewLimiter(metaLimit, metaBurst),
 		regionLookupTimeout: region.DefaultLookupTimeout,
 		regionReadTimeout:   region.DefaultReadTimeout,
 		done:                make(chan struct{}),
