@@ -2064,8 +2064,17 @@ func TestListTableNames(t *testing.T) {
 				t.Error(err)
 			}
 
-			if len(names) != len(tcase.match) {
-				t.Errorf("expected %v, got %v", tcase.match, names)
+			// filter to have only tables that we've created
+			var got []*pb.TableName
+			for _, m := range names {
+				if strings.HasPrefix(string(m.Qualifier), table) ||
+					string(m.Namespace) == "hbase" {
+					got = append(got, m)
+				}
+			}
+
+			if len(got) != len(tcase.match) {
+				t.Errorf("expected %v, got %v", tcase.match, got)
 			}
 
 			for i, m := range tcase.match {
