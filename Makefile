@@ -14,7 +14,7 @@ check: vet fmtcheck lint
 jenkins: check integration
 
 COVER_PKGS := `find ./* -name '*_test.go' ! -path "./test/mock/*" | xargs -I{} dirname {} | sort -u`
-COVER_MODE := count
+COVER_MODE := atomic
 integration_cover:
 	echo 'mode: $(COVER_MODE)' >coverage.out
 	for dir in $(COVER_PKGS); do \
