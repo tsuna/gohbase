@@ -13,19 +13,13 @@ GOLINT := golint
 check: vet fmtcheck lint
 jenkins: check integration
 
-COVER_PKGS := `find ./* -name '*_test.go' ! -path "./test/mock/*" | xargs -I{} dirname {} | sort -u`
+COVER_PKGS := `go list ./... | grep -v test`
 COVER_MODE := atomic
 integration_cover:
-	echo 'mode: $(COVER_MODE)' >coverage.out
-	for dir in $(COVER_PKGS); do \
-	  $(GO) test -covermode=$(COVER_MODE) -race -timeout=$(INTEGRATION_TIMEOUT) -tags=integration -coverprofile=cov.out-t $$dir || exit; \
-	  tail -n +2 cov.out-t >> coverage.out && \
-	  rm cov.out-t; \
-	done;
+	$(GO) test -v -covermode=$(COVER_MODE) -race -timeout=$(INTEGRATION_TIMEOUT) -tags=integration -coverprofile=coverage.out $(COVER_PKGS)
 
 coverage: integration_cover
 	$(GO) tool cover -html=coverage.out
-	rm -f coverage.out
 
 fmtcheck:
 	errors=`gofmt -l .`; if test -n "$$errors"; then echo Check these files for style errors:; echo "$$errors"; exit 1; fi
