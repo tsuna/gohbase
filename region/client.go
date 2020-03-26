@@ -251,7 +251,9 @@ func (c *client) fail(err error) {
 		// close connection to the regionserver
 		// to let it know that we can't receive anymore
 		// and fail all the rpcs being sent
-		c.conn.Close()
+		if c.conn != nil {
+			c.conn.Close()
+		}
 
 		c.failSentRPCs()
 	})

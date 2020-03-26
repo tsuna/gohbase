@@ -141,6 +141,14 @@ func TestFail(t *testing.T) {
 			t.Error("expected done to be closed")
 		}
 	}
+
+	// check that failing undialed client doesn't panic
+	c = &client{
+		done: make(chan struct{}),
+		rpcs: make(chan hrpc.Call),
+		sent: make(map[uint32]hrpc.Call),
+	}
+	c.fail(expectedErr)
 }
 
 type mc struct {
