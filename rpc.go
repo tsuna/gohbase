@@ -545,6 +545,11 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 			// region is dead
 			reg.MarkAvailable()
 			return
+		} else {
+			// otherwise Dial failed, purge the client and retry.
+			// note that it's safer to reestablish all regions for this client as well
+			// because they could have ended up setteling for the same client.
+			c.clientDown(client)
 		}
 
 		log.WithFields(log.Fields{

@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	atest "github.com/aristanetworks/goarista/test"
 	"github.com/golang/mock/gomock"
@@ -270,6 +271,62 @@ func TestReestablishRegionNSRE(t *testing.T) {
 
 	if origlReg.Client() != rc1 {
 		t.Error("Expected original region the same client")
+	}
+}
+
+func TestEstablishRegionDialFail(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+
+	c := newMockClient(nil)
+
+	rcFailDial := mockRegion.NewMockRegionClient(ctrl)
+	// return an error to make sure we lookup an new client
+	rcFailDial.EXPECT().Dial(gomock.Any()).Return(errors.New("ooops")).AnyTimes()
+	rcFailDial.EXPECT().Addr().Return("regionserver:1").AnyTimes()
+	rcFailDial.EXPECT().String().Return("regionserver:1").AnyTimes()
+
+	// second client returns that region has been dead
+	// this is a success case to make sure we ever obtain a new client and not
+	// just stuck looking up in cache
+	rcDialCancel := mockRegion.NewMockRegionClient(ctrl)
+	rcDialCancel.EXPECT().Dial(gomock.Any()).Return(context.Canceled)
+	rcDialCancel.EXPECT().Addr().Return("regionserver:1").AnyTimes()
+	rcDialCancel.EXPECT().String().Return("reginserver:1").AnyTimes()
+
+	newRegionClientFnCallCount := 0
+	c.newRegionClientFn = func(_ string, _ region.ClientType, _ int, _ time.Duration,
+		_ string, _ time.Duration) hrpc.RegionClient {
+		var rc hrpc.RegionClient
+		if newRegionClientFnCallCount == 0 {
+			rc = rcFailDial
+		} else {
+			// if there was a bug with cache updates, we would never get into this case
+			rc = rcDialCancel
+		}
+		newRegionClientFnCallCount++
+		return rc
+	}
+
+	reg := region.NewInfo(
+		0, nil, []byte("test1"), []byte("test1,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."),
+		nil, nil)
+	reg.MarkUnavailable()
+
+	// inject a fake regionserver client and fake region into cache
+	// pretend regionserver:0 has meta table
+	rc1 := c.clients.put("regionserver:0", c.metaRegionInfo, newRegionClientFn("regionserver:0"))
+	c.metaRegionInfo.SetClient(rc1)
+
+	// should get stuck if the region is never established
+	c.establishRegion(reg, "regionserver:1")
+
+	if len(c.clients.regions) != 2 {
+		t.Errorf("Expected 2 clients in cache, got %d", len(c.clients.regions))
+	}
+
+	if reg.IsUnavailable() {
+		t.Error("Expected region to be available")
 	}
 }
 
