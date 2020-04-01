@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -43,29 +44,33 @@ var (
 	// If a Java exception listed here is returned by HBase, the client should
 	// reestablish region and attempt to resend the RPC message, potentially via
 	// a different region client.
-	javaRegionExceptions = map[string]struct{}{
-		"org.apache.hadoop.hbase.NotServingRegionException":       struct{}{},
-		"org.apache.hadoop.hbase.exceptions.RegionMovedException": struct{}{},
+	// The value of exception should be contained in the stack trace.
+	javaRegionExceptions = map[string]string{
+		"org.apache.hadoop.hbase.NotServingRegionException":       "",
+		"org.apache.hadoop.hbase.exceptions.RegionMovedException": "",
+		"java.io.IOException": "Cannot append; log is closed",
 	}
 
 	// If a Java exception listed here is returned by HBase, the client should
 	// backoff and resend the RPC message to the same region and region server
-	javaRetryableExceptions = map[string]struct{}{
-		"org.apache.hadoop.hbase.CallQueueTooBigException":          struct{}{},
-		"org.apache.hadoop.hbase.exceptions.RegionOpeningException": struct{}{},
-		"org.apache.hadoop.hbase.ipc.ServerNotRunningYetException":  struct{}{},
-		"org.apache.hadoop.hbase.quotas.RpcThrottlingException":     struct{}{},
-		"org.apache.hadoop.hbase.RetryImmediatelyException":         struct{}{},
-		"org.apache.hadoop.hbase.RegionTooBusyException":            struct{}{},
+	// The value of exception should be contained in the stack trace.
+	javaRetryableExceptions = map[string]string{
+		"org.apache.hadoop.hbase.CallQueueTooBigException":          "",
+		"org.apache.hadoop.hbase.exceptions.RegionOpeningException": "",
+		"org.apache.hadoop.hbase.ipc.ServerNotRunningYetException":  "",
+		"org.apache.hadoop.hbase.quotas.RpcThrottlingException":     "",
+		"org.apache.hadoop.hbase.RetryImmediatelyException":         "",
+		"org.apache.hadoop.hbase.RegionTooBusyException":            "",
 	}
 
 	// javaServerExceptions is a map where all Java exceptions that signify
 	// the RPC should be sent again are listed (as keys). If a Java exception
 	// listed here is returned by HBase, the RegionClient will be closed and a new
 	// one should be established.
-	javaServerExceptions = map[string]struct{}{
-		"org.apache.hadoop.hbase.regionserver.RegionServerAbortedException": struct{}{},
-		"org.apache.hadoop.hbase.regionserver.RegionServerStoppedException": struct{}{},
+	// The value of exception should be contained in the stack trace.
+	javaServerExceptions = map[string]string{
+		"org.apache.hadoop.hbase.regionserver.RegionServerAbortedException": "",
+		"org.apache.hadoop.hbase.regionserver.RegionServerStoppedException": "",
 	}
 )
 
@@ -509,11 +514,11 @@ func (c *client) receive() (err error) {
 
 func exceptionToError(class, stack string) error {
 	err := fmt.Errorf("HBase Java exception %s:\n%s", class, stack)
-	if _, ok := javaRetryableExceptions[class]; ok {
+	if s, ok := javaRetryableExceptions[class]; ok && strings.Contains(stack, s) {
 		return RetryableError{err}
-	} else if _, ok := javaRegionExceptions[class]; ok {
+	} else if s, ok := javaRegionExceptions[class]; ok && strings.Contains(stack, s) {
 		return NotServingRegionError{err}
-	} else if _, ok := javaServerExceptions[class]; ok {
+	} else if s, ok := javaServerExceptions[class]; ok && strings.Contains(stack, s) {
 		return ServerError{err}
 	}
 	return err

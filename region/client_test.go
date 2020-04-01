@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"reflect"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -537,6 +538,41 @@ func TestServerErrorExceptionResponse(t *testing.T) {
 	re := <-rpc.ResultChan()
 	if re.Error != err {
 		t.Errorf("expected error %v, got %v", err, re.Error)
+	}
+}
+
+func TestExceptionToError(t *testing.T) {
+	tcases := []struct {
+		class string
+		stack string
+		out   error
+	}{
+		{
+			class: "java.io.IOException",
+			stack: "ooops",
+			out:   errors.New("HBase Java exception java.io.IOException:\nooops"),
+		},
+		{
+			class: "java.io.IOException",
+			stack: "Cannot append; log is closed\nblahblah",
+			out: NotServingRegionError{errors.New("HBase Java exception java.io.IOException:\n" +
+				"Cannot append; log is closed\nblahblah")},
+		},
+		{
+			class: "org.apache.hadoop.hbase.CallQueueTooBigException",
+			stack: "blahblah",
+			out: RetryableError{errors.New(
+				"HBase Java exception org.apache.hadoop.hbase.CallQueueTooBigException:\n" +
+					"blahblah")},
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.class, func(t *testing.T) {
+			err := exceptionToError(tcase.class, tcase.stack)
+			if !reflect.DeepEqual(err, tcase.out) {
+				t.Fatalf("expected error %q, got error %q", tcase.out, err)
+			}
+		})
 	}
 }
 
