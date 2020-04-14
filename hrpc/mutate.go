@@ -15,21 +15,7 @@ import (
 	"github.com/tsuna/gohbase/pb"
 )
 
-var (
-	// ErrNotAStruct is returned by any of the *Ref functions when something
-	// other than a struct is passed in to their data argument
-	ErrNotAStruct = errors.New("data must be a struct")
-
-	// ErrUnsupportedUints is returned when this message is serialized and uints
-	// are unsupported on your platform (this will probably never happen)
-	ErrUnsupportedUints = errors.New("uints are unsupported on your platform")
-
-	// ErrUnsupportedInts is returned when this message is serialized and ints
-	// are unsupported on your platform (this will probably never happen)
-	ErrUnsupportedInts = errors.New("ints are unsupported on your platform")
-
-	attributeNameTTL = "_ttl"
-)
+var attributeNameTTL = "_ttl"
 
 // DurabilityType is used to set durability for Durability option
 type DurabilityType int32
