@@ -15,6 +15,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,7 +24,6 @@ import (
 
 	"math"
 
-	atest "github.com/aristanetworks/goarista/test"
 	"github.com/golang/protobuf/proto"
 	log "github.com/sirupsen/logrus"
 	"github.com/tsuna/gohbase"
@@ -714,7 +714,7 @@ func TestDelete(t *testing.T) {
 			in: func(key string) (*hrpc.Mutate, error) {
 				return hrpc.NewDelStr(context.Background(), table, key, nil)
 			},
-			out: []*hrpc.Cell{},
+			out: nil,
 		},
 		{
 			// delete the whole row at ts
@@ -803,8 +803,8 @@ func TestDelete(t *testing.T) {
 				c.CellType = pb.CellType_PUT.Enum()
 			}
 
-			if d := atest.Diff(tcase.out, rsp.Cells); d != "" {
-				t.Fatalf("unexpected cells: %s", d)
+			if !reflect.DeepEqual(tcase.out, rsp.Cells) {
+				t.Fatalf("expected %v, got %v", tcase.out, rsp.Cells)
 			}
 		})
 	}

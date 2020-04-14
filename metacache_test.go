@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strconv"
 	"testing"
 
-	"github.com/aristanetworks/goarista/test"
 	"github.com/golang/mock/gomock"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/region"
@@ -382,31 +382,32 @@ func TestRegionCacheAge(t *testing.T) {
 
 	client := newClient("~invalid.quorum~")
 	for i, tcase := range tcases {
-		client.regions.regions.Clear()
-		// set up initial cache
-		for _, region := range tcase.cachedRegions {
-			client.regions.put(region)
-		}
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			client.regions.regions.Clear()
+			// set up initial cache
+			for _, region := range tcase.cachedRegions {
+				client.regions.put(region)
+			}
 
-		overlaps, replaced := client.regions.put(tcase.newRegion)
-		if replaced != tcase.replaced {
-			t.Errorf("Test %d: Expected %v, got %v", i, tcase.replaced, replaced)
-		}
+			overlaps, replaced := client.regions.put(tcase.newRegion)
+			if replaced != tcase.replaced {
+				t.Errorf("expected %v, got %v", tcase.replaced, replaced)
+			}
 
-		expectedNames := make(regionNames, len(tcase.cachedRegions))
-		for i, r := range tcase.cachedRegions {
-			expectedNames[i] = r.Name()
-		}
-		osNames := make(regionNames, len(overlaps))
-		for i, o := range overlaps {
-			osNames[i] = o.Name()
-		}
+			expectedNames := make(regionNames, len(tcase.cachedRegions))
+			for i, r := range tcase.cachedRegions {
+				expectedNames[i] = r.Name()
+			}
+			osNames := make(regionNames, len(overlaps))
+			for i, o := range overlaps {
+				osNames[i] = o.Name()
+			}
 
-		// check overlaps are correct
-		if diff := test.Diff(expectedNames, osNames); diff != "" {
-			t.Errorf("Test %d: Expected: %v\nReceived: %v\nDiff:%s",
-				i, expectedNames, osNames, diff)
-		}
+			// check overlaps are correct
+			if !reflect.DeepEqual(expectedNames, osNames) {
+				t.Errorf("expected %v, got %v", expectedNames, osNames)
+			}
+		})
 	}
 }
 

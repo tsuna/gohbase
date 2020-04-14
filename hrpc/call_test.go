@@ -6,11 +6,10 @@
 package hrpc
 
 import (
-	"errors"
+	"reflect"
 	"strconv"
 	"testing"
 
-	"github.com/aristanetworks/goarista/test"
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
 )
@@ -38,8 +37,8 @@ func TestCellFromCellBlock(t *testing.T) {
 		CellType:  pb.CellType_PUT.Enum(),
 	}
 
-	if d := test.Diff(expectedCell, cell); len(d) != 0 {
-		t.Error(d)
+	if !proto.Equal(expectedCell, cell) {
+		t.Errorf("expected cell %v, got cell %v", expectedCell, cell)
 	}
 
 	// test error cases
@@ -60,13 +59,12 @@ func TestCellFromCellBlock(t *testing.T) {
 		})
 	}
 
-	expectedError := errors.New("HBase has lied about KeyValue length: expected 42, got 48")
 	cellblock[3] = 42
 	_, _, err = cellFromCellBlock(cellblock)
-	if d := test.Diff(expectedError, err); len(d) != 0 {
-		t.Error(d)
+	expectedErr := "HBase has lied about KeyValue length: expected 42, got 48"
+	if err == nil || err.Error() != expectedErr {
+		t.Errorf("expected error %q, got error %q", expectedErr, err)
 	}
-
 }
 
 func TestDeserializeCellblocks(t *testing.T) {
@@ -103,26 +101,26 @@ func TestDeserializeCellblocks(t *testing.T) {
 		},
 	}
 
-	if d := test.Diff(expectedCells, cells); len(d) != 0 {
-		t.Error(d)
+	if !reflect.DeepEqual(expectedCells, cells) {
+		t.Errorf("expected %v, got %v", expectedCells, cells)
 	}
 
 	// test error cases
 	cells, read, err = deserializeCellBlocks(cellblocks[:100], 2)
-	expectedError := errors.New("buffer is too small: expected 54, got 46")
-	if d := test.Diff(expectedError, err); len(d) != 0 {
-		t.Error(d)
+	expectedErr := "buffer is too small: expected 54, got 46"
+	if err == nil || err.Error() != expectedErr {
+		t.Errorf("expected error %q, got error %q", expectedErr, err)
 	}
-	if d := test.Diff([]*pb.Cell(nil), cells); len(d) != 0 {
-		t.Error(d)
+	if cells != nil {
+		t.Errorf("expected no cells, got %v", cells)
 	}
 
 	cells, read, err = deserializeCellBlocks(cellblocks, 1)
 	if err != nil {
 		t.Error(err)
 	}
-	if d := test.Diff(expectedCells[:1], cells); len(d) != 0 {
-		t.Error(d)
+	if expected := expectedCells[:1]; !reflect.DeepEqual(expected, cells) {
+		t.Errorf("expected cells %v, got cells %v", expected, cells)
 	}
 	if int(read) != 54 {
 		t.Errorf("invalid number of bytes read: expected %d, got %d", 54, int(read))

@@ -28,3 +28,15 @@ func (r reporter) Fatalf(format string, args ...interface{}) {
 func NewController(t gomock.TestReporter) *gomock.Controller {
 	return gomock.NewController(reporter{t})
 }
+
+// ErrEqual returns true if errors messages are equal
+func ErrEqual(a, b error) bool {
+	aMsg, bMsg := "", ""
+	if a != nil {
+		aMsg = a.Error()
+	}
+	if b != nil {
+		bMsg = b.Error()
+	}
+	return aMsg == bMsg
+}

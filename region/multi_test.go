@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"testing"
 
-	atest "github.com/aristanetworks/goarista/test"
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
@@ -26,22 +25,6 @@ func (a RegionActions) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a RegionActions) Len() int      { return len(a) }
 func (a RegionActions) Less(i, j int) bool {
 	return bytes.Compare(a[i].Region.Value, a[j].Region.Value) < 0
-}
-
-func (e NotServingRegionError) Equal(other interface{}) bool {
-	oe, ok := other.(NotServingRegionError)
-	if !ok {
-		return false
-	}
-	return atest.DeepEqual(e.error, oe.error)
-}
-
-func (e ServerError) Equal(other interface{}) bool {
-	oe, ok := other.(ServerError)
-	if !ok {
-		return false
-	}
-	return atest.DeepEqual(e.error, oe.error)
 }
 
 var (
@@ -181,7 +164,14 @@ func TestMultiToProto(t *testing.T) {
 			}
 
 			if tcase.panicMsg != "" {
-				atest.ShouldPanicWith(t, tcase.panicMsg, func() { m.ToProto() })
+				defer func() {
+					r := recover()
+					msg, ok := r.(string)
+					if r == nil || !ok || msg != tcase.panicMsg {
+						t.Errorf("expected panic with %q, got %v", tcase.panicMsg, r)
+					}
+				}()
+				_ = m.ToProto()
 				return
 			}
 
@@ -206,8 +196,8 @@ func TestMultiToProto(t *testing.T) {
 			sort.Sort(RegionActions(tcase.out.RegionAction))
 			sort.Sort(RegionActions(out.RegionAction))
 
-			if d := atest.Diff(tcase.out, out); d != "" {
-				t.Fatal(d)
+			if !proto.Equal(tcase.out, out) {
+				t.Fatalf("expected %v, got %v", tcase.out, out)
 			}
 		})
 	}
@@ -500,21 +490,25 @@ func TestMultiReturnResults(t *testing.T) {
 			m.regions = tcase.regions
 
 			if tcase.shouldPanic {
-				atest.ShouldPanic(t, func() {
-					m.returnResults(tcase.response, tcase.err)
-				})
+				defer func() {
+					if r := recover(); r == nil {
+						t.Error("returnResults should have panicked")
+					}
+				}()
+				m.returnResults(tcase.response, tcase.err)
 				return
 			}
 
 			m.returnResults(tcase.response, tcase.err)
 
-			var out []hrpc.RPCResult
-			for _, c := range tcase.calls {
-				out = append(out, <-c.ResultChan())
-			}
-
-			if d := atest.Diff(tcase.out, out); d != "" {
-				t.Fatal(d)
+			for i, c := range tcase.calls {
+				expected, out := tcase.out[i], <-c.ResultChan()
+				if !test.ErrEqual(expected.Error, out.Error) {
+					t.Errorf("expected %v, got %v", expected.Error, out.Error)
+				}
+				if !proto.Equal(expected.Msg, out.Msg) {
+					t.Errorf("expected %v, got %v", expected.Msg, out.Msg)
+				}
 			}
 		})
 	}
@@ -793,16 +787,16 @@ func TestMultiDeserializeCellBlocks(t *testing.T) {
 				t.Errorf("expected read %d, got read %d", l, n)
 			}
 
-			if d := atest.Diff(tcase.err, err); d != "" {
-				t.Fatal(d)
+			if !test.ErrEqual(tcase.err, err) {
+				t.Fatalf("expected %v, got %v", tcase.err, err)
 			}
 
 			if tcase.err != nil {
 				return
 			}
 
-			if d := atest.Diff(tcase.out, tcase.response); d != "" {
-				t.Fatal(d)
+			if !proto.Equal(tcase.out, tcase.response) {
+				t.Fatalf("expected %v, got %v", tcase.out, tcase.response)
 			}
 		})
 	}

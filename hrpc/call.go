@@ -253,6 +253,11 @@ type Result struct {
 	Exists *bool
 }
 
+func (c *Result) String() string {
+	return fmt.Sprintf("cells:%v stale:%v partial:%v exists:%v ",
+		c.Cells, c.Stale, c.Partial, c.Exists)
+}
+
 func extractBool(v *bool) bool {
 	return v != nil && *v
 }

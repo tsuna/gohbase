@@ -16,10 +16,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aristanetworks/goarista/test"
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
+	"github.com/tsuna/gohbase/test"
 )
 
 func TestNewGet(t *testing.T) {
@@ -670,6 +670,7 @@ func TestMutate(t *testing.T) {
 	}
 
 	run := func(t *testing.T, i int, m *Mutate) {
+		t.Helper()
 		if m.Name() != "Mutate" {
 			t.Fatalf("Expected name to be 'Mutate', got %s", m.Name())
 		}
@@ -689,16 +690,15 @@ func TestMutate(t *testing.T) {
 			sort.Sort(byQualifier(cv.QualifierValue))
 		}
 
-		if d := test.Diff(tests[i].out, mr); d != "" {
-			t.Fatalf("unexpected error: %s", d)
+		if !proto.Equal(tests[i].out, mr) {
+			t.Errorf("expected %v, got %v", tests[i].out, mr)
 		}
 	}
-
 	for i, tcase := range tests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			m, err := tcase.in()
-			if d := test.Diff(tcase.err, err); d != "" {
-				t.Fatalf("unexpected error: %s", d)
+			if !test.ErrEqual(tcase.err, err) {
+				t.Fatalf("expected %v, got %v", tcase.err, err)
 			}
 			if tcase.err != nil {
 				return
@@ -707,8 +707,8 @@ func TestMutate(t *testing.T) {
 		})
 		t.Run(strconv.Itoa(i)+" str", func(t *testing.T) {
 			m, err := tcase.inStr()
-			if d := test.Diff(tcase.err, err); d != "" {
-				t.Fatalf("unexpected error: %s", d)
+			if !test.ErrEqual(tcase.err, err) {
+				t.Fatalf("expected %v, got %v", tcase.err, err)
 			}
 			if tcase.err != nil {
 				return
@@ -763,10 +763,13 @@ func TestDeserializeCellBlocksGet(t *testing.T) {
 	g := &Get{}
 	n, err := g.DeserializeCellBlocks(getResp, cellblock)
 	if err != nil {
-		t.Error(err)
-	} else if d := test.Diff(expectedCells, getResp.Result.Cell); len(d) != 0 {
-		t.Error(d)
+		t.Fatal(err)
 	}
+
+	if !reflect.DeepEqual(expectedCells, getResp.Result.Cell) {
+		t.Errorf("expected %v, got %v", expectedCells, getResp.Result.Cell)
+	}
+
 	if int(n) != len(cellblock) {
 		t.Errorf("expected read %d, got read %d", len(cellblock), n)
 	}
@@ -792,9 +795,11 @@ func TestDeserializeCellblocksMutate(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if d := test.Diff(expectedCells, mResp.Result.Cell); len(d) != 0 {
-		t.Error(d)
+
+	if !reflect.DeepEqual(expectedCells, mResp.Result.Cell) {
+		t.Errorf("expected %v, got %v", expectedCells, mResp.Result.Cell)
 	}
+
 	if int(n) != len(cellblock) {
 		t.Errorf("expected read %d, got read %d", len(cellblock), n)
 	}
@@ -865,10 +870,13 @@ func TestDeserializeCellBlocksScan(t *testing.T) {
 	s := &Scan{}
 	n, err := s.DeserializeCellBlocks(scanResp, cellblocks)
 	if err != nil {
-		t.Error(err)
-	} else if d := test.Diff(expectedResults, scanResp.Results); len(d) != 0 {
-		t.Error(d)
+		t.Fatal(err)
 	}
+
+	if !reflect.DeepEqual(expectedResults, scanResp.Results) {
+		t.Errorf("expected %v, got %v", expectedResults, scanResp.Results)
+	}
+
 	if int(n) != len(cellblocks) {
 		t.Errorf("expected read %d, got read %d", len(cellblock), n)
 	}

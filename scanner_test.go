@@ -10,10 +10,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"sync"
 	"testing"
 
-	atest "github.com/aristanetworks/goarista/test"
 	"github.com/golang/mock/gomock"
 	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
@@ -179,8 +179,8 @@ func TestScanner(t *testing.T) {
 		expected = append(expected, hrpc.ToLocalResult(r))
 	}
 
-	if d := atest.Diff(expected, rs); d != "" {
-		t.Fatal(d)
+	if !reflect.DeepEqual(expected, rs) {
+		t.Fatalf("expected %v, got %v", expected, rs)
 	}
 }
 
@@ -222,6 +222,7 @@ func TestAllowPartialResults(t *testing.T) {
 		hrpc.ToLocalResult(&pb.Result{Cell: cells[4:5], Partial: proto.Bool(true)}),
 		hrpc.ToLocalResult(&pb.Result{Cell: cells[5:7], Partial: proto.Bool(true)}),
 		hrpc.ToLocalResult(&pb.Result{Cell: cells[7:8], Partial: proto.Bool(true)}),
+		// empty list
 		hrpc.ToLocalResult(&pb.Result{Cell: cells[8:8], Partial: proto.Bool(true)}),
 		hrpc.ToLocalResult(&pb.Result{Cell: cells[8:9], Partial: proto.Bool(true)}),
 		hrpc.ToLocalResult(&pb.Result{Cell: cells[9:], Partial: proto.Bool(true)}),
@@ -288,8 +289,8 @@ func TestErrorFirstFetch(t *testing.T) {
 	if err != outErr {
 		t.Errorf("Expected error %v, got error %v", outErr, err)
 	}
-	if d := atest.Diff([]*hrpc.Result{}, rs); d != "" {
-		t.Fatal(d)
+	if len(rs) != 0 {
+		t.Fatalf("expected no results, got %v", rs)
 	}
 }
 
@@ -357,8 +358,8 @@ func testErrorScanFromID(t *testing.T, scan *hrpc.Scan, out []*hrpc.Result) {
 	if err != outErr {
 		t.Errorf("Expected error %v, got error %v", outErr, err)
 	}
-	if d := atest.Diff(out, rs); d != "" {
-		t.Fatal(d)
+	if !reflect.DeepEqual(out, rs) {
+		t.Fatalf("expected %v, got %v", out, rs)
 	}
 }
 
@@ -398,7 +399,7 @@ func testPartialResults(t *testing.T, scan *hrpc.Scan, expected []*hrpc.Result) 
 		},
 		{ // empty result, last in region
 			region:     region2,
-			results:    []*pb.Result{&pb.Result{Partial: proto.Bool(true)}},
+			results:    []*pb.Result{&pb.Result{Cell: cells[8:8], Partial: proto.Bool(true)}},
 			scanFromID: true,
 		},
 		{
@@ -458,8 +459,8 @@ func testPartialResults(t *testing.T, scan *hrpc.Scan, expected []*hrpc.Result) 
 		rs = append(rs, r)
 	}
 
-	if d := atest.Diff(expected, rs); d != "" {
-		t.Fatal(d)
+	if !reflect.DeepEqual(expected, rs) {
+		t.Fatalf("expected %v, got %s", expected, rs)
 	}
 }
 
@@ -542,8 +543,8 @@ func TestReversedScanner(t *testing.T) {
 		expected = append(expected, hrpc.ToLocalResult(resultsPB[i]))
 	}
 
-	if d := atest.Diff(expected, rs); d != "" {
-		t.Fatal(d)
+	if !reflect.DeepEqual(expected, rs) {
+		t.Fatalf("expected %v, got %v", expected, rs)
 	}
 }
 

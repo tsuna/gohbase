@@ -10,13 +10,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
 
-	atest "github.com/aristanetworks/goarista/test"
 	"github.com/golang/mock/gomock"
+	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
@@ -78,9 +79,8 @@ func TestSendRPCSanity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if diff := atest.Diff(expMsg, msg); diff != "" {
-		t.Errorf("Expected: %#v\nReceived: %#v\nDiff:%s",
-			expMsg, msg, diff)
+	if !proto.Equal(expMsg, msg) {
+		t.Errorf("expected %v, got %v", expMsg, msg)
 	}
 
 	if len(c.clients.regions) != 2 {
@@ -182,9 +182,8 @@ func TestReestablishRegionSplit(t *testing.T) {
 					r.Client().Addr(), rc1.Addr())
 			}
 		}
-		if diff := atest.Diff(expRegs, gotRegs); diff != "" {
-			t.Errorf("Expected: %#v\nReceived: %#v\nDiff:%s",
-				expRegs, gotRegs, diff)
+		if !reflect.DeepEqual(expRegs, gotRegs) {
+			t.Errorf("expected %v, got %v", expRegs, gotRegs)
 		}
 
 		// check that we still have the same client that we injected
@@ -406,9 +405,9 @@ func TestEstablishServerErrorDuringProbe(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}
-	if diff := atest.Diff(expMsg, msg); diff != "" {
-		t.Errorf("Expected: %#v\nReceived: %#v\nDiff:%s",
-			expMsg, msg, diff)
+
+	if !proto.Equal(expMsg, msg) {
+		t.Errorf("expected %v, got %v", expMsg, msg)
 	}
 
 	if len(c.clients.regions) != 2 {
