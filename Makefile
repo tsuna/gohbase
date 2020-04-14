@@ -7,11 +7,11 @@ GO := go
 TEST_TIMEOUT := 30s
 INTEGRATION_TIMEOUT := 120s
 GOTEST_FLAGS := -v
+GOTEST_ARGS := 
 
-GOLINT := golint
 
-check: vet fmtcheck lint
-jenkins: check integration
+check: vet fmtcheck
+jenkins: check test integration
 
 COVER_PKGS := `go list ./... | grep -v test`
 COVER_MODE := atomic
@@ -28,16 +28,10 @@ fmtcheck:
 vet:
 	$(GO) vet ./...
 
-lint:
-	find ./* -type d ! -name pb ! -name mock ! -path "./test/mock/*" | xargs -L 1 $(GOLINT) &>lint; :
-	if test -s lint; then echo Check these packages for golint:; cat lint; rm lint; exit 1; else rm lint; fi
-# The above is ugly, but unfortunately golint doesn't exit 1 when it finds
-# lint.  See https://github.com/golang/lint/issues/65
-
 test:
 	$(GO) test $(GOTEST_FLAGS) -race -timeout=$(TEST_TIMEOUT) ./...
 
 integration:
-	$(GO) test $(GOTEST_FLAGS) -race -timeout=$(INTEGRATION_TIMEOUT) -tags=integration ./...
+	$(GO) test $(GOTEST_FLAGS) -race -timeout=$(INTEGRATION_TIMEOUT) -tags=integration -args $(GOTEST_ARGS)
 
-.PHONY: check coverage integration_cover fmtcheck integration jenkins lint test vet
+.PHONY: check coverage integration_cover fmtcheck integration jenkins test vet
