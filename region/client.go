@@ -218,23 +218,31 @@ func (c *client) String() string {
 	return fmt.Sprintf("RegionClient{Addr: %s}", c.addr)
 }
 
-func (c *client) inFlightUp() {
+func (c *client) inFlightUp() error {
 	c.inFlightM.Lock()
 	c.inFlight++
 	// we expect that at least the last request can be completed within readTimeout
-	c.conn.SetReadDeadline(time.Now().Add(c.readTimeout))
+	if err := c.conn.SetReadDeadline(time.Now().Add(c.readTimeout)); err != nil {
+		c.inFlightM.Unlock()
+		return err
+	}
 	c.inFlightM.Unlock()
+	return nil
 }
 
-func (c *client) inFlightDown() {
+func (c *client) inFlightDown() error {
 	c.inFlightM.Lock()
 	c.inFlight--
 	// reset read timeout if we are not waiting for any responses
 	// in order to prevent from closing this client if there are no request
 	if c.inFlight == 0 {
-		c.conn.SetReadDeadline(time.Time{})
+		if err := c.conn.SetReadDeadline(time.Time{}); err != nil {
+			c.inFlightM.Unlock()
+			return err
+		}
 	}
 	c.inFlightM.Unlock()
+	return nil
 }
 
 func (c *client) fail(err error) {
@@ -468,7 +476,9 @@ func (c *client) receive() (err error) {
 	if rpc == nil {
 		return ServerError{fmt.Errorf("got a response with an unexpected call ID: %d", callID)}
 	}
-	c.inFlightDown()
+	if err := c.inFlightDown(); err != nil {
+		return ServerError{err}
+	}
 
 	select {
 	case <-rpc.Context().Done():
@@ -597,6 +607,8 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 	if err := c.write(b); err != nil {
 		return id, ServerError{err}
 	}
-	c.inFlightUp()
+	if err := c.inFlightUp(); err != nil {
+		return id, ServerError{err}
+	}
 	return id, nil
 }

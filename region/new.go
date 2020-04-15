@@ -44,14 +44,20 @@ func (c *client) Dial(ctx context.Context) error {
 
 		// time out send hello if it take long
 		if deadline, ok := ctx.Deadline(); ok {
-			c.conn.SetWriteDeadline(deadline)
+			if err = c.conn.SetWriteDeadline(deadline); err != nil {
+				c.fail(fmt.Errorf("failed to set write deadline: %s", err))
+				return
+			}
 		}
 		if err := c.sendHello(); err != nil {
 			c.fail(fmt.Errorf("failed to send hello to RegionServer: %s", err))
 			return
 		}
 		// reset write deadline
-		c.conn.SetWriteDeadline(time.Time{})
+		if err = c.conn.SetWriteDeadline(time.Time{}); err != nil {
+			c.fail(fmt.Errorf("failed to set write deadline: %s", err))
+			return
+		}
 
 		if c.ctype == RegionClient {
 			go c.processRPCs() // Batching goroutine

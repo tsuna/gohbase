@@ -493,7 +493,9 @@ func TestServerErrorExceptionResponse(t *testing.T) {
 	}
 
 	c.registerRPC(rpc)
-	c.inFlightUp()
+	if err := c.inFlightUp(); err != nil {
+		t.Fatal(err)
+	}
 
 	var response []byte
 	b := proto.NewBuffer(response)
@@ -999,7 +1001,9 @@ func BenchmarkSetReadDeadline(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		conn.SetReadDeadline(time.Now().Add(DefaultReadTimeout))
+		if err := conn.SetReadDeadline(time.Now().Add(DefaultReadTimeout)); err != nil {
+			b.Fatal(err)
+		}
 	}
 	b.StopTimer()
 
