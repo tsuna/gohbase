@@ -106,7 +106,7 @@ func TestDeserializeCellblocks(t *testing.T) {
 	}
 
 	// test error cases
-	cells, read, err = deserializeCellBlocks(cellblocks[:100], 2)
+	cells, _, err = deserializeCellBlocks(cellblocks[:100], 2)
 	expectedErr := "buffer is too small: expected 54, got 46"
 	if err == nil || err.Error() != expectedErr {
 		t.Errorf("expected error %q, got error %q", expectedErr, err)

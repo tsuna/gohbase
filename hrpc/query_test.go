@@ -102,7 +102,7 @@ func TestMaxVersions(t *testing.T) {
 		t.Errorf("expected %d, got %d", vExp, vGot)
 	}
 
-	g, err = NewGet(context.Background(), nil, nil, MaxVersions(uint32(math.MaxUint32)))
+	_, err = NewGet(context.Background(), nil, nil, MaxVersions(uint32(math.MaxUint32)))
 	if err == nil || err.Error() != "'MaxVersions' exceeds supported number of versions" {
 		t.Error(err)
 	}
@@ -125,7 +125,7 @@ func TestMaxResultsPerColumnFamily(t *testing.T) {
 		t.Errorf("expected %d, got %d", rExp, rGot)
 	}
 
-	g, err = NewGet(context.Background(), nil, nil,
+	_, err = NewGet(context.Background(), nil, nil,
 		MaxResultsPerColumnFamily(uint32(math.MaxUint32)))
 	if err == nil || err.Error() !=
 		"'MaxResultsPerColumnFamily' exceeds supported number of value results" {
@@ -150,7 +150,7 @@ func TestResultOffset(t *testing.T) {
 		t.Errorf("expected %d, got %d", rExp, rGot)
 	}
 
-	g, err = NewGet(context.Background(), nil, nil, ResultOffset(uint32(math.MaxUint32)))
+	_, err = NewGet(context.Background(), nil, nil, ResultOffset(uint32(math.MaxUint32)))
 	if err == nil || err.Error() != "'ResultOffset' exceeds supported offset value" {
 		t.Error(err)
 	}

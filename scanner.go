@@ -57,7 +57,7 @@ func (s *scanner) Close() error {
 			// If the request fails, the scanner lease will be expired
 			// and it will be closed automatically by hbase.
 			// No need to bother clients about that.
-			s.SendRPC(rpc)
+			_, _ = s.SendRPC(rpc)
 		}()
 	}
 	return nil

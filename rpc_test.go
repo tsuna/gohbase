@@ -502,7 +502,7 @@ func TestReestablishDeadRegion(t *testing.T) {
 	reg.MarkDead()
 
 	rc1 := c.clients.put("regionserver:0", c.metaRegionInfo, newRegionClientFn("regionserver:0"))
-	rc1 = c.clients.put("regionserver:0", reg, newRegionClientFn("regionserver:0"))
+	c.clients.put("regionserver:0", reg, newRegionClientFn("regionserver:0"))
 
 	// pretend regionserver:0 has meta table
 	c.metaRegionInfo.SetClient(rc1)

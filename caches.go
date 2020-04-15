@@ -161,7 +161,7 @@ func (krc *keyRegionCache) getOverlaps(reg hrpc.RegionInfo) []hrpc.RegionInfo {
 	// enum.Prev() returns the region X before it landed, moves pointer to the region X - 1
 	// enum.Next() returns X - 1 and move pointer to X, which has smaller start key
 
-	enum.Prev()
+	_, _, _ = enum.Prev()
 	_, _, err = enum.Next()
 	if err == io.EOF {
 		// we are in the beginning of tree, get new enum starting
@@ -170,11 +170,15 @@ func (krc *keyRegionCache) getOverlaps(reg hrpc.RegionInfo) []hrpc.RegionInfo {
 		enum, err = krc.regions.SeekFirst()
 		if err != nil {
 			log.Fatalf(
-				"error seeking first region when getting  overlaps for region %v: %v", reg, err)
+				"error seeking first region when getting overlaps for region %v: %v", reg, err)
 		}
 	}
 
 	_, v, err = enum.Next()
+	if err != nil {
+		log.Fatalf(
+			"error accessing first region when getting overlaps for region %v: %v", reg, err)
+	}
 	if isRegionOverlap(v.(hrpc.RegionInfo), reg) {
 		overlaps = append(overlaps, v.(hrpc.RegionInfo))
 	}

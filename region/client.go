@@ -107,7 +107,7 @@ func newBuffer(size int) []byte {
 }
 
 func freeBuffer(b []byte) {
-	bufferPool.Put(b[:0])
+	bufferPool.Put(b[:0]) // nolint:staticcheck
 }
 
 // ServerError is an error that this region.Client can't recover from.

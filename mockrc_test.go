@@ -167,34 +167,6 @@ var test1SplitA = &pb.Result{Cell: []*pb.Cell{
 	},
 }}
 
-var test1SplitB = &pb.Result{Cell: []*pb.Cell{
-	&pb.Cell{
-		Row:       []byte("test1,baz,1480547738107.3f2483f5618e1b791f58f83a8ebba6a9."),
-		Family:    []byte("info"),
-		Qualifier: []byte("regioninfo"),
-		Value: []byte("PBUF\b\xfbÖ\xbc\x8b+\x12\x10\n\adefault\x12\x05" +
-			"test1\x1a\x03baz\"\x00(\x000\x008\x00"),
-	},
-	&pb.Cell{
-		Row:       []byte("test1,baz,1480547738107.3f2483f5618e1b791f58f83a8ebba6a9."),
-		Family:    []byte("info"),
-		Qualifier: []byte("seqnumDuringOpen"),
-		Value:     []byte("\x00\x00\x00\x00\x00\x00\x00\f"),
-	},
-	&pb.Cell{
-		Row:       []byte("test1,baz,1480547738107.3f2483f5618e1b791f58f83a8ebba6a9."),
-		Family:    []byte("info"),
-		Qualifier: []byte("server"),
-		Value:     []byte("regionserver:3"),
-	},
-	&pb.Cell{
-		Row:       []byte("test1,baz,1480547738107.3f2483f5618e1b791f58f83a8ebba6a9."),
-		Family:    []byte("info"),
-		Qualifier: []byte("serverstartcode"),
-		Value:     []byte("\x00\x00\x01X\xb6\x83^3"),
-	},
-}}
-
 var m sync.RWMutex
 var clients map[string]uint32
 

@@ -199,7 +199,7 @@ func (c *client) lookupRegion(ctx context.Context,
 			addr, err = c.zkLookup(lookupCtx, zk.Master)
 			cancel()
 			reg = c.adminRegionInfo
-		} else if bytes.Compare(table, metaTableName) == 0 {
+		} else if bytes.Equal(table, metaTableName) {
 			log.WithField("resource", zk.Meta).Debug("looking up region server of hbase:meta")
 
 			addr, err = c.zkLookup(lookupCtx, zk.Meta)

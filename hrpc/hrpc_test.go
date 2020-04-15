@@ -52,15 +52,18 @@ func TestNewGet(t *testing.T) {
 		t.Errorf("Get5 didn't set attributes correctly.")
 	}
 	get, err = NewGet(ctx, tableb, keyb, Filters(filter1))
+	if err != nil {
+		t.Errorf("Get6 didn't set attributes correctly.")
+	}
 	err = Families(fam)(get)
 	if err != nil || !confirmGetAttributes(ctx, get, tableb, keyb, fam, filter1) {
 		t.Errorf("Get6 didn't set attributes correctly.")
 	}
-	get, err = NewGet(ctx, tableb, keyb, MaxVersions(math.MaxInt32))
+	_, err = NewGet(ctx, tableb, keyb, MaxVersions(math.MaxInt32))
 	if err != nil {
 		t.Errorf("Get7 didn't set attributes correctly.")
 	}
-	get, err = NewGet(ctx, tableb, keyb, MaxVersions(math.MaxInt32+1))
+	_, err = NewGet(ctx, tableb, keyb, MaxVersions(math.MaxInt32+1))
 	errStr := "'MaxVersions' exceeds supported number of versions"
 	if err != nil && errStr != err.Error() || err == nil {
 		t.Errorf("Get8 Expected: %#v\nReceived: %#v", errStr, err)
