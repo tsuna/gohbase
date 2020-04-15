@@ -7,8 +7,8 @@ package mock
 import (
 	context "context"
 	gomock "github.com/golang/mock/gomock"
-	proto "github.com/golang/protobuf/proto"
 	hrpc "github.com/tsuna/gohbase/hrpc"
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	reflect "reflect"
 )
 
@@ -78,10 +78,10 @@ func (mr *MockCallMockRecorder) Name() *gomock.Call {
 }
 
 // NewResponse mocks base method
-func (m *MockCall) NewResponse() proto.Message {
+func (m *MockCall) NewResponse() protoreflect.ProtoMessage {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NewResponse")
-	ret0, _ := ret[0].(proto.Message)
+	ret0, _ := ret[0].(protoreflect.ProtoMessage)
 	return ret0
 }
 
@@ -146,10 +146,10 @@ func (mr *MockCallMockRecorder) Table() *gomock.Call {
 }
 
 // ToProto mocks base method
-func (m *MockCall) ToProto() proto.Message {
+func (m *MockCall) ToProto() protoreflect.ProtoMessage {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ToProto")
-	ret0, _ := ret[0].(proto.Message)
+	ret0, _ := ret[0].(protoreflect.ProtoMessage)
 	return ret0
 }
 

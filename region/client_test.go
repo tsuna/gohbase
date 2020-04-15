@@ -21,11 +21,12 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/golang/protobuf/proto" // nolint:staticcheck
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/test"
 	"github.com/tsuna/gohbase/test/mock"
+	"google.golang.org/protobuf/encoding/protowire"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestErrors(t *testing.T) {
@@ -300,11 +301,13 @@ func mockRPCProto(row string) (proto.Message, []byte) {
 	get := &pb.GetRequest{Region: r, Get: &pb.Get{Row: []byte(row)}}
 
 	var b []byte
-	buf := proto.NewBuffer(b)
-	if err := buf.EncodeMessage(get); err != nil {
+	var err error
+	b = protowire.AppendVarint(b, uint64(proto.Size(get)))
+	b, err = proto.MarshalOptions{}.MarshalAppend(b, get)
+	if err != nil {
 		panic(err)
 	}
-	return get, buf.Bytes()
+	return get, b
 }
 
 func TestQueueRPC(t *testing.T) {
@@ -498,21 +501,20 @@ func TestServerErrorExceptionResponse(t *testing.T) {
 	}
 
 	var response []byte
-	b := proto.NewBuffer(response)
-
-	err = b.EncodeMessage(&pb.ResponseHeader{
+	header := &pb.ResponseHeader{
 		CallId: proto.Uint32(1),
 		Exception: &pb.ExceptionResponse{
 			ExceptionClassName: proto.String(
 				"org.apache.hadoop.hbase.regionserver.RegionServerAbortedException"),
 			StackTrace: proto.String("ooops"),
 		},
-	})
+	}
+
+	response = protowire.AppendVarint(response, uint64(proto.Size(header)))
+	response, err = proto.MarshalOptions{}.MarshalAppend(response, header)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	response = b.Bytes()
 
 	mockConn.EXPECT().Read(readBufSizeMatcher{l: 4}).Times(1).Return(4, nil).
 		Do(func(buf []byte) { binary.BigEndian.PutUint32(buf, uint32(len(response))) })

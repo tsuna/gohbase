@@ -16,9 +16,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/samuel/go-zookeeper/zk"
 	"github.com/tsuna/gohbase/pb"
+	"google.golang.org/protobuf/proto"
 )
 
 type logger struct{}
@@ -99,7 +99,7 @@ func (c *client) LocateResource(resource ResourceName) (string, error) {
 	var server *pb.ServerName
 	if resource == Meta {
 		meta := &pb.MetaRegionServer{}
-		err = proto.UnmarshalMerge(buf, meta)
+		err = proto.Unmarshal(buf, meta)
 		if err != nil {
 			return "",
 				fmt.Errorf("failed to deserialize the MetaRegionServer entry from ZK: %s", err)
@@ -107,7 +107,7 @@ func (c *client) LocateResource(resource ResourceName) (string, error) {
 		server = meta.Server
 	} else {
 		master := &pb.Master{}
-		err = proto.UnmarshalMerge(buf, master)
+		err = proto.Unmarshal(buf, master)
 		if err != nil {
 			return "",
 				fmt.Errorf("failed to deserialize the Master entry from ZK: %s", err)

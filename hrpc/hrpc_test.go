@@ -16,10 +16,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/test"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestNewGet(t *testing.T) {
@@ -718,21 +718,6 @@ func TestMutate(t *testing.T) {
 			}
 			run(t, i, m)
 		})
-	}
-}
-
-func TestCellStringer(t *testing.T) {
-	example := Cell{
-		Row:       []byte("r"),
-		Family:    []byte("f"),
-		Qualifier: []byte("q"),
-		Timestamp: proto.Uint64(42),
-		Value:     []byte("Stringer!"),
-	}
-	want := `row:"r" family:"f" qualifier:"q" timestamp:42 value:"Stringer!" `
-	got := example.String()
-	if got != want {
-		t.Errorf("Stringer produced wrong result.  Want %q, got %q", want, got)
 	}
 }
 

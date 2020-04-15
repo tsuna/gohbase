@@ -9,8 +9,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
+	"google.golang.org/protobuf/proto"
 )
 
 type snap struct {

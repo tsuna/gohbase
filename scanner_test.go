@@ -15,12 +15,12 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/golang/protobuf/proto" // nolint:staticcheck
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
 	"github.com/tsuna/gohbase/test"
 	"github.com/tsuna/gohbase/test/mock"
+	"google.golang.org/protobuf/proto"
 )
 
 func cp(i uint64) *uint64 {

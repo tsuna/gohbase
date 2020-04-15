@@ -8,8 +8,8 @@ package hrpc
 import (
 	"context"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
+	"google.golang.org/protobuf/proto"
 )
 
 // EnableTable represents a EnableTable HBase call

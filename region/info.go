@@ -13,9 +13,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/golang/protobuf/proto" // nolint:staticcheck
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
+	"google.golang.org/protobuf/proto"
 )
 
 var defaultNamespace = []byte("default")
@@ -84,7 +84,7 @@ func infoFromCell(cell *hrpc.Cell) (hrpc.RegionInfo, error) {
 		return nil, fmt.Errorf("invalid magic number in %q", cell)
 	}
 	var regInfo pb.RegionInfo
-	err := proto.UnmarshalMerge(value[4:], &regInfo)
+	err := proto.Unmarshal(value[4:], &regInfo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode %q: %s", cell, err)
 	}

@@ -3,8 +3,8 @@ package hrpc
 import (
 	"context"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
+	"google.golang.org/protobuf/proto"
 )
 
 // ClusterStatus to represent a cluster status request

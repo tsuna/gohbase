@@ -18,9 +18,10 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/golang/protobuf/proto" // nolint:staticcheck
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
+	"google.golang.org/protobuf/encoding/protowire"
+	"google.golang.org/protobuf/proto"
 )
 
 // ClientType is a type alias to represent the type of this region client
@@ -462,11 +463,16 @@ func (c *client) receive() (err error) {
 		return ServerError{err}
 	}
 
-	buf := proto.NewBuffer(b)
-
-	if err = buf.DecodeMessage(&header); err != nil {
-		return ServerError{fmt.Errorf("failed to decode the response header: %s", err)}
+	// unmarshal header
+	headerBytes, headerLen := protowire.ConsumeBytes(b)
+	if headerLen < 0 {
+		return ServerError{fmt.Errorf("failed to decode the response header: %v",
+			protowire.ParseError(headerLen))}
 	}
+	if err = proto.Unmarshal(headerBytes, &header); err != nil {
+		return ServerError{fmt.Errorf("failed to decode the response header: %v", err)}
+	}
+
 	if header.CallId == nil {
 		return ErrMissingCallID
 	}
@@ -498,16 +504,25 @@ func (c *client) receive() (err error) {
 	}
 
 	response = rpc.NewResponse()
-	if err = buf.DecodeMessage(response); err != nil {
+
+	responseBytes, responseLen := protowire.ConsumeBytes(b[headerLen:])
+	if responseLen < 0 {
+		err = RetryableError{fmt.Errorf("failed to decode the response: %s",
+			protowire.ParseError(responseLen))}
+		return
+	}
+
+	if err = proto.Unmarshal(responseBytes, response); err != nil {
 		err = RetryableError{fmt.Errorf("failed to decode the response: %s", err)}
 		return
 	}
+
 	var cellsLen uint32
 	if header.CellBlockMeta != nil {
 		cellsLen = header.CellBlockMeta.GetLength()
 	}
 	if d, ok := rpc.(canDeserializeCellBlocks); cellsLen > 0 && ok {
-		b := buf.Bytes()[size-cellsLen:]
+		b := b[size-cellsLen:]
 		var nread uint32
 		nread, err = d.DeserializeCellBlocks(response, b)
 		if err != nil {
@@ -572,15 +587,13 @@ func (c *client) sendHello() error {
 // send sends an RPC out to the wire.
 // Returns the response (for now, as the call is synchronous).
 func (c *client) send(rpc hrpc.Call) (uint32, error) {
+	var err error
 	b := newBuffer(4)
 	defer func() { freeBuffer(b) }()
 
-	buf := proto.NewBuffer(b[4:])
-	buf.Reset()
-
 	request := rpc.ToProto()
 
-	// we have to register rpc after we marhsal because
+	// we have to register rpc after we marshal because
 	// registered rpc can fail before it was even sent
 	// in all the cases where c.fail() is called.
 	// If that happens, client can retry sending the rpc
@@ -592,17 +605,23 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 		MethodName:   proto.String(rpc.Name()),
 		RequestParam: proto.Bool(true),
 	}
-	if err := buf.EncodeMessage(header); err != nil {
+
+	b = protowire.AppendVarint(b, uint64(proto.Size(header)))
+	b, err = proto.MarshalOptions{}.MarshalAppend(b, header)
+	if err != nil {
 		return id, fmt.Errorf("failed to marshal request header: %s", err)
 	}
 
-	if err := buf.EncodeMessage(request); err != nil {
+	if request == nil {
+		return id, errors.New("failed to marshal request: proto: Marshal called with nil")
+	}
+	b = protowire.AppendVarint(b, uint64(proto.Size(request)))
+	b, err = proto.MarshalOptions{}.MarshalAppend(b, request)
+	if err != nil {
 		return id, fmt.Errorf("failed to marshal request: %s", err)
 	}
 
-	payload := buf.Bytes()
-	binary.BigEndian.PutUint32(b, uint32(len(payload)))
-	b = append(b[:4], payload...)
+	binary.BigEndian.PutUint32(b, uint32(len(b)-4))
 
 	if err := c.write(b); err != nil {
 		return id, ServerError{err}

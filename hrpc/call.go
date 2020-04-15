@@ -12,8 +12,8 @@ import (
 	"fmt"
 	"unsafe"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/tsuna/gohbase/pb"
+	"google.golang.org/protobuf/proto"
 )
 
 // RegionInfo represents HBase region.
@@ -278,7 +278,7 @@ func ToLocalResult(pbr *pb.Result) *Result {
 }
 
 func toLocalCells(pbr *pb.Result) []*Cell {
-	return *(*[]*Cell)(unsafe.Pointer(pbr))
+	return *(*[]*Cell)(unsafe.Pointer(&pbr.Cell))
 }
 
 // We can now define any helper functions on Result that we want.

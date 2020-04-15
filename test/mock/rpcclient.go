@@ -6,8 +6,8 @@ package mock
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	proto "github.com/golang/protobuf/proto"
 	hrpc "github.com/tsuna/gohbase/hrpc"
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	reflect "reflect"
 )
 
@@ -35,10 +35,10 @@ func (m *MockRPCClient) EXPECT() *MockRPCClientMockRecorder {
 }
 
 // SendRPC mocks base method
-func (m *MockRPCClient) SendRPC(arg0 hrpc.Call) (proto.Message, error) {
+func (m *MockRPCClient) SendRPC(arg0 hrpc.Call) (protoreflect.ProtoMessage, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SendRPC", arg0)
-	ret0, _ := ret[0].(proto.Message)
+	ret0, _ := ret[0].(protoreflect.ProtoMessage)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
