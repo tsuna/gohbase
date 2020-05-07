@@ -49,8 +49,19 @@ func (m *multi) Name() string {
 
 // ToProto converts all request in multi batch to a protobuf message.
 func (m *multi) ToProto() proto.Message {
+	msg, _, _ := m.toProto(false)
+	return msg
+}
+
+type actions struct {
+	pbs        []*pb.Action
+	cellblocks [][]byte
+}
+
+func (m *multi) toProto(isCellblocks bool) (proto.Message, [][]byte, uint32) {
 	// aggregate calls per region
-	actionsPerReg := map[hrpc.RegionInfo][]*pb.Action{}
+	actionsPerReg := map[hrpc.RegionInfo]actions{}
+	var size uint32
 
 	for i, c := range m.calls {
 		select {
@@ -61,7 +72,15 @@ func (m *multi) ToProto() proto.Message {
 		default:
 		}
 
-		msg := c.ToProto()
+		var msg proto.Message
+		var cellblocks [][]byte
+		if s, ok := c.(canSerializeCellBlocks); isCellblocks && ok && s.CellBlocksEnabled() {
+			var sz uint32
+			msg, cellblocks, sz = s.SerializeCellBlocks()
+			size += sz
+		} else {
+			msg = c.ToProto()
+		}
 
 		a := &pb.Action{
 			Index: proto.Uint32(uint32(i) + 1), // +1 because 0 index means there's no index
@@ -76,13 +95,21 @@ func (m *multi) ToProto() proto.Message {
 			panic(fmt.Sprintf("unsupported call type for Multi: %T", c))
 		}
 
-		actionsPerReg[c.Region()] = append(actionsPerReg[c.Region()], a)
+		as, ok := actionsPerReg[c.Region()]
+		if !ok {
+			as = actions{}
+		}
+		as.pbs = append(as.pbs, a)
+		as.cellblocks = append(as.cellblocks, cellblocks...)
+
+		actionsPerReg[c.Region()] = as
 	}
 
 	// construct the multi proto
 	ra := make([]*pb.RegionAction, len(actionsPerReg))
 	m.regions = make([]hrpc.RegionInfo, len(actionsPerReg))
 
+	var cellblocks [][]byte
 	i := 0
 	for r, as := range actionsPerReg {
 		ra[i] = &pb.RegionAction{
@@ -90,14 +117,24 @@ func (m *multi) ToProto() proto.Message {
 				Type:  pb.RegionSpecifier_REGION_NAME.Enum(),
 				Value: r.Name(),
 			},
-			Action: as,
+			Action: as.pbs,
 		}
+		cellblocks = append(cellblocks, as.cellblocks...)
 		// Track the order of RegionActions,
 		// so that we can handle whole region exceptions.
 		m.regions[i] = r
 		i++
 	}
-	return &pb.MultiRequest{RegionAction: ra}
+	return &pb.MultiRequest{RegionAction: ra}, cellblocks, size
+}
+
+func (m *multi) SerializeCellBlocks() (proto.Message, [][]byte, uint32) {
+	return m.toProto(true)
+}
+
+func (m *multi) CellBlocksEnabled() bool {
+	// TODO: maybe have some global client option
+	return true
 }
 
 // NewResponse creates an empty protobuf message to read the response of this RPC.
