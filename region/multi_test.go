@@ -19,6 +19,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+type bytesSlice [][]byte
+
+func (p bytesSlice) Len() int           { return len(p) }
+func (p bytesSlice) Less(i, j int) bool { return bytes.Compare(p[i], p[j]) < 0 }
+func (p bytesSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+
 type RegionActions []*pb.RegionAction
 
 func (a RegionActions) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
@@ -36,27 +42,93 @@ var (
 		[]byte("reg2,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil)
 )
 
+func bytesSlicesEqual(a, b [][]byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !bytes.Equal(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func bytesSlicesLen(a [][]byte) uint32 {
+	var l uint32
+	for _, b := range a {
+		l += uint32(len(b))
+	}
+	return l
+}
+
 func TestMultiToProto(t *testing.T) {
 	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 
+	values := map[string]map[string][]byte{
+		"cf": map[string][]byte{
+			"c": []byte("v"),
+		},
+	}
+	valuesProto := []*pb.MutationProto_ColumnValue{
+		&pb.MutationProto_ColumnValue{
+			Family: []byte("cf"),
+			QualifierValue: []*pb.MutationProto_ColumnValue_QualifierValue{
+				&pb.MutationProto_ColumnValue_QualifierValue{
+					Qualifier: []byte("c"),
+					Value:     []byte("v"),
+				},
+			},
+		},
+	}
+	delValues := map[string]map[string][]byte{
+		"cf": map[string][]byte{
+			"c": nil,
+		},
+	}
+	delProto := []*pb.MutationProto_ColumnValue{
+		&pb.MutationProto_ColumnValue{
+			Family: []byte("cf"),
+			QualifierValue: []*pb.MutationProto_ColumnValue_QualifierValue{
+				&pb.MutationProto_ColumnValue_QualifierValue{
+					Qualifier:  []byte("c"),
+					DeleteType: pb.MutationProto_DELETE_MULTIPLE_VERSIONS.Enum(),
+				},
+			},
+		},
+	}
+	appendProto := []*pb.MutationProto_ColumnValue{
+		&pb.MutationProto_ColumnValue{
+			Family: []byte("cf"),
+			QualifierValue: []*pb.MutationProto_ColumnValue_QualifierValue{
+				&pb.MutationProto_ColumnValue_QualifierValue{
+					Qualifier: []byte("c"),
+				},
+			},
+		},
+	}
+
 	tests := []struct {
-		calls    []hrpc.Call
-		out      *pb.MultiRequest
-		panicMsg string
+		calls           []hrpc.Call
+		out             *pb.MultiRequest
+		panicMsg        string
+		cellblocksProto *pb.MultiRequest
+		cellblocks      [][]byte
+		cellblocksLen   uint32
 	}{
 		{
 			calls: func() []hrpc.Call {
 				cs := make([]hrpc.Call, 5)
 				cs[0], _ = hrpc.NewGetStr(context.Background(), "reg0", "call0")
 				cs[0].SetRegion(reg0)
-				cs[1], _ = hrpc.NewPutStr(context.Background(), "reg0", "call1", nil)
+				cs[1], _ = hrpc.NewPutStr(context.Background(), "reg0", "call1", values)
 				cs[1].SetRegion(reg0)
-				cs[2], _ = hrpc.NewAppStr(context.Background(), "reg1", "call2", nil)
+				cs[2], _ = hrpc.NewAppStr(context.Background(), "reg1", "call2", values)
 				cs[2].SetRegion(reg1)
-				cs[3], _ = hrpc.NewDelStr(context.Background(), "reg1", "call3", nil)
+				cs[3], _ = hrpc.NewDelStr(context.Background(), "reg1", "call3", delValues)
 				cs[3].SetRegion(reg1)
-				cs[4], _ = hrpc.NewIncStr(context.Background(), "reg2", "call4", nil)
+				cs[4], _ = hrpc.NewIncStr(context.Background(), "reg2", "call4", delValues)
 				cs[4].SetRegion(reg2)
 				return cs
 			}(),
@@ -71,9 +143,10 @@ func TestMultiToProto(t *testing.T) {
 							&pb.Action{Index: proto.Uint32(1), Get: &pb.Get{
 								Row: []byte("call0"), TimeRange: &pb.TimeRange{}}},
 							&pb.Action{Index: proto.Uint32(2), Mutation: &pb.MutationProto{
-								Row:        []byte("call1"),
-								MutateType: pb.MutationProto_PUT.Enum(),
-								Durability: pb.MutationProto_USE_DEFAULT.Enum(),
+								Row:         []byte("call1"),
+								MutateType:  pb.MutationProto_PUT.Enum(),
+								Durability:  pb.MutationProto_USE_DEFAULT.Enum(),
+								ColumnValue: valuesProto,
 							}},
 						},
 					},
@@ -84,14 +157,16 @@ func TestMultiToProto(t *testing.T) {
 						},
 						Action: []*pb.Action{
 							&pb.Action{Index: proto.Uint32(3), Mutation: &pb.MutationProto{
-								Row:        []byte("call2"),
-								MutateType: pb.MutationProto_APPEND.Enum(),
-								Durability: pb.MutationProto_USE_DEFAULT.Enum(),
+								Row:         []byte("call2"),
+								MutateType:  pb.MutationProto_APPEND.Enum(),
+								Durability:  pb.MutationProto_USE_DEFAULT.Enum(),
+								ColumnValue: valuesProto,
 							}},
 							&pb.Action{Index: proto.Uint32(4), Mutation: &pb.MutationProto{
-								Row:        []byte("call3"),
-								MutateType: pb.MutationProto_DELETE.Enum(),
-								Durability: pb.MutationProto_USE_DEFAULT.Enum(),
+								Row:         []byte("call3"),
+								MutateType:  pb.MutationProto_DELETE.Enum(),
+								Durability:  pb.MutationProto_USE_DEFAULT.Enum(),
+								ColumnValue: delProto,
 							}},
 						},
 					},
@@ -102,14 +177,83 @@ func TestMultiToProto(t *testing.T) {
 						},
 						Action: []*pb.Action{
 							&pb.Action{Index: proto.Uint32(5), Mutation: &pb.MutationProto{
-								Row:        []byte("call4"),
-								MutateType: pb.MutationProto_INCREMENT.Enum(),
-								Durability: pb.MutationProto_USE_DEFAULT.Enum(),
+								Row:         []byte("call4"),
+								MutateType:  pb.MutationProto_INCREMENT.Enum(),
+								Durability:  pb.MutationProto_USE_DEFAULT.Enum(),
+								ColumnValue: appendProto,
 							}},
 						},
 					},
 				},
 			},
+			cellblocksProto: &pb.MultiRequest{
+				RegionAction: []*pb.RegionAction{
+					&pb.RegionAction{
+						Region: &pb.RegionSpecifier{
+							Type:  pb.RegionSpecifier_REGION_NAME.Enum(),
+							Value: []byte("reg0,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+						},
+						Action: []*pb.Action{
+							&pb.Action{Index: proto.Uint32(1), Get: &pb.Get{
+								Row: []byte("call0"), TimeRange: &pb.TimeRange{}}},
+							&pb.Action{Index: proto.Uint32(2), Mutation: &pb.MutationProto{
+								Row:                 []byte("call1"),
+								MutateType:          pb.MutationProto_PUT.Enum(),
+								Durability:          pb.MutationProto_USE_DEFAULT.Enum(),
+								AssociatedCellCount: proto.Int32(1),
+							}},
+						},
+					},
+					&pb.RegionAction{
+						Region: &pb.RegionSpecifier{
+							Type:  pb.RegionSpecifier_REGION_NAME.Enum(),
+							Value: []byte("reg1,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+						},
+						Action: []*pb.Action{
+							&pb.Action{Index: proto.Uint32(3), Mutation: &pb.MutationProto{
+								Row:                 []byte("call2"),
+								MutateType:          pb.MutationProto_APPEND.Enum(),
+								Durability:          pb.MutationProto_USE_DEFAULT.Enum(),
+								AssociatedCellCount: proto.Int32(1),
+							}},
+							&pb.Action{Index: proto.Uint32(4), Mutation: &pb.MutationProto{
+								Row:                 []byte("call3"),
+								MutateType:          pb.MutationProto_DELETE.Enum(),
+								Durability:          pb.MutationProto_USE_DEFAULT.Enum(),
+								AssociatedCellCount: proto.Int32(1),
+							}},
+						},
+					},
+					&pb.RegionAction{
+						Region: &pb.RegionSpecifier{
+							Type:  pb.RegionSpecifier_REGION_NAME.Enum(),
+							Value: []byte("reg2,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+						},
+						Action: []*pb.Action{
+							&pb.Action{Index: proto.Uint32(5), Mutation: &pb.MutationProto{
+								Row:                 []byte("call4"),
+								MutateType:          pb.MutationProto_INCREMENT.Enum(),
+								Durability:          pb.MutationProto_USE_DEFAULT.Enum(),
+								AssociatedCellCount: proto.Int32(1),
+							}},
+						},
+					},
+				},
+			},
+			cellblocksLen: 130,
+			cellblocks: [][]byte{
+				[]byte("\x00\x00\x00\x1d\x00\x00\x00\x14\x00\x00\x00\x01\x00\x05"),
+				[]byte("call1"), []byte("\x02"), []byte("cf"), []byte("c"),
+				[]byte("\u007f\xff\xff\xff\xff\xff\xff\xff\x04"), []byte("v"),
+				[]byte("\x00\x00\x00\x1d\x00\x00\x00\x14\x00\x00\x00\x01\x00\x05"),
+				[]byte("call2"), []byte("\x02"), []byte("cf"), []byte("c"),
+				[]byte("\u007f\xff\xff\xff\xff\xff\xff\xff\x04"), []byte("v"),
+				[]byte("\x00\x00\x00\x1c\x00\x00\x00\x14\x00\x00\x00\x00\x00\x05"),
+				[]byte("call3"), []byte("\x02"), []byte("cf"), []byte("c"),
+				[]byte("\u007f\xff\xff\xff\xff\xff\xff\xff\f"),
+				[]byte("\x00\x00\x00\x1c\x00\x00\x00\x14\x00\x00\x00\x00\x00\x05"),
+				[]byte("call4"), []byte("\x02"), []byte("cf"), []byte("c"),
+				[]byte("\u007f\xff\xff\xff\xff\xff\xff\xff\x04")},
 		},
 		{ // one call with expired context
 			calls: func() []hrpc.Call {
@@ -134,6 +278,24 @@ func TestMultiToProto(t *testing.T) {
 								Row:        []byte("call1"),
 								MutateType: pb.MutationProto_APPEND.Enum(),
 								Durability: pb.MutationProto_USE_DEFAULT.Enum(),
+							}},
+						},
+					},
+				},
+			},
+			cellblocksProto: &pb.MultiRequest{
+				RegionAction: []*pb.RegionAction{
+					&pb.RegionAction{
+						Region: &pb.RegionSpecifier{
+							Type:  pb.RegionSpecifier_REGION_NAME.Enum(),
+							Value: []byte("reg0,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
+						},
+						Action: []*pb.Action{
+							&pb.Action{Index: proto.Uint32(2), Mutation: &pb.MutationProto{
+								Row:                 []byte("call1"),
+								MutateType:          pb.MutationProto_APPEND.Enum(),
+								Durability:          pb.MutationProto_USE_DEFAULT.Enum(),
+								AssociatedCellCount: proto.Int32(0),
 							}},
 						},
 					},
@@ -175,6 +337,7 @@ func TestMultiToProto(t *testing.T) {
 				return
 			}
 
+			// test proto
 			p := m.ToProto()
 
 			out, ok := p.(*pb.MultiRequest)
@@ -198,6 +361,52 @@ func TestMultiToProto(t *testing.T) {
 
 			if !proto.Equal(tcase.out, out) {
 				t.Fatalf("expected %v, got %v", tcase.out, out)
+			}
+
+			// test cellblocks
+			m = newMulti(1000)
+			for _, c := range tcase.calls {
+				if m.add(c) {
+					t.Fatal("multi is full")
+				}
+			}
+			cellblocksProto, cellblocks, cellblocksLen := m.SerializeCellBlocks()
+			out, ok = cellblocksProto.(*pb.MultiRequest)
+			if !ok {
+				t.Fatalf("unexpected proto type %T", cellblocksProto)
+			}
+
+			sort.Sort(RegionActions(tcase.cellblocksProto.RegionAction))
+			sort.Sort(RegionActions(out.RegionAction))
+
+			if !proto.Equal(tcase.cellblocksProto, out) {
+				t.Errorf("expected cellblocks proto %v, got %v",
+					tcase.cellblocksProto, cellblocksProto)
+			}
+
+			if cellblocksLen != tcase.cellblocksLen {
+				t.Errorf("expected cellblocks length %d, got %d",
+					tcase.cellblocksLen, cellblocksLen)
+			}
+
+			// check total length matches the returned
+			if l := bytesSlicesLen(cellblocks); l != cellblocksLen {
+				t.Errorf("total length of cellblocks %d doesn't match returned %d",
+					l, cellblocksLen)
+			}
+
+			// because maps are iterated in random order, the best we can do here
+			// is sort cellblocks and make sure that each byte slice equals. This doesn't
+			// test that byte slices are written out in the correct order.
+			expected := make([][]byte, len(tcase.cellblocks))
+			copy(expected, tcase.cellblocks)
+			got := make([][]byte, len(cellblocks))
+			copy(got, cellblocks)
+
+			sort.Sort(bytesSlice(expected))
+			sort.Sort(bytesSlice(got))
+			if !bytesSlicesEqual(expected, got) {
+				t.Errorf("expected cellblocks %q, got %q", tcase.cellblocks, cellblocks)
 			}
 		})
 	}
