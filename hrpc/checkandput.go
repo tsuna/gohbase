@@ -54,7 +54,7 @@ func NewCheckAndPut(put *Mutate, family string,
 
 // ToProto converts the RPC into a protobuf message
 func (cp *CheckAndPut) ToProto() proto.Message {
-	mutateRequest := cp.toProto()
+	mutateRequest, _, _ := cp.toProto(false)
 	mutateRequest.Condition = &pb.Condition{
 		Row:         cp.key,
 		Family:      cp.family,
@@ -63,4 +63,9 @@ func (cp *CheckAndPut) ToProto() proto.Message {
 		Comparator:  cp.comparator,
 	}
 	return mutateRequest
+}
+
+func (cp *CheckAndPut) CellBlocksEnabled() bool {
+	// cellblocks are not supported for check and put request
+	return false
 }

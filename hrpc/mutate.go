@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"math"
 	"time"
 
 	"github.com/tsuna/gohbase/pb"
@@ -32,6 +33,16 @@ const (
 	// FsyncWal is FSYNC_WAL
 	FsyncWal
 )
+
+const (
+	putType                 = 4
+	deleteType              = 8
+	deleteFamilyVersionType = 10
+	deleteColumnType        = 12
+	deleteFamilyType        = 14
+)
+
+var emptyQualifier = map[string][]byte{"": nil}
 
 // Mutate represents a mutation on HBase.
 type Mutate struct {
@@ -279,14 +290,7 @@ func (m *Mutate) setSkipBatch(v bool) {
 	m.skipbatch = v
 }
 
-func (m *Mutate) toProto() *pb.MutateRequest {
-	var ts *uint64
-	if m.timestamp != MaxTimestamp {
-		ts = &m.timestamp
-	}
-
-	// We need to convert everything in the values field
-	// to a protobuf ColumnValue
+func (m *Mutate) valuesToProto(ts *uint64) []*pb.MutationProto_ColumnValue {
 	cvs := make([]*pb.MutationProto_ColumnValue, len(m.values))
 	i := 0
 	for k, v := range m.values {
@@ -305,9 +309,8 @@ func (m *Mutate) toProto() *pb.MutateRequest {
 				}
 				// add empty qualifier
 				if v == nil {
-					v = make(map[string][]byte)
+					v = emptyQualifier
 				}
-				v[""] = nil
 			} else {
 				// delete specific qualifiers
 				if m.deleteOneVersion {
@@ -335,13 +338,142 @@ func (m *Mutate) toProto() *pb.MutateRequest {
 		}
 		i++
 	}
+	return cvs
+}
 
+// <keyvaluelength 4> <keylength 4> <valuelength 4> <rowlength 2>
+// <row>
+// <columnfamilylength 1>
+// <columnfamily>
+// <columnqualifier>
+// <timestamp 8> <keytype 1>
+// <value>
+const nSlicesPerCellblock = 7
+const lengthsAndTsSize = 4 + 4 + 4 + 2 + 1 + 8 + 1
+
+func toCellblock(row, family, qualifier, value []byte, ts uint64, typ byte) ([][]byte, uint32) {
+	var cellblock [][]byte
+	if len(value) != 0 {
+		cellblock = make([][]byte, nSlicesPerCellblock)
+	} else {
+		cellblock = make([][]byte, nSlicesPerCellblock-1)
+	}
+	lengthsAndTs := make([]byte, lengthsAndTsSize)
+
+	// keyvaluelength
+	keylength := 2 /* row length */ + len(row) + 1 /* columnfamily length */ +
+		len(family) + len(qualifier) + 8 /* timestamp length */ + 1 /* key type length */
+	valuelength := len(value)
+
+	keyvaluelength := 8 + uint32(keylength+valuelength)
+
+	// keyvaluelength
+	binary.BigEndian.PutUint32(lengthsAndTs[0:4], keyvaluelength)
+	// keylength
+	binary.BigEndian.PutUint32(lengthsAndTs[4:8], uint32(keylength))
+	// valuelength
+	binary.BigEndian.PutUint32(lengthsAndTs[8:12], uint32(valuelength))
+	// row length
+	binary.BigEndian.PutUint16(lengthsAndTs[12:14], uint16(len(row)))
+	// column family length
+	lengthsAndTs[14] = byte(len(family))
+	// timestamp
+	binary.BigEndian.PutUint64(lengthsAndTs[15:23], ts)
+	// keytype
+	lengthsAndTs[23] = typ
+
+	// add keyvalue length, key length, value length, row length
+	cellblock[0] = lengthsAndTs[:14]
+	// add row
+	cellblock[1] = row
+	// add column family length
+	cellblock[2] = lengthsAndTs[14:15]
+	// add column family
+	cellblock[3] = family
+	// add column qualifier
+	cellblock[4] = qualifier
+	// add timestamp and key type
+	cellblock[5] = lengthsAndTs[15:]
+	// add value
+	if len(value) != 0 {
+		cellblock[6] = value
+	}
+
+	return cellblock, 4 + keyvaluelength
+}
+
+func (m *Mutate) valuesToCellblocks() ([][]byte, int32, uint32) {
+	var count int
+	var size uint32
+	var cellblocks [][]byte
+	var ts uint64
+	if m.timestamp == MaxTimestamp {
+		ts = math.MaxInt64 // Java's Long.MAX_VALUE use for HBase's LATEST_TIMESTAMP
+	} else {
+		ts = m.timestamp
+	}
+	for k, v := range m.values {
+		// figure out mutation type
+		var mt byte
+		if m.mutationType == pb.MutationProto_DELETE {
+			if len(v) == 0 {
+				// delete the whole column family
+				if m.deleteOneVersion {
+					mt = deleteFamilyVersionType
+				} else {
+					mt = deleteFamilyType
+				}
+				// add empty qualifier
+				if v == nil {
+					v = emptyQualifier
+				}
+			} else {
+				// delete specific qualifiers
+				if m.deleteOneVersion {
+					mt = deleteType
+				} else {
+					mt = deleteColumnType
+				}
+			}
+		} else {
+			mt = putType
+		}
+
+		family := []byte(k)
+		for k1, v1 := range v {
+			cellblock, sz := toCellblock(m.key, family, []byte(k1), v1, ts, mt)
+			cellblocks = append(cellblocks, cellblock...)
+			size += sz
+			count += 1
+		}
+	}
+	return cellblocks, int32(count), size
+}
+
+func (m *Mutate) toProto(isCellblocks bool) (*pb.MutateRequest, [][]byte, uint32) {
+	var ts *uint64
+	if m.timestamp != MaxTimestamp {
+		ts = &m.timestamp
+	}
+
+	var cellblocks [][]byte
+	var size uint32
 	mProto := &pb.MutationProto{
-		Row:         m.key,
-		MutateType:  &m.mutationType,
-		ColumnValue: cvs,
-		Durability:  pb.MutationProto_Durability(m.durability).Enum(),
-		Timestamp:   ts,
+		Row:        m.key,
+		MutateType: &m.mutationType,
+		Durability: pb.MutationProto_Durability(m.durability).Enum(),
+		Timestamp:  ts,
+	}
+
+	if isCellblocks {
+		// if cellblocks we only add associated cell count as the actual
+		// data will be sent after protobuf
+		var count int32
+		cellblocks, count, size = m.valuesToCellblocks()
+		mProto.AssociatedCellCount = &count
+	} else {
+		// otherwise, convert the values to protobuf
+		mProto.ColumnValue = m.valuesToProto(ts)
 	}
 
 	if len(m.ttl) > 0 {
@@ -354,12 +486,13 @@ func (m *Mutate) toProto() *pb.MutateRequest {
 	return &pb.MutateRequest{
 		Region:   m.regionSpecifier(),
 		Mutation: mProto,
-	}
+	}, cellblocks, size
 }
 
 // ToProto converts this mutate RPC into a protobuf message
 func (m *Mutate) ToProto() proto.Message {
-	return m.toProto()
+	p, _, _ := m.toProto(false)
+	return p
 }
 
 // NewResponse creates an empty protobuf message to read the response of this RPC.
@@ -380,4 +513,13 @@ func (m *Mutate) DeserializeCellBlocks(pm proto.Message, b []byte) (uint32, erro
 	}
 	resp.Result.Cell = append(resp.Result.Cell, cells...)
 	return read, nil
+}
+
+func (m *Mutate) SerializeCellBlocks() (proto.Message, [][]byte, uint32) {
+	return m.toProto(true)
+}
+
+func (m *Mutate) CellBlocksEnabled() bool {
+	// TODO: maybe have some global client option
+	return true
 }

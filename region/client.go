@@ -33,6 +33,14 @@ type canDeserializeCellBlocks interface {
 	DeserializeCellBlocks(proto.Message, []byte) (uint32, error)
 }
 
+type canSerializeCellBlocks interface {
+	// SerializeCellBlocks serializes RPC into protobuf for metadata
+	// as well as cellblocks for payload.
+	SerializeCellBlocks() (proto.Message, [][]byte, uint32)
+	// CellBlocksEnabled returns true if cellblocks are enabled for this RPC
+	CellBlocksEnabled() bool
+}
+
 var (
 	// ErrMissingCallID is used when HBase sends us a response message for a
 	// request that we didn't send
@@ -588,10 +596,26 @@ func (c *client) sendHello() error {
 // Returns the response (for now, as the call is synchronous).
 func (c *client) send(rpc hrpc.Call) (uint32, error) {
 	var err error
-	b := newBuffer(4)
-	defer func() { freeBuffer(b) }()
+	var request proto.Message
+	var cellblocks net.Buffers
+	var cellblocksLen uint32
+	header := &pb.RequestHeader{
+		MethodName:   proto.String(rpc.Name()),
+		RequestParam: proto.Bool(true),
+	}
 
-	request := rpc.ToProto()
+	if s, ok := rpc.(canSerializeCellBlocks); ok && s.CellBlocksEnabled() {
+		// request can be serialized to cellblocks
+		request, cellblocks, cellblocksLen = s.SerializeCellBlocks()
+
+		// specify cellblocks length
+		header.CellBlockMeta = &pb.CellBlockMeta{
+			Length: &cellblocksLen,
+		}
+	} else {
+		// plain protobuf request
+		request = rpc.ToProto()
+	}
 
 	// we have to register rpc after we marshal because
 	// registered rpc can fail before it was even sent
@@ -599,12 +623,10 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 	// If that happens, client can retry sending the rpc
 	// again potentially changing it's contents.
 	id := c.registerRPC(rpc)
+	header.CallId = &id
 
-	header := &pb.RequestHeader{
-		CallId:       &id,
-		MethodName:   proto.String(rpc.Name()),
-		RequestParam: proto.Bool(true),
-	}
+	b := newBuffer(4)
+	defer func() { freeBuffer(b) }()
 
 	b = protowire.AppendVarint(b, uint64(proto.Size(header)))
 	b, err = proto.MarshalOptions{}.MarshalAppend(b, header)
@@ -621,11 +643,18 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 		return id, fmt.Errorf("failed to marshal request: %s", err)
 	}
 
-	binary.BigEndian.PutUint32(b, uint32(len(b)-4))
+	binary.BigEndian.PutUint32(b, uint32(len(b))+cellblocksLen-4)
 
-	if err := c.write(b); err != nil {
+	if cellblocks != nil {
+		bfs := append(net.Buffers{b}, cellblocks...)
+		_, err = bfs.WriteTo(c.conn)
+	} else {
+		err = c.write(b)
+	}
+	if err != nil {
 		return id, ServerError{err}
 	}
+
 	if err := c.inFlightUp(); err != nil {
 		return id, ServerError{err}
 	}
