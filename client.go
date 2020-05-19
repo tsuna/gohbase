@@ -12,6 +12,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/tsuna/gohbase/compression"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
@@ -93,7 +94,9 @@ type client struct {
 	closeOnce sync.Once
 
 	newRegionClientFn func(string, region.ClientType, int, time.Duration,
-		string, time.Duration) hrpc.RegionClient
+		string, time.Duration, compression.Codec) hrpc.RegionClient
+
+	compressionCodec compression.Codec
 }
 
 // NewClient creates a new HBase client.
@@ -187,6 +190,15 @@ func EffectiveUser(user string) Option {
 func FlushInterval(interval time.Duration) Option {
 	return func(c *client) {
 		c.flushInterval = interval
+	}
+}
+
+// CompressionCodec will return an option to set compression codec between
+// client and server. The only currently supported codec is "snappy".
+// Default is no compression.
+func CompressionCodec(codec string) Option {
+	return func(c *client) {
+		c.compressionCodec = compression.New(codec)
 	}
 }
 
