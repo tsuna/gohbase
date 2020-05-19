@@ -190,6 +190,9 @@ type client struct {
 
 	// readTimeout is the maximum amount of time to wait for regionserver reply
 	readTimeout time.Duration
+
+	// compressor for cellblocks. if nil, then no compression
+	compressor *compressor
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine
@@ -531,6 +534,13 @@ func (c *client) receive() (err error) {
 	}
 	if d, ok := rpc.(canDeserializeCellBlocks); cellsLen > 0 && ok {
 		b := b[size-cellsLen:]
+		if c.compressor != nil {
+			b, err = c.compressor.decompressCellblocks(b)
+			if err != nil {
+				err = RetryableError{fmt.Errorf("failed to decompress the response: %s", err)}
+				return
+			}
+		}
 		var nread uint32
 		nread, err = d.DeserializeCellBlocks(response, b)
 		if err != nil {
@@ -538,7 +548,8 @@ func (c *client) receive() (err error) {
 			return
 		}
 		if int(nread) < len(b) {
-			err = RetryableError{fmt.Errorf("short read: buffer len %d, read %d", len(b), nread)}
+			err = RetryableError{
+				fmt.Errorf("short read: buffer length %d, read %d", len(b), nread)}
 			return
 		}
 	}
@@ -578,6 +589,10 @@ func (c *client) sendHello() error {
 		ServiceName:         proto.String(string(c.ctype)),
 		CellBlockCodecClass: proto.String("org.apache.hadoop.hbase.codec.KeyValueCodec"),
 	}
+	if c.compressor != nil {
+		// if we have compression enabled, specify the compressor class
+		connHeader.CellBlockCompressorClass = proto.String(c.compressor.CellBlockCompressorClass())
+	}
 	data, err := proto.Marshal(connHeader)
 	if err != nil {
 		return fmt.Errorf("failed to marshal connection header: %s", err)
@@ -607,6 +622,14 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 	if s, ok := rpc.(canSerializeCellBlocks); ok && s.CellBlocksEnabled() {
 		// request can be serialized to cellblocks
 		request, cellblocks, cellblocksLen = s.SerializeCellBlocks()
+
+		if c.compressor != nil {
+			// we have compressor, encode the cellblocks
+			compressed := c.compressor.compressCellblocks(cellblocks, cellblocksLen)
+			defer freeBuffer(compressed)
+			cellblocks = net.Buffers{compressed}
+			cellblocksLen = uint32(len(compressed))
+		}
 
 		// specify cellblocks length
 		header.CellBlockMeta = &pb.CellBlockMeta{
