@@ -11,6 +11,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"reflect"
 	"strconv"
@@ -95,6 +96,21 @@ func TestSendHello(t *testing.T) {
 			"org.apache.hadoop.hbase.codec.KeyValueCodec")
 		if !bytes.Equal(expected, buf) {
 			t.Errorf("expected %v, got %v", expected, buf)
+		}
+	})
+	err = c.sendHello()
+	if err != nil {
+		t.Errorf("Was expecting error, but got one: %#v", err)
+	}
+
+	c.compressor = &compressor{Codec: mockCodec{}}
+	// check if compressor is getting sent
+	c.ctype = RegionClient
+	mockConn.EXPECT().Write(gomock.Any()).Return(78, nil).Times(1).Do(func(buf []byte) {
+		expected := []byte("HBas\x00P\x00\x00\x00J\n\x06\n\x04root\x12\rClientService\x1a+" +
+			"org.apache.hadoop.hbase.codec.KeyValueCodec\"\x04mock")
+		if !bytes.Equal(expected, buf) {
+			t.Errorf("expected %q, got %q", expected, buf)
 		}
 	})
 	err = c.sendHello()
@@ -927,6 +943,131 @@ func TestSanity(t *testing.T) {
 				Value:     []byte("meow"),
 				CellType:  pb.CellType_PUT.Enum(),
 				Timestamp: proto.Uint64(0),
+			},
+		},
+	}
+	if !proto.Equal(expResult, r.Result) {
+		t.Errorf("expected %v, got %v", expResult, r.Result)
+	}
+	if int(c.inFlight) != 0 {
+		t.Errorf("expected %d in-flight rpcs, got %d", 0, c.inFlight)
+	}
+
+	mockConn.EXPECT().Close().Times(1)
+	c.Close()
+	wg.Wait()
+}
+
+func TestSanityCompressor(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+	mockConn := mock.NewMockConn(ctrl)
+	c := &client{
+		conn:          mockConn,
+		rpcs:          make(chan hrpc.Call),
+		done:          make(chan struct{}),
+		sent:          make(map[uint32]hrpc.Call),
+		rpcQueueSize:  1, // size one to skip sendBatch
+		flushInterval: 1000 * time.Second,
+		compressor:    &compressor{Codec: mockCodec{}},
+	}
+
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		c.processRPCs()
+		wg.Done()
+	}()
+
+	// using Append as it returns cellblocks
+	app, err := hrpc.NewAppStr(context.Background(), "test1", "yolo",
+		map[string]map[string][]byte{"cf": map[string][]byte{"swag": []byte("meow")}})
+	if err != nil {
+		t.Fatalf("Failed to create Get request: %s", err)
+	}
+	app.SetRegion(
+		NewInfo(0, nil, []byte("test1"), []byte("test1,,lololololololololololo"), nil, nil))
+
+	compressedCellblocks := "\x00\x00\x00&" +
+		"\x00\x00\x00\n\x00\x00\x00\"\x00\x00\x00\x16\x00\x00" +
+		"\x00\x00\x00\n\x00\x04\x00\x04yolo\x02c" +
+		"\x00\x00\x00\nfswag\u007f\xff\xff\xff\xff" +
+		"\x00\x00\x00\b\xff\xff\xff\x04meow"
+
+	mockConn.EXPECT().Write([]byte("\x00\x00\x00}\x10\b\x01\x1a\x06Mutate \x01*\x02\b:1\n!"+
+		"\b\x01\x12\x1dtest1,,lololololololololololo\x12\f\n\x04yolo\x10\x000\x00@\x01")).Return(
+		71, nil)
+	mockConn.EXPECT().Write([]byte(compressedCellblocks)).Return(58, nil)
+	mockConn.EXPECT().SetReadDeadline(gomock.Any())
+
+	c.QueueRPC(app)
+
+	header := &pb.ResponseHeader{
+		CallId: proto.Uint32(1),
+		CellBlockMeta: &pb.CellBlockMeta{
+			Length: proto.Uint32(58),
+		},
+	}
+
+	mutate := &pb.MutateResponse{
+		Result: &pb.Result{
+			AssociatedCellCount: proto.Int32(1),
+			Stale:               proto.Bool(false),
+		},
+	}
+
+	var response []byte
+	response = protowire.AppendVarint(response, uint64(proto.Size(header)))
+	response, err = proto.MarshalOptions{}.MarshalAppend(response, header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response = protowire.AppendVarint(response, uint64(proto.Size(mutate)))
+	response, err = proto.MarshalOptions{}.MarshalAppend(response, mutate)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	response = append(response, []byte(compressedCellblocks)...)
+	mockConn.EXPECT().Read(readBufSizeMatcher{l: 4}).Times(1).Return(4, nil).
+		Do(func(buf []byte) {
+			binary.BigEndian.PutUint32(buf, uint32(len(response)))
+		})
+	mockConn.EXPECT().Read(readBufSizeMatcher{l: len(response)}).Times(1).
+		Return(len(response), nil).Do(func(buf []byte) {
+		copy(buf, response)
+
+		// stall the next read
+		mockConn.EXPECT().Read(readBufSizeMatcher{l: 4}).MaxTimes(1).
+			Return(0, errors.New("closed")).Do(func(buf []byte) { <-c.done })
+	})
+	mockConn.EXPECT().SetReadDeadline(time.Time{}).Times(1)
+	wg.Add(1)
+	go func() {
+		c.receiveRPCs()
+		wg.Done()
+	}()
+
+	re := <-app.ResultChan()
+	if re.Error != nil {
+		t.Error(re.Error)
+	}
+	r, ok := re.Msg.(*pb.MutateResponse)
+	if !ok {
+		t.Fatalf("got unexpected type %T for response", r)
+	}
+	expResult := &pb.Result{
+		AssociatedCellCount: proto.Int32(1),
+		Stale:               proto.Bool(false),
+		Cell: []*pb.Cell{
+			&pb.Cell{
+				Row:       []byte("yolo"),
+				Family:    []byte("cf"),
+				Qualifier: []byte("swag"),
+				Value:     []byte("meow"),
+				CellType:  pb.CellType_PUT.Enum(),
+				Timestamp: proto.Uint64(math.MaxInt64),
 			},
 		},
 	}
