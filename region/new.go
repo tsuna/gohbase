@@ -13,13 +13,14 @@ import (
 	"net"
 	"time"
 
+	"github.com/tsuna/gohbase/compression"
 	"github.com/tsuna/gohbase/hrpc"
 )
 
 // NewClient creates a new RegionClient.
 func NewClient(addr string, ctype ClientType, queueSize int, flushInterval time.Duration,
-	effectiveUser string, readTimeout time.Duration) hrpc.RegionClient {
-	return &client{
+	effectiveUser string, readTimeout time.Duration, codec compression.Codec) hrpc.RegionClient {
+	c := &client{
 		addr:          addr,
 		ctype:         ctype,
 		rpcQueueSize:  queueSize,
@@ -30,6 +31,11 @@ func NewClient(addr string, ctype ClientType, queueSize int, flushInterval time.
 		done:          make(chan struct{}),
 		sent:          make(map[uint32]hrpc.Call),
 	}
+
+	if codec != nil {
+		c.compressor = &compressor{Codec: codec}
+	}
+	return c
 }
 
 func (c *client) Dial(ctx context.Context) error {

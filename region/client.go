@@ -547,6 +547,7 @@ func (c *client) receive() (err error) {
 			err = RetryableError{fmt.Errorf("failed to decode the response: %s", err)}
 			return
 		}
+
 		if int(nread) < len(b) {
 			err = RetryableError{
 				fmt.Errorf("short read: buffer length %d, read %d", len(b), nread)}
