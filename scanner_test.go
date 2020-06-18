@@ -9,11 +9,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"reflect"
-	"sync"
-	"testing"
-
 	"github.com/golang/mock/gomock"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
@@ -21,6 +16,10 @@ import (
 	"github.com/tsuna/gohbase/test"
 	"github.com/tsuna/gohbase/test/mock"
 	"google.golang.org/protobuf/proto"
+	"io"
+	"reflect"
+	"sync"
+	"testing"
 )
 
 func cp(i uint64) *uint64 {
@@ -93,10 +92,26 @@ func dup(a []*pb.Result) []*pb.Result {
 	return b
 }
 
+func testCallClose(scan *hrpc.Scan, c *mock.MockRPCClient, scannerID uint64,
+	group *sync.WaitGroup) error {
+	s, err := hrpc.NewScanRange(scan.Context(), table,
+		nil, nil, hrpc.NumberOfRows(0), hrpc.CloseScanner(), hrpc.ScannerID(scannerID))
+	if err != nil {
+		return err
+	}
+	c.EXPECT().SendRPC(&scanMatcher{scan: s}).Do(func(arg0 interface{}) {
+		group.Done()
+	}).Return(&pb.ScanResponse{}, nil).Times(1)
+	return nil
+}
 func TestScanner(t *testing.T) {
 	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 	c := mock.NewMockRPCClient(ctrl)
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+	defer wg.Wait()
 
 	scan, err := hrpc.NewScan(context.Background(), table, hrpc.NumberOfRows(2))
 	if err != nil {
@@ -133,6 +148,11 @@ func TestScanner(t *testing.T) {
 		Results: dup(resultsPB[1:2]),
 	}, nil).Times(1)
 
+	// added call to close scanner
+	err = testCallClose(scan, c, scannerID, &wg)
+	if err != nil {
+		t.Fatal(err)
+	}
 	scannerID++
 
 	s, err = hrpc.NewScanRange(scan.Context(), table,
@@ -147,6 +167,11 @@ func TestScanner(t *testing.T) {
 		Results:   dup(resultsPB[2:3]),
 	}, nil).Times(1)
 
+	// added call to close scanner
+	err = testCallClose(scan, c, scannerID, &wg)
+	if err != nil {
+		t.Fatal(err)
+	}
 	scannerID++
 
 	s, err = hrpc.NewScanRange(scan.Context(), table, []byte("foo"), nil,
@@ -161,6 +186,12 @@ func TestScanner(t *testing.T) {
 		Results:     dup(resultsPB[3:4]),
 		MoreResults: proto.Bool(false),
 	}, nil).Times(1)
+
+	// added call to close scanner
+	err = testCallClose(scan, c, scannerID, &wg)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	var rs []*hrpc.Result
 	for {
@@ -299,6 +330,10 @@ func testErrorScanFromID(t *testing.T, scan *hrpc.Scan, out []*hrpc.Result) {
 	defer ctrl.Finish()
 	c := mock.NewMockRPCClient(ctrl)
 
+	var wg sync.WaitGroup
+	wg.Add(1)
+	defer wg.Wait()
+
 	var scannerID uint64 = 42
 	scanner := newScanner(c, scan)
 
@@ -335,12 +370,8 @@ func testErrorScanFromID(t *testing.T, scan *hrpc.Scan, out []*hrpc.Result) {
 		t.Fatal(err)
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(1)
 	// expect scan close rpc to be sent
-	c.EXPECT().SendRPC(&scanMatcher{
-		scan: sid,
-	}).Return(nil, nil).Times(1).Do(func(rpc hrpc.Call) { wg.Done() })
+	testCallClose(sid, c, scannerID, &wg)
 
 	var r *hrpc.Result
 	var rs []*hrpc.Result
@@ -353,7 +384,6 @@ func testErrorScanFromID(t *testing.T, scan *hrpc.Scan, out []*hrpc.Result) {
 			break
 		}
 	}
-	wg.Wait()
 
 	if err != outErr {
 		t.Errorf("Expected error %v, got error %v", outErr, err)
@@ -368,6 +398,11 @@ func testPartialResults(t *testing.T, scan *hrpc.Scan, expected []*hrpc.Result) 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	c := mock.NewMockRPCClient(ctrl)
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+	defer wg.Wait()
+
 	tcase := []struct {
 		region              hrpc.RegionInfo
 		results             []*pb.Result
@@ -421,7 +456,6 @@ func testPartialResults(t *testing.T, scan *hrpc.Scan, expected []*hrpc.Result) 
 	var scannerID uint64
 	scanner := newScanner(c, scan)
 	ctx := scan.Context()
-
 	for _, partial := range tcase {
 		partial := partial
 		var s *hrpc.Scan
@@ -445,6 +479,14 @@ func testPartialResults(t *testing.T, scan *hrpc.Scan, expected []*hrpc.Result) 
 			MoreResultsInRegion: &partial.moreResultsInRegion,
 			Results:             partial.results,
 		}, nil).Times(1)
+
+		if partial.scanFromID {
+			// added call to close scanner
+			err := testCallClose(scan, c, scannerID, &wg)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 
 	var rs []*hrpc.Result
@@ -469,6 +511,10 @@ func TestReversedScanner(t *testing.T) {
 	defer ctrl.Finish()
 	c := mock.NewMockRPCClient(ctrl)
 
+	var wg sync.WaitGroup
+	wg.Add(3)
+	defer wg.Wait()
+
 	ctx := context.Background()
 	scan, err := hrpc.NewScan(ctx, table, hrpc.Reversed())
 	if err != nil {
@@ -479,7 +525,6 @@ func TestReversedScanner(t *testing.T) {
 
 	scanner := newScanner(c, scan)
 	ctx = scan.Context()
-
 	s, err := hrpc.NewScanRange(ctx, table, nil, nil, hrpc.Reversed())
 	if err != nil {
 		t.Fatal(err)
@@ -487,8 +532,15 @@ func TestReversedScanner(t *testing.T) {
 	c.EXPECT().SendRPC(&scanMatcher{scan: s}).Do(func(rpc hrpc.Call) {
 		rpc.SetRegion(region3)
 	}).Return(&pb.ScanResponse{
-		Results: dup(resultsPB[3:4]),
+		ScannerId: cp(scannerID),
+		Results:   dup(resultsPB[3:4]),
 	}, nil).Times(1)
+
+	// added call to close scanner
+	err = testCallClose(scan, c, scannerID, &wg)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	s, err = hrpc.NewScanRange(ctx, table,
 		append([]byte("fon"), rowPadding...), nil, hrpc.Reversed())
@@ -498,8 +550,15 @@ func TestReversedScanner(t *testing.T) {
 	c.EXPECT().SendRPC(&scanMatcher{scan: s}).Do(func(rpc hrpc.Call) {
 		rpc.SetRegion(region2)
 	}).Return(&pb.ScanResponse{
-		Results: dup(resultsPB[2:3]),
+		ScannerId: cp(scannerID),
+		Results:   dup(resultsPB[2:3]),
 	}, nil).Times(1)
+
+	// added call to close scanner
+	err = testCallClose(scan, c, scannerID, &wg)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	s, err = hrpc.NewScanRange(ctx, table,
 		append([]byte("baq"), rowPadding...), nil, hrpc.Reversed())
@@ -525,6 +584,12 @@ func TestReversedScanner(t *testing.T) {
 	}).Return(&pb.ScanResponse{
 		Results: dup(resultsPB[:1]),
 	}, nil).Times(1)
+
+	// added call to close scanner
+	err = testCallClose(scan, c, scannerID, &wg)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	var rs []*hrpc.Result
 	for {

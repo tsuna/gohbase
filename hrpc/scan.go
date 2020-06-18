@@ -149,7 +149,7 @@ func (s *Scan) StartRow() []byte {
 	return s.startRow
 }
 
-// IsClosing returns wether this scan closes scanner prematurely
+// IsClosing returns whether this scan closes scanner prematurely
 func (s *Scan) IsClosing() bool {
 	return s.closeScanner
 }

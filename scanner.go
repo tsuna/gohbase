@@ -27,40 +27,12 @@ type scanner struct {
 	RPCClient
 	// rpc is original scan query
 	rpc *hrpc.Scan
-	// scannerID is the id of scanner on current region
-	scannerID uint64
+	// curRegionScannerID is the id of scanner on current region
+	curRegionScannerID uint64
 	// startRow is the start row in the current region
 	startRow []byte
 	results  []*pb.Result
 	closed   bool
-}
-
-func (s *scanner) Close() error {
-	if s.closed {
-		return errors.New("scanner has already been closed")
-	}
-	s.closed = true
-	if s.scannerID != noScannerID {
-		go func() {
-			// if we are closing in the middle of scanning a region,
-			// send a close scanner request
-			// TODO: add a deadline
-			rpc, err := hrpc.NewScanRange(context.Background(),
-				s.rpc.Table(), s.startRow, nil,
-				hrpc.ScannerID(s.scannerID),
-				hrpc.CloseScanner(),
-				hrpc.NumberOfRows(0))
-			if err != nil {
-				panic(fmt.Sprintf("should not happen: %s", err))
-			}
-
-			// If the request fails, the scanner lease will be expired
-			// and it will be closed automatically by hbase.
-			// No need to bother clients about that.
-			_, _ = s.SendRPC(rpc)
-		}()
-	}
-	return nil
 }
 
 func (s *scanner) fetch() ([]*pb.Result, error) {
@@ -74,7 +46,7 @@ func (s *scanner) fetch() ([]*pb.Result, error) {
 
 		s.update(resp, region)
 
-		if s.shouldClose(resp, region) {
+		if s.isDone(resp, region) {
 			s.Close()
 		}
 
@@ -140,10 +112,10 @@ func (s *scanner) coalesce(result, partial *pb.Result) (*pb.Result, bool) {
 
 func newScanner(c RPCClient, rpc *hrpc.Scan) *scanner {
 	return &scanner{
-		RPCClient: c,
-		rpc:       rpc,
-		startRow:  rpc.StartRow(),
-		scannerID: noScannerID,
+		RPCClient:          c,
+		rpc:                rpc,
+		startRow:           rpc.StartRow(),
+		curRegionScannerID: noScannerID,
 	}
 }
 
@@ -207,8 +179,8 @@ func (s *scanner) request() (*pb.ScanResponse, hrpc.RegionInfo, error) {
 		err error
 	)
 
-	if s.scannerID == noScannerID {
-		// starting to scan on a new region
+	if s.isRegionScannerClosed() {
+		// open a new region scan to scan on a new region
 		rpc, err = hrpc.NewScanRange(
 			s.rpc.Context(),
 			s.rpc.Table(),
@@ -221,7 +193,7 @@ func (s *scanner) request() (*pb.ScanResponse, hrpc.RegionInfo, error) {
 			s.rpc.Table(),
 			s.startRow,
 			nil,
-			hrpc.ScannerID(s.scannerID),
+			hrpc.ScannerID(s.curRegionScannerID),
 			hrpc.NumberOfRows(s.rpc.NumberOfRows()))
 	}
 	if err != nil {
@@ -241,13 +213,12 @@ func (s *scanner) request() (*pb.ScanResponse, hrpc.RegionInfo, error) {
 
 // update updates the scanner for the next scan request
 func (s *scanner) update(resp *pb.ScanResponse, region hrpc.RegionInfo) {
-	if resp.GetMoreResultsInRegion() {
-		if resp.ScannerId != nil {
-			s.scannerID = resp.GetScannerId()
-		}
-	} else {
+	if s.isRegionScannerClosed() && resp.ScannerId != nil {
+		s.openRegionScanner(resp.GetScannerId())
+	}
+	if !resp.GetMoreResultsInRegion() {
 		// we are done with this region, prepare scan for next region
-		s.scannerID = noScannerID
+		s.closeRegionScanner()
 
 		// Normal Scan
 		if !s.rpc.Reversed() {
@@ -278,14 +249,26 @@ func (s *scanner) update(resp *pb.ScanResponse, region hrpc.RegionInfo) {
 	}
 }
 
-// shouldClose check if this scanner should be closed and should stop fetching new results
-func (s *scanner) shouldClose(resp *pb.ScanResponse, region hrpc.RegionInfo) bool {
+func (s *scanner) Close() error {
+	if s.closed {
+		return errors.New("scanner has already been closed")
+	}
+	s.closed = true
+	if !s.isRegionScannerClosed() {
+		// close the last region scanner
+		s.closeRegionScanner()
+	}
+	return nil
+}
+
+// isDone check if this scanner is done fetching new results
+func (s *scanner) isDone(resp *pb.ScanResponse, region hrpc.RegionInfo) bool {
 	if resp.MoreResults != nil && !*resp.MoreResults {
-		// the filter for the whole scan has been exhausted, close the scanner
+		// or the filter for the whole scan has been exhausted, close the scanner
 		return true
 	}
 
-	if s.scannerID != noScannerID {
+	if !s.isRegionScannerClosed() {
 		// not done with this region yet
 		return false
 	}
@@ -308,4 +291,41 @@ func (s *scanner) shouldClose(resp *pb.ScanResponse, region hrpc.RegionInfo) boo
 	//  Reversed Scanner
 	return len(s.rpc.StopRow()) != 0 && // (2)
 		bytes.Compare(s.rpc.StopRow(), region.StartKey()) >= 0 // (3)
+}
+
+func (s *scanner) isRegionScannerClosed() bool {
+	return s.curRegionScannerID == noScannerID
+}
+
+func (s *scanner) openRegionScanner(scannerId uint64) {
+	if !s.isRegionScannerClosed() {
+		panic(fmt.Sprintf("should not happen: previous region scanner was not closed"))
+	}
+	s.curRegionScannerID = scannerId
+}
+
+func (s *scanner) closeRegionScanner() {
+	if s.isRegionScannerClosed() {
+		return
+	}
+	if !s.rpc.IsClosing() {
+		// Not closed at server side
+		// if we are closing in the middle of scanning a region,
+		// send a close scanner request
+		// TODO: add a deadline
+		rpc, err := hrpc.NewScanRange(context.Background(),
+			s.rpc.Table(), s.startRow, nil,
+			hrpc.ScannerID(s.curRegionScannerID),
+			hrpc.CloseScanner(),
+			hrpc.NumberOfRows(0))
+		if err != nil {
+			panic(fmt.Sprintf("should not happen: %s", err))
+		}
+
+		// If the request fails, the scanner lease will be expired
+		// and it will be closed automatically by hbase.
+		// No need to bother clients about that.
+		go s.SendRPC(rpc)
+	}
+	s.curRegionScannerID = noScannerID
 }
