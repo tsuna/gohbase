@@ -156,7 +156,7 @@ func TestGet(t *testing.T) {
 	}
 
 	c := gohbase.NewClient(*host)
-
+	defer c.Close()
 	err := insertKeyValue(c, key, "cf", val)
 	if err != nil {
 		t.Errorf("Put returned an error: %v", err)
@@ -198,7 +198,7 @@ func TestGet(t *testing.T) {
 func TestGetDoesntExist(t *testing.T) {
 	key := "row1.5"
 	c := gohbase.NewClient(*host)
-
+	defer c.Close()
 	headers := map[string][]string{"cf": nil}
 	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
 	rsp, err := c.Get(get)
@@ -219,6 +219,7 @@ func TestGetDoesntExist(t *testing.T) {
 
 func TestMutateGetTableNotFound(t *testing.T) {
 	c := gohbase.NewClient(*host)
+	defer c.Close()
 
 	key := "whatever"
 	table := "NonExistentTable"
@@ -246,7 +247,7 @@ func TestMutateGetTableNotFound(t *testing.T) {
 func TestGetBadColumnFamily(t *testing.T) {
 	key := "row1.625"
 	c := gohbase.NewClient(*host)
-
+	defer c.Close()
 	err := insertKeyValue(c, key, "cf", []byte("Bad!"))
 	if err != nil {
 		t.Errorf("Put returned an error: %v", err)
@@ -265,7 +266,7 @@ func TestGetBadColumnFamily(t *testing.T) {
 func TestGetMultipleCells(t *testing.T) {
 	key := "row1.75"
 	c := gohbase.NewClient(*host, gohbase.FlushInterval(time.Millisecond*2))
-
+	defer c.Close()
 	err := insertKeyValue(c, key, "cf", []byte("cf"))
 	if err != nil {
 		t.Errorf("Put returned an error: %v", err)
@@ -293,6 +294,7 @@ func TestGetMultipleCells(t *testing.T) {
 
 func TestGetNonDefaultNamespace(t *testing.T) {
 	c := gohbase.NewClient(*host)
+	defer c.Close()
 
 	get, err := hrpc.NewGetStr(context.Background(), "hbase:namespace", "default")
 	if err != nil {
@@ -314,7 +316,7 @@ func TestPut(t *testing.T) {
 		t.Fatal("Host is not set!")
 	}
 	c := gohbase.NewClient(*host)
-
+	defer c.Close()
 	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values)
 	if err != nil {
 		t.Errorf("NewPutStr returned an error: %v", err)
@@ -339,7 +341,7 @@ func TestPutMultipleCells(t *testing.T) {
 	values["cf"]["b"] = []byte("b")
 	values["cf2"]["a"] = []byte("a")
 	c := gohbase.NewClient(*host)
-
+	defer c.Close()
 	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values)
 	_, err = c.Put(putRequest)
 	if err != nil {
@@ -369,7 +371,7 @@ func TestMultiplePutsGetsSequentially(t *testing.T) {
 	keyPrefix := "row3"
 	headers := map[string][]string{"cf": nil}
 	c := gohbase.NewClient(*host, gohbase.FlushInterval(time.Millisecond))
-
+	defer c.Close()
 	err := performNPuts(keyPrefix, num_ops)
 	if err != nil {
 		t.Errorf("Put returned an error: %v", err)
@@ -394,6 +396,7 @@ func TestMultiplePutsGetsSequentially(t *testing.T) {
 
 func TestMultiplePutsGetsParallel(t *testing.T) {
 	c := gohbase.NewClient(*host)
+	defer c.Close()
 
 	const n = 1000
 	var wg sync.WaitGroup
@@ -442,7 +445,7 @@ func TestMultiplePutsGetsParallel(t *testing.T) {
 func TestTimestampIncreasing(t *testing.T) {
 	key := "row4"
 	c := gohbase.NewClient(*host)
-
+	defer c.Close()
 	var oldTime uint64 = 0
 	headers := map[string][]string{"cf": nil}
 	for i := 0; i < 10; i++ {
@@ -466,7 +469,7 @@ func TestTimestampIncreasing(t *testing.T) {
 func TestPutTimestamp(t *testing.T) {
 	key := "TestPutTimestamp"
 	c := gohbase.NewClient(*host)
-
+	defer c.Close()
 	var putTs uint64 = 50
 	timestamp := time.Unix(0, int64(putTs*1e6))
 	err := insertKeyValue(c, key, "cf", []byte("1"), hrpc.Timestamp(timestamp))
@@ -490,6 +493,7 @@ func TestPutTimestamp(t *testing.T) {
 // each having 3 versions at timestamps 50, 51, 52
 func TestDelete(t *testing.T) {
 	c := gohbase.NewClient(*host)
+	defer c.Close()
 
 	ts := uint64(50)
 
@@ -809,7 +813,7 @@ func TestDelete(t *testing.T) {
 func TestGetTimeRangeVersions(t *testing.T) {
 	key := "TestGetTimeRangeVersions"
 	c := gohbase.NewClient(*host)
-
+	defer c.Close()
 	err := insertKeyValue(c, key, "cf", []byte("1"), hrpc.Timestamp(time.Unix(0, 50*1e6)))
 	if err != nil {
 		t.Fatalf("Put failed: %s", err)
@@ -866,7 +870,7 @@ func TestGetTimeRangeVersions(t *testing.T) {
 func TestScanTimeRangeVersions(t *testing.T) {
 	key := "TestScanTimeRangeVersions"
 	c := gohbase.NewClient(*host)
-
+	defer c.Close()
 	err := insertKeyValue(c, key+"1", "cf", []byte("1"), hrpc.Timestamp(time.Unix(0, 50*1e6)))
 	if err != nil {
 		t.Fatalf("Put failed: %s", err)
@@ -972,6 +976,7 @@ func TestScanTimeRangeVersions(t *testing.T) {
 func TestPutTTL(t *testing.T) {
 	key := "TestPutTTL"
 	c := gohbase.NewClient(*host)
+	defer c.Close()
 
 	var ttl = 2 * time.Second
 
@@ -1014,6 +1019,7 @@ func checkResultRow(t *testing.T, res *hrpc.Result, expectedRow string, err, exp
 func TestScannerClose(t *testing.T) {
 	key := t.Name()
 	c := gohbase.NewClient(*host)
+	defer c.Close()
 
 	err := insertKeyValue(c, key+"1", "cf", []byte("1"))
 	if err != nil {
@@ -1042,6 +1048,8 @@ func TestScannerClose(t *testing.T) {
 	res, err = scanner.Next()
 	checkResultRow(t, res, key+"2", err, nil)
 
+	scanner.Close()
+
 	// make sure we get io.EOF eventually
 	for {
 		if _, err = scanner.Next(); err == io.EOF {
@@ -1053,6 +1061,7 @@ func TestScannerClose(t *testing.T) {
 func TestScannerContextCancel(t *testing.T) {
 	key := t.Name()
 	c := gohbase.NewClient(*host)
+	defer c.Close()
 
 	err := insertKeyValue(c, key+"1", "cf", []byte("1"))
 	if err != nil {
@@ -1089,7 +1098,7 @@ func TestScannerContextCancel(t *testing.T) {
 func TestAppend(t *testing.T) {
 	key := "row7"
 	c := gohbase.NewClient(*host)
-
+	defer c.Close()
 	// Inserting "Hello"
 	insertErr := insertKeyValue(c, key, "cf", []byte("Hello"))
 	if insertErr != nil {
@@ -1130,7 +1139,7 @@ func TestAppend(t *testing.T) {
 
 func TestIncrement(t *testing.T) {
 	c := gohbase.NewClient(*host)
-
+	defer c.Close()
 	key := "row102"
 
 	// test incerement
@@ -1157,7 +1166,7 @@ func TestIncrement(t *testing.T) {
 
 func TestIncrementParallel(t *testing.T) {
 	c := gohbase.NewClient(*host)
-
+	defer c.Close()
 	key := "row102.5"
 
 	numParallel := 10
@@ -1191,6 +1200,7 @@ func TestIncrementParallel(t *testing.T) {
 
 func TestCheckAndPut(t *testing.T) {
 	c := gohbase.NewClient(*host)
+	defer c.Close()
 
 	key := "row100"
 	ef := "cf"
@@ -1243,6 +1253,7 @@ func TestCheckAndPut(t *testing.T) {
 func TestCheckAndPutNotPut(t *testing.T) {
 	key := "row101"
 	c := gohbase.NewClient(*host)
+	defer c.Close()
 	values := map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte("lol")}}
 
 	appRequest, err := hrpc.NewAppStr(context.Background(), table, key, values)
@@ -1254,6 +1265,7 @@ func TestCheckAndPutNotPut(t *testing.T) {
 
 func TestCheckAndPutParallel(t *testing.T) {
 	c := gohbase.NewClient(*host)
+	defer c.Close()
 
 	keyPrefix := "row100.5"
 
@@ -1344,7 +1356,7 @@ func TestChangingRegionServers(t *testing.T) {
 		t.Fatal("Host is not set!")
 	}
 	c := gohbase.NewClient(*host)
-
+	defer c.Close()
 	err := insertKeyValue(c, key, "cf", val)
 	if err != nil {
 		t.Errorf("Put returned an error: %v", err)
@@ -1390,7 +1402,7 @@ func BenchmarkGet(b *testing.B) {
 		b.Errorf("Put returned an error: %v", err)
 	}
 	c := gohbase.NewClient(*host)
-
+	defer c.Close()
 	b.ResetTimer()
 	headers := map[string][]string{"cf": nil}
 	for i := 0; i < b.N; i++ {
@@ -1403,7 +1415,7 @@ func BenchmarkGet(b *testing.B) {
 // Helper function. Given a key_prefix, num_ops, performs num_ops.
 func performNPuts(keyPrefix string, num_ops int) error {
 	c := gohbase.NewClient(*host)
-
+	defer c.Close()
 	for i := 0; i < num_ops; i++ {
 		key := keyPrefix + fmt.Sprintf("%d", i)
 		err := insertKeyValue(c, key, "cf", []byte(fmt.Sprintf("%d", i)))
@@ -1441,7 +1453,7 @@ func deleteKeyValue(c gohbase.Client, key, columnFamily string, value []byte,
 
 func TestMaxResultsPerColumnFamilyGet(t *testing.T) {
 	c := gohbase.NewClient(*host)
-
+	defer c.Close()
 	key := "variablecolumnrow"
 	baseErr := "MaxResultsPerColumnFamilyGet error "
 
@@ -1595,6 +1607,7 @@ func TestMaxResultsPerColumnFamilyGet(t *testing.T) {
 
 func TestMaxResultsPerColumnFamilyScan(t *testing.T) {
 	c := gohbase.NewClient(*host)
+	defer c.Close()
 
 	baseErr := "MaxResultsPerColumnFamilyScan error "
 	key := "variablecolumnrow_1"
@@ -1788,6 +1801,7 @@ func TestMultiRequest(t *testing.T) {
 	c.Close()
 
 	c = gohbase.NewClient(*host, gohbase.FlushInterval(1000*time.Hour), gohbase.RpcQueueSize(5))
+	defer c.Close()
 
 	var wg sync.WaitGroup
 	wg.Add(5)
@@ -1875,6 +1889,7 @@ func TestMultiRequest(t *testing.T) {
 
 func TestReverseScan(t *testing.T) {
 	c := gohbase.NewClient(*host)
+	defer c.Close()
 
 	baseErr := "Reverse Scan error "
 

@@ -254,10 +254,8 @@ func (s *scanner) Close() error {
 		return errors.New("scanner has already been closed")
 	}
 	s.closed = true
-	if !s.isRegionScannerClosed() {
-		// close the last region scanner
-		s.closeRegionScanner()
-	}
+	// close the last region scanner
+	s.closeRegionScanner()
 	return nil
 }
 
