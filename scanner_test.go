@@ -16,6 +16,7 @@ import (
 	"github.com/tsuna/gohbase/test"
 	"github.com/tsuna/gohbase/test/mock"
 	"google.golang.org/protobuf/proto"
+
 	"io"
 	"reflect"
 	"sync"
@@ -93,16 +94,18 @@ func dup(a []*pb.Result) []*pb.Result {
 }
 
 func testCallClose(scan *hrpc.Scan, c *mock.MockRPCClient, scannerID uint64,
-	group *sync.WaitGroup) error {
-	s, err := hrpc.NewScanRange(scan.Context(), table,
-		nil, nil, hrpc.NumberOfRows(0), hrpc.CloseScanner(), hrpc.ScannerID(scannerID))
+	group *sync.WaitGroup, t *testing.T) {
+	//	t.Helper()
+
+	s, err := hrpc.NewScanRange(context.Background(), table, nil, nil,
+		hrpc.ScannerID(scannerID), hrpc.CloseScanner(), hrpc.NumberOfRows(0))
 	if err != nil {
-		return err
+		t.Fatal(err)
 	}
+
 	c.EXPECT().SendRPC(&scanMatcher{scan: s}).Do(func(arg0 interface{}) {
 		group.Done()
 	}).Return(&pb.ScanResponse{}, nil).Times(1)
-	return nil
 }
 func TestScanner(t *testing.T) {
 	ctrl := test.NewController(t)
@@ -149,10 +152,7 @@ func TestScanner(t *testing.T) {
 	}, nil).Times(1)
 
 	// added call to close scanner
-	err = testCallClose(scan, c, scannerID, &wg)
-	if err != nil {
-		t.Fatal(err)
-	}
+	testCallClose(scan, c, scannerID, &wg, t)
 	scannerID++
 
 	s, err = hrpc.NewScanRange(scan.Context(), table,
@@ -168,7 +168,7 @@ func TestScanner(t *testing.T) {
 	}, nil).Times(1)
 
 	// added call to close scanner
-	err = testCallClose(scan, c, scannerID, &wg)
+	testCallClose(scan, c, scannerID, &wg, t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,10 +188,7 @@ func TestScanner(t *testing.T) {
 	}, nil).Times(1)
 
 	// added call to close scanner
-	err = testCallClose(scan, c, scannerID, &wg)
-	if err != nil {
-		t.Fatal(err)
-	}
+	testCallClose(scan, c, scannerID, &wg, t)
 
 	var rs []*hrpc.Result
 	for {
@@ -364,14 +361,8 @@ func testErrorScanFromID(t *testing.T, scan *hrpc.Scan, out []*hrpc.Result) {
 		rpc.SetRegion(region1)
 	}).Return(nil, outErr).Times(1)
 
-	sid, err = hrpc.NewScanRange(context.Background(), table, nil, nil,
-		hrpc.ScannerID(scannerID), hrpc.CloseScanner(), hrpc.NumberOfRows(0))
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	// expect scan close rpc to be sent
-	testCallClose(sid, c, scannerID, &wg)
+	testCallClose(sid, c, scannerID, &wg, t)
 
 	var r *hrpc.Result
 	var rs []*hrpc.Result
@@ -482,10 +473,7 @@ func testPartialResults(t *testing.T, scan *hrpc.Scan, expected []*hrpc.Result) 
 
 		if partial.scanFromID {
 			// added call to close scanner
-			err := testCallClose(scan, c, scannerID, &wg)
-			if err != nil {
-				t.Fatal(err)
-			}
+			testCallClose(scan, c, scannerID, &wg, t)
 		}
 	}
 
@@ -537,10 +525,7 @@ func TestReversedScanner(t *testing.T) {
 	}, nil).Times(1)
 
 	// added call to close scanner
-	err = testCallClose(scan, c, scannerID, &wg)
-	if err != nil {
-		t.Fatal(err)
-	}
+	testCallClose(scan, c, scannerID, &wg, t)
 
 	s, err = hrpc.NewScanRange(ctx, table,
 		append([]byte("fon"), rowPadding...), nil, hrpc.Reversed())
@@ -555,10 +540,7 @@ func TestReversedScanner(t *testing.T) {
 	}, nil).Times(1)
 
 	// added call to close scanner
-	err = testCallClose(scan, c, scannerID, &wg)
-	if err != nil {
-		t.Fatal(err)
-	}
+	testCallClose(scan, c, scannerID, &wg, t)
 
 	s, err = hrpc.NewScanRange(ctx, table,
 		append([]byte("baq"), rowPadding...), nil, hrpc.Reversed())
@@ -586,10 +568,7 @@ func TestReversedScanner(t *testing.T) {
 	}, nil).Times(1)
 
 	// added call to close scanner
-	err = testCallClose(scan, c, scannerID, &wg)
-	if err != nil {
-		t.Fatal(err)
-	}
+	testCallClose(scan, c, scannerID, &wg, t)
 
 	var rs []*hrpc.Result
 	for {
