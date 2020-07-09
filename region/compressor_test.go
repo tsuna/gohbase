@@ -98,27 +98,35 @@ func TestDecompressCellblocks(t *testing.T) {
 		},
 		{
 			in:  nil,
-			err: errors.New("short read on total uncompressed length: want 4 bytes, got 0"),
+			out: nil,
 		},
 		{
-			in:  []byte("\x00\x00"),
-			err: errors.New("short read on total uncompressed length: want 4 bytes, got 2"),
+			in: []byte("\x00\x00"),
+			err: errors.New(
+				"failed to read uncompressed block length: short read: want 4 bytes, got 2"),
 		},
 		{
-			in:  []byte("\x00\x00\x00\v\x00"),
-			err: errors.New("short read on chunk length: want 4, got 1"),
+			in: []byte("\x00\x00\x00\v\x00"),
+			err: errors.New(
+				"failed to read compressed chunk block length: short read: want 4 bytes, got 1"),
 		},
 		{
 			in:  []byte("\x00\x00\x00\v\x00\x00\x00\n123"),
-			err: errors.New("short read on chunk: want 10, got 3"),
+			err: errors.New("failed to read compressed chunk: short read: want 10 bytes, got 3"),
 		},
 		{
 			in:  []byte("\x00\x00\x00\t\x00\x00\x00\n1234567890\x00\x00\x00\x01a"),
 			err: errors.New("uncompressed more than expected: expected 9, got 10 so far"),
 		},
-		{
-			in:  []byte("\x00\x00\x00\v\x00\x00\x00\t123456789"),
-			err: errors.New("uncompressed less than expected: expected 11, got 9"),
+		{ // uncompressed block length is larger than chunk's uncompressed length
+			in: []byte("\x00\x00\x00\v\x00\x00\x00\t123456789"),
+			err: errors.New(
+				"failed to read compressed chunk block length: short read: want 4 bytes, got 0"),
+		},
+		{ // 2 blocks with 2 chunks each
+			in: []byte("\x00\x00\x00\v\x00\x00\x00\n1234567890\x00\x00\x00\x01a" +
+				"\x00\x00\x00\v\x00\x00\x00\n1234567890\x00\x00\x00\x01a"),
+			out: []byte("1234567890a1234567890a"),
 		},
 	}
 
@@ -128,7 +136,7 @@ func TestDecompressCellblocks(t *testing.T) {
 			out, err := c.decompressCellblocks(tcase.in)
 
 			if !test.ErrEqual(tcase.err, err) {
-				t.Errorf("expected err %v, got %v", tcase.err, err)
+				t.Errorf("expected err %q, got %q", tcase.err, err)
 			}
 
 			if !bytes.Equal(tcase.out, out) {

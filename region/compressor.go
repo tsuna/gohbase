@@ -68,43 +68,76 @@ func (c *compressor) compressCellblocks(cbs net.Buffers, uncompressedLen uint32)
 	return b
 }
 
-func (c *compressor) decompressCellblocks(b []byte) ([]byte, error) {
-	if len(b) < 4 {
-		return nil, fmt.Errorf(
-			"short read on total uncompressed length: want 4 bytes, got %d", len(b))
+func readN(b []byte, n int) ([]byte, []byte, error) {
+	if len(b) < n {
+		return nil, nil, fmt.Errorf(
+			"short read: want %d bytes, got %d", n, len(b))
 	}
-	totalUncompressedLen := binary.BigEndian.Uint32(b[:4])
-	b = b[4:]
+	return b[:n], b[n:], nil
+}
 
-	var err error
-	out := make([]byte, 0, totalUncompressedLen)
-	var uncompressedSoFar uint32
-	var uncompressedLen uint32
-	for len(b) > 0 {
-		if len(b) < 4 {
-			return nil, fmt.Errorf("short read on chunk length: want 4, got %d", len(b))
-		}
-		compressedChunkLen := binary.BigEndian.Uint32(b)
-		b = b[4:]
-		if len(b) < int(compressedChunkLen) {
-			return nil, fmt.Errorf("short read on chunk: want %d, got %d",
-				compressedChunkLen, len(b))
-		}
-		out, uncompressedLen, err = c.Decode(b[:compressedChunkLen], out)
-		if err != nil {
-			return nil, err
-		}
-		// check that uncompressed lengths add up
-		uncompressedSoFar += uncompressedLen
-		if uncompressedSoFar > totalUncompressedLen {
-			return nil, fmt.Errorf("uncompressed more than expected: expected %d, got %d so far",
-				totalUncompressedLen, uncompressedSoFar)
-		}
-		b = b[compressedChunkLen:]
+func readUint32(b []byte) (uint32, []byte, error) {
+	head, tail, err := readN(b, 4)
+	if err != nil {
+		return 0, nil, err
 	}
-	if uncompressedSoFar < totalUncompressedLen {
-		return nil, fmt.Errorf("uncompressed less than expected: expected %d, got %d",
-			totalUncompressedLen, uncompressedSoFar)
+	return binary.BigEndian.Uint32(head), tail, nil
+}
+
+// decompressCellblocks decodes block stream format of hadoop.
+// The wire format is as follows:
+//
+//  <length of uncompressed block>
+//    <length of compressed chunk><compressed chunk>
+//    <length of compressed chunk><compressed chunk>
+//    ...
+//    <length of compressed chunk><compressed chunk>
+//  <length of uncompressed block>
+//    <length of compressed chunk><compressed chunk>
+//    ...
+//  ...
+func (c *compressor) decompressCellblocks(b []byte) ([]byte, error) {
+	var (
+		err                  error
+		out                  []byte
+		compressedChunk      []byte
+		compressedChunkLen   uint32
+		uncompressedBlockLen uint32
+		uncompressedChunkLen uint32
+	)
+	for len(b) > 0 {
+		// read uncompressed block length
+		uncompressedBlockLen, b, err = readUint32(b)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read uncompressed block length: %w", err)
+		}
+
+		// read and decompress encoded chunks until whole block is read
+		var uncompressedSoFar uint32
+		for uncompressedSoFar < uncompressedBlockLen {
+			compressedChunkLen, b, err = readUint32(b)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"failed to read compressed chunk block length: %w", err)
+			}
+
+			compressedChunk, b, err = readN(b, int(compressedChunkLen))
+			if err != nil {
+				return nil, fmt.Errorf("failed to read compressed chunk: %w", err)
+			}
+			out, uncompressedChunkLen, err = c.Decode(compressedChunk, out)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode compressed chunk: %w", err)
+			}
+			uncompressedSoFar += uncompressedChunkLen
+		}
+
+		// check that uncompressed lengths add up
+		if uncompressedSoFar > uncompressedBlockLen {
+			return nil, fmt.Errorf(
+				"uncompressed more than expected: expected %d, got %d so far",
+				uncompressedBlockLen, uncompressedSoFar)
+		}
 	}
 	return out, nil
 }
