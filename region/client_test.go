@@ -733,7 +733,7 @@ func TestProcessRPCs(t *testing.T) {
 			minsent: 1, maxsent: 1},
 		{qsize: 2, interval: 1000 * time.Hour, ncalls: 100, minsent: 50, maxsent: 50},
 		{qsize: 100, interval: 0 * time.Millisecond, ncalls: 1000,
-			minsent: 10, maxsent: 700, concurrent: true},
+			minsent: 1, maxsent: 1000, concurrent: true},
 	}
 
 	for i, tcase := range tests {
