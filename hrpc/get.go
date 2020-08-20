@@ -105,6 +105,9 @@ func (g *Get) ToProto() proto.Message {
 	if g.existsOnly {
 		get.Get.ExistenceOnly = proto.Bool(true)
 	}
+	if g.cacheBlocks != DefaultCacheBlocks {
+		get.Get.CacheBlocks = &g.cacheBlocks
+	}
 	get.Get.Filter = g.filter
 	return get
 }
