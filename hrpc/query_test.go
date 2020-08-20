@@ -161,3 +161,50 @@ func TestResultOffset(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestCacheBlocks(t *testing.T) {
+	// set CacheBlocks to false for Get
+	g, err := NewGet(context.Background(), nil, nil, CacheBlocks(false))
+	if err != nil {
+		t.Error(err)
+	}
+
+	if cbExp, cbGot := false, g.cacheBlocks; cbExp != cbGot {
+		t.Errorf("expected %v, got %v", cbExp, cbGot)
+	}
+
+	// check that default CacheBlocks for Get is true
+	g2, err := NewGet(context.Background(), nil, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	if cbExp, cbGot := true, g2.cacheBlocks; cbExp != cbGot {
+		t.Errorf("expected %v, got %v", cbExp, cbGot)
+	}
+
+	// explicitly set CacheBlocks to true for Get
+	s, err := NewScan(context.Background(), nil, CacheBlocks(true))
+	if err != nil {
+		t.Error(err)
+	}
+
+	if cbExp, cbGot := true, s.cacheBlocks; cbExp != cbGot {
+		t.Errorf("expected %v, got %v", cbExp, cbGot)
+	}
+
+	// check that default CacheBlocks for Scan is true
+	s2, err := NewScan(context.Background(), nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if cbExp, cbGot := true, s2.cacheBlocks; cbExp != cbGot {
+		t.Errorf("expected %v, got %v", cbExp, cbGot)
+	}
+
+	_, err = NewPutStr(context.Background(), "", "", nil, CacheBlocks(true))
+	if err == nil || err.Error() !=
+		"'CacheBlocks' option can only be used with Get or Scan request" {
+		t.Error(err)
+	}
+}
