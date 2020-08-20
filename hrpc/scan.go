@@ -31,6 +31,8 @@ const (
 	// DefaultMaxResultsPerColumnFamily is the default max number of cells fetched
 	// per column family for each row
 	DefaultMaxResultsPerColumnFamily = math.MaxInt32
+	// DefaultCacheBlocks is the default setting to enable the block cache for get/scan queries
+	DefaultCacheBlocks = true
 )
 
 // Scanner is used to read data sequentially from HBase.
@@ -213,6 +215,9 @@ func (s *Scan) ToProto() proto.Message {
 	}
 	if s.reversed {
 		scan.Scan.Reversed = &s.reversed
+	}
+	if s.cacheBlocks != DefaultCacheBlocks {
+		scan.Scan.CacheBlocks = &s.cacheBlocks
 	}
 	scan.Scan.Filter = s.filter
 	return scan

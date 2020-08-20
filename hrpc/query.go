@@ -23,6 +23,7 @@ type baseQuery struct {
 	maxVersions   uint32
 	storeLimit    uint32
 	storeOffset   uint32
+	cacheBlocks   bool
 }
 
 // newBaseQuery return baseQuery with all default values
@@ -32,6 +33,7 @@ func newBaseQuery() baseQuery {
 		fromTimestamp: MinTimestamp,
 		toTimestamp:   MaxTimestamp,
 		maxVersions:   DefaultMaxVersions,
+		cacheBlocks:   DefaultCacheBlocks,
 	}
 }
 
@@ -53,6 +55,9 @@ func (bq *baseQuery) setMaxResultsPerColumnFamily(maxresults uint32) {
 }
 func (bq *baseQuery) setResultOffset(offset uint32) {
 	bq.storeOffset = offset
+}
+func (bq *baseQuery) setCacheBlocks(cacheBlocks bool) {
+	bq.cacheBlocks = cacheBlocks
 }
 
 // Families option adds families constraint to a Scan or Get request.
@@ -149,5 +154,17 @@ func ResultOffset(offset uint32) func(Call) error {
 			return nil
 		}
 		return errors.New("'ResultOffset' option can only be used with Get or Scan request")
+	}
+}
+
+// CacheBlocks is an option for Scan or Get requests to enable/disable the block cache
+// for the request
+func CacheBlocks(cacheBlocks bool) func(Call) error {
+	return func(hc Call) error {
+		if c, ok := hc.(hasQueryOptions); ok {
+			c.setCacheBlocks(cacheBlocks)
+			return nil
+		}
+		return errors.New("'CacheBlocks' option can only be used with Get or Scan request")
 	}
 }
