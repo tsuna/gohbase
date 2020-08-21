@@ -82,6 +82,129 @@ func confirmGetAttributes(ctx context.Context, g *Get, table, key []byte,
 	return true
 }
 
+func TestGetToProto(t *testing.T) {
+	var (
+		ctx    = context.Background()
+		keyStr = "key"
+		key    = []byte("key")
+		rs     = &pb.RegionSpecifier{
+			Type:  pb.RegionSpecifier_REGION_NAME.Enum(),
+			Value: []byte("region"),
+		}
+		fil = filter.NewList(filter.MustPassAll, filter.NewKeyOnlyFilter(false))
+		fam = map[string][]string{"cookie": []string{"got", "it"}}
+	)
+
+	tests := []struct {
+		g        *Get
+		expProto *pb.GetRequest
+	}{
+		{
+			g: func() *Get {
+				get, _ := NewGetStr(ctx, "", keyStr)
+				return get
+			}(),
+			expProto: &pb.GetRequest{
+				Region: rs,
+				Get: &pb.Get{
+					Row:       key,
+					Column:    []*pb.Column{},
+					TimeRange: &pb.TimeRange{},
+				},
+			},
+		},
+		{ // explicitly set configurable attributes to default values
+			g: func() *Get {
+				get, _ := NewGetStr(ctx, "", keyStr,
+					MaxResultsPerColumnFamily(DefaultMaxResultsPerColumnFamily),
+					ResultOffset(0),
+					MaxVersions(DefaultMaxVersions),
+					CacheBlocks(DefaultCacheBlocks),
+					TimeRangeUint64(MinTimestamp, MaxTimestamp),
+				)
+				return get
+			}(),
+			expProto: &pb.GetRequest{
+				Region: rs,
+				Get: &pb.Get{
+					Row:         key,
+					Column:      []*pb.Column{},
+					TimeRange:   &pb.TimeRange{},
+					StoreLimit:  nil,
+					StoreOffset: nil,
+					MaxVersions: nil,
+					CacheBlocks: nil,
+				},
+			},
+		},
+		{ // set configurable options to non-default values
+			g: func() *Get {
+				get, _ := NewGetStr(ctx, "", keyStr,
+					MaxResultsPerColumnFamily(22),
+					ResultOffset(7),
+					MaxVersions(4),
+					CacheBlocks(!DefaultCacheBlocks),
+					TimeRangeUint64(3456, 6789),
+				)
+				return get
+			}(),
+			expProto: &pb.GetRequest{
+				Region: rs,
+				Get: &pb.Get{
+					Row:    key,
+					Column: []*pb.Column{},
+					TimeRange: &pb.TimeRange{
+						From: proto.Uint64(3456),
+						To:   proto.Uint64(6789),
+					},
+					StoreLimit:  proto.Uint32(22),
+					StoreOffset: proto.Uint32(7),
+					MaxVersions: proto.Uint32(4),
+					CacheBlocks: proto.Bool(!DefaultCacheBlocks),
+				},
+			},
+		},
+		{ // set Filters, Families, and ExistenceOnly
+			g: func() *Get {
+				get, _ := NewGetStr(ctx, "", keyStr,
+					Filters(fil),
+					Families(fam),
+				)
+				get.ExistsOnly()
+				return get
+			}(),
+			expProto: func() *pb.GetRequest {
+				pbFilter, _ := fil.ConstructPBFilter()
+				return &pb.GetRequest{
+					Region: rs,
+					Get: &pb.Get{
+						Row:           key,
+						Column:        familiesToColumn(fam),
+						TimeRange:     &pb.TimeRange{},
+						ExistenceOnly: proto.Bool(true),
+						Filter:        pbFilter,
+					},
+				}
+			}(),
+		},
+	}
+
+	for i, tcase := range tests {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			tcase.g.SetRegion(mockRegionInfo([]byte("region")))
+			p := tcase.g.ToProto()
+			out, ok := p.(*pb.GetRequest)
+			if !ok {
+				t.Fatalf("f")
+			}
+			if !proto.Equal(out, tcase.expProto) {
+				t.Fatalf("expected %+v, got %+v", tcase.expProto, out)
+			}
+		})
+
+	}
+}
+
 func TestNewScan(t *testing.T) {
 	ctx := context.Background()
 	table := "test"
