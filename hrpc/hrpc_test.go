@@ -68,10 +68,6 @@ func TestNewGet(t *testing.T) {
 	if err != nil && errStr != err.Error() || err == nil {
 		t.Errorf("Get8 Expected: %#v\nReceived: %#v", errStr, err)
 	}
-	_, err = NewGet(ctx, tableb, keyb, CacheBlocks(false))
-	if err != nil {
-		t.Errorf("Get9 didn't set attributes correctly.")
-	}
 }
 
 func confirmGetAttributes(ctx context.Context, g *Get, table, key []byte,
