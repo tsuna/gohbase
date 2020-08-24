@@ -444,7 +444,7 @@ func (m *Mutate) valuesToCellblocks() ([][]byte, int32, uint32) {
 			cellblock, sz := toCellblock(m.key, family, []byte(k1), v1, ts, mt)
 			cellblocks = append(cellblocks, cellblock...)
 			size += sz
-			count += 1
+			count++
 		}
 	}
 	return cellblocks, int32(count), size
