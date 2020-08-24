@@ -164,7 +164,7 @@ func TestGetToProto(t *testing.T) {
 				},
 			},
 		},
-		{ // set Filters, Families, and ExistenceOnly
+		{ // set filters, families, and existenceOnly
 			g: func() *Get {
 				get, _ := NewGetStr(ctx, "", keyStr,
 					Filters(fil),
@@ -415,7 +415,7 @@ func TestScanToProto(t *testing.T) {
 				},
 			},
 		},
-		{
+		{ // set filters and families
 			s: func() *Scan {
 				s, _ := NewScanStr(ctx, "", Filters(fil), Families(fam))
 				return s
