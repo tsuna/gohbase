@@ -256,6 +256,227 @@ func TestNewScan(t *testing.T) {
 	}
 }
 
+func TestScanToProto(t *testing.T) {
+	var (
+		ctx = context.Background()
+		rs  = &pb.RegionSpecifier{
+			Type:  pb.RegionSpecifier_REGION_NAME.Enum(),
+			Value: []byte("region"),
+		}
+		startRow = []byte("start")
+		stopRow  = []byte("stop")
+		fil      = filter.NewKeyOnlyFilter(false)
+		fam      = map[string][]string{"cookie": []string{"got", "it"}}
+	)
+
+	tests := []struct {
+		s        *Scan
+		expProto *pb.ScanRequest
+	}{
+		{
+			s: func() *Scan {
+				s, _ := NewScanStr(ctx, "")
+				return s
+			}(),
+			expProto: &pb.ScanRequest{
+				Region:                  rs,
+				NumberOfRows:            proto.Uint32(DefaultNumberOfRows),
+				CloseScanner:            proto.Bool(false),
+				ClientHandlesPartials:   proto.Bool(true),
+				ClientHandlesHeartbeats: proto.Bool(true),
+				Scan: &pb.Scan{
+					MaxResultSize: proto.Uint64(DefaultMaxResultSize),
+					Column:        []*pb.Column{},
+					TimeRange:     &pb.TimeRange{},
+				},
+			},
+		},
+		{ // explicitly set configurable attributes to default values
+			s: func() *Scan {
+				s, _ := NewScanStr(ctx, "",
+					MaxResultSize(DefaultMaxResultSize),
+					ScannerID(math.MaxUint64),
+					NumberOfRows(DefaultNumberOfRows),
+					MaxResultsPerColumnFamily(DefaultMaxResultsPerColumnFamily),
+					ResultOffset(0),
+					MaxVersions(DefaultMaxVersions),
+					CacheBlocks(DefaultCacheBlocks),
+					TimeRangeUint64(MinTimestamp, MaxTimestamp),
+				)
+				return s
+			}(),
+			expProto: &pb.ScanRequest{
+				Region:                  rs,
+				NumberOfRows:            proto.Uint32(DefaultNumberOfRows),
+				ScannerId:               nil,
+				CloseScanner:            proto.Bool(false),
+				ClientHandlesPartials:   proto.Bool(true),
+				ClientHandlesHeartbeats: proto.Bool(true),
+				Scan: &pb.Scan{
+					MaxResultSize: proto.Uint64(DefaultMaxResultSize),
+					Column:        []*pb.Column{},
+					TimeRange:     &pb.TimeRange{},
+					StoreLimit:    nil,
+					StoreOffset:   nil,
+					MaxVersions:   nil,
+					CacheBlocks:   nil,
+				},
+			},
+		},
+		{ // set configurable attributes to non-default values
+			s: func() *Scan {
+				s, _ := NewScanStr(ctx, "",
+					MaxResultSize(52),
+					NumberOfRows(37),
+					MaxResultsPerColumnFamily(13),
+					ResultOffset(7),
+					MaxVersions(89),
+					CacheBlocks(!DefaultCacheBlocks),
+					TimeRangeUint64(1024, 1738),
+				)
+				return s
+			}(),
+			expProto: &pb.ScanRequest{
+				Region:                  rs,
+				NumberOfRows:            proto.Uint32(37),
+				CloseScanner:            proto.Bool(false),
+				ClientHandlesPartials:   proto.Bool(true),
+				ClientHandlesHeartbeats: proto.Bool(true),
+				Scan: &pb.Scan{
+					MaxResultSize: proto.Uint64(52),
+					Column:        []*pb.Column{},
+					TimeRange: &pb.TimeRange{
+						From: proto.Uint64(1024),
+						To:   proto.Uint64(1738),
+					},
+					StoreLimit:  proto.Uint32(13),
+					StoreOffset: proto.Uint32(7),
+					MaxVersions: proto.Uint32(89),
+					CacheBlocks: proto.Bool(!DefaultCacheBlocks),
+				},
+			},
+		},
+		{ // test that pb.ScanRequest.Scan is nil when scanner id is specificed
+			s: func() *Scan {
+				s, _ := NewScanStr(ctx, "",
+					MaxResultSize(52),
+					NumberOfRows(37),
+					ScannerID(4444),
+					MaxResultsPerColumnFamily(13),
+					ResultOffset(7),
+					MaxVersions(89),
+					CacheBlocks(!DefaultCacheBlocks),
+					TimeRangeUint64(1024, 1738),
+				)
+				return s
+			}(),
+			expProto: &pb.ScanRequest{
+				Region:                  rs,
+				NumberOfRows:            proto.Uint32(37),
+				ScannerId:               proto.Uint64(4444),
+				CloseScanner:            proto.Bool(false),
+				ClientHandlesPartials:   proto.Bool(true),
+				ClientHandlesHeartbeats: proto.Bool(true),
+				Scan:                    nil,
+			},
+		},
+		{ // set reversed attribute
+			s: func() *Scan {
+				s, _ := NewScanStr(ctx, "", Reversed())
+				return s
+			}(),
+			expProto: &pb.ScanRequest{
+				Region:                  rs,
+				NumberOfRows:            proto.Uint32(DefaultNumberOfRows),
+				CloseScanner:            proto.Bool(false),
+				ClientHandlesPartials:   proto.Bool(true),
+				ClientHandlesHeartbeats: proto.Bool(true),
+				Scan: &pb.Scan{
+					MaxResultSize: proto.Uint64(DefaultMaxResultSize),
+					Column:        []*pb.Column{},
+					TimeRange:     &pb.TimeRange{},
+					Reversed:      proto.Bool(true),
+				},
+			},
+		},
+		{ // scan key range
+			s: func() *Scan {
+				s, _ := NewScanRange(ctx, nil, startRow, stopRow)
+				return s
+			}(),
+			expProto: &pb.ScanRequest{
+				Region:                  rs,
+				NumberOfRows:            proto.Uint32(DefaultNumberOfRows),
+				CloseScanner:            proto.Bool(false),
+				ClientHandlesPartials:   proto.Bool(true),
+				ClientHandlesHeartbeats: proto.Bool(true),
+				Scan: &pb.Scan{
+					MaxResultSize: proto.Uint64(DefaultMaxResultSize),
+					Column:        []*pb.Column{},
+					TimeRange:     &pb.TimeRange{},
+					StartRow:      startRow,
+					StopRow:       stopRow,
+				},
+			},
+		},
+		{
+			s: func() *Scan {
+				s, _ := NewScanStr(ctx, "", Filters(fil), Families(fam))
+				return s
+			}(),
+			expProto: func() *pb.ScanRequest {
+				pbFilter, _ := fil.ConstructPBFilter()
+				return &pb.ScanRequest{
+					Region:                  rs,
+					NumberOfRows:            proto.Uint32(DefaultNumberOfRows),
+					CloseScanner:            proto.Bool(false),
+					ClientHandlesPartials:   proto.Bool(true),
+					ClientHandlesHeartbeats: proto.Bool(true),
+					Scan: &pb.Scan{
+						MaxResultSize: proto.Uint64(DefaultMaxResultSize),
+						Column:        familiesToColumn(fam),
+						TimeRange:     &pb.TimeRange{},
+						Filter:        pbFilter,
+					},
+				}
+			}(),
+		},
+		{ // close scanner
+			s: func() *Scan {
+				s, _ := NewScanStr(ctx, "", CloseScanner())
+				return s
+			}(),
+			expProto: &pb.ScanRequest{
+				Region:                  rs,
+				NumberOfRows:            proto.Uint32(DefaultNumberOfRows),
+				CloseScanner:            proto.Bool(true),
+				ClientHandlesPartials:   proto.Bool(true),
+				ClientHandlesHeartbeats: proto.Bool(true),
+				Scan: &pb.Scan{
+					MaxResultSize: proto.Uint64(DefaultMaxResultSize),
+					Column:        []*pb.Column{},
+					TimeRange:     &pb.TimeRange{},
+				},
+			},
+		},
+	}
+
+	for i, tcase := range tests {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			tcase.s.SetRegion(mockRegionInfo([]byte("region")))
+			p := tcase.s.ToProto()
+			out, ok := p.(*pb.ScanRequest)
+			if !ok {
+				t.Fatalf("f")
+			}
+			if !proto.Equal(out, tcase.expProto) {
+				t.Fatalf("expected %+v, got %+v", tcase.expProto, out)
+			}
+		})
+
+	}
+}
+
 type mockRegionInfo []byte
 
 func (ri mockRegionInfo) Name() []byte {
