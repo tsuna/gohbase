@@ -19,7 +19,7 @@ import (
 
 // NewClient creates a new RegionClient.
 func NewClient(addr string, ctype ClientType, queueSize int, flushInterval time.Duration,
-	effectiveUser string, readTimeout time.Duration, codec compression.Codec) hrpc.RegionClient {
+	effectiveUser string, readTimeout time.Duration, codec compression.Codec, auth string) hrpc.RegionClient {
 	c := &client{
 		addr:          addr,
 		ctype:         ctype,
@@ -30,6 +30,7 @@ func NewClient(addr string, ctype ClientType, queueSize int, flushInterval time.
 		rpcs:          make(chan hrpc.Call),
 		done:          make(chan struct{}),
 		sent:          make(map[uint32]hrpc.Call),
+		auth:          auth,
 	}
 
 	if codec != nil {
