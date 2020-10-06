@@ -50,7 +50,7 @@ type Scanner interface {
 	// Close should be called if it is desired to stop scanning before getting all of results.
 	// If you call Next() after calling Close() you might still get buffered results.
 	// Othwerwise, in case all results have been delivered or in case of an error, the Scanner
-	// will be closed automatically.
+	// will be closed automatically. It's okay to close an already closed scanner.
 	Close() error
 }
 
