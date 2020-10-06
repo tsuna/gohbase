@@ -251,7 +251,7 @@ func (s *scanner) update(resp *pb.ScanResponse, region hrpc.RegionInfo) {
 
 func (s *scanner) Close() error {
 	if s.closed {
-		return errors.New("scanner has already been closed")
+		return nil
 	}
 	s.closed = true
 	// close the last region scanner
