@@ -36,6 +36,8 @@ type AdminClient interface {
 	RestoreSnapshot(t *hrpc.Snapshot) error
 	ClusterStatus() (*pb.ClusterStatus, error)
 	ListTableNames(t *hrpc.ListTableNames) ([]*pb.TableName, error)
+	// SetBalancer sets balancer state and returns previous state
+	SetBalancer(sb *hrpc.SetBalancer) (bool, error)
 }
 
 // NewAdminClient creates an admin HBase client.
@@ -267,4 +269,16 @@ func (c *client) ListTableNames(t *hrpc.ListTableNames) ([]*pb.TableName, error)
 	}
 
 	return res.GetTableNames(), nil
+}
+
+func (c *client) SetBalancer(sb *hrpc.SetBalancer) (bool, error) {
+	pbmsg, err := c.SendRPC(sb)
+	if err != nil {
+		return false, err
+	}
+	res, ok := pbmsg.(*pb.SetBalancerRunningResponse)
+	if !ok {
+		return false, errors.New("SendPRC returned not a SetBalancerRunningResponse")
+	}
+	return res.GetPrevBalanceValue(), nil
 }
