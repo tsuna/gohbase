@@ -2207,3 +2207,31 @@ func TestRestoreSnapshot(t *testing.T) {
 		t.Errorf("expected %v, got %v:", expV, r.Cells[0].Value)
 	}
 }
+
+func TestSetBalancer(t *testing.T) {
+	ac := gohbase.NewAdminClient(*host)
+
+	sb, err := hrpc.NewSetBalancer(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prevState, err := ac.SetBalancer(sb)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !prevState {
+		t.Fatal("expected balancer to be previously enabled")
+	}
+
+	sb, err = hrpc.NewSetBalancer(context.Background(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prevState, err = ac.SetBalancer(sb)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prevState {
+		t.Fatal("expected balancer to be previously disabled")
+	}
+}
