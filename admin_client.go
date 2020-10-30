@@ -38,6 +38,8 @@ type AdminClient interface {
 	ListTableNames(t *hrpc.ListTableNames) ([]*pb.TableName, error)
 	// SetBalancer sets balancer state and returns previous state
 	SetBalancer(sb *hrpc.SetBalancer) (bool, error)
+	// MoveRegion moves a region to a different RegionServer
+	MoveRegion(mr *hrpc.MoveRegion) error
 }
 
 // NewAdminClient creates an admin HBase client.
@@ -281,4 +283,16 @@ func (c *client) SetBalancer(sb *hrpc.SetBalancer) (bool, error) {
 		return false, errors.New("SendPRC returned not a SetBalancerRunningResponse")
 	}
 	return res.GetPrevBalanceValue(), nil
+}
+
+func (c *client) MoveRegion(mr *hrpc.MoveRegion) error {
+	pbmsg, err := c.SendRPC(mr)
+	if err != nil {
+		return err
+	}
+	_, ok := pbmsg.(*pb.MoveRegionResponse)
+	if !ok {
+		return errors.New("SendPRC returned not a MoveRegionResponse")
+	}
+	return nil
 }

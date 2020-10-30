@@ -2235,3 +2235,48 @@ func TestSetBalancer(t *testing.T) {
 		t.Fatal("expected balancer to be previously disabled")
 	}
 }
+
+func TestMoveRegion(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	ac := gohbase.NewAdminClient(*host)
+
+	// scan meta to get a region to move
+	scan, err := hrpc.NewScan(context.Background(),
+		[]byte("hbase:meta"),
+		hrpc.Families(map[string][]string{"info": []string{"regioninfo"}}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var rsp []*hrpc.Result
+	scanner := c.Scan(scan)
+	for {
+		res, err := scanner.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		rsp = append(rsp, res)
+	}
+
+	// use the first region
+	if len(rsp) == 0 {
+		t.Fatal("got 0 results")
+	}
+	if len(rsp[0].Cells) == 0 {
+		t.Fatal("got 0 cells")
+	}
+
+	regionName := rsp[0].Cells[0].Row
+	regionName = regionName[len(regionName)-33 : len(regionName)-1]
+	mr, err := hrpc.NewMoveRegion(context.Background(), regionName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ac.MoveRegion(mr); err != nil {
+		t.Fatal(err)
+	}
+}
