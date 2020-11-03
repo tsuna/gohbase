@@ -27,6 +27,7 @@ const (
 	defaultZkRoot        = "/hbase"
 	defaultZkTimeout     = 30 * time.Second
 	defaultEffectiveUser = "root"
+	defaultAuth          = "SIMPLE"
 )
 
 // Client a regular HBase client
@@ -94,9 +95,11 @@ type client struct {
 	closeOnce sync.Once
 
 	newRegionClientFn func(string, region.ClientType, int, time.Duration,
-		string, time.Duration, compression.Codec) hrpc.RegionClient
+		string, time.Duration, compression.Codec, string) hrpc.RegionClient
 
 	compressionCodec compression.Codec
+
+	auth string
 }
 
 // NewClient creates a new HBase client.
@@ -130,6 +133,7 @@ func newClient(zkquorum string, options ...Option) *client {
 		regionReadTimeout:   region.DefaultReadTimeout,
 		done:                make(chan struct{}),
 		newRegionClientFn:   region.NewClient,
+		auth:                defaultAuth,
 	}
 	for _, option := range options {
 		option(c)
@@ -182,6 +186,13 @@ func RegionReadTimeout(to time.Duration) Option {
 func EffectiveUser(user string) Option {
 	return func(c *client) {
 		c.effectiveUser = user
+	}
+}
+
+// Auth will return an option that will set the authorization method when accessing regions
+func Auth(auth string) Option {
+	return func(c *client) {
+		c.auth = auth
 	}
 }
 

@@ -22,6 +22,9 @@ import (
 	"github.com/tsuna/gohbase/pb"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/runtime/protoimpl"
+
+	gosasl "github.com/beltran/gosasl"
 )
 
 // ClientType is a type alias to represent the type of this region client
@@ -193,6 +196,8 @@ type client struct {
 
 	// compressor for cellblocks. if nil, then no compression
 	compressor *compressor
+
+	auth string
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine
@@ -485,13 +490,15 @@ func (c *client) receive() (err error) {
 	}
 
 	if header.CallId == nil {
+		log.Println(protoimpl.X.MessageStringOf(header.Exception))
 		return ErrMissingCallID
 	}
 
 	callID := *header.CallId
 	rpc := c.unregisterRPC(callID)
 	if rpc == nil {
-		return ServerError{fmt.Errorf("got a response with an unexpected call ID: %d", callID)}
+		//return ServerError{fmt.Errorf("got a response with an unexpected call ID: %d", callID)}
+		return ServerError{fmt.Errorf("got a response with an unexpected call ID: %d, message: %v", callID, protoimpl.X.MessageStringOf(header.Exception))}
 	}
 	if err := c.inFlightDown(); err != nil {
 		return ServerError{err}
@@ -581,7 +588,13 @@ func (c *client) readFully(buf []byte) error {
 	return err
 }
 
-// sendHello sends the "hello" message needed when opening a new connection.
+/* sendHello sends the "hello" message needed when opening a new connection.
+1. Setup connection
+2. Define input and output streams
+3. Write the preamble (const header below)
+4. if(useSasl) Create sasl connection
+5. Send connection header
+*/
 func (c *client) sendHello() error {
 	connHeader := &pb.ConnectionHeader{
 		UserInfo: &pb.UserInformation{
@@ -599,13 +612,80 @@ func (c *client) sendHello() error {
 		return fmt.Errorf("failed to marshal connection header: %s", err)
 	}
 
-	const header = "HBas\x00\x50" // \x50 = Simple Auth.
-	buf := make([]byte, 0, len(header)+4+len(data))
-	buf = append(buf, header...)
-	buf = buf[:len(header)+4]
-	binary.BigEndian.PutUint32(buf[6:], uint32(len(data)))
-	buf = append(buf, data...)
-	return c.write(buf)
+	if c.auth == "KERBEROS" {
+		// Write the preamble
+		const header = "HBas\x00\x51" // \x51 = Kerberos Auth
+		buf := make([]byte, 0, len(header)+4+len(data))
+		buf = append(buf, header...)
+		c.write(buf)
+
+		mechanism, err := gosasl.NewGSSAPIMechanism("hbase")
+		if err != nil {
+			log.Println(err)
+		}
+		saslClient := gosasl.NewSaslClient(strings.Split(c.addr, ":")[0], mechanism)
+
+		// Get initial response
+		saslToken, err := saslClient.Start()
+		if err != nil {
+			log.Println(err)
+		}
+
+		sbuf := make([]byte, 4)
+		binary.BigEndian.PutUint32(sbuf[0:], uint32(len(saslToken)))
+		sbuf = append(sbuf, saslToken...)
+		c.write(sbuf)
+
+		if !saslClient.Complete() {
+			status := make([]byte, 4)
+			c.conn.Read(status)
+
+			tokenLen := make([]byte, 4)
+			c.conn.Read(tokenLen)
+
+			resLength := binary.BigEndian.Uint32(tokenLen)
+			saslToken = make([]byte, resLength)
+			c.conn.Read(saslToken)
+
+			for !saslClient.Complete() {
+				saslToken, err = saslClient.Step(saslToken)
+				if err != nil {
+					log.Println(err)
+				}
+				if saslToken != nil {
+					sbuf := make([]byte, 4)
+					binary.BigEndian.PutUint32(sbuf[0:], uint32(len(saslToken)))
+					sbuf = append(sbuf, saslToken...)
+					c.write(sbuf)
+				}
+				if !saslClient.Complete() {
+					status := make([]byte, 4)
+					c.conn.Read(status)
+
+					tokenLen := make([]byte, 4)
+					c.conn.Read(tokenLen)
+
+					resLength := binary.BigEndian.Uint32(tokenLen)
+					saslToken = make([]byte, resLength)
+					c.conn.Read(saslToken)
+				}
+			}
+		}
+
+		buf = make([]byte, 4)
+		binary.BigEndian.PutUint32(buf[:], uint32(len(data)))
+		buf = append(buf, data...)
+		resp, err := saslClient.Encode(buf)
+		return c.write(resp)
+	} else {
+		const header = "HBas\x00\x50" // \x50 = Simple Auth.
+		buf := make([]byte, 0, len(header)+4+len(data))
+		buf = append(buf, header...)
+		buf = buf[:len(header)+4]
+		binary.BigEndian.PutUint32(buf[6:], uint32(len(data)))
+		buf = append(buf, data...)
+		return c.write(buf)
+	}
 }
 
 // send sends an RPC out to the wire.
