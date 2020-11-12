@@ -163,6 +163,20 @@ func (mr *MockAdminClientMockRecorder) ListTableNames(arg0 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTableNames", reflect.TypeOf((*MockAdminClient)(nil).ListTableNames), arg0)
 }
 
+// MoveRegion mocks base method
+func (m *MockAdminClient) MoveRegion(arg0 *hrpc.MoveRegion) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MoveRegion", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// MoveRegion indicates an expected call of MoveRegion
+func (mr *MockAdminClientMockRecorder) MoveRegion(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MoveRegion", reflect.TypeOf((*MockAdminClient)(nil).MoveRegion), arg0)
+}
+
 // RestoreSnapshot mocks base method
 func (m *MockAdminClient) RestoreSnapshot(arg0 *hrpc.Snapshot) error {
 	m.ctrl.T.Helper()
@@ -175,4 +189,19 @@ func (m *MockAdminClient) RestoreSnapshot(arg0 *hrpc.Snapshot) error {
 func (mr *MockAdminClientMockRecorder) RestoreSnapshot(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestoreSnapshot", reflect.TypeOf((*MockAdminClient)(nil).RestoreSnapshot), arg0)
+}
+
+// SetBalancer mocks base method
+func (m *MockAdminClient) SetBalancer(arg0 *hrpc.SetBalancer) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetBalancer", arg0)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetBalancer indicates an expected call of SetBalancer
+func (mr *MockAdminClientMockRecorder) SetBalancer(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetBalancer", reflect.TypeOf((*MockAdminClient)(nil).SetBalancer), arg0)
 }
