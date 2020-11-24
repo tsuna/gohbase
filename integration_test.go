@@ -1283,11 +1283,13 @@ func TestCheckAndPutParallel(t *testing.T) {
 	// make 10 pairs of CheckAndPut requests
 	for i := 0; i < 10; i++ {
 		ch := make(chan bool, 2)
-		putRequest1, err := hrpc.NewPutStr(context.Background(), table, keyPrefix+fmt.Sprint(i), values)
+		putRequest1, err := hrpc.NewPutStr(
+			context.Background(), table, keyPrefix+fmt.Sprint(i), values)
 		if err != nil {
 			t.Fatalf("NewPutStr returned an error: %v", err)
 		}
-		putRequest2, err := hrpc.NewPutStr(context.Background(), table, keyPrefix+fmt.Sprint(i), values)
+		putRequest2, err := hrpc.NewPutStr(
+			context.Background(), table, keyPrefix+fmt.Sprint(i), values)
 		if err != nil {
 			t.Fatalf("NewPutStr returned an error: %v", err)
 		}

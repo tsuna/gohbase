@@ -32,7 +32,8 @@ func WithDestinationRegionServer(serverName string) func(Call) error {
 		}
 		out := strings.SplitN(serverName, ",", 3)
 		if len(out) != 3 {
-			return errors.New("invalid server name, needs to be of format <host>,<port>,<startcode>")
+			return errors.New(
+				"invalid server name, needs to be of format <host>,<port>,<startcode>")
 		}
 
 		// parse port
@@ -57,7 +58,8 @@ func WithDestinationRegionServer(serverName string) func(Call) error {
 
 // NewMoveRegion creates an hrpc to move region to a different RegionServer.
 // Specify encoded region name.
-func NewMoveRegion(ctx context.Context, regionName []byte, opts ...func(Call) error) (*MoveRegion, error) {
+func NewMoveRegion(ctx context.Context, regionName []byte,
+	opts ...func(Call) error) (*MoveRegion, error) {
 	mr := &MoveRegion{
 		base: base{
 			ctx:      ctx,
