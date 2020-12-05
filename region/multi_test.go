@@ -321,7 +321,7 @@ func TestMultiToProto(t *testing.T) {
 
 			for _, c := range tcase.calls {
 				if m.add(c) {
-					t.Fatal("multi is full")
+					t.Fatal("Multi is full")
 				}
 			}
 
@@ -367,7 +367,7 @@ func TestMultiToProto(t *testing.T) {
 			m = newMulti(1000)
 			for _, c := range tcase.calls {
 				if m.add(c) {
-					t.Fatal("multi is full")
+					t.Fatal("Multi is full")
 				}
 			}
 			cellblocksProto, cellblocks, cellblocksLen := m.SerializeCellBlocks()
@@ -693,7 +693,7 @@ func TestMultiReturnResults(t *testing.T) {
 
 			for _, c := range tcase.calls {
 				if m.add(c) {
-					t.Fatal("multi is full")
+					t.Fatal("Multi is full")
 				}
 			}
 			m.regions = tcase.regions
@@ -928,7 +928,7 @@ func TestMultiDeserializeCellBlocks(t *testing.T) {
 					},
 				},
 			},
-			err: errors.New("no index for result in multi response"),
+			err: errors.New("no index for result in Multi response"),
 		},
 		{ // no result and no exception
 			response: &pb.MultiResponse{
@@ -940,7 +940,7 @@ func TestMultiDeserializeCellBlocks(t *testing.T) {
 					},
 				},
 			},
-			err: errors.New("no result or exception for action in multi response"),
+			err: errors.New("no result or exception for action in Multi response"),
 		},
 		{ // result and exception
 			response: &pb.MultiResponse{
@@ -957,7 +957,7 @@ func TestMultiDeserializeCellBlocks(t *testing.T) {
 					},
 				},
 			},
-			err: errors.New("got result and exception for action in multi response"),
+			err: errors.New("got result and exception for action in Multi response"),
 		},
 		{ // single call deserialize error
 			calls: func() []hrpc.Call {
@@ -987,7 +987,7 @@ func TestMultiDeserializeCellBlocks(t *testing.T) {
 
 			for _, c := range tcase.calls {
 				if m.add(c) {
-					t.Fatal("multi is full")
+					t.Fatal("Multi is full")
 				}
 			}
 

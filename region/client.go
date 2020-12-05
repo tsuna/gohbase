@@ -320,7 +320,7 @@ func (c *client) unregisterRPC(id uint32) hrpc.Call {
 
 func (c *client) processRPCs() {
 	// TODO: flush when the size is too large
-	// TODO: if multi has only one call, send that call instead
+	// TODO: if Multi has only one call, send that call instead
 	m := newMulti(c.rpcQueueSize)
 	defer func() {
 		m.returnResults(nil, ErrClientClosed)
@@ -342,7 +342,7 @@ func (c *client) processRPCs() {
 	for {
 		// first loop is to accomodate request heavy workload
 		// it will batch as long as conccurent writers are sending
-		// new rpcs or until multi is filled up
+		// new rpcs or until Multi is filled up
 		for {
 			select {
 			case <-c.done:
@@ -401,7 +401,7 @@ func (c *client) processRPCs() {
 }
 
 func returnResult(c hrpc.Call, msg proto.Message, err error) {
-	if m, ok := c.(*multi); ok {
+	if m, ok := c.(*Multi); ok {
 		m.returnResults(msg, err)
 	} else {
 		c.ResultChan() <- hrpc.RPCResult{Msg: msg, Error: err}
