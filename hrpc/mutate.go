@@ -58,6 +58,7 @@ type Mutate struct {
 	durability       DurabilityType
 	deleteOneVersion bool
 	skipbatch        bool
+	tags             []byte
 }
 
 // TTL sets a time-to-live for mutation queries.
@@ -101,6 +102,18 @@ func TimestampUint64(ts uint64) func(Call) error {
 			return errors.New("'TimestampUint64' option can only be used with mutation queries")
 		}
 		m.timestamp = ts
+		return nil
+	}
+}
+
+// Tags sets tags for mutation queries.
+func Tags(tags []byte) func(Call) error {
+	return func(o Call) error {
+		m, ok := o.(*Mutate)
+		if !ok {
+			return errors.New("'TimestampUint64' option can only be used with mutation queries")
+		}
+		m.tags = tags
 		return nil
 	}
 }
@@ -329,6 +342,7 @@ func (m *Mutate) valuesToProto(ts *uint64) []*pb.MutationProto_ColumnValue {
 				Value:      v1,
 				Timestamp:  ts,
 				DeleteType: dt,
+				Tags: m.tags,
 			}
 			j++
 		}
