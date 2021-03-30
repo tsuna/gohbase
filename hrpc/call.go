@@ -44,6 +44,7 @@ type RegionClient interface {
 	Addr() string
 	QueueRPC(Call)
 	String() string
+	IsDead() bool
 }
 
 // Call represents an HBase RPC call.
