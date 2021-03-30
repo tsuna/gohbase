@@ -220,6 +220,15 @@ func (c *client) Close() {
 	c.fail(ErrClientClosed)
 }
 
+func (c *client) IsDead() bool {
+	select {
+	case <-c.done:
+		return true
+	default:
+		return false
+	}
+}
+
 // Addr returns address of the region server the client is connected to
 func (c *client) Addr() string {
 	return c.addr

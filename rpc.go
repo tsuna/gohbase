@@ -41,6 +41,10 @@ var (
 
 	// ErrClientClosed is returned when the gohbase client has been closed
 	ErrClientClosed = errors.New("client is closed")
+
+	// RegionProbeTimeout when probe region timed out, recreate the region client,
+	// otherwise the client will block forever even if the regionserver comes back
+	RegionProbeTimeout = time.Second * 60
 )
 
 const (
@@ -128,7 +132,7 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 
 	// Queue the RPC to be sent to the region
 	client := reg.Client()
-	if client == nil {
+	if client == nil || client.IsDead() {
 		// There was an error queueing the RPC.
 		// Mark the region as unavailable.
 		if reg.MarkUnavailable() {
@@ -407,7 +411,8 @@ func probeKey(reg hrpc.RegionInfo) []byte {
 // isRegionEstablished checks whether regionserver accepts rpcs for the region.
 // Returns the cause if not established.
 func isRegionEstablished(rc hrpc.RegionClient, reg hrpc.RegionInfo) error {
-	probe, err := hrpc.NewGet(context.Background(), fullyQualifiedTable(reg), probeKey(reg),
+	ctx, _ := context.WithTimeout(context.Background(), RegionProbeTimeout)
+	probe, err := hrpc.NewGet(ctx, fullyQualifiedTable(reg), probeKey(reg),
 		hrpc.SkipBatch())
 	if err != nil {
 		panic(fmt.Sprintf("should not happen: %s", err))
@@ -417,7 +422,12 @@ func isRegionEstablished(rc hrpc.RegionClient, reg hrpc.RegionInfo) error {
 	probe.SetRegion(reg)
 	res, err := sendBlocking(rc, probe)
 	if err != nil {
-		panic(fmt.Sprintf("should not happen: %s", err))
+		log.WithFields(log.Fields{
+			"client": rc.String(),
+			"region": reg.String(),
+			"err":    err,
+		}).Info("client probe region timed out")
+		return region.ServerError{}
 	}
 
 	switch res.Error.(type) {

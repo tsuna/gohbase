@@ -33,6 +33,11 @@ func (rcc *clientRegionCache) put(addr string, r hrpc.RegionInfo,
 		// check if client already exists, checking by host and port
 		// because concurrent callers might try to put the same client
 		if addr == existingClient.Addr() {
+			if existingClient.IsDead() {
+				rcc.clientDown(existingClient)
+				break
+			}
+
 			// check client already knows about the region, checking
 			// by pointer is enough because we make sure that there are
 			// no regions with the same name around
