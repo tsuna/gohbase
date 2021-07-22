@@ -342,8 +342,10 @@ func (c *client) metaLookup(ctx context.Context,
 		return nil, "", err
 	}
 
+	c.lock.Lock()
 	scanner := c.Scan(rpc)
 	resp, err := scanner.Next()
+	c.lock.Unlock()
 	if err == io.EOF {
 		return nil, "", TableNotFound
 	}

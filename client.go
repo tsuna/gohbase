@@ -90,6 +90,9 @@ type client struct {
 	// regionReadTimeout is the maximum amount of time to wait for regionserver reply
 	regionReadTimeout time.Duration
 
+	// The lock to control meta table lookup
+	lock sync.Mutex
+
 	done      chan struct{}
 	closeOnce sync.Once
 
