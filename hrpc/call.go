@@ -129,9 +129,11 @@ func (b *base) SetRegion(region RegionInfo) {
 	b.region = region
 }
 
+var RegionSpecifierRegionName = pb.RegionSpecifier_REGION_NAME.Enum()
+
 func (b *base) regionSpecifier() *pb.RegionSpecifier {
 	return &pb.RegionSpecifier{
-		Type:  pb.RegionSpecifier_REGION_NAME.Enum(),
+		Type:  RegionSpecifierRegionName,
 		Value: []byte(b.region.Name()),
 	}
 }
