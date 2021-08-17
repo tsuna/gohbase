@@ -290,6 +290,13 @@ func (m *Mutate) setSkipBatch(v bool) {
 	m.skipbatch = v
 }
 
+var (
+	MutationProtoDeleteFamilyVersion = pb.MutationProto_DELETE_FAMILY_VERSION.Enum()
+	MutationProtoDeleteFamily = pb.MutationProto_DELETE_FAMILY.Enum()
+	MutationProtoDeleteOneVersion = pb.MutationProto_DELETE_ONE_VERSION.Enum()
+	MutationProtoDeleteMultipleVersions = pb.MutationProto_DELETE_MULTIPLE_VERSIONS.Enum()
+)
+
 func (m *Mutate) valuesToProto(ts *uint64) []*pb.MutationProto_ColumnValue {
 	cvs := make([]*pb.MutationProto_ColumnValue, len(m.values))
 	i := 0
@@ -303,9 +310,9 @@ func (m *Mutate) valuesToProto(ts *uint64) []*pb.MutationProto_ColumnValue {
 			if len(v) == 0 {
 				// delete the whole column family
 				if m.deleteOneVersion {
-					dt = pb.MutationProto_DELETE_FAMILY_VERSION.Enum()
+					dt = MutationProtoDeleteFamilyVersion
 				} else {
-					dt = pb.MutationProto_DELETE_FAMILY.Enum()
+					dt = MutationProtoDeleteFamily
 				}
 				// add empty qualifier
 				if v == nil {
@@ -314,9 +321,9 @@ func (m *Mutate) valuesToProto(ts *uint64) []*pb.MutationProto_ColumnValue {
 			} else {
 				// delete specific qualifiers
 				if m.deleteOneVersion {
-					dt = pb.MutationProto_DELETE_ONE_VERSION.Enum()
+					dt = MutationProtoDeleteOneVersion
 				} else {
-					dt = pb.MutationProto_DELETE_MULTIPLE_VERSIONS.Enum()
+					dt = MutationProtoDeleteMultipleVersions
 				}
 			}
 		}
