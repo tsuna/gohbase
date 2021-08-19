@@ -457,7 +457,7 @@ func (m *Mutate) valuesToCellblocks() ([][]byte, int32, uint32) {
 	return cellblocks, int32(count), size
 }
 
-var disabilities = []*pb.MutationProto_Durability{
+var durabilities = []*pb.MutationProto_Durability{
 	pb.MutationProto_Durability(UseDefault).Enum(),
 	pb.MutationProto_Durability(SkipWal).Enum(),
 	pb.MutationProto_Durability(AsyncWal).Enum(),
@@ -476,7 +476,7 @@ func (m *Mutate) toProto(isCellblocks bool) (*pb.MutateRequest, [][]byte, uint32
 	mProto := &pb.MutationProto{
 		Row:        m.key,
 		MutateType: &m.mutationType,
-		Durability: disabilities[m.durability],
+		Durability: durabilities[m.durability],
 		Timestamp:  ts,
 	}
 
