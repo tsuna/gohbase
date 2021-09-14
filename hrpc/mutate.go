@@ -286,6 +286,14 @@ func (m *Mutate) SkipBatch() bool {
 	return m.skipbatch
 }
 
+// Values returns the internal values object
+// which should be treated as read-only.
+// This would typically be used for calculations
+// related to metrics and workloads
+func (m *Mutate) Values() map[string]map[string][]byte {
+	return m.values
+}
+
 func (m *Mutate) setSkipBatch(v bool) {
 	m.skipbatch = v
 }
