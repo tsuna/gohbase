@@ -18,37 +18,37 @@ import (
 
 var multiPool = sync.Pool{
 	New: func() interface{} {
-		return &multi{}
+		return &Multi{}
 	},
 }
 
-func freeMulti(m *multi) {
+func freeMulti(m *Multi) {
 	m.calls = m.calls[:0]
 	m.regions = m.regions[:0]
 	m.size = 0
 	multiPool.Put(m)
 }
 
-type multi struct {
+type Multi struct {
 	size  int
 	calls []hrpc.Call
 	// regions preserves the order of regions to match against RegionActionResults
 	regions []hrpc.RegionInfo
 }
 
-func newMulti(queueSize int) *multi {
-	m := multiPool.Get().(*multi)
+func newMulti(queueSize int) *Multi {
+	m := multiPool.Get().(*Multi)
 	m.size = queueSize
 	return m
 }
 
 // Name returns the name of this RPC call.
-func (m *multi) Name() string {
+func (m *Multi) Name() string {
 	return "Multi"
 }
 
-// ToProto converts all request in multi batch to a protobuf message.
-func (m *multi) ToProto() proto.Message {
+// ToProto converts all request in Multi batch to a protobuf message.
+func (m *Multi) ToProto() proto.Message {
 	msg, _, _ := m.toProto(false)
 	return msg
 }
@@ -58,7 +58,7 @@ type actions struct {
 	cellblocks [][]byte
 }
 
-func (m *multi) toProto(isCellblocks bool) (proto.Message, [][]byte, uint32) {
+func (m *Multi) toProto(isCellblocks bool) (proto.Message, [][]byte, uint32) {
 	// aggregate calls per region
 	actionsPerReg := map[hrpc.RegionInfo]actions{}
 	var size uint32
@@ -105,7 +105,7 @@ func (m *multi) toProto(isCellblocks bool) (proto.Message, [][]byte, uint32) {
 		actionsPerReg[c.Region()] = as
 	}
 
-	// construct the multi proto
+	// construct the Multi proto
 	ra := make([]*pb.RegionAction, len(actionsPerReg))
 	m.regions = make([]hrpc.RegionInfo, len(actionsPerReg))
 
@@ -128,22 +128,22 @@ func (m *multi) toProto(isCellblocks bool) (proto.Message, [][]byte, uint32) {
 	return &pb.MultiRequest{RegionAction: ra}, cellblocks, size
 }
 
-func (m *multi) SerializeCellBlocks() (proto.Message, [][]byte, uint32) {
+func (m *Multi) SerializeCellBlocks() (proto.Message, [][]byte, uint32) {
 	return m.toProto(true)
 }
 
-func (m *multi) CellBlocksEnabled() bool {
+func (m *Multi) CellBlocksEnabled() bool {
 	// TODO: maybe have some global client option
 	return true
 }
 
 // NewResponse creates an empty protobuf message to read the response of this RPC.
-func (m *multi) NewResponse() proto.Message {
+func (m *Multi) NewResponse() proto.Message {
 	return &pb.MultiResponse{}
 }
 
 // DeserializeCellBlocks deserializes action results from cell blocks.
-func (m *multi) DeserializeCellBlocks(msg proto.Message, b []byte) (uint32, error) {
+func (m *Multi) DeserializeCellBlocks(msg proto.Message, b []byte) (uint32, error) {
 	mr := msg.(*pb.MultiResponse)
 
 	var nread uint32
@@ -162,11 +162,11 @@ func (m *multi) DeserializeCellBlocks(msg proto.Message, b []byte) (uint32, erro
 			i := roe.GetIndex()
 
 			if i == 0 {
-				return 0, errors.New("no index for result in multi response")
+				return 0, errors.New("no index for result in Multi response")
 			} else if r == nil && e == nil {
-				return 0, errors.New("no result or exception for action in multi response")
+				return 0, errors.New("no result or exception for action in Multi response")
 			} else if r != nil && e != nil {
-				return 0, errors.New("got result and exception for action in multi response")
+				return 0, errors.New("got result and exception for action in Multi response")
 			} else if e != nil {
 				continue
 			}
@@ -197,7 +197,7 @@ func (m *multi) DeserializeCellBlocks(msg proto.Message, b []byte) (uint32, erro
 	return nread, nil
 }
 
-func (m *multi) returnResults(msg proto.Message, err error) {
+func (m *Multi) returnResults(msg proto.Message, err error) {
 	defer freeMulti(m)
 
 	if err != nil {
@@ -264,19 +264,19 @@ func (m *multi) returnResults(msg proto.Message, err error) {
 }
 
 // add adds the call and returns wether the batch is full.
-func (m *multi) add(call hrpc.Call) bool {
+func (m *Multi) add(call hrpc.Call) bool {
 	m.calls = append(m.calls, call)
 	return len(m.calls) == m.size
 }
 
 // len returns number of batched calls.
-func (m *multi) len() int {
+func (m *Multi) len() int {
 	return len(m.calls)
 }
 
 // get retruns an rpc at index. Indicies start from 1 since 0 means that
 // region server didn't set an index for the action result.
-func (m *multi) get(i uint32) hrpc.Call {
+func (m *Multi) get(i uint32) hrpc.Call {
 	if i == 0 {
 		panic("index cannot be 0")
 	}
@@ -284,32 +284,32 @@ func (m *multi) get(i uint32) hrpc.Call {
 }
 
 // Table is not supported for Multi.
-func (m *multi) Table() []byte {
+func (m *Multi) Table() []byte {
 	panic("'Table' is not supported for 'Multi'")
 }
 
 // Reqion is not supported for Multi.
-func (m *multi) Region() hrpc.RegionInfo {
+func (m *Multi) Region() hrpc.RegionInfo {
 	panic("'Region' is not supported for 'Multi'")
 }
 
 // SetRegion is not supported for Multi.
-func (m *multi) SetRegion(r hrpc.RegionInfo) {
+func (m *Multi) SetRegion(r hrpc.RegionInfo) {
 	panic("'SetRegion' is not supported for 'Multi'")
 }
 
 // ResultChan is not supported for Multi.
-func (m *multi) ResultChan() chan hrpc.RPCResult {
+func (m *Multi) ResultChan() chan hrpc.RPCResult {
 	panic("'ResultChan' is not supported for 'Multi'")
 }
 
 // Context is not supported for Multi.
-func (m *multi) Context() context.Context {
+func (m *Multi) Context() context.Context {
 	// TODO: maybe pick the one with the longest deadline and use a context that has that deadline?
 	return context.Background()
 }
 
 // Key is not supported for Multi RPC.
-func (m *multi) Key() []byte {
+func (m *Multi) Key() []byte {
 	panic("'Key' is not supported for 'Multi'")
 }
