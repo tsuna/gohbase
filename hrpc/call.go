@@ -115,6 +115,8 @@ type base struct {
 
 	region   RegionInfo
 	resultch chan RPCResult
+
+	notifiers []Notifier
 }
 
 func (b *base) Context() context.Context {
@@ -166,6 +168,22 @@ func (b *base) Key() []byte {
 
 func (b *base) ResultChan() chan RPCResult {
 	return b.resultch
+}
+
+func (b *base) AddNotifier(n Notifier) {
+	b.notifiers = append(b.notifiers, n)
+}
+
+func (b *base) BeginRPC(values map[string]interface{}) {
+	for _, n := range b.notifiers {
+		n.BeginRPC(values)
+	}
+}
+
+func (b *base) EndRPC(err error) {
+	for _, n := range b.notifiers {
+		n.EndRPC(err)
+	}
 }
 
 // Cell is the smallest level of granularity in returned results.

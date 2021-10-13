@@ -58,6 +58,31 @@ scanRequest, err := hrpc.NewScanStr(context.Background(), "table",
 scanRsp, err := client.Scan(scanRequest)
 ```
 
+#### Notifications
+```go
+type hbaseNotifier struct {
+  name string
+}
+
+func (h *hbaseNotifier)BeforeSend() {
+  fmt.Printf("%s is about to send\n")
+}
+
+func (h *hbaseNotifier)AfterSend(err error) {
+  if err != nil {
+    fmt.Printf("%s had error %v while sending\n", err)
+    return
+  }
+  fmt.Printf("%s sent\n")
+}
+
+values := map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte{0}}}
+putRequest, err := hrpc.NewPutStr(context.Background(), "table", "key", values)
+putRequest.AddNotifier(&hbaseNotifier{"put"})
+rsp, err := client.Put(putRequest)
+```
+
+
 ## Contributing
 
 Any help would be appreciated. Please use Github pull requests

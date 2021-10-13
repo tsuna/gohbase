@@ -298,6 +298,9 @@ func (c *client) failSentRPCs() {
 
 	// send error to awaiting rpcs
 	for _, rpc := range sent {
+		if ns, ok := rpc.(hrpc.NotificationSender); ok {
+			ns.EndRPC(ErrClientClosed)
+		}
 		returnResult(rpc, nil, ErrClientClosed)
 	}
 }
@@ -497,6 +500,10 @@ func (c *client) receive() (err error) {
 		return ServerError{err}
 	}
 
+	if ns, ok := rpc.(hrpc.NotificationSender); ok {
+		ns.EndRPC(nil)
+	}
+
 	select {
 	case <-rpc.Context().Done():
 		// context has expired, don't bother deserializing
@@ -618,6 +625,10 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 	header := &pb.RequestHeader{
 		MethodName:   proto.String(rpc.Name()),
 		RequestParam: proto.Bool(true),
+	}
+
+	if ns, ok := rpc.(hrpc.NotificationSender); ok {
+		ns.BeginRPC(map[string]interface{}{"batch": 1})
 	}
 
 	if s, ok := rpc.(canSerializeCellBlocks); ok && s.CellBlocksEnabled() {

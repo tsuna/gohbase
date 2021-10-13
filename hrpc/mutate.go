@@ -280,6 +280,11 @@ func (m *Mutate) Name() string {
 	return "Mutate"
 }
 
+// MutationType returns the type of mutation for this RPC call
+func (m *Mutate) MutationType() pb.MutationProto_MutationType {
+	return m.mutationType
+}
+
 // SkipBatch returns true if the Mutate request shouldn't be batched,
 // but should be sent to Region Server right away.
 func (m *Mutate) SkipBatch() bool {
