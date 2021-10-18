@@ -34,6 +34,11 @@ func (sb *SetBalancer) Name() string {
 	return "SetBalancerRunning"
 }
 
+// Description returns the description of this RPC call.
+func (sb *SetBalancer) Description() string {
+	return sb.Name()
+}
+
 // ToProto converts the RPC into a protobuf message.
 func (sb *SetBalancer) ToProto() proto.Message {
 	return sb.req

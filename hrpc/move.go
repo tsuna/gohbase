@@ -83,6 +83,11 @@ func (mr *MoveRegion) Name() string {
 	return "MoveRegion"
 }
 
+// Description returns the description of this RPC call.
+func (mr *MoveRegion) Description() string {
+	return mr.Name()
+}
+
 // ToProto converts the RPC into a protobuf message.
 func (mr *MoveRegion) ToProto() proto.Message {
 	return mr.req

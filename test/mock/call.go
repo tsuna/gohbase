@@ -6,36 +6,37 @@ package mock
 
 import (
 	context "context"
+	reflect "reflect"
+
 	gomock "github.com/golang/mock/gomock"
 	hrpc "github.com/tsuna/gohbase/hrpc"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	reflect "reflect"
 )
 
-// MockCall is a mock of Call interface
+// MockCall is a mock of Call interface.
 type MockCall struct {
 	ctrl     *gomock.Controller
 	recorder *MockCallMockRecorder
 }
 
-// MockCallMockRecorder is the mock recorder for MockCall
+// MockCallMockRecorder is the mock recorder for MockCall.
 type MockCallMockRecorder struct {
 	mock *MockCall
 }
 
-// NewMockCall creates a new mock instance
+// NewMockCall creates a new mock instance.
 func NewMockCall(ctrl *gomock.Controller) *MockCall {
 	mock := &MockCall{ctrl: ctrl}
 	mock.recorder = &MockCallMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockCall) EXPECT() *MockCallMockRecorder {
 	return m.recorder
 }
 
-// Context mocks base method
+// Context mocks base method.
 func (m *MockCall) Context() context.Context {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Context")
@@ -43,13 +44,27 @@ func (m *MockCall) Context() context.Context {
 	return ret0
 }
 
-// Context indicates an expected call of Context
+// Context indicates an expected call of Context.
 func (mr *MockCallMockRecorder) Context() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Context", reflect.TypeOf((*MockCall)(nil).Context))
 }
 
-// Key mocks base method
+// Description mocks base method.
+func (m *MockCall) Description() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Description")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// Description indicates an expected call of Description.
+func (mr *MockCallMockRecorder) Description() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Description", reflect.TypeOf((*MockCall)(nil).Description))
+}
+
+// Key mocks base method.
 func (m *MockCall) Key() []byte {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Key")
@@ -57,13 +72,13 @@ func (m *MockCall) Key() []byte {
 	return ret0
 }
 
-// Key indicates an expected call of Key
+// Key indicates an expected call of Key.
 func (mr *MockCallMockRecorder) Key() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Key", reflect.TypeOf((*MockCall)(nil).Key))
 }
 
-// Name mocks base method
+// Name mocks base method.
 func (m *MockCall) Name() string {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Name")
@@ -71,13 +86,13 @@ func (m *MockCall) Name() string {
 	return ret0
 }
 
-// Name indicates an expected call of Name
+// Name indicates an expected call of Name.
 func (mr *MockCallMockRecorder) Name() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Name", reflect.TypeOf((*MockCall)(nil).Name))
 }
 
-// NewResponse mocks base method
+// NewResponse mocks base method.
 func (m *MockCall) NewResponse() protoreflect.ProtoMessage {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NewResponse")
@@ -85,13 +100,13 @@ func (m *MockCall) NewResponse() protoreflect.ProtoMessage {
 	return ret0
 }
 
-// NewResponse indicates an expected call of NewResponse
+// NewResponse indicates an expected call of NewResponse.
 func (mr *MockCallMockRecorder) NewResponse() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewResponse", reflect.TypeOf((*MockCall)(nil).NewResponse))
 }
 
-// Region mocks base method
+// Region mocks base method.
 func (m *MockCall) Region() hrpc.RegionInfo {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Region")
@@ -99,13 +114,13 @@ func (m *MockCall) Region() hrpc.RegionInfo {
 	return ret0
 }
 
-// Region indicates an expected call of Region
+// Region indicates an expected call of Region.
 func (mr *MockCallMockRecorder) Region() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Region", reflect.TypeOf((*MockCall)(nil).Region))
 }
 
-// ResultChan mocks base method
+// ResultChan mocks base method.
 func (m *MockCall) ResultChan() chan hrpc.RPCResult {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ResultChan")
@@ -113,25 +128,37 @@ func (m *MockCall) ResultChan() chan hrpc.RPCResult {
 	return ret0
 }
 
-// ResultChan indicates an expected call of ResultChan
+// ResultChan indicates an expected call of ResultChan.
 func (mr *MockCallMockRecorder) ResultChan() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResultChan", reflect.TypeOf((*MockCall)(nil).ResultChan))
 }
 
-// SetRegion mocks base method
+// SetContext mocks base method.
+func (m *MockCall) SetContext(arg0 context.Context) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetContext", arg0)
+}
+
+// SetContext indicates an expected call of SetContext.
+func (mr *MockCallMockRecorder) SetContext(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetContext", reflect.TypeOf((*MockCall)(nil).SetContext), arg0)
+}
+
+// SetRegion mocks base method.
 func (m *MockCall) SetRegion(arg0 hrpc.RegionInfo) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SetRegion", arg0)
 }
 
-// SetRegion indicates an expected call of SetRegion
+// SetRegion indicates an expected call of SetRegion.
 func (mr *MockCallMockRecorder) SetRegion(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRegion", reflect.TypeOf((*MockCall)(nil).SetRegion), arg0)
 }
 
-// Table mocks base method
+// Table mocks base method.
 func (m *MockCall) Table() []byte {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Table")
@@ -139,13 +166,13 @@ func (m *MockCall) Table() []byte {
 	return ret0
 }
 
-// Table indicates an expected call of Table
+// Table indicates an expected call of Table.
 func (mr *MockCallMockRecorder) Table() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Table", reflect.TypeOf((*MockCall)(nil).Table))
 }
 
-// ToProto mocks base method
+// ToProto mocks base method.
 func (m *MockCall) ToProto() protoreflect.ProtoMessage {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ToProto")
@@ -153,7 +180,7 @@ func (m *MockCall) ToProto() protoreflect.ProtoMessage {
 	return ret0
 }
 
-// ToProto indicates an expected call of ToProto
+// ToProto indicates an expected call of ToProto.
 func (mr *MockCallMockRecorder) ToProto() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ToProto", reflect.TypeOf((*MockCall)(nil).ToProto))

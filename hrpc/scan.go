@@ -141,6 +141,11 @@ func (s *Scan) Name() string {
 	return "Scan"
 }
 
+// Description returns the description of this RPC call.
+func (s *Scan) Description() string {
+	return s.Name()
+}
+
 // StopRow returns the end key (exclusive) of this scanner.
 func (s *Scan) StopRow() []byte {
 	return s.stopRow

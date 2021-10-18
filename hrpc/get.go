@@ -58,6 +58,11 @@ func (g *Get) Name() string {
 	return "Get"
 }
 
+// Description returns the description of this RPC call.
+func (g *Get) Description() string {
+	return g.Name()
+}
+
 // SkipBatch returns true if the Get request shouldn't be batched,
 // but should be sent to Region Server right away.
 func (g *Get) SkipBatch() bool {

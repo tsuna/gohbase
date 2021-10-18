@@ -359,7 +359,9 @@ func TestQueueRPC(t *testing.T) {
 		mockCall.EXPECT().Name().Return("Get").Times(1)
 		p, payload := mockRPCProto(fmt.Sprintf("rpc_%d", i))
 		mockCall.EXPECT().ToProto().Return(p).Times(1)
-		mockCall.EXPECT().Context().Return(ctx).Times(1)
+		mockCall.EXPECT().Context().Return(ctx).AnyTimes()
+		mockCall.EXPECT().SetContext(gomock.Any()).AnyTimes()
+		mockCall.EXPECT().Description().AnyTimes()
 		mockCall.EXPECT().ResultChan().Return(make(chan hrpc.RPCResult, 1)).Times(1)
 		calls[i] = mockCall
 
@@ -393,7 +395,9 @@ func TestQueueRPC(t *testing.T) {
 			defer wg.Done()
 			result := make(chan hrpc.RPCResult, 1)
 			mockCall := mock.NewMockCall(ctrl)
-			mockCall.EXPECT().Context().Return(ctx).Times(1)
+			mockCall.EXPECT().Context().Return(ctx).AnyTimes()
+			mockCall.EXPECT().SetContext(gomock.Any()).AnyTimes()
+			mockCall.EXPECT().Description().AnyTimes()
 			mockCall.EXPECT().ResultChan().Return(result).Times(1)
 			c.QueueRPC(mockCall)
 			r := <-result
@@ -431,7 +435,9 @@ func TestServerErrorWrite(t *testing.T) {
 	p, payload := mockRPCProto("rpc")
 	mockCall.EXPECT().ToProto().Return(p).Times(1)
 	mockCall.EXPECT().Name().Return("Get").Times(1)
-	mockCall.EXPECT().Context().Return(context.Background()).Times(1)
+	mockCall.EXPECT().Context().Return(context.Background()).AnyTimes()
+	mockCall.EXPECT().SetContext(gomock.Any()).AnyTimes()
+	mockCall.EXPECT().Description().AnyTimes()
 	result := make(chan hrpc.RPCResult, 1)
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
 	// we expect that it eventually writes to connection
@@ -698,7 +704,9 @@ func TestUnexpectedSendError(t *testing.T) {
 	// define rpcs behaviour
 	mockCall := mock.NewMockCall(ctrl)
 	mockCall.EXPECT().ToProto().Return(nil).Times(1)
-	mockCall.EXPECT().Context().Return(context.Background()).Times(1)
+	mockCall.EXPECT().Context().Return(context.Background()).AnyTimes()
+	mockCall.EXPECT().SetContext(gomock.Any()).AnyTimes()
+	mockCall.EXPECT().Description().AnyTimes()
 	result := make(chan hrpc.RPCResult, 1)
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
 	mockCall.EXPECT().Name().Return("Whatever").Times(1)
@@ -832,7 +840,9 @@ func TestRPCContext(t *testing.T) {
 	mockCall.EXPECT().Name().Return("Get").Times(1)
 	p, payload := mockRPCProto("yolo")
 	mockCall.EXPECT().ToProto().Return(p).Times(1)
-	mockCall.EXPECT().Context().Return(context.Background()).Times(1)
+	mockCall.EXPECT().Context().Return(context.Background()).AnyTimes()
+	mockCall.EXPECT().SetContext(gomock.Any()).AnyTimes()
+	mockCall.EXPECT().Description().AnyTimes()
 	mockCall.EXPECT().ResultChan().Return(make(chan hrpc.RPCResult, 1)).Times(1)
 	mockConn.EXPECT().Write(newRPCMatcher(payload)).Times(1).Return(14+len(payload), nil)
 	c.QueueRPC(mockCall)
@@ -840,7 +850,9 @@ func TestRPCContext(t *testing.T) {
 	ctxCancel, cancel := context.WithCancel(context.Background())
 	cancel()
 	callWithCancel := mock.NewMockCall(ctrl)
-	callWithCancel.EXPECT().Context().Return(ctxCancel).Times(1)
+	callWithCancel.EXPECT().Context().Return(ctxCancel).AnyTimes()
+	callWithCancel.EXPECT().SetContext(gomock.Any()).AnyTimes()
+	mockCall.EXPECT().Description().AnyTimes()
 	// this shouldn't block
 	c.QueueRPC(callWithCancel)
 

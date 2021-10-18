@@ -58,7 +58,9 @@ type Call interface {
 	// response of this call.
 	NewResponse() proto.Message
 	ResultChan() chan RPCResult
+	Description() string // Used for tracing and metrics
 	Context() context.Context
+	SetContext(context.Context)
 }
 
 type withOptions interface {
@@ -119,6 +121,10 @@ type base struct {
 
 func (b *base) Context() context.Context {
 	return b.ctx
+}
+
+func (b *base) SetContext(ctx context.Context) {
+	b.ctx = ctx
 }
 
 func (b *base) Region() RegionInfo {

@@ -76,6 +76,11 @@ func (ct *CreateTable) Name() string {
 	return "CreateTable"
 }
 
+// Description returns the description of this RPC call.
+func (ct *CreateTable) Description() string {
+	return ct.Name()
+}
+
 // ToProto converts the RPC into a protobuf message
 func (ct *CreateTable) ToProto() proto.Message {
 	pbFamilies := make([]*pb.ColumnFamilySchema, 0, len(ct.families))

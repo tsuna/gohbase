@@ -317,7 +317,7 @@ func TestMultiToProto(t *testing.T) {
 
 	for i, tcase := range tests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			m := newMulti(1000)
+			m := newMulti(context.Background(), 1000)
 
 			for _, c := range tcase.calls {
 				if m.add(c) {
@@ -364,7 +364,7 @@ func TestMultiToProto(t *testing.T) {
 			}
 
 			// test cellblocks
-			m = newMulti(1000)
+			m = newMulti(context.Background(), 1000)
 			for _, c := range tcase.calls {
 				if m.add(c) {
 					t.Fatal("multi is full")
@@ -689,7 +689,7 @@ func TestMultiReturnResults(t *testing.T) {
 
 	for i, tcase := range tests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			m := newMulti(1000)
+			m := newMulti(context.Background(), 1000)
 
 			for _, c := range tcase.calls {
 				if m.add(c) {
@@ -983,7 +983,7 @@ func TestMultiDeserializeCellBlocks(t *testing.T) {
 
 	for i, tcase := range tests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			m := newMulti(1000)
+			m := newMulti(context.Background(), 1000)
 
 			for _, c := range tcase.calls {
 				if m.add(c) {

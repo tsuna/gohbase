@@ -34,6 +34,11 @@ func (et *EnableTable) Name() string {
 	return "EnableTable"
 }
 
+// Description returns the description of this RPC call.
+func (et *EnableTable) Description() string {
+	return et.Name()
+}
+
 // ToProto converts the RPC into a protobuf message
 func (et *EnableTable) ToProto() proto.Message {
 	return &pb.EnableTableRequest{
