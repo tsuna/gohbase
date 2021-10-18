@@ -35,6 +35,11 @@ func (ps *GetProcedureState) Name() string {
 	return "getProcedureResult"
 }
 
+// Description returns the description of this RPC call.
+func (ps *GetProcedureState) Description() string {
+	return ps.Name()
+}
+
 // ToProto converts the RPC into a protobuf message
 func (ps *GetProcedureState) ToProto() proto.Message {
 	return &pb.GetProcedureResultRequest{ProcId: &ps.procID}

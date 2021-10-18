@@ -280,6 +280,11 @@ func (m *Mutate) Name() string {
 	return "Mutate"
 }
 
+// Description returns the string of type of mutation being performed
+func (m *Mutate) Description() string {
+	return pb.MutationProto_MutationType_name[int32(m.mutationType)]
+}
+
 // SkipBatch returns true if the Mutate request shouldn't be batched,
 // but should be sent to Region Server right away.
 func (m *Mutate) SkipBatch() bool {

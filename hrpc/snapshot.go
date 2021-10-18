@@ -116,6 +116,11 @@ func (sr *Snapshot) Name() string {
 	return "Snapshot"
 }
 
+// Description returns the description of this RPC call.
+func (sr *Snapshot) Description() string {
+	return sr.Name()
+}
+
 // ToProto converts the RPC into a protobuf message.
 func (sr *Snapshot) ToProto() proto.Message {
 	return &pb.SnapshotRequest{Snapshot: sr.snap.ToProto()}
@@ -191,6 +196,11 @@ func NewListSnapshots(ctx context.Context) *ListSnapshots {
 // Name returns the name of this RPC call.
 func (sr *ListSnapshots) Name() string {
 	return "GetCompletedSnapshots"
+}
+
+// Description returns the description of this RPC call.
+func (sr *ListSnapshots) Description() string {
+	return sr.Name()
 }
 
 // NewResponse creates an empty protobuf message to read the response of this

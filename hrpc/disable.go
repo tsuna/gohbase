@@ -34,6 +34,11 @@ func (dt *DisableTable) Name() string {
 	return "DisableTable"
 }
 
+// Description returns the description of this RPC call.
+func (dt *DisableTable) Description() string {
+	return dt.Name()
+}
+
 // ToProto converts the RPC into a protobuf message
 func (dt *DisableTable) ToProto() proto.Message {
 	return &pb.DisableTableRequest{

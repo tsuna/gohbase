@@ -5,35 +5,36 @@
 package mock
 
 import (
+	reflect "reflect"
+
 	gomock "github.com/golang/mock/gomock"
 	hrpc "github.com/tsuna/gohbase/hrpc"
-	reflect "reflect"
 )
 
-// MockClient is a mock of Client interface
+// MockClient is a mock of Client interface.
 type MockClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockClientMockRecorder
 }
 
-// MockClientMockRecorder is the mock recorder for MockClient
+// MockClientMockRecorder is the mock recorder for MockClient.
 type MockClientMockRecorder struct {
 	mock *MockClient
 }
 
-// NewMockClient creates a new mock instance
+// NewMockClient creates a new mock instance.
 func NewMockClient(ctrl *gomock.Controller) *MockClient {
 	mock := &MockClient{ctrl: ctrl}
 	mock.recorder = &MockClientMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockClient) EXPECT() *MockClientMockRecorder {
 	return m.recorder
 }
 
-// Append mocks base method
+// Append mocks base method.
 func (m *MockClient) Append(arg0 *hrpc.Mutate) (*hrpc.Result, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Append", arg0)
@@ -42,13 +43,13 @@ func (m *MockClient) Append(arg0 *hrpc.Mutate) (*hrpc.Result, error) {
 	return ret0, ret1
 }
 
-// Append indicates an expected call of Append
+// Append indicates an expected call of Append.
 func (mr *MockClientMockRecorder) Append(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Append", reflect.TypeOf((*MockClient)(nil).Append), arg0)
 }
 
-// CheckAndPut mocks base method
+// CheckAndPut mocks base method.
 func (m *MockClient) CheckAndPut(arg0 *hrpc.Mutate, arg1, arg2 string, arg3 []byte) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CheckAndPut", arg0, arg1, arg2, arg3)
@@ -57,25 +58,25 @@ func (m *MockClient) CheckAndPut(arg0 *hrpc.Mutate, arg1, arg2 string, arg3 []by
 	return ret0, ret1
 }
 
-// CheckAndPut indicates an expected call of CheckAndPut
+// CheckAndPut indicates an expected call of CheckAndPut.
 func (mr *MockClientMockRecorder) CheckAndPut(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckAndPut", reflect.TypeOf((*MockClient)(nil).CheckAndPut), arg0, arg1, arg2, arg3)
 }
 
-// Close mocks base method
+// Close mocks base method.
 func (m *MockClient) Close() {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Close")
 }
 
-// Close indicates an expected call of Close
+// Close indicates an expected call of Close.
 func (mr *MockClientMockRecorder) Close() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockClient)(nil).Close))
 }
 
-// Delete mocks base method
+// Delete mocks base method.
 func (m *MockClient) Delete(arg0 *hrpc.Mutate) (*hrpc.Result, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Delete", arg0)
@@ -84,13 +85,13 @@ func (m *MockClient) Delete(arg0 *hrpc.Mutate) (*hrpc.Result, error) {
 	return ret0, ret1
 }
 
-// Delete indicates an expected call of Delete
+// Delete indicates an expected call of Delete.
 func (mr *MockClientMockRecorder) Delete(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockClient)(nil).Delete), arg0)
 }
 
-// Get mocks base method
+// Get mocks base method.
 func (m *MockClient) Get(arg0 *hrpc.Get) (*hrpc.Result, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", arg0)
@@ -99,13 +100,13 @@ func (m *MockClient) Get(arg0 *hrpc.Get) (*hrpc.Result, error) {
 	return ret0, ret1
 }
 
-// Get indicates an expected call of Get
+// Get indicates an expected call of Get.
 func (mr *MockClientMockRecorder) Get(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockClient)(nil).Get), arg0)
 }
 
-// Increment mocks base method
+// Increment mocks base method.
 func (m *MockClient) Increment(arg0 *hrpc.Mutate) (int64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Increment", arg0)
@@ -114,13 +115,13 @@ func (m *MockClient) Increment(arg0 *hrpc.Mutate) (int64, error) {
 	return ret0, ret1
 }
 
-// Increment indicates an expected call of Increment
+// Increment indicates an expected call of Increment.
 func (mr *MockClientMockRecorder) Increment(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Increment", reflect.TypeOf((*MockClient)(nil).Increment), arg0)
 }
 
-// Put mocks base method
+// Put mocks base method.
 func (m *MockClient) Put(arg0 *hrpc.Mutate) (*hrpc.Result, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Put", arg0)
@@ -129,13 +130,13 @@ func (m *MockClient) Put(arg0 *hrpc.Mutate) (*hrpc.Result, error) {
 	return ret0, ret1
 }
 
-// Put indicates an expected call of Put
+// Put indicates an expected call of Put.
 func (mr *MockClientMockRecorder) Put(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Put", reflect.TypeOf((*MockClient)(nil).Put), arg0)
 }
 
-// Scan mocks base method
+// Scan mocks base method.
 func (m *MockClient) Scan(arg0 *hrpc.Scan) hrpc.Scanner {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Scan", arg0)
@@ -143,7 +144,7 @@ func (m *MockClient) Scan(arg0 *hrpc.Scan) hrpc.Scanner {
 	return ret0
 }
 
-// Scan indicates an expected call of Scan
+// Scan indicates an expected call of Scan.
 func (mr *MockClientMockRecorder) Scan(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scan", reflect.TypeOf((*MockClient)(nil).Scan), arg0)

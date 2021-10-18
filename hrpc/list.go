@@ -75,6 +75,11 @@ func (tn *ListTableNames) Name() string {
 	return "GetTableNames"
 }
 
+// Description returns the description of this RPC call.
+func (tn *ListTableNames) Description() string {
+	return tn.Name()
+}
+
 // ToProto converts the RPC into a protobuf message.
 func (tn *ListTableNames) ToProto() proto.Message {
 	return &pb.GetTableNamesRequest{

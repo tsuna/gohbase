@@ -5,36 +5,37 @@
 package mock
 
 import (
+	reflect "reflect"
+
 	gomock "github.com/golang/mock/gomock"
 	hrpc "github.com/tsuna/gohbase/hrpc"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	reflect "reflect"
 )
 
-// MockRPCClient is a mock of RPCClient interface
+// MockRPCClient is a mock of RPCClient interface.
 type MockRPCClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockRPCClientMockRecorder
 }
 
-// MockRPCClientMockRecorder is the mock recorder for MockRPCClient
+// MockRPCClientMockRecorder is the mock recorder for MockRPCClient.
 type MockRPCClientMockRecorder struct {
 	mock *MockRPCClient
 }
 
-// NewMockRPCClient creates a new mock instance
+// NewMockRPCClient creates a new mock instance.
 func NewMockRPCClient(ctrl *gomock.Controller) *MockRPCClient {
 	mock := &MockRPCClient{ctrl: ctrl}
 	mock.recorder = &MockRPCClientMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockRPCClient) EXPECT() *MockRPCClientMockRecorder {
 	return m.recorder
 }
 
-// SendRPC mocks base method
+// SendRPC mocks base method.
 func (m *MockRPCClient) SendRPC(arg0 hrpc.Call) (protoreflect.ProtoMessage, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SendRPC", arg0)
@@ -43,7 +44,7 @@ func (m *MockRPCClient) SendRPC(arg0 hrpc.Call) (protoreflect.ProtoMessage, erro
 	return ret0, ret1
 }
 
-// SendRPC indicates an expected call of SendRPC
+// SendRPC indicates an expected call of SendRPC.
 func (mr *MockRPCClientMockRecorder) SendRPC(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendRPC", reflect.TypeOf((*MockRPCClient)(nil).SendRPC), arg0)

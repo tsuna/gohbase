@@ -34,6 +34,11 @@ func (dt *DeleteTable) Name() string {
 	return "DeleteTable"
 }
 
+// Description returns the description of this RPC call.
+func (dt *DeleteTable) Description() string {
+	return dt.Name()
+}
+
 // ToProto converts the RPC into a protobuf message
 func (dt *DeleteTable) ToProto() proto.Message {
 	return &pb.DeleteTableRequest{

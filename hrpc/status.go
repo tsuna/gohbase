@@ -28,6 +28,11 @@ func (c *ClusterStatus) Name() string {
 	return "GetClusterStatus"
 }
 
+// Description returns the description of this RPC call.
+func (c *ClusterStatus) Description() string {
+	return c.Name()
+}
+
 // ToProto returns the Protobuf message to be sent
 func (c *ClusterStatus) ToProto() proto.Message {
 	return &pb.GetClusterStatusRequest{}
