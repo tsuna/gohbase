@@ -16,6 +16,7 @@
  * limitations under the License.
  */
 
+syntax = "proto2";
 package pb;
 
 option java_package = "org.apache.hadoop.hbase.protobuf.generated";
@@ -23,6 +24,7 @@ option java_outer_classname = "QuotaProtos";
 option java_generic_services = true;
 option java_generate_equals_and_hash = true;
 option optimize_for = SPEED;
+option go_package = "../pb";
 
 import "HBase.proto";
 

@@ -19,6 +19,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 
@@ -667,6 +668,13 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 		MethodName:   proto.String(rpc.Name()),
 		RequestParam: proto.Bool(true),
 	}
+
+	// Propagate any tracing information that is present in the rpc
+	// context into the HBase call
+	otel.GetTextMapPropagator().Inject(
+		rpc.Context(),
+		observability.RequestTracePropagator{RequestHeader: header},
+	)
 
 	if s, ok := rpc.(canSerializeCellBlocks); ok && s.CellBlocksEnabled() {
 		// request can be serialized to cellblocks
