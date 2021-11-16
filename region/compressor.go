@@ -33,6 +33,16 @@ func growBuffer(b []byte, sz int) []byte {
 	return append(b, make([]byte, sz)...)
 }
 
+func resizeBufferCap(b []byte, capacity int) []byte {
+	if capacity <= cap(b) {
+		return b
+	}
+
+	l := len(b)
+	b = append(b, make([]byte, capacity-l)...)
+	return b[:l]
+}
+
 func (c *compressor) compressCellblocks(cbs net.Buffers, uncompressedLen uint32) []byte {
 	b := newBuffer(4)
 
@@ -111,6 +121,8 @@ func (c *compressor) decompressCellblocks(b []byte) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to read uncompressed block length: %w", err)
 		}
+
+		out = resizeBufferCap(out, len(out)+int(uncompressedBlockLen))
 
 		// read and decompress encoded chunks until whole block is read
 		var uncompressedSoFar uint32
