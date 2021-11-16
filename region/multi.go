@@ -123,7 +123,7 @@ func (m *multi) toProto(isCellblocks bool) (proto.Message, [][]byte, uint32) {
 	for r, as := range actionsPerReg {
 		ra[i] = &pb.RegionAction{
 			Region: &pb.RegionSpecifier{
-				Type:  pb.RegionSpecifier_REGION_NAME.Enum(),
+				Type:  hrpc.RegionSpecifierRegionName,
 				Value: r.Name(),
 			},
 			Action: as.pbs,
