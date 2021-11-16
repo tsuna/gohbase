@@ -8,6 +8,8 @@ package region
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"math/rand"
 	"net"
 	"strconv"
 	"testing"
@@ -143,5 +145,53 @@ func TestDecompressCellblocks(t *testing.T) {
 				t.Errorf("expected out %q, got %q", tcase.out, out)
 			}
 		})
+	}
+}
+
+var blockLenghts = []int{10, 100, 1000, 10000}
+
+func BenchmarkDecompressCellblocks1(b *testing.B) {
+	for _, bl := range blockLenghts {
+		b.Run(fmt.Sprintf("BlockLen%d", bl), func(b *testing.B) {
+			benchmarkDecompressCellblocks(b, bl, 1)
+		})
+	}
+}
+
+func BenchmarkDecompressCellblocks10(b *testing.B) {
+	for _, bl := range blockLenghts {
+		b.Run(fmt.Sprintf("BlockLen%d", bl), func(b *testing.B) {
+			benchmarkDecompressCellblocks(b, bl, 10)
+		})
+	}
+}
+
+func benchmarkDecompressCellblocks(b *testing.B, blockLen int, blocksCount int) {
+	b.ReportAllocs()
+
+	data := make([]byte, blockLen)
+	rand.Seed(int64(b.N))
+
+	c := &compressor{Codec: mockCodec{}}
+
+	var compressedCellblocks []byte
+	for i := 0; i < blocksCount; i++ {
+		_, err := rand.Read(data)
+		if err != nil {
+			b.FailNow()
+		}
+
+		cellblocks := c.compressCellblocks(net.Buffers([][]byte{data}), uint32(blockLen))
+		compressedCellblocks = append(compressedCellblocks, cellblocks...)
+	}
+
+	uncompressedCellblocksLen := blockLen * blocksCount
+
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		uncompressedCellblocks, err := c.decompressCellblocks(compressedCellblocks)
+		if err != nil || len(uncompressedCellblocks) != uncompressedCellblocksLen {
+			b.Fail()
+		}
 	}
 }
