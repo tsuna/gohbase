@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"sync"
 	"unsafe"
 
 	"github.com/tsuna/gohbase/pb"
@@ -110,7 +111,9 @@ type RPCResult struct {
 }
 
 type base struct {
-	ctx     context.Context
+	ctxM sync.Mutex
+	ctx  context.Context
+
 	table   []byte
 	key     []byte
 	options []func(Call) error
@@ -120,10 +123,16 @@ type base struct {
 }
 
 func (b *base) Context() context.Context {
+	b.ctxM.Lock()
+	defer b.ctxM.Unlock()
+
 	return b.ctx
 }
 
 func (b *base) SetContext(ctx context.Context) {
+	b.ctxM.Lock()
+	defer b.ctxM.Unlock()
+
 	b.ctx = ctx
 }
 
