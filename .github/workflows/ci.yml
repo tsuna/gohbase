@@ -14,9 +14,9 @@ jobs:
 
       - name: Setup | Download HBase
         run: |
-          ver=2.2.3 &&
+          ver=2.4.8 &&
           wget -nv https://archive.apache.org/dist/hbase/$ver/hbase-$ver-bin.tar.gz &&
-          echo "99F7631C9B09ED2CA4292613207F6F74B24905ED1F1146433CCA81FF88F741648A1C796D81A1A55F2166B56030D21624FC510CFA71FD9BEE3A0D5B1D5E941A5A  hbase-$ver-bin.tar.gz" | sha512sum --strict --check - &&
+          echo "2CCB816619FA651E72BF7C110FC2455705654276CFEBE067A7B9D8B39641A8A8BB827BE6EBBB7CE9D6A8441B60B6836FF3A3CA2C394952D688621F8B22F9C310  hbase-$ver-bin.tar.gz" | sha512sum --strict --check - &&
           tar zxf hbase-$ver-bin.tar.gz --exclude=docs &&
           ln -s hbase-$ver hbase
 
@@ -35,7 +35,7 @@ jobs:
         run: make check
 
       - name: Test
-        run: make integration_cover
+        run: make integration_cover HBASE_HOME=hbase
 
       - name: Upload to Codecov
         uses: codecov/codecov-action@v2.1.0

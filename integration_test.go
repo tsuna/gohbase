@@ -82,22 +82,14 @@ func DeleteTable(client gohbase.AdminClient, table string) error {
 	return nil
 }
 
-// LaunchRegionServers uses the script local-regionservers.sh to create new
-// RegionServers. Fails silently if server already exists.
-// Ex. LaunchRegions([]string{"2", "3"}) launches two servers with id=2,3
-func LaunchRegionServers(servers []string) {
+func LocalRegionServersCmd(t *testing.T, action string, servers []string) {
 	hh := os.Getenv("HBASE_HOME")
-	servers = append([]string{"start"}, servers...)
-	exec.Command(hh+"/bin/local-regionservers.sh", servers...).Run()
+	args := append([]string{action}, servers...)
+	if err := exec.Command(hh+"/bin/local-regionservers.sh", args...).Run(); err != nil {
+		t.Errorf("failed to %s RS=%v: %v", action, servers, err)
+	}
 }
 
-// StopRegionServers uses the script local-regionservers.sh to stop existing
-// RegionServers. Fails silently if server isn't running.
-func StopRegionServers(servers []string) {
-	hh := os.Getenv("HBASE_HOME")
-	servers = append([]string{"stop"}, servers...)
-	exec.Command(hh+"/bin/local-regionservers.sh", servers...).Run()
-}
 func TestMain(m *testing.M) {
 	flag.Parse()
 
@@ -1367,11 +1359,11 @@ func TestChangingRegionServers(t *testing.T) {
 
 	// RegionServer 1 hosts all the current regions.
 	// Now launch servers 2,3
-	LaunchRegionServers([]string{"2", "3"})
+	LocalRegionServersCmd(t, "start", []string{"2", "3"})
 
 	// Now (gracefully) stop servers 1,2.
 	// All regions should now be on server 3.
-	StopRegionServers([]string{"1", "2"})
+	LocalRegionServersCmd(t, "stop", []string{"1", "2"})
 	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
 	rsp, err := c.Get(get)
 	if err != nil {
@@ -1384,8 +1376,8 @@ func TestChangingRegionServers(t *testing.T) {
 	}
 
 	// Clean up by re-launching RS1 and closing RS3
-	LaunchRegionServers([]string{"1"})
-	StopRegionServers([]string{"3"})
+	LocalRegionServersCmd(t, "start", []string{"1"})
+	LocalRegionServersCmd(t, "stop", []string{"3"})
 }
 
 func BenchmarkPut(b *testing.B) {
