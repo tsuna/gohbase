@@ -304,9 +304,9 @@ func (m *Mutate) setSkipBatch(v bool) {
 }
 
 var (
-	MutationProtoDeleteFamilyVersion = pb.MutationProto_DELETE_FAMILY_VERSION.Enum()
-	MutationProtoDeleteFamily = pb.MutationProto_DELETE_FAMILY.Enum()
-	MutationProtoDeleteOneVersion = pb.MutationProto_DELETE_ONE_VERSION.Enum()
+	MutationProtoDeleteFamilyVersion    = pb.MutationProto_DELETE_FAMILY_VERSION.Enum()
+	MutationProtoDeleteFamily           = pb.MutationProto_DELETE_FAMILY.Enum()
+	MutationProtoDeleteOneVersion       = pb.MutationProto_DELETE_ONE_VERSION.Enum()
 	MutationProtoDeleteMultipleVersions = pb.MutationProto_DELETE_MULTIPLE_VERSIONS.Enum()
 )
 

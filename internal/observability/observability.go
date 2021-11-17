@@ -22,7 +22,11 @@ type RequestTracePropagator struct {
 }
 
 // StartSpan starts a trace with the given context
-func StartSpan(ctx context.Context, name string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
+func StartSpan(
+	ctx context.Context,
+	name string,
+	opts ...trace.SpanStartOption,
+) (context.Context, trace.Span) {
 	tracer := otel.GetTracerProvider().Tracer("gohbase")
 	return tracer.Start(ctx, name, opts...)
 }
