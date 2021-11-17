@@ -32,7 +32,9 @@ func freeMulti(m *multi) {
 }
 
 type multi struct {
-	ctx   context.Context
+	ctxM sync.Mutex
+	ctx  context.Context
+
 	size  int
 	calls []hrpc.Call
 	// regions preserves the order of regions to match against RegionActionResults
@@ -325,6 +327,9 @@ func (m *multi) ResultChan() chan hrpc.RPCResult {
 // Context is not supported for Multi.
 func (m *multi) Context() context.Context {
 	// TODO: maybe pick the one with the longest deadline and use a context that has that deadline?
+	m.ctxM.Lock()
+	defer m.ctxM.Unlock()
+
 	return m.ctx
 }
 
@@ -335,6 +340,9 @@ func (m *multi) String() string {
 
 // SetContext is used for tracing implementations
 func (m *multi) SetContext(ctx context.Context) {
+	m.ctxM.Lock()
+	defer m.ctxM.Unlock()
+
 	m.ctx = ctx
 }
 
@@ -352,7 +360,7 @@ func (m *multi) callCount() int {
 // to each of the calls represented. This
 // will run when they are actually sent
 func (m *multi) addSendEventsToCallSpans() {
-	spCtx := trace.SpanContextFromContext(m.ctx)
+	spCtx := trace.SpanContextFromContext(m.Context())
 	traceID := ""
 	if spCtx.HasTraceID() {
 		traceID = spCtx.TraceID().String()
