@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup | Download HBase
+        run: |
+          ver=2.2.3 &&
+          wget -nv https://archive.apache.org/dist/hbase/$ver/hbase-$ver-bin.tar.gz &&
+          echo "99F7631C9B09ED2CA4292613207F6F74B24905ED1F1146433CCA81FF88F741648A1C796D81A1A55F2166B56030D21624FC510CFA71FD9BEE3A0D5B1D5E941A5A  hbase-$ver-bin.tar.gz" | sha512sum --strict --check - &&
+          tar zxf hbase-$ver-bin.tar.gz --exclude=docs &&
+          ln -s hbase-$ver hbase
+
+      - name: Setup | Start HBase
+        run: hbase/bin/hbase-daemon.sh --config hbase/conf start master
+
+      - name: Setup | Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.17
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Check
+        run: make check
+
+      - name: Test
+        run: make integration_cover
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v2.1.0
