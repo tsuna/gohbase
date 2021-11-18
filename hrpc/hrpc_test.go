@@ -1524,6 +1524,9 @@ func confirmScanAttributes(ctx context.Context, s *Scan, table, start, stop []by
 func BenchmarkMutateToProtoWithNestedMaps(b *testing.B) {
 	b.ReportAllocs()
 
+	regionInfo := mockRegionInfo([]byte("region"))
+
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		data := map[string]map[string][]byte{
 			"cf": map[string][]byte{
@@ -1551,6 +1554,7 @@ func BenchmarkMutateToProtoWithNestedMaps(b *testing.B) {
 		if err != nil {
 			b.Errorf("Error creating mutate: %v", err)
 		}
+		mutate.SetRegion(regionInfo)
 
 		if p := mutate.ToProto(); p == nil {
 			b.Fatal("got a nil proto")
