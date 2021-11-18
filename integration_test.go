@@ -1738,7 +1738,7 @@ func TestMaxResultsPerColumnFamilyScan(t *testing.T) {
 		}
 		resultCnt++
 	}
-	if resultCnt != 1 {
+	if resultCnt != 2 {
 		t.Errorf(baseErr+"- expected 1 row; received %d", resultCnt)
 	}
 
