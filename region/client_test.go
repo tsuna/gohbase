@@ -1117,9 +1117,11 @@ func BenchmarkSendBatchMemory(b *testing.B) {
 	p, _ := mockRPCProto("rpc")
 	mockCall.EXPECT().ToProto().Return(p).AnyTimes()
 	mockCall.EXPECT().Context().Return(ctx).AnyTimes()
+	mockCall.EXPECT().SetContext(gomock.Any()).AnyTimes()
 	mockConn.EXPECT().Write(gomock.Any()).AnyTimes().Return(0, nil).Do(func(buf []byte) {
 		wgWrites.Done()
 	})
+	mockConn.EXPECT().SetReadDeadline(gomock.Any()).AnyTimes()
 
 	go c.processRPCs()
 	b.ResetTimer()
