@@ -6,6 +6,7 @@
 package hrpc
 
 import (
+	"bytes"
 	"context"
 
 	"github.com/tsuna/gohbase/pb"
@@ -97,12 +98,18 @@ func (ct *CreateTable) ToProto() proto.Message {
 		}
 		pbFamilies = append(pbFamilies, f)
 	}
+
+	namespace := []byte("default")
+	table := ct.table
+	if i := bytes.Index(table, []byte(":")); i > -1 {
+		namespace = table[:i]
+		table = table[i+1:]
+	}
 	return &pb.CreateTableRequest{
 		TableSchema: &pb.TableSchema{
 			TableName: &pb.TableName{
-				// TODO: handle namespaces
-				Namespace: []byte("default"),
-				Qualifier: ct.table,
+				Namespace: namespace,
+				Qualifier: table,
 			},
 			ColumnFamilies: pbFamilies,
 		},
