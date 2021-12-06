@@ -280,8 +280,12 @@ func (m *multi) add(call hrpc.Call) bool {
 	if msp.IsRecording() {
 		csp := trace.SpanContextFromContext(call.Context())
 		if csp.HasTraceID() {
+			traceID := csp.TraceID().String()
+			if !csp.IsSampled() {
+				traceID += " (not sampled)"
+			}
 			msp.AddEvent("enqueue", trace.WithAttributes(
-				attribute.String("traceid", csp.TraceID().String()),
+				attribute.String("traceid", traceID),
 			))
 		}
 	}
@@ -362,8 +366,12 @@ func (m *multi) callCount() int {
 func (m *multi) addSendEventsToCallSpans() {
 	spCtx := trace.SpanContextFromContext(m.Context())
 	traceID := ""
+
 	if spCtx.HasTraceID() {
 		traceID = spCtx.TraceID().String()
+		if !spCtx.IsSampled() {
+			traceID += " (not sampled)"
+		}
 	}
 
 	for _, c := range m.calls {
