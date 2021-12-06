@@ -51,7 +51,7 @@ func (dt *DisableTable) ToProto() proto.Message {
 	return &pb.DisableTableRequest{
 		TableName: &pb.TableName{
 			Namespace: namespace,
-			Qualifier: dt.table,
+			Qualifier: table,
 		},
 	}
 }
