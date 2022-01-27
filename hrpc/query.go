@@ -24,6 +24,40 @@ type baseQuery struct {
 	storeLimit    uint32
 	storeOffset   uint32
 	cacheBlocks   bool
+	consistency   ConsistencyType
+}
+
+// ConsistencyType is used to specify the required consistency of data
+//
+// See https://docs.cloudera.com/HDPDocuments/HDP2/HDP-2.2.9/bk_hadoop-ha/
+//          content/ha-hbase-timeline-consistency.html
+type ConsistencyType int
+
+const (
+	// Use HBase's default
+	DefaultConsistency ConsistencyType = iota
+
+	// Guarantees that the client receives the latest data.
+	StrongConsistency
+
+	// Client might receive stale data (indicated by the Stale field), but
+	// the data that is received was valid at a given point of time.
+	TimelineConsistency
+)
+
+func (c ConsistencyType) toProto() (ret *pb.Consistency) {
+	ret = new(pb.Consistency)
+	switch c {
+	case TimelineConsistency:
+		*ret = pb.Consistency_TIMELINE
+		return
+	case StrongConsistency:
+		*ret = pb.Consistency_STRONG
+		return
+	case DefaultConsistency:
+		panic("default consistency depends on context")
+	}
+	panic("invalid value for ConsistencyType")
 }
 
 // newBaseQuery return baseQuery with all default values
@@ -58,6 +92,9 @@ func (bq *baseQuery) setResultOffset(offset uint32) {
 }
 func (bq *baseQuery) setCacheBlocks(cacheBlocks bool) {
 	bq.cacheBlocks = cacheBlocks
+}
+func (bq *baseQuery) setConsistency(consistency ConsistencyType) {
+	bq.consistency = consistency
 }
 
 // Families option adds families constraint to a Scan or Get request.
@@ -166,5 +203,17 @@ func CacheBlocks(cacheBlocks bool) func(Call) error {
 			return nil
 		}
 		return errors.New("'CacheBlocks' option can only be used with Get or Scan request")
+	}
+}
+
+// Consistency is a Scan or Get option that requests the given
+// consistency of data.
+func Consistency(consistency ConsistencyType) func(Call) error {
+	return func(g Call) error {
+		if c, ok := g.(hasQueryOptions); ok {
+			c.setConsistency(consistency)
+			return nil
+		}
+		return errors.New("'Consistency' option can only be used with Get or Scan requests")
 	}
 }

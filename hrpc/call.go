@@ -101,6 +101,7 @@ type hasQueryOptions interface {
 	setMaxResultsPerColumnFamily(maxresults uint32)
 	setResultOffset(offset uint32)
 	setCacheBlocks(cacheBlocks bool)
+	setConsistency(consistency ConsistencyType)
 }
 
 // RPCResult is struct that will contain both the resulting message from an RPC
