@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -54,6 +55,17 @@ const (
 )
 
 func (c *client) getRegionForRpc(rpc hrpc.Call) (hrpc.RegionInfo, error) {
+	// Check the cache for a region that can handle this request
+	// if in cache, return quickly
+	if reg := c.getRegionFromCache(rpc.Table(), rpc.Key()); reg != nil {
+		return reg, nil
+	}
+
+	il, _ := c.regionLookerMap.LoadOrStore(string(rpc.Table()), &sync.Mutex{})
+	lo := il.(*sync.Mutex)
+	lo.Lock()
+	defer lo.Unlock()
+
 	for i := 0; i < maxFindRegionTries; i++ {
 		// Check the cache for a region that can handle this request
 		if reg := c.getRegionFromCache(rpc.Table(), rpc.Key()); reg != nil {
