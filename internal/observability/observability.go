@@ -35,11 +35,15 @@ func StartSpan(
 // an exemplar if exemplars are supported and a traceID is present
 func ObserveWithTrace(ctx context.Context, o prometheus.Observer, v float64) {
 	spanContext := trace.SpanContextFromContext(ctx)
-	if exemplarObserver, ok := o.(prometheus.ExemplarObserver); ok && spanContext.HasTraceID() {
-		exemplarObserver.ObserveWithExemplar(v, prometheus.Labels{
-			"traceID": spanContext.TraceID().String(),
-		})
-		return
+	if spanContext.IsSampled() && spanContext.HasTraceID() {
+		traceID := spanContext.TraceID().String()
+
+		if exemplarObserver, ok := o.(prometheus.ExemplarObserver); ok {
+			exemplarObserver.ObserveWithExemplar(v, prometheus.Labels{
+				"traceID": traceID,
+			})
+			return
+		}
 	}
 
 	o.Observe(v)
