@@ -6,6 +6,8 @@
 package region
 
 import (
+	"net"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -19,4 +21,40 @@ var (
 		},
 		[]string{"reason"},
 	)
+
+	bytesReadTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "gohbase",
+			Name:      "bytes_read_total",
+			Help:      "Bytes read from hbase",
+		},
+		[]string{"regionserver"},
+	)
+
+	bytesWrittenTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "gohbase",
+			Name:      "bytes_written_total",
+			Help:      "Bytes written to hbase",
+		},
+		[]string{"regionserver"},
+	)
 )
+
+type promMetricConn struct {
+	net.Conn
+	counterRead  prometheus.Counter
+	counterWrite prometheus.Counter
+}
+
+func (mc promMetricConn) Read(b []byte) (int, error) {
+	n, err := mc.Conn.Read(b)
+	mc.counterRead.Add(float64(n))
+	return n, err
+}
+
+func (mc promMetricConn) Write(b []byte) (int, error) {
+	n, err := mc.Conn.Write(b)
+	mc.counterWrite.Add(float64(n))
+	return n, err
+}
