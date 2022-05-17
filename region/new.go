@@ -14,7 +14,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/tsuna/gohbase/compression"
 	"github.com/tsuna/gohbase/hrpc"
 )
@@ -44,19 +43,10 @@ func (c *client) Dial(ctx context.Context) error {
 	c.dialOnce.Do(func() {
 		var d net.Dialer
 		var err error
-
 		c.conn, err = d.DialContext(ctx, "tcp", c.addr)
 		if err != nil {
 			c.fail(fmt.Errorf("failed to dial RegionServer: %s", err))
 			return
-		}
-
-		// Wrap our connection in a counter to expose prometheus counts for our
-		// connection.
-		c.conn = promMetricConn{
-			c.conn,
-			bytesReadTotal.With(prometheus.Labels{"regionserver": c.addr}),
-			bytesWrittenTotal.With(prometheus.Labels{"regionserver": c.addr}),
 		}
 
 		// time out send hello if it take long
