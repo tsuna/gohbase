@@ -111,8 +111,9 @@ var bufferPool = sync.Pool{
 
 func newBuffer(size int) []byte {
 	b := bufferPool.Get().([]byte)
-	if cap(b) < size {
-		doublecap := 2 * cap(b)
+	c := cap(b)
+	if c < size {
+		doublecap := 2 * c
 		if doublecap > size {
 			return make([]byte, size, doublecap)
 		}
