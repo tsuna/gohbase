@@ -102,21 +102,16 @@ const (
 	MasterClient = ClientType("MasterService")
 )
 
-var bufferPool = sync.Pool{
-	New: func() interface{} {
-		var b []byte
-		return b
-	},
-}
+var bufferPool sync.Pool
 
 func newBuffer(size int) []byte {
-	b := bufferPool.Get().([]byte)
+	v := bufferPool.Get()
+	var b []byte
+	if v != nil {
+		b = v.([]byte)
+	}
 	if cap(b) < size {
-		doublecap := 2 * cap(b)
-		if doublecap > size {
-			return make([]byte, size, doublecap)
-		}
-		return make([]byte, size)
+		return append(b[:0], make([]byte, size)...)[:size]
 	}
 	return b[:size]
 }
@@ -705,25 +700,59 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 	id := c.registerRPC(rpc)
 	header.CallId = &id
 
-	b := newBuffer(4)
-	defer func() { freeBuffer(b) }()
-
-	b = protowire.AppendVarint(b, uint64(proto.Size(header)))
-	b, err = proto.MarshalOptions{}.MarshalAppend(b, header)
-	if err != nil {
-		return id, fmt.Errorf("failed to marshal request header: %s", err)
-	}
+	// Wire protocol:
+	//
+	// 4 byte total length
+	//
+	// Protobuf data:
+	// varint length of header
+	// <header>
+	// varint length of request
+	// <request>
+	//
+	// Cellblocks:
+	// <cellblocks>
+	//
+	// As an optimization we use the net.Buffers.WriteTo API below to
+	// send a [][]byte in a single writev syscall rather than making a
+	// write syscall per []byte or concatenating the [][]byte into a
+	// single []byte. The cellblocks data is already organized into an
+	// [][]byte, so we just need to encode the total length and the
+	// protobuf data into a []byte.
 
 	if request == nil {
 		return id, errors.New("failed to marshal request: proto: Marshal called with nil")
 	}
-	b = protowire.AppendVarint(b, uint64(proto.Size(request)))
-	b, err = proto.MarshalOptions{}.MarshalAppend(b, request)
+
+	headerSize := proto.Size(header)
+	requestSize := proto.Size(request)
+
+	protobufLen := protowire.SizeVarint(uint64(headerSize)) + headerSize +
+		protowire.SizeVarint(uint64(requestSize)) + requestSize
+	totalLen := uint32(protobufLen) + cellblocksLen
+
+	b := make([]byte, 4, 4+protobufLen)
+
+	binary.BigEndian.PutUint32(b, totalLen)
+
+	b = protowire.AppendVarint(b, uint64(headerSize))
+	b, err = proto.MarshalOptions{UseCachedSize: true}.MarshalAppend(b, header)
+	if err != nil {
+		return id, fmt.Errorf("failed to marshal request header: %s", err)
+	}
+
+	b = protowire.AppendVarint(b, uint64(requestSize))
+	b, err = proto.MarshalOptions{UseCachedSize: true}.MarshalAppend(b, request)
 	if err != nil {
 		return id, fmt.Errorf("failed to marshal request: %s", err)
 	}
-
-	binary.BigEndian.PutUint32(b, uint32(len(b))+cellblocksLen-4)
+	if len(b) != 4+protobufLen {
+		// This shouldn't ever happen, if it does there is a bug in
+		// the size calculation.
+		panic(fmt.Errorf("size of data sent doesn't match expected. expected: %d actual: %d"+
+			"headerSize: %d requestSize: %d\nheader: %s\nrequest: %s",
+			4+protobufLen, len(b), headerSize, requestSize, header, request))
+	}
 
 	if cellblocks != nil {
 		bfs := append(net.Buffers{b}, cellblocks...)
