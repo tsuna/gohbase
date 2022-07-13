@@ -25,8 +25,16 @@ var multiPool = sync.Pool{
 }
 
 func freeMulti(m *multi) {
+	// Set pointers to nil to allow the objects to be garbage
+	// collected
+
+	// m.ctx = nil Do this after #174 is fixed
+	for i := range m.calls {
+		m.calls[i] = nil
+	}
 	m.calls = m.calls[:0]
-	m.regions = m.regions[:0]
+	// set m.regions to nil because the slice is not reused.
+	m.regions = nil
 	m.size = 0
 	multiPool.Put(m)
 }
