@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/internal/observability"
@@ -82,10 +81,7 @@ func (c *client) SendRPC(rpc hrpc.Call) (msg proto.Message, err error) {
 			sp.SetStatus(codes.Error, err.Error())
 		}
 
-		o := operationDurationSeconds.With(prometheus.Labels{
-			"operation": description,
-			"result":    result,
-		})
+		o := operationDurationSeconds.WithLabelValues(description, result)
 
 		observability.ObserveWithTrace(spCtx, o, time.Since(start).Seconds())
 		sp.End()

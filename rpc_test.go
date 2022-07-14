@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/tsuna/gohbase/compression"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
@@ -800,5 +801,31 @@ func TestProbeKey(t *testing.T) {
 		t.Errorf("key %q is not within bounds of region %s: %v %v %v %v\n", key, reg,
 			isGreaterThanStartOfTable, isGreaterThanStartKey,
 			isLessThanEndOfTable, isLessThanStopKey)
+	}
+}
+
+var (
+	description = "GET"
+	result      = "SUCCESS"
+	o           prometheus.Observer
+)
+
+func BenchmarkPrometheusWithLabelValues(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		o = operationDurationSeconds.WithLabelValues(
+			description,
+			result,
+		)
+	}
+}
+
+func BenchmarkPrometheusWith(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		o = operationDurationSeconds.With(prometheus.Labels{
+			"operation": description,
+			"result":    result,
+		})
 	}
 }
