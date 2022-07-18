@@ -75,12 +75,10 @@ func (m *multi) toProto(isCellblocks bool) (proto.Message, [][]byte, uint32) {
 	var size uint32
 
 	for i, c := range m.calls {
-		select {
-		case <-c.Context().Done():
+		if c.Context().Err() != nil {
 			// context has expired, don't bother sending it
 			m.calls[i] = nil
 			continue
-		default:
 		}
 
 		var msg proto.Message
