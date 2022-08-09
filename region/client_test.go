@@ -909,7 +909,7 @@ func TestSanity(t *testing.T) {
 	app.SetRegion(
 		NewInfo(0, nil, []byte("test1"), []byte("test1,,lololololololololololo"), nil, nil))
 
-	mockConn.EXPECT().Write(gomock.Any()).Times(8).Return(0, nil)
+	mockConn.EXPECT().Write(gomock.Any()).Times(2).Return(0, nil)
 	mockConn.EXPECT().SetReadDeadline(gomock.Any()).Times(1)
 
 	c.QueueRPC(app)
