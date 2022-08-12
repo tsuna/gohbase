@@ -1010,3 +1010,46 @@ func TestMultiDeserializeCellBlocks(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkMultiToProto(b *testing.B) {
+	values := map[string]map[string][]byte{
+		"cf": map[string][]byte{
+			"c": []byte("v"),
+		},
+	}
+	delValues := map[string]map[string][]byte{
+		"cf": map[string][]byte{
+			"c": nil,
+		},
+	}
+
+	m := newMulti(context.Background(), 1000)
+	var c hrpc.Call
+	c, _ = hrpc.NewGetStr(context.Background(), "reg0", "call0")
+	c.SetRegion(reg0)
+	m.add(c)
+	c, _ = hrpc.NewPutStr(context.Background(), "reg0", "call1", values)
+	c.SetRegion(reg0)
+	m.add(c)
+	c, _ = hrpc.NewAppStr(context.Background(), "reg1", "call2", values)
+	c.SetRegion(reg1)
+	m.add(c)
+	c, _ = hrpc.NewDelStr(context.Background(), "reg1", "call3", delValues)
+	c.SetRegion(reg1)
+	m.add(c)
+	c, _ = hrpc.NewIncStr(context.Background(), "reg2", "call4", delValues)
+	c.SetRegion(reg2)
+	m.add(c)
+	b.Run("cellblocks", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			m.toProto(true)
+		}
+	})
+	b.Run("no_cellblocks", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			m.toProto(false)
+		}
+	})
+}
