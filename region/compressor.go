@@ -97,15 +97,15 @@ func readUint32(b []byte) (uint32, []byte, error) {
 // decompressCellblocks decodes block stream format of hadoop.
 // The wire format is as follows:
 //
-//  <length of uncompressed block>
-//    <length of compressed chunk><compressed chunk>
-//    <length of compressed chunk><compressed chunk>
-//    ...
-//    <length of compressed chunk><compressed chunk>
-//  <length of uncompressed block>
-//    <length of compressed chunk><compressed chunk>
-//    ...
-//  ...
+//	<length of uncompressed block>
+//	  <length of compressed chunk><compressed chunk>
+//	  <length of compressed chunk><compressed chunk>
+//	  ...
+//	  <length of compressed chunk><compressed chunk>
+//	<length of uncompressed block>
+//	  <length of compressed chunk><compressed chunk>
+//	  ...
+//	...
 func (c *compressor) decompressCellblocks(b []byte) ([]byte, error) {
 	var (
 		err                  error

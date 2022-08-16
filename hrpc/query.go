@@ -30,7 +30,8 @@ type baseQuery struct {
 // ConsistencyType is used to specify the required consistency of data
 //
 // See https://docs.cloudera.com/HDPDocuments/HDP2/HDP-2.2.9/bk_hadoop-ha/
-//          content/ha-hbase-timeline-consistency.html
+//
+//	content/ha-hbase-timeline-consistency.html
 type ConsistencyType int
 
 const (

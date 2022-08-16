@@ -259,8 +259,10 @@ func CompareGeneric(a, b interface{}) int {
 // We can't just use bytes.Compare() because it doesn't play nicely
 // with the way META keys are built as the first region has an empty start
 // key.  Let's assume we know about those 2 regions in our cache:
-//   .META.,,1
-//   tableA,,1273018455182
+//
+//	.META.,,1
+//	tableA,,1273018455182
+//
 // We're given an RPC to execute on "tableA", row "\x00" (1 byte row key
 // containing a 0).  If we use Compare() to sort the entries in the cache,
 // when we search for the entry right before "tableA,\000,:"

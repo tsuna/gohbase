@@ -179,18 +179,20 @@ func NewPutStr(ctx context.Context, table, key string,
 // To delete entire row, values should be nil.
 //
 // To delete specific families, qualifiers map should be nil:
-//  map[string]map[string][]byte{
-//		"cf1": nil,
-//		"cf2": nil,
-//  }
+//
+//	 map[string]map[string][]byte{
+//			"cf1": nil,
+//			"cf2": nil,
+//	 }
 //
 // To delete specific qualifiers:
-//  map[string]map[string][]byte{
-//      "cf": map[string][]byte{
-//			"q1": nil,
-//			"q2": nil,
-//		},
-//  }
+//
+//	 map[string]map[string][]byte{
+//	     "cf": map[string][]byte{
+//				"q1": nil,
+//				"q2": nil,
+//			},
+//	 }
 //
 // To delete all versions before and at a timestamp, pass hrpc.Timestamp() option.
 // By default all versions will be removed.
