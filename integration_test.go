@@ -125,7 +125,7 @@ func TestMain(m *testing.M) {
 	os.Exit(res)
 }
 
-//Test retrieval of cluster status
+// Test retrieval of cluster status
 func TestClusterStatus(t *testing.T) {
 	ac := gohbase.NewAdminClient(*host)
 
