@@ -25,8 +25,6 @@ var multiPool = sync.Pool{
 func freeMulti(m *multi) {
 	// Set pointers to nil to allow the objects to be garbage
 	// collected
-
-	// m.ctx = nil Do this after #174 is fixed
 	for i := range m.calls {
 		m.calls[i] = nil
 	}
@@ -38,18 +36,14 @@ func freeMulti(m *multi) {
 }
 
 type multi struct {
-	ctxM sync.Mutex
-	ctx  context.Context
-
 	size  int
 	calls []hrpc.Call
 	// regions preserves the order of regions to match against RegionActionResults
 	regions []hrpc.RegionInfo
 }
 
-func newMulti(ctx context.Context, queueSize int) *multi {
+func newMulti(queueSize int) *multi {
 	m := multiPool.Get().(*multi)
-	m.ctx = ctx
 	m.size = queueSize
 	return m
 }
@@ -320,11 +314,7 @@ func (m *multi) ResultChan() chan hrpc.RPCResult {
 
 // Context is not supported for Multi.
 func (m *multi) Context() context.Context {
-	// TODO: maybe pick the one with the longest deadline and use a context that has that deadline?
-	m.ctxM.Lock()
-	defer m.ctxM.Unlock()
-
-	return m.ctx
+	return context.Background()
 }
 
 // String returns a description of this call
@@ -334,10 +324,7 @@ func (m *multi) String() string {
 
 // SetContext is used for tracing implementations
 func (m *multi) SetContext(ctx context.Context) {
-	m.ctxM.Lock()
-	defer m.ctxM.Unlock()
-
-	m.ctx = ctx
+	panic("not supported")
 }
 
 // Key is not supported for Multi RPC.
