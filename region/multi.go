@@ -13,8 +13,6 @@ import (
 
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -282,20 +280,6 @@ func (m *multi) returnResults(msg proto.Message, err error) {
 
 // add adds the call and returns wether the batch is full.
 func (m *multi) add(call hrpc.Call) bool {
-	msp := trace.SpanFromContext(m.Context())
-	if msp.IsRecording() {
-		csp := trace.SpanContextFromContext(call.Context())
-		if csp.HasTraceID() {
-			traceID := csp.TraceID().String()
-			if !csp.IsSampled() {
-				traceID += " (not sampled)"
-			}
-			msp.AddEvent("enqueue", trace.WithAttributes(
-				attribute.String("traceid", traceID),
-			))
-		}
-	}
-
 	m.calls = append(m.calls, call)
 	return len(m.calls) == m.size
 }
@@ -364,27 +348,4 @@ func (m *multi) Key() []byte {
 // callCount returns how many calls are represented
 func (m *multi) callCount() int {
 	return len(m.calls)
-}
-
-// addSendEventsToCallSpans adds a send event
-// to each of the calls represented. This
-// will run when they are actually sent
-func (m *multi) addSendEventsToCallSpans() {
-	spCtx := trace.SpanContextFromContext(m.Context())
-	traceID := ""
-
-	if spCtx.HasTraceID() {
-		traceID = spCtx.TraceID().String()
-		if !spCtx.IsSampled() {
-			traceID += " (not sampled)"
-		}
-	}
-
-	for _, c := range m.calls {
-		sp := trace.SpanFromContext(c.Context())
-		sp.AddEvent(
-			"send",
-			trace.WithAttributes(attribute.String("traceID", traceID)),
-		)
-	}
 }

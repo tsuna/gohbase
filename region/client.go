@@ -19,12 +19,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 
 	"github.com/tsuna/gohbase/hrpc"
-	"github.com/tsuna/gohbase/internal/observability"
 	"github.com/tsuna/gohbase/pb"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
@@ -320,16 +316,9 @@ func (c *client) unregisterRPC(id uint32) hrpc.Call {
 }
 
 func (c *client) processRPCs() {
-	spCtx, sp := observability.StartSpan(context.Background(), "region.processRPCs")
-	defer func() {
-		// Ensure that the last span created is ended to
-		// prevent memory leaks
-		sp.End()
-	}()
-
 	// TODO: flush when the size is too large
 	// TODO: if multi has only one call, send that call instead
-	m := newMulti(spCtx, c.rpcQueueSize)
+	m := newMulti(context.Background(), c.rpcQueueSize)
 	defer func() {
 		m.returnResults(nil, ErrClientClosed)
 	}()
@@ -346,22 +335,12 @@ func (c *client) processRPCs() {
 			"reason": reason,
 		}).Inc()
 
-		m.addSendEventsToCallSpans()
-
-		sp.SetAttributes(
-			attribute.String("flush_reason", reason),
-			attribute.Int("calls", m.callCount()),
-		)
-
 		if err := c.trySend(m); err != nil {
 			m.returnResults(nil, err)
-			sp.SetStatus(codes.Error, err.Error())
 		}
-		sp.End()
 
 		// Start preparing for the next batch
-		spCtx, sp = observability.StartSpan(context.Background(), "region.processRPCs")
-		m = newMulti(spCtx, c.rpcQueueSize)
+		m = newMulti(context.Background(), c.rpcQueueSize)
 	}
 
 	for {
@@ -437,22 +416,6 @@ func returnResult(c hrpc.Call, msg proto.Message, err error) {
 }
 
 func (c *client) trySend(rpc hrpc.Call) (err error) {
-	// Replace the rpc's context with one that includes a
-	// tracing span, but restore it when returning from this
-	// function so that spans don't weirdly cascade when they
-	// are not supposed to
-	origCtx := rpc.Context()
-	spCtx, sp := observability.StartSpan(rpc.Context(), "trySend")
-	rpc.SetContext(spCtx)
-	defer func() {
-		if err != nil {
-			sp.SetStatus(codes.Error, err.Error())
-		}
-
-		sp.End()
-		rpc.SetContext(origCtx)
-	}()
-
 	select {
 	case <-c.done:
 		// An unrecoverable error has occured,
@@ -663,13 +626,6 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 		MethodName:   proto.String(rpc.Name()),
 		RequestParam: proto.Bool(true),
 	}
-
-	// Propagate any tracing information that is present in the rpc
-	// context into the HBase call
-	otel.GetTextMapPropagator().Inject(
-		rpc.Context(),
-		observability.RequestTracePropagator{RequestHeader: header},
-	)
 
 	if s, ok := rpc.(canSerializeCellBlocks); ok && s.CellBlocksEnabled() {
 		// request can be serialized to cellblocks
