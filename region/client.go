@@ -6,7 +6,6 @@
 package region
 
 import (
-	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -318,7 +317,7 @@ func (c *client) unregisterRPC(id uint32) hrpc.Call {
 func (c *client) processRPCs() {
 	// TODO: flush when the size is too large
 	// TODO: if multi has only one call, send that call instead
-	m := newMulti(context.Background(), c.rpcQueueSize)
+	m := newMulti(c.rpcQueueSize)
 	defer func() {
 		m.returnResults(nil, ErrClientClosed)
 	}()
@@ -340,7 +339,7 @@ func (c *client) processRPCs() {
 		}
 
 		// Start preparing for the next batch
-		m = newMulti(context.Background(), c.rpcQueueSize)
+		m = newMulti(c.rpcQueueSize)
 	}
 
 	for {
