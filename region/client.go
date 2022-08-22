@@ -203,8 +203,20 @@ func (c *client) QueueRPC(rpc hrpc.Call) {
 		case c.rpcs <- rpc:
 		}
 	} else {
-		if err := c.trySend(rpc); err != nil {
-			returnResult(rpc, nil, err)
+		select {
+		case <-c.done:
+			// An unrecoverable error has occured,
+			// region client has been stopped,
+			// don't send rpcs
+			returnResult(rpc, nil, ErrClientClosed)
+		case <-rpc.Context().Done():
+			// If the deadline has been exceeded, don't bother sending the
+			// request. The function that placed the RPC in our queue should
+			// stop waiting for a result and return an error.
+		default:
+			if err := c.trySend(rpc); err != nil {
+				returnResult(rpc, nil, err)
+			}
 		}
 	}
 }
@@ -415,30 +427,17 @@ func returnResult(c hrpc.Call, msg proto.Message, err error) {
 }
 
 func (c *client) trySend(rpc hrpc.Call) (err error) {
-	select {
-	case <-c.done:
-		// An unrecoverable error has occured,
-		// region client has been stopped,
-		// don't send rpcs
-		return ErrClientClosed
-	case <-rpc.Context().Done():
-		// If the deadline has been exceeded, don't bother sending the
-		// request. The function that placed the RPC in our queue should
-		// stop waiting for a result and return an error.
-		return nil
-	default:
-		if id, err := c.send(rpc); err != nil {
-			if _, ok := err.(ServerError); ok {
-				c.fail(err)
-			}
-			if r := c.unregisterRPC(id); r != nil {
-				// we are the ones to unregister the rpc,
-				// return err to notify client of it
-				return err
-			}
+	if id, err := c.send(rpc); err != nil {
+		if _, ok := err.(ServerError); ok {
+			c.fail(err)
 		}
-		return nil
+		if r := c.unregisterRPC(id); r != nil {
+			// we are the ones to unregister the rpc,
+			// return err to notify client of it
+			return err
+		}
 	}
+	return nil
 }
 
 func (c *client) receiveRPCs() {
