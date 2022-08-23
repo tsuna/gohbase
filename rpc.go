@@ -52,14 +52,14 @@ const (
 	backoffStart = 16 * time.Millisecond
 )
 
-func (c *client) getRegionForRpc(rpc hrpc.Call) (hrpc.RegionInfo, error) {
+func (c *client) getRegionForRpc(ctx context.Context, rpc hrpc.Call) (hrpc.RegionInfo, error) {
 	for i := 0; i < maxFindRegionTries; i++ {
 		// Check the cache for a region that can handle this request
 		if reg := c.getRegionFromCache(rpc.Table(), rpc.Key()); reg != nil {
 			return reg, nil
 		}
 
-		if reg, err := c.findRegion(rpc.Context(), rpc.Table(), rpc.Key()); reg != nil {
+		if reg, err := c.findRegion(ctx, rpc.Table(), rpc.Key()); reg != nil {
 			return reg, nil
 		} else if err != nil {
 			return nil, err
@@ -70,10 +70,8 @@ func (c *client) getRegionForRpc(rpc hrpc.Call) (hrpc.RegionInfo, error) {
 
 func (c *client) SendRPC(rpc hrpc.Call) (msg proto.Message, err error) {
 	start := time.Now()
-	origCtx := rpc.Context()
 	description := rpc.Description()
-	spCtx, sp := observability.StartSpan(origCtx, description)
-	rpc.SetContext(spCtx)
+	ctx, sp := observability.StartSpan(rpc.Context(), description)
 	defer func() {
 		result := "ok"
 		if err != nil {
@@ -83,24 +81,22 @@ func (c *client) SendRPC(rpc hrpc.Call) (msg proto.Message, err error) {
 
 		o := operationDurationSeconds.WithLabelValues(description, result)
 
-		observability.ObserveWithTrace(spCtx, o, time.Since(start).Seconds())
+		observability.ObserveWithTrace(ctx, o, time.Since(start).Seconds())
 		sp.End()
-
-		rpc.SetContext(origCtx)
 	}()
 
-	reg, err := c.getRegionForRpc(rpc)
+	reg, err := c.getRegionForRpc(ctx, rpc)
 	if err != nil {
 		return nil, err
 	}
 
 	backoff := backoffStart
 	for {
-		msg, err := c.sendRPCToRegion(rpc, reg)
+		msg, err = c.sendRPCToRegion(ctx, rpc, reg)
 		switch err.(type) {
 		case region.RetryableError:
 			sp.AddEvent("retrySleep")
-			backoff, err = sleepAndIncreaseBackoff(rpc.Context(), backoff)
+			backoff, err = sleepAndIncreaseBackoff(ctx, backoff)
 			if err != nil {
 				return msg, err
 			}
@@ -109,7 +105,7 @@ func (c *client) SendRPC(rpc hrpc.Call) (msg proto.Message, err error) {
 				// The region is unavailable. Wait for it to become available,
 				// a new region or for the deadline to be exceeded.
 				select {
-				case <-rpc.Context().Done():
+				case <-ctx.Done():
 					return nil, rpc.Context().Err()
 				case <-c.done:
 					return nil, ErrClientClosed
@@ -119,7 +115,7 @@ func (c *client) SendRPC(rpc hrpc.Call) (msg proto.Message, err error) {
 			if reg.Context().Err() != nil {
 				// region is dead because it was split or merged,
 				// lookup a new one and retry
-				reg, err = c.getRegionForRpc(rpc)
+				reg, err = c.getRegionForRpc(ctx, rpc)
 				if err != nil {
 					return nil, err
 				}
@@ -130,7 +126,8 @@ func (c *client) SendRPC(rpc hrpc.Call) (msg proto.Message, err error) {
 	}
 }
 
-func sendBlocking(rc hrpc.RegionClient, rpc hrpc.Call) (hrpc.RPCResult, error) {
+func sendBlocking(ctx context.Context, rc hrpc.RegionClient, rpc hrpc.Call) (
+	hrpc.RPCResult, error) {
 	rc.QueueRPC(rpc)
 
 	var res hrpc.RPCResult
@@ -138,12 +135,13 @@ func sendBlocking(rc hrpc.RegionClient, rpc hrpc.Call) (hrpc.RPCResult, error) {
 	select {
 	case res = <-rpc.ResultChan():
 		return res, nil
-	case <-rpc.Context().Done():
+	case <-ctx.Done():
 		return res, rpc.Context().Err()
 	}
 }
 
-func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Message, error) {
+func (c *client) sendRPCToRegion(ctx context.Context, rpc hrpc.Call, reg hrpc.RegionInfo) (
+	proto.Message, error) {
 	if reg.IsUnavailable() {
 		return nil, region.NotServingRegionError{}
 	}
@@ -161,7 +159,7 @@ func (c *client) sendRPCToRegion(rpc hrpc.Call, reg hrpc.RegionInfo) (proto.Mess
 		}
 		return nil, region.NotServingRegionError{}
 	}
-	res, err := sendBlocking(client, rpc)
+	res, err := sendBlocking(ctx, client, rpc)
 	if err != nil {
 		return nil, err
 	}
@@ -438,7 +436,7 @@ func isRegionEstablished(rc hrpc.RegionClient, reg hrpc.RegionInfo) error {
 	probe.ExistsOnly()
 
 	probe.SetRegion(reg)
-	res, err := sendBlocking(rc, probe)
+	res, err := sendBlocking(probe.Context(), rc, probe)
 	if err != nil {
 		panic(fmt.Sprintf("should not happen: %s", err))
 	}
