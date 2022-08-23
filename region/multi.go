@@ -322,11 +322,6 @@ func (m *multi) String() string {
 	return "MULTI"
 }
 
-// SetContext is used for tracing implementations
-func (m *multi) SetContext(ctx context.Context) {
-	panic("not supported")
-}
-
 // Key is not supported for Multi RPC.
 func (m *multi) Key() []byte {
 	panic("'Key' is not supported for 'Multi'")

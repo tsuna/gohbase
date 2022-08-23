@@ -68,7 +68,6 @@ func TestSendRPCSanity(t *testing.T) {
 	// ask for "theKey" in table "test"
 	mockCall := mock.NewMockCall(ctrl)
 	mockCall.EXPECT().Context().Return(context.Background()).AnyTimes()
-	mockCall.EXPECT().SetContext(gomock.Any()).AnyTimes()
 	mockCall.EXPECT().Description().AnyTimes()
 	mockCall.EXPECT().Table().Return([]byte("test")).AnyTimes()
 	mockCall.EXPECT().Key().Return([]byte("theKey")).AnyTimes()
@@ -397,7 +396,6 @@ func TestEstablishServerErrorDuringProbe(t *testing.T) {
 
 	mockCall := mock.NewMockCall(ctrl)
 	mockCall.EXPECT().Context().Return(context.Background()).AnyTimes()
-	mockCall.EXPECT().SetContext(gomock.Any()).AnyTimes()
 	mockCall.EXPECT().Description().AnyTimes()
 	mockCall.EXPECT().Table().Return([]byte("down")).AnyTimes()
 	mockCall.EXPECT().Key().Return([]byte("yolo")).AnyTimes()

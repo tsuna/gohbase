@@ -10,7 +10,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"sync"
 	"unsafe"
 
 	"github.com/tsuna/gohbase/pb"
@@ -61,7 +60,6 @@ type Call interface {
 	ResultChan() chan RPCResult
 	Description() string // Used for tracing and metrics
 	Context() context.Context
-	SetContext(context.Context)
 }
 
 type withOptions interface {
@@ -112,8 +110,7 @@ type RPCResult struct {
 }
 
 type base struct {
-	ctxM sync.Mutex
-	ctx  context.Context
+	ctx context.Context
 
 	table   []byte
 	key     []byte
@@ -124,17 +121,7 @@ type base struct {
 }
 
 func (b *base) Context() context.Context {
-	b.ctxM.Lock()
-	defer b.ctxM.Unlock()
-
 	return b.ctx
-}
-
-func (b *base) SetContext(ctx context.Context) {
-	b.ctxM.Lock()
-	defer b.ctxM.Unlock()
-
-	b.ctx = ctx
 }
 
 func (b *base) Region() RegionInfo {

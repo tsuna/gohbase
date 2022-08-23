@@ -134,18 +134,6 @@ func (mr *MockCallMockRecorder) ResultChan() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResultChan", reflect.TypeOf((*MockCall)(nil).ResultChan))
 }
 
-// SetContext mocks base method.
-func (m *MockCall) SetContext(arg0 context.Context) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetContext", arg0)
-}
-
-// SetContext indicates an expected call of SetContext.
-func (mr *MockCallMockRecorder) SetContext(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetContext", reflect.TypeOf((*MockCall)(nil).SetContext), arg0)
-}
-
 // SetRegion mocks base method.
 func (m *MockCall) SetRegion(arg0 hrpc.RegionInfo) {
 	m.ctrl.T.Helper()
