@@ -446,7 +446,6 @@ func TestSendRPCToRegionClientDownDelayed(t *testing.T) {
 
 	mockCall := mock.NewMockCall(ctrl)
 	mockCall.EXPECT().SetRegion(origlReg).Times(1)
-	mockCall.EXPECT().Context().Return(context.Background())
 	result := make(chan hrpc.RPCResult, 1)
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
 
@@ -470,7 +469,7 @@ func TestSendRPCToRegionClientDownDelayed(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		_, err := c.sendRPCToRegion(mockCall, origlReg)
+		_, err := c.sendRPCToRegion(context.Background(), mockCall, origlReg)
 		switch err.(type) {
 		case region.ServerError, region.NotServingRegionError:
 		default:
@@ -748,7 +747,6 @@ func TestConcurrentRetryableError(t *testing.T) {
 	for i := range calls {
 		mockCall := mock.NewMockCall(ctrl)
 		mockCall.EXPECT().SetRegion(origlReg).AnyTimes()
-		mockCall.EXPECT().Context().Return(context.Background()).AnyTimes()
 		result := make(chan hrpc.RPCResult, 1)
 		result <- hrpc.RPCResult{Error: region.NotServingRegionError{}}
 		mockCall.EXPECT().ResultChan().Return(result).AnyTimes()
@@ -759,7 +757,7 @@ func TestConcurrentRetryableError(t *testing.T) {
 	for _, mockCall := range calls {
 		wg.Add(1)
 		go func(mockCall hrpc.Call) {
-			_, err := c.sendRPCToRegion(mockCall, origlReg)
+			_, err := c.sendRPCToRegion(context.Background(), mockCall, origlReg)
 			if _, ok := err.(region.NotServingRegionError); !ok {
 				t.Errorf("Got unexpected error: %v", err)
 			}
