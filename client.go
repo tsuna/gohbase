@@ -97,6 +97,10 @@ type client struct {
 		string, time.Duration, compression.Codec) hrpc.RegionClient
 
 	compressionCodec compression.Codec
+
+
+	// region looker lock container
+	regionLookerMap sync.Map
 }
 
 // NewClient creates a new HBase client.
