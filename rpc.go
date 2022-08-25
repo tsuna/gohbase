@@ -130,6 +130,8 @@ func sendBlocking(ctx context.Context, rc hrpc.RegionClient, rpc hrpc.Call) (
 	hrpc.RPCResult, error) {
 	rc.QueueRPC(rpc)
 
+	ctx, sp := observability.StartSpan(ctx, "waitForResult")
+	defer sp.End()
 	var res hrpc.RPCResult
 	// Wait for the response
 	select {
