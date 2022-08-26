@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"strconv"
 	"testing"
@@ -1050,6 +1051,58 @@ func BenchmarkMultiToProto(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
 			m.toProto(false)
+		}
+	})
+}
+
+func BenchmarkMultiToProtoLarge(b *testing.B) {
+	row := "12345678901234567890123456789012345678901234567890"
+	values := map[string]map[string][]byte{
+		"cf": {
+			"abcde":  []byte("1234567890"),
+			"fghij":  []byte("1234567890"),
+			"klmno":  []byte("1234567890"),
+			"pqrst":  []byte("1234567890"),
+			"uvxwyz": []byte("1234567890"),
+		},
+	}
+
+	regions := []hrpc.RegionInfo{
+		NewInfo(0, nil, []byte("reg0"),
+			[]byte("reg0,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil),
+		NewInfo(1, nil, []byte("reg1"),
+			[]byte("reg1,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil),
+		NewInfo(2, nil, []byte("reg2"),
+			[]byte("reg2,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil),
+		NewInfo(3, nil, []byte("reg3"),
+			[]byte("reg3,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil),
+		NewInfo(4, nil, []byte("reg4"),
+			[]byte("reg4,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil),
+		NewInfo(5, nil, []byte("reg5"),
+			[]byte("reg5,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil),
+		NewInfo(6, nil, []byte("reg6"),
+			[]byte("reg6,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil),
+		NewInfo(7, nil, []byte("reg7"),
+			[]byte("reg7,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil),
+		NewInfo(8, nil, []byte("reg8"),
+			[]byte("reg8,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil),
+		NewInfo(9, nil, []byte("reg9"),
+			[]byte("reg9,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil),
+	}
+
+	m := newMulti(1000)
+	for i := 0; i < 1000; i++ {
+		rpc, err := hrpc.NewPutStr(context.Background(), fmt.Sprintf("region%d", i%10), row, values)
+		if err != nil {
+			b.Fatal(err)
+		}
+		rpc.SetRegion(regions[i%10])
+		m.add(rpc)
+	}
+	b.Run("cellblocks", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			m.toProto(true)
 		}
 	})
 }
