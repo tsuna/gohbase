@@ -37,6 +37,7 @@ type info struct {
 	name      []byte
 	startKey  []byte
 	stopKey   []byte
+	specifier *pb.RegionSpecifier
 	ctx       context.Context
 	cancel    context.CancelFunc
 
@@ -66,6 +67,10 @@ func NewInfo(id uint64, namespace, table, name, startKey, stopKey []byte) hrpc.R
 		name:      name,
 		startKey:  startKey,
 		stopKey:   stopKey,
+		specifier: &pb.RegionSpecifier{
+			Type:  pb.RegionSpecifier_REGION_NAME.Enum(),
+			Value: name,
+		},
 	}
 }
 
@@ -213,6 +218,11 @@ func (i *info) ID() uint64 {
 // Name returns region name
 func (i *info) Name() []byte {
 	return i.name
+}
+
+// RegionSpecifier returns the RegionSpecifier proto for this region
+func (i *info) RegionSpecifier() *pb.RegionSpecifier {
+	return i.specifier
 }
 
 // StopKey return region stop key

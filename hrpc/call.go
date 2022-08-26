@@ -135,6 +135,9 @@ func (b *base) SetRegion(region RegionInfo) {
 var RegionSpecifierRegionName = pb.RegionSpecifier_REGION_NAME.Enum()
 
 func (b *base) regionSpecifier() *pb.RegionSpecifier {
+	if i, ok := b.region.(interface{ RegionSpecifier() *pb.RegionSpecifier }); ok {
+		return i.RegionSpecifier()
+	}
 	return &pb.RegionSpecifier{
 		Type:  RegionSpecifierRegionName,
 		Value: b.region.Name(),
