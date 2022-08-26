@@ -416,8 +416,16 @@ func toCellblock(row, family, qualifier, value []byte, ts uint64, typ byte) []by
 
 func (m *Mutate) valuesToCellblocks() ([][]byte, int32, uint32) {
 	var count int
+	for _, v := range m.values {
+		if v == nil {
+			count += len(emptyQualifier)
+		} else {
+			count += len(v)
+		}
+	}
+	cellblocks := make([][]byte, 0, count)
+
 	var size int
-	cellblocks := make([][]byte, 0, len(m.values))
 	var ts uint64
 	if m.timestamp == MaxTimestamp {
 		ts = math.MaxInt64 // Java's Long.MAX_VALUE use for HBase's LATEST_TIMESTAMP
@@ -456,7 +464,6 @@ func (m *Mutate) valuesToCellblocks() ([][]byte, int32, uint32) {
 			cellblock := toCellblock(m.key, family, []byte(k1), v1, ts, mt)
 			cellblocks = append(cellblocks, cellblock)
 			size += len(cellblock)
-			count++
 		}
 	}
 	return cellblocks, int32(count), uint32(size)
