@@ -27,6 +27,8 @@ const (
 // AdminClient to perform admistrative operations with HMaster
 type AdminClient interface {
 	CreateTable(t *hrpc.CreateTable) error
+	ModifyTable(t *hrpc.ModifyTable) error
+	GetTableDescriptors(t *hrpc.GetTableDescriptors) ([]*pb.TableSchema, error)
 	DeleteTable(t *hrpc.DeleteTable) error
 	EnableTable(t *hrpc.EnableTable) error
 	DisableTable(t *hrpc.DisableTable) error
@@ -71,7 +73,7 @@ func newAdminClient(zkquorum string, options ...Option) AdminClient {
 	return c
 }
 
-//Get the status of the cluster
+// Get the status of the cluster
 func (c *client) ClusterStatus() (*pb.ClusterStatus, error) {
 	pbmsg, err := c.SendRPC(hrpc.NewClusterStatus())
 	if err != nil {
@@ -98,6 +100,32 @@ func (c *client) CreateTable(t *hrpc.CreateTable) error {
 	}
 
 	return c.checkProcedureWithBackoff(t.Context(), r.GetProcId())
+}
+
+func (c *client) ModifyTable(t *hrpc.ModifyTable) error {
+	pbmsg, err := c.SendRPC(t)
+	if err != nil {
+		return err
+	}
+
+	_, ok := pbmsg.(*pb.ModifyTableResponse)
+	if !ok {
+		return fmt.Errorf("sendRPC returned not a ModifyTableResponse")
+	}
+	return nil
+}
+
+func (c *client) GetTableDescriptors(t *hrpc.GetTableDescriptors) ([]*pb.TableSchema, error) {
+	pbmsg, err := c.SendRPC(t)
+	if err != nil {
+		return nil, err
+	}
+
+	r, ok := pbmsg.(*pb.GetTableDescriptorsResponse)
+	if !ok {
+		return nil, fmt.Errorf("sendRPC returned not a GetTableDescriptorsResponse")
+	}
+	return r.GetTableSchema(), nil
 }
 
 func (c *client) DeleteTable(t *hrpc.DeleteTable) error {

@@ -6,6 +6,7 @@
 package hrpc
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -160,6 +161,20 @@ func (b *base) setOptions(options []func(Call) error) {
 // Options returns all the options passed to this call
 func (b *base) Options() []func(Call) error {
 	return b.options
+}
+
+// return <namespace, tableName>
+func (b *base) parseTableName() ([]byte, []byte) {
+	return parseTableName(b.table)
+}
+
+func parseTableName(table []byte) ([]byte, []byte) {
+	namespace := []byte("default")
+	if i := bytes.Index(table, []byte(":")); i > -1 {
+		namespace = table[:i]
+		table = table[i+1:]
+	}
+	return namespace, table
 }
 
 func applyOptions(call Call, options ...func(Call) error) error {

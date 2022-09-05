@@ -6,7 +6,6 @@
 package hrpc
 
 import (
-	"bytes"
 	"context"
 
 	"github.com/tsuna/gohbase/pb"
@@ -42,12 +41,7 @@ func (dt *DeleteTable) Description() string {
 
 // ToProto converts the RPC into a protobuf message
 func (dt *DeleteTable) ToProto() proto.Message {
-	namespace := []byte("default")
-	table := dt.table
-	if i := bytes.Index(table, []byte(":")); i > -1 {
-		namespace = table[:i]
-		table = table[i+1:]
-	}
+	namespace, table := dt.parseTableName()
 	return &pb.DeleteTableRequest{
 		TableName: &pb.TableName{
 			Namespace: namespace,
