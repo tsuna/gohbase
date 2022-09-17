@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -358,4 +359,33 @@ func findCommaFromEnd(b []byte, offset int) int {
 		}
 	}
 	panic(fmt.Errorf("no comma found in %q after offset %d", b, offset))
+}
+
+func (i *info) MarshalJSON() ([]byte, error) {
+	state := struct {
+		Id        uint64
+		Namespace []byte
+		Table     []byte
+		Name      []byte
+		StartKey  []byte
+		StopKey   []byte
+		//Specifier        *pb.RegionSpecifier // TODO TARAN: REMOVE BEFORE MERGING. COMMENTED OUT INCASE WE WANT TO PUT IT BACK
+		ContextInstance string
+		Err             error
+		ClientInstance  string
+		Client          hrpc.RegionClient
+	}{
+		i.id,
+		i.namespace,
+		i.table,
+		i.name,
+		i.startKey,
+		i.stopKey,
+		//i.specifier,
+		fmt.Sprint(&i.ctx),
+		i.ctx.Err(),
+		fmt.Sprint(&i.client),
+		i.client,
+	}
+	return json.Marshal(state)
 }

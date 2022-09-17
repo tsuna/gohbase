@@ -7,6 +7,7 @@ package gohbase
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"sync"
 
@@ -100,6 +101,12 @@ type keyRegionCache struct {
 	regions *b.Tree
 }
 
+// key is the B+ key that the value is under
+type RegionCacheKeyValue struct {
+	Key        []byte
+	RegionInfo hrpc.RegionInfo
+}
+
 func (krc *keyRegionCache) get(key []byte) ([]byte, hrpc.RegionInfo) {
 	krc.m.RLock()
 
@@ -119,6 +126,35 @@ func (krc *keyRegionCache) get(key []byte) ([]byte, hrpc.RegionInfo) {
 		return nil, nil
 	}
 	return k.([]byte), v.(hrpc.RegionInfo)
+}
+
+// reads whole b tree in keyRegionCache
+func (krc *keyRegionCache) MarshalJSON() ([]byte, error) {
+
+	regionCacheKeyValues := make([]RegionCacheKeyValue, 0)
+
+	krc.m.RLock()
+	enum, err := krc.regions.SeekFirst()
+	if err != nil {
+		log.Infof("No regions cached in keyRegionCache: %v", err)
+		krc.m.RUnlock()
+		return nil, err
+	}
+	krc.m.RUnlock()
+
+	for {
+		krc.m.RLock()
+		k, v, err := enum.Next()
+		// release lock after each iteration to allow other processes a chance to get it
+		krc.m.RUnlock()
+		if err == io.EOF {
+			log.Infof("No more regions in keyRegionCache: %v", err)
+			break
+		}
+		regionCacheKeyValues = append(regionCacheKeyValues, RegionCacheKeyValue{k.([]byte), v.(hrpc.RegionInfo)})
+	}
+
+	return json.Marshal(regionCacheKeyValues)
 }
 
 func isRegionOverlap(regA, regB hrpc.RegionInfo) bool {

@@ -7,6 +7,7 @@ package region
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -722,4 +723,38 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 		return id, ServerError{err}
 	}
 	return id, nil
+}
+
+func (c *client) MarshalJSON() ([]byte, error) {
+
+	// connStatus := struct {
+	// 	LocalAddress net.Addr
+	// 	RemoteAddress net.Addr
+	// }
+
+	var done_status string
+	select {
+	case <-c.done:
+		done_status = "Closed"
+	default:
+		done_status = "Not Closed"
+	}
+
+	state := struct {
+		LocalAddress        net.Addr
+		RemoteAddress       net.Addr
+		RegionServerAddress string
+		ClientType          ClientType
+		done_status         string
+		id                  uint32
+	}{
+		c.conn.LocalAddr(),
+		c.conn.RemoteAddr(),
+		c.addr,
+		c.ctype,
+		done_status,
+		c.id,
+	}
+
+	return json.Marshal(state)
 }

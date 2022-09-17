@@ -7,6 +7,7 @@ package gohbase
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -60,7 +61,7 @@ type client struct {
 	// serves it.
 	clients clientRegionCache
 
-	metaRegionInfo hrpc.RegionInfo
+	metaRegionInfo hrpc.RegionInfo // TODO: Get mem addr, if we use something like printf can we get the value (for pointers: memory addr for now)
 
 	adminRegionInfo hrpc.RegionInfo
 
@@ -140,6 +141,43 @@ func newClient(zkquorum string, options ...Option) *client {
 	c.zkClient = zk.NewClient(zkquorum, c.zkTimeout)
 
 	return c
+}
+
+// DebugState information about the clients keyRegionCache, and clientRegionCache
+func DebugState(client *client) []byte {
+
+	debugInfoJson, err := json.Marshal(client)
+
+	// debugInfo := DebugInfo{regionCacheKeyValues}
+	// debugInfoJson, err := json.Marshal(debugInfo)
+
+	if err != nil {
+		log.Errorf("Cannot turn debugInfo into JSON bytes array: %v", err)
+	}
+
+	return debugInfoJson
+}
+
+func (c *client) MarshalJSON() ([]byte, error) {
+
+	state := struct {
+		ClientType region.ClientType
+		//KeyRegionCache          keyRegionCache
+		MetaRegionInfoInstance  string
+		MetaRegionInfo          hrpc.RegionInfo
+		AdminRegionInfoInstance string
+		AdminRegionInfo         hrpc.RegionInfo
+	}{
+		c.clientType,
+		//c.regions, // TODO: FIGURE OUT WHY THIS IS SAYING WE ARE COPYING THE MUTEX WHEN THE CUSTOM MARSHALER IS NOT
+		fmt.Sprint(&c.metaRegionInfo),
+		c.metaRegionInfo,
+		fmt.Sprint(&c.adminRegionInfo),
+		c.adminRegionInfo,
+	}
+
+	return json.Marshal(state)
+
 }
 
 // RpcQueueSize will return an option that will set the size of the RPC queues

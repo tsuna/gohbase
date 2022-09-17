@@ -26,10 +26,11 @@
 package pb
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -706,6 +707,19 @@ func (x *RegionSpecifier) GetValue() []byte {
 	}
 	return nil
 }
+
+// func (x *RegionSpecifier) MarshalJSON() ([]byte, error) {
+// 	state := struct {
+// 		Type RegionSpecifier_RegionSpecifierType
+// 		Value []byte
+// 	}{
+// 		*x.Type,
+// 		x.Value,
+
+// 	}
+
+// 	return json.Marshal(state)
+// }
 
 // *
 // A range of time. Both from and to are Java time
