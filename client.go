@@ -61,7 +61,7 @@ type client struct {
 	// serves it.
 	clients clientRegionCache
 
-	metaRegionInfo hrpc.RegionInfo // TODO: Get mem addr, if we use something like printf can we get the value (for pointers: memory addr for now)
+	metaRegionInfo hrpc.RegionInfo
 
 	adminRegionInfo hrpc.RegionInfo
 
