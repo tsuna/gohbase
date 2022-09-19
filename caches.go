@@ -93,6 +93,34 @@ func (rcc *clientRegionCache) clientDown(c hrpc.RegionClient) map[hrpc.RegionInf
 	return downregions
 }
 
+func (rcc *clientRegionCache) MarshalJSON() ([]byte, error) {
+
+	type ClientRegionInfoMap struct {
+		RegionInfo hrpc.RegionInfo
+	}
+
+	type ClientRegionCacheKeyValue struct {
+		RegionClient  hrpc.RegionClient
+		RegionInfoMap []ClientRegionInfoMap
+	}
+
+	clientRegionCacheValues := make([]ClientRegionCacheKeyValue, 0)
+
+	for key, value := range rcc.regions {
+
+		clientRegionInfoMap := make([]ClientRegionInfoMap, 0)
+		for regionInfo := range value {
+			clientRegionInfoMap = append(clientRegionInfoMap, ClientRegionInfoMap{regionInfo})
+		}
+
+		clientRegionCacheValues = append(clientRegionCacheValues, ClientRegionCacheKeyValue{key, clientRegionInfoMap})
+	}
+
+	jsonVal, err := json.Marshal(clientRegionCacheValues)
+
+	return jsonVal, err
+}
+
 // key -> region cache.
 type keyRegionCache struct {
 	m sync.RWMutex
@@ -103,7 +131,7 @@ type keyRegionCache struct {
 
 // key is the B+ key that the value is under
 type RegionCacheKeyValue struct {
-	Key        []byte
+	Key        string
 	RegionInfo hrpc.RegionInfo
 }
 
@@ -151,10 +179,12 @@ func (krc *keyRegionCache) MarshalJSON() ([]byte, error) {
 			log.Infof("No more regions in keyRegionCache: %v", err)
 			break
 		}
-		regionCacheKeyValues = append(regionCacheKeyValues, RegionCacheKeyValue{k.([]byte), v.(hrpc.RegionInfo)})
+		regionCacheKeyValues = append(regionCacheKeyValues, RegionCacheKeyValue{string(k.([]byte)), v.(hrpc.RegionInfo)})
 	}
 
-	return json.Marshal(regionCacheKeyValues)
+	jsonVal, err := json.Marshal(regionCacheKeyValues)
+
+	return jsonVal, err
 }
 
 func isRegionOverlap(regA, regB hrpc.RegionInfo) bool {

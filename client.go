@@ -161,22 +161,28 @@ func DebugState(client *client) []byte {
 func (c *client) MarshalJSON() ([]byte, error) {
 
 	state := struct {
-		ClientType region.ClientType
-		//KeyRegionCache          keyRegionCache
+		ClientType              region.ClientType
+		KeyRegionCache          *keyRegionCache
+		Client                  *clientRegionCache
 		MetaRegionInfoInstance  string
 		MetaRegionInfo          hrpc.RegionInfo
 		AdminRegionInfoInstance string
 		AdminRegionInfo         hrpc.RegionInfo
 	}{
 		c.clientType,
-		//c.regions, // TODO: FIGURE OUT WHY THIS IS SAYING WE ARE COPYING THE MUTEX WHEN THE CUSTOM MARSHALER IS NOT
+		&c.regions, // TODO: FIGURE OUT WHY THIS IS SAYING WE ARE COPYING THE MUTEX WHEN THE CUSTOM MARSHALER IS NOT
+		&c.clients,
 		fmt.Sprint(&c.metaRegionInfo),
 		c.metaRegionInfo,
 		fmt.Sprint(&c.adminRegionInfo),
 		c.adminRegionInfo,
 	}
 
-	return json.Marshal(state)
+	//c.zkClient.LocateResource() Implement method to check status of connection
+
+	jsonVal, err := json.Marshal(state)
+
+	return jsonVal, err
 
 }
 

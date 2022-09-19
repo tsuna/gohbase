@@ -75,6 +75,21 @@ func (mr *MockRegionClientMockRecorder) Dial(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dial", reflect.TypeOf((*MockRegionClient)(nil).Dial), arg0)
 }
 
+// MarshalJSON mocks base method.
+func (m *MockRegionClient) MarshalJSON() ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MarshalJSON")
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MarshalJSON indicates an expected call of MarshalJSON.
+func (mr *MockRegionClientMockRecorder) MarshalJSON() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarshalJSON", reflect.TypeOf((*MockRegionClient)(nil).MarshalJSON))
+}
+
 // QueueRPC mocks base method.
 func (m *MockRegionClient) QueueRPC(arg0 hrpc.Call) {
 	m.ctrl.T.Helper()

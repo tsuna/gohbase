@@ -318,12 +318,6 @@ func (c *client) getRegionFromCache(table, key []byte) hrpc.RegionInfo {
 	}
 	regionName := createRegionSearchKey(table, key)
 	_, region := c.regions.get(regionName)
-	// TARAN TODO: REMOVE BEFORE MERGING THIS. HERE JUST FOR TESTING
-	jsonVal, err := c.regions.MarshalJSON()
-	// here to remove error
-	if err != nil {
-		log.Infof("here to remove error %v", jsonVal)
-	}
 	if region == nil {
 		return nil
 	}

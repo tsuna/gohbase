@@ -364,11 +364,11 @@ func findCommaFromEnd(b []byte, offset int) int {
 func (i *info) MarshalJSON() ([]byte, error) {
 	state := struct {
 		Id        uint64
-		Namespace []byte
-		Table     []byte
-		Name      []byte
-		StartKey  []byte
-		StopKey   []byte
+		Namespace string
+		Table     string
+		Name      string
+		StartKey  string
+		StopKey   string
 		//Specifier        *pb.RegionSpecifier // TODO TARAN: REMOVE BEFORE MERGING. COMMENTED OUT INCASE WE WANT TO PUT IT BACK
 		ContextInstance string
 		Err             error
@@ -376,16 +376,18 @@ func (i *info) MarshalJSON() ([]byte, error) {
 		Client          hrpc.RegionClient
 	}{
 		i.id,
-		i.namespace,
-		i.table,
-		i.name,
-		i.startKey,
-		i.stopKey,
+		string(i.namespace),
+		string(i.table),
+		string(i.name),
+		string(i.startKey),
+		string(i.stopKey),
 		//i.specifier,
 		fmt.Sprint(&i.ctx),
 		i.ctx.Err(),
 		fmt.Sprint(&i.client),
 		i.client,
 	}
-	return json.Marshal(state)
+	jsonVal, err := json.Marshal(state)
+
+	return jsonVal, err
 }

@@ -257,3 +257,5 @@ func (c *testClient) QueueRPC(call hrpc.Call) {
 }
 
 func (c *testClient) Close() {}
+
+func (c *testClient) MarshalJSON() ([]byte, error) { return nil, nil }

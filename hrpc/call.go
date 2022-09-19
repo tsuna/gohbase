@@ -46,6 +46,7 @@ type RegionClient interface {
 	Addr() string
 	QueueRPC(Call)
 	String() string
+	json.Marshaler
 }
 
 // Call represents an HBase RPC call.
