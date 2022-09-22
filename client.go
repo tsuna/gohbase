@@ -144,46 +144,49 @@ func newClient(zkquorum string, options ...Option) *client {
 }
 
 // DebugState information about the clients keyRegionCache, and clientRegionCache
-func DebugState(client *client) []byte {
+func DebugState(client *client) ([]byte, error) {
 
-	debugInfoJson, err := json.Marshal(client)
-
-	// debugInfo := DebugInfo{regionCacheKeyValues}
-	// debugInfoJson, err := json.Marshal(debugInfo)
-
+	debugInfoJson, err := json.Marshal(client) // TODO: REVERT TO ONLY USING MARSHAL. T
 	if err != nil {
 		log.Errorf("Cannot turn debugInfo into JSON bytes array: %v", err)
 	}
-
-	return debugInfoJson
+	return debugInfoJson, err
 }
 
 func (c *client) MarshalJSON() ([]byte, error) {
 
-	state := struct {
-		ClientType              region.ClientType
-		KeyRegionCache          *keyRegionCache
-		Client                  *clientRegionCache
-		MetaRegionInfoInstance  string
-		MetaRegionInfo          hrpc.RegionInfo
-		AdminRegionInfoInstance string
-		AdminRegionInfo         hrpc.RegionInfo
-	}{
-		c.clientType,
-		&c.regions, // TODO: FIGURE OUT WHY THIS IS SAYING WE ARE COPYING THE MUTEX WHEN THE CUSTOM MARSHALER IS NOT
-		&c.clients,
-		fmt.Sprint(&c.metaRegionInfo),
-		c.metaRegionInfo,
-		fmt.Sprint(&c.adminRegionInfo),
-		c.adminRegionInfo,
+	var done_status string
+	if c.done != nil {
+		select {
+		case <-c.done:
+			done_status = "Closed"
+		default:
+			done_status = "Not Closed"
+		}
 	}
 
-	//c.zkClient.LocateResource() Implement method to check status of connection
+	state := struct {
+		ClientType          region.ClientType
+		KeyRegionCache      *keyRegionCache
+		Client              *clientRegionCache
+		MetaRegionInfo      hrpc.RegionInfo
+		AdminRegionInfo     hrpc.RegionInfo
+		Done_Status         string
+		RegionLookupTimeout time.Duration
+		RegionReadTimeout   time.Duration
+	}{
+		c.clientType,
+		&c.regions,
+		&c.clients,
+		c.metaRegionInfo,
+		c.adminRegionInfo,
+		done_status,
+		c.regionLookupTimeout,
+		c.regionReadTimeout,
+	}
 
 	jsonVal, err := json.Marshal(state)
-
 	return jsonVal, err
-
 }
 
 // RpcQueueSize will return an option that will set the size of the RPC queues

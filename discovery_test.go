@@ -81,12 +81,4 @@ func TestRegionDiscovery(t *testing.T) {
 	if reg != nil {
 		t.Errorf("Found region %#v even though this table doesn't exist", reg)
 	}
-
-	// TODO: DELETE AND MOVE INTO ITS OWN TEST
-	debugInfo := DebugState(client)
-
-	if len(debugInfo) == 0 {
-		t.Errorf("DebugInfo is empty, even though it should have values")
-	}
-
 }

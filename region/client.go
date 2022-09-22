@@ -266,6 +266,36 @@ func (c *client) inFlightDown() error {
 	return nil
 }
 
+// return inFlight value
+func (c *client) InFlight() uint32 {
+	c.inFlightM.Lock()
+	inFlight := c.inFlight
+	c.inFlightM.Unlock()
+	return inFlight
+}
+
+func (c *client) DoneStatus() string {
+	var done_status string
+	if c.done != nil {
+		select {
+		case <-c.done:
+			done_status = "Closed"
+		default:
+			done_status = "Not Closed"
+		}
+	}
+	return done_status
+}
+
+// return the (local address, remote address) if the connection is not nil, o.w return nil
+func (c *client) ConnectionAddresses() (net.Addr, net.Addr) {
+	if c.conn != nil {
+		return c.conn.LocalAddr(), c.conn.RemoteAddr()
+	} else {
+		return nil, nil
+	}
+}
+
 func (c *client) fail(err error) {
 	c.failOnce.Do(func() {
 		if err != ErrClientClosed {
@@ -727,33 +757,33 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 
 func (c *client) MarshalJSON() ([]byte, error) {
 
-	// connStatus := struct {
-	// 	LocalAddress net.Addr
-	// 	RemoteAddress net.Addr
-	// }
-
-	var done_status string
-	select {
-	case <-c.done:
-		done_status = "Closed"
-	default:
-		done_status = "Not Closed"
+	type Address struct {
+		Network string
+		Address string
 	}
+	// if conn is nil then we don't want to panic. So just get the addresses if conn is not nil
+	localAddress, remoteAddress := c.ConnectionAddresses()
+	localAddr := Address{localAddress.Network(), localAddress.String()}
+	remoteAddr := Address{remoteAddress.Network(), remoteAddress.String()}
 
 	state := struct {
-		LocalAddress        net.Addr
-		RemoteAddress       net.Addr
-		RegionServerAddress string
-		ClientType          ClientType
-		done_status         string
-		id                  uint32
+		Instance                string
+		ConnectionLocalAddress  Address
+		ConnectionRemoteAddress Address
+		RegionServerAddress     string
+		ClientType              ClientType
+		InFlight                uint32
+		Id                      uint32
+		Done_status             string
 	}{
-		c.conn.LocalAddr(),
-		c.conn.RemoteAddr(),
+		fmt.Sprintf("%p", c),
+		localAddr,
+		remoteAddr,
 		c.addr,
 		c.ctype,
-		done_status,
+		c.InFlight(),
 		c.id,
+		c.DoneStatus(),
 	}
 
 	return json.Marshal(state)

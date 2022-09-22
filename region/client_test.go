@@ -1193,3 +1193,52 @@ func TestBuffer(t *testing.T) {
 	}
 	freeBuffer(b)
 }
+
+func TestMarshalJSON(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+
+	var localAddr net.Addr
+	var remoteAddr net.Addr
+	localAddr = &net.TCPAddr{IP: []byte("172.16.254.1"), Port: 0, Zone: "testZone"}
+	remoteAddr = &net.TCPAddr{IP: []byte("10.16.254.1"), Port: 0, Zone: "testZone"}
+
+	mockConn := mock.NewMockConn(ctrl)
+	mockConn.EXPECT().LocalAddr().Return(localAddr)
+	mockConn.EXPECT().RemoteAddr().Return(remoteAddr)
+	c := &client{
+		conn:          mockConn,
+		addr:          "testRegionServerAddress",
+		ctype:         RegionClient,
+		rpcs:          make(chan hrpc.Call),
+		done:          make(chan struct{}),
+		sent:          make(map[uint32]hrpc.Call),
+		rpcQueueSize:  1, // size one to skip sendBatch
+		flushInterval: 1000 * time.Second,
+		compressor:    &compressor{Codec: mockCodec{}},
+		id:            111,
+	}
+
+	_, err := c.MarshalJSON()
+
+	if err != nil {
+		t.Fatalf("Did not expect Error to be thrown: %v", err)
+	}
+}
+
+func TestMarshalJSONNilValues(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+
+	c := &client{
+		conn: nil,
+		rpcs: nil,
+		done: nil,
+		sent: nil,
+	}
+
+	_, err := c.MarshalJSON()
+	if err != nil {
+		t.Fatalf("Did not expect Error to be thrown: %v", err)
+	}
+}

@@ -95,29 +95,23 @@ func (rcc *clientRegionCache) clientDown(c hrpc.RegionClient) map[hrpc.RegionInf
 
 func (rcc *clientRegionCache) MarshalJSON() ([]byte, error) {
 
-	type ClientRegionInfoMap struct {
-		RegionInfo hrpc.RegionInfo
-	}
-
 	type ClientRegionCacheKeyValue struct {
 		RegionClient  hrpc.RegionClient
-		RegionInfoMap []ClientRegionInfoMap
+		RegionInfoMap []hrpc.RegionInfo
 	}
 
 	clientRegionCacheValues := make([]ClientRegionCacheKeyValue, 0)
 
 	for key, value := range rcc.regions {
-
-		clientRegionInfoMap := make([]ClientRegionInfoMap, 0)
+		clientRegionInfoMap := make([]hrpc.RegionInfo, 0)
 		for regionInfo := range value {
-			clientRegionInfoMap = append(clientRegionInfoMap, ClientRegionInfoMap{regionInfo})
+			clientRegionInfoMap = append(clientRegionInfoMap, regionInfo)
 		}
 
 		clientRegionCacheValues = append(clientRegionCacheValues, ClientRegionCacheKeyValue{key, clientRegionInfoMap})
 	}
 
 	jsonVal, err := json.Marshal(clientRegionCacheValues)
-
 	return jsonVal, err
 }
 
@@ -127,12 +121,6 @@ type keyRegionCache struct {
 
 	// Maps a []byte of a region start key to a hrpc.RegionInfo
 	regions *b.Tree
-}
-
-// key is the B+ key that the value is under
-type RegionCacheKeyValue struct {
-	Key        string
-	RegionInfo hrpc.RegionInfo
 }
 
 func (krc *keyRegionCache) get(key []byte) ([]byte, hrpc.RegionInfo) {
@@ -158,6 +146,12 @@ func (krc *keyRegionCache) get(key []byte) ([]byte, hrpc.RegionInfo) {
 
 // reads whole b tree in keyRegionCache
 func (krc *keyRegionCache) MarshalJSON() ([]byte, error) {
+
+	// key is the B+ key that the value is under
+	type RegionCacheKeyValue struct {
+		Key        string
+		RegionInfo hrpc.RegionInfo
+	}
 
 	regionCacheKeyValues := make([]RegionCacheKeyValue, 0)
 

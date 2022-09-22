@@ -7,11 +7,16 @@ package region
 
 import (
 	"bytes"
+	"context"
+	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
+	"github.com/tsuna/gohbase/test"
+	"github.com/tsuna/gohbase/test/mock"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -149,4 +154,84 @@ func TestCompareBogusName(t *testing.T) {
 		}
 	}()
 	Compare([]byte("bogus"), []byte("bogus"))
+}
+
+func TestRegionInfoMarshalJson(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+
+	queueSize := 30
+	flushInterval := 20 * time.Millisecond
+	var localAddr net.Addr
+	var remoteAddr net.Addr
+	localAddr = &net.TCPAddr{IP: []byte("172.16.254.1"), Port: 0, Zone: "testZone"}
+	remoteAddr = &net.TCPAddr{IP: []byte("10.16.254.1"), Port: 0, Zone: "testZone"}
+
+	mockConn := mock.NewMockConn(ctrl)
+	mockConn.EXPECT().LocalAddr().Return(localAddr)
+	mockConn.EXPECT().RemoteAddr().Return(remoteAddr)
+
+	c := &client{
+		conn:          mockConn,
+		addr:          "testAddr",
+		ctype:         RegionClient,
+		rpcs:          make(chan hrpc.Call),
+		done:          make(chan struct{}),
+		sent:          make(map[uint32]hrpc.Call),
+		inFlight:      20,
+		effectiveUser: "effectiveUser",
+		rpcQueueSize:  queueSize,
+		flushInterval: flushInterval,
+		readTimeout:   DefaultReadTimeout,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	info := &info{
+		id:        0,
+		ctx:       ctx,
+		cancel:    cancel,
+		namespace: []byte("test"),
+		table:     []byte("testTable"),
+		name:      []byte("testTableName"),
+		startKey:  []byte("startKey"),
+		stopKey:   []byte("stopKey"),
+		specifier: &pb.RegionSpecifier{
+			Type:  pb.RegionSpecifier_REGION_NAME.Enum(),
+			Value: []byte("test"),
+		},
+		client:    c,
+		available: nil,
+	}
+
+	_, err := info.MarshalJSON()
+
+	// Since we can't test the actual JSON values since the memory addresses are dynamic, we can make sure that no error was thrown when Marshalling. If no error was
+	// thrown, we can at least guarantee that the Marshaller ran and was able to parse all the fields we specified
+	if err != nil {
+		t.Errorf("Should not have thrown an error: %v", err)
+	}
+}
+
+func TestRegionInfoMarshalJsonNilValues(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+	info := &info{
+		id:        0,
+		ctx:       nil,
+		cancel:    nil,
+		namespace: nil,
+		table:     nil,
+		name:      nil,
+		startKey:  nil,
+		stopKey:   nil,
+		specifier: nil,
+		client:    nil,
+		available: nil,
+	}
+
+	_, err := info.MarshalJSON()
+
+	if err != nil {
+		t.Errorf("Should not have thrown an error: %v", err)
+	}
 }
