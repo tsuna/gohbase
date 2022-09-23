@@ -392,7 +392,7 @@ func (i *info) MarshalJSON() ([]byte, error) {
 		fmt.Sprintf("%p", (i.ctx)),
 		ctxError,
 		i.client,
-		i.IsUnavailable(),
+		!i.IsUnavailable(),
 	}
 	jsonVal, err := json.Marshal(state)
 

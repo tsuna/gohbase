@@ -146,25 +146,27 @@ func newClient(zkquorum string, options ...Option) *client {
 // DebugState information about the clients keyRegionCache, and clientRegionCache
 func DebugState(client *client) ([]byte, error) {
 
-	debugInfoJson, err := json.Marshal(client) // TODO: REVERT TO ONLY USING MARSHAL. T
+	debugInfoJson, err := json.Marshal(client)
 	if err != nil {
-		log.Errorf("Cannot turn debugInfo into JSON bytes array: %v", err)
+		log.Errorf("Cannot turn client into JSON bytes array: %v", err)
 	}
 	return debugInfoJson, err
 }
 
-func (c *client) MarshalJSON() ([]byte, error) {
-
-	var done_status string
+func (c *client) DoneStatus() string {
 	if c.done != nil {
 		select {
 		case <-c.done:
-			done_status = "Closed"
+			return "Closed"
 		default:
-			done_status = "Not Closed"
+			return "Not Closed"
 		}
+	} else {
+		return "nil"
 	}
+}
 
+func (c *client) MarshalJSON() ([]byte, error) {
 	state := struct {
 		ClientType          region.ClientType
 		KeyRegionCache      *keyRegionCache
@@ -180,7 +182,7 @@ func (c *client) MarshalJSON() ([]byte, error) {
 		&c.clients,
 		c.metaRegionInfo,
 		c.adminRegionInfo,
-		done_status,
+		c.DoneStatus(),
 		c.regionLookupTimeout,
 		c.regionReadTimeout,
 	}

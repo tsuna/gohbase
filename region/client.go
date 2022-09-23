@@ -266,7 +266,7 @@ func (c *client) inFlightDown() error {
 	return nil
 }
 
-// return inFlight value
+// InFlight returns inFlight value
 func (c *client) InFlight() uint32 {
 	c.inFlightM.Lock()
 	inFlight := c.inFlight
@@ -274,6 +274,7 @@ func (c *client) InFlight() uint32 {
 	return inFlight
 }
 
+// DoneStatus returns the status of the Done channel as a string. Closed if its done, Not Closed o.w
 func (c *client) DoneStatus() string {
 	var done_status string
 	if c.done != nil {
@@ -285,15 +286,6 @@ func (c *client) DoneStatus() string {
 		}
 	}
 	return done_status
-}
-
-// return the (local address, remote address) if the connection is not nil, o.w return nil
-func (c *client) ConnectionAddresses() (net.Addr, net.Addr) {
-	if c.conn != nil {
-		return c.conn.LocalAddr(), c.conn.RemoteAddr()
-	} else {
-		return nil, nil
-	}
 }
 
 func (c *client) fail(err error) {
@@ -761,10 +753,15 @@ func (c *client) MarshalJSON() ([]byte, error) {
 		Network string
 		Address string
 	}
+
 	// if conn is nil then we don't want to panic. So just get the addresses if conn is not nil
-	localAddress, remoteAddress := c.ConnectionAddresses()
-	localAddr := Address{localAddress.Network(), localAddress.String()}
-	remoteAddr := Address{remoteAddress.Network(), remoteAddress.String()}
+	var localAddr, remoteAddr Address
+	if c.conn != nil {
+		localAddress := c.conn.LocalAddr()
+		remoteAddress := c.conn.RemoteAddr()
+		localAddr = Address{localAddress.Network(), localAddress.String()}
+		remoteAddr = Address{remoteAddress.Network(), remoteAddress.String()}
+	}
 
 	state := struct {
 		Instance                string

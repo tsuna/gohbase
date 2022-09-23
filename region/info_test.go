@@ -206,7 +206,7 @@ func TestRegionInfoMarshalJson(t *testing.T) {
 	_, err := info.MarshalJSON()
 
 	// Since we can't test the actual JSON values since the memory addresses are dynamic, we can make sure that no error was thrown when Marshalling. If no error was
-	// thrown, we can at least guarantee that the Marshaller ran and was able to parse all the fields we specified
+	// thrown, we can at least guarantee that the Marshaller ran
 	if err != nil {
 		t.Errorf("Should not have thrown an error: %v", err)
 	}
