@@ -144,7 +144,7 @@ func newClient(zkquorum string, options ...Option) *client {
 }
 
 // DebugState information about the clients keyRegionCache, and clientRegionCache
-func DebugState(client *client) ([]byte, error) {
+func DebugState(client Client) ([]byte, error) {
 
 	debugInfoJson, err := json.Marshal(client)
 	if err != nil {
