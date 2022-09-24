@@ -37,6 +37,7 @@ type Client interface {
 	Delete(d *hrpc.Mutate) (*hrpc.Result, error)
 	Append(a *hrpc.Mutate) (*hrpc.Result, error)
 	Increment(i *hrpc.Mutate) (int64, error)
+	IncrementMultiColumn(i *hrpc.Mutate) (*hrpc.Result, error)
 	CheckAndPut(p *hrpc.Mutate, family string, qualifier string,
 		expectedValue []byte) (bool, error)
 	Close()
@@ -258,6 +259,14 @@ func (c *client) Increment(i *hrpc.Mutate) (int64, error) {
 
 	val := binary.BigEndian.Uint64(r.Cells[0].Value)
 	return int64(val), nil
+}
+
+func (c *client) IncrementMultiColumn(i *hrpc.Mutate) (*hrpc.Result, error) {
+	r, err := c.mutate(i)
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
 }
 
 func (c *client) mutate(m *hrpc.Mutate) (*hrpc.Result, error) {
