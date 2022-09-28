@@ -93,15 +93,19 @@ func (rcc *clientRegionCache) clientDown(c hrpc.RegionClient) map[hrpc.RegionInf
 	return downregions
 }
 
-// Collects information about the clientRegion cache and stores them in two maps to reduce duplication of data. We do this in one function to avoid running the iterations twice
-func (rcc *clientRegionCache) ClientRegionCacheDebugInfo(keyRegionInfosMap map[string]hrpc.RegionInfo, clientRegionsMap map[string]hrpc.RegionClient) map[string][]string {
+// Collects information about the clientRegion cache and stores them in two maps to reduce
+// duplication of data. We do this in one function to avoid running the iterations twice
+func (rcc *clientRegionCache) ClientRegionCacheDebugInfo(
+	keyRegionInfosMap map[string]hrpc.RegionInfo,
+	clientRegionsMap map[string]hrpc.RegionClient) map[string][]string {
 	// key = RegionClient memory address , value = List of RegionInfo addresses
 	clientRegionCacheMap := map[string][]string{}
 
 	rcc.m.RLock()
 	for client, reginfos := range rcc.regions {
 		clientRegionInfoMap := make([]string, 0)
-		// put all the region infos in the client into the keyRegionInfosMap b/c its not guaranteed that rcc and krc will have the same infos
+		// put all the region infos in the client into the keyRegionInfosMap b/c its not
+		// guaranteed that rcc and krc will have the same infos
 		clientRegionsMap[fmt.Sprintf("%p", client)] = client
 
 		for regionInfo := range reginfos {
@@ -146,7 +150,8 @@ func (krc *keyRegionCache) get(key []byte) ([]byte, hrpc.RegionInfo) {
 }
 
 // reads whole b tree in keyRegionCache and gathers debug info
-func (krc *keyRegionCache) KeyRegionCacheDebugInfo(keyRegionInfosMap map[string]hrpc.RegionInfo) map[string]string {
+func (krc *keyRegionCache) KeyRegionCacheDebugInfo(
+	keyRegionInfosMap map[string]hrpc.RegionInfo) map[string]string {
 	regionCacheMap := map[string]string{}
 
 	krc.m.RLock()

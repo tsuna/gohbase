@@ -1238,8 +1238,8 @@ func TestMarshalJSON(t *testing.T) {
 		t.Errorf("Error while unmarshalling JSON, %v", err)
 	}
 
-	var actualLocalAddr map[string]interface{} = jsonUnMarshal[ConnectionLocalAddressJsonKey].(map[string]interface{})
-	var actualRemoteAddr map[string]interface{} = jsonUnMarshal[ConnectionRemoteAddressJsonKey].(map[string]interface{})
+	actualLocalAddr := jsonUnMarshal[ConnectionLocalAddressJsonKey].(map[string]interface{})
+	actualRemoteAddr := jsonUnMarshal[ConnectionRemoteAddressJsonKey].(map[string]interface{})
 
 	assert.Equal(t, tcp, actualLocalAddr[NetworkJsonKey])
 	assert.Equal(t, tcp, actualRemoteAddr[NetworkJsonKey])
