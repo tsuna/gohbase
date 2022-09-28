@@ -8,7 +8,6 @@ package hrpc
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"unsafe"
@@ -34,7 +33,6 @@ type RegionInfo interface {
 	Table() []byte
 	SetClient(RegionClient)
 	Client() RegionClient
-	json.Marshaler
 }
 
 // RegionClient represents HBase region client.
@@ -46,7 +44,6 @@ type RegionClient interface {
 	Addr() string
 	QueueRPC(Call)
 	String() string
-	json.Marshaler
 }
 
 // Call represents an HBase RPC call.
