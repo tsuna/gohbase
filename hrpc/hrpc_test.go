@@ -493,7 +493,6 @@ func (ri mockRegionInfo) Namespace() []byte                 { return nil }
 func (ri mockRegionInfo) Table() []byte                     { return nil }
 func (ri mockRegionInfo) SetClient(RegionClient)            {}
 func (ri mockRegionInfo) Client() RegionClient              { return nil }
-func (r1 mockRegionInfo) MarshalJSON() ([]byte, error)      { return nil, nil }
 
 type byFamily []*pb.MutationProto_ColumnValue
 
