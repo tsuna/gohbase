@@ -28,6 +28,18 @@ const (
 	defaultZkRoot        = "/hbase"
 	defaultZkTimeout     = 30 * time.Second
 	defaultEffectiveUser = "root"
+
+	// variables here are used for testing the Marshalling interface
+	ClientTypeJsonKey          = "ClientType"
+	ClientRegionMapJsonKey     = "ClientRegionMap"
+	RegionInfoMapJsonKey       = "RegionInfoMap"
+	KeyRegionCacheJson         = "KeyRegionCache"
+	ClientRegionCacheJsonKey   = "ClientRegionCache"
+	MetaRegionInfoJsonKey      = "MetaRegionInfo"
+	AdminRegionInfoJsonKey     = "AdminRegionInfo"
+	Done_StatusJsonKey         = "Done_Status"
+	RegionLookupTimeoutJsonKey = "RegionLookupTimeout"
+	RegionReadTimeoutJsonKey   = "RegionReadTimeout"
 )
 
 // Client a regular HBase client
@@ -167,24 +179,40 @@ func (c *client) DoneStatus() string {
 }
 
 func (c *client) MarshalJSON() ([]byte, error) {
+
+	rcc := &c.clients
+	krc := &c.regions
+
+	// create map for all ClientRegions (clntRegion Ptr -> JSONified Client Region)
+	clientRegionsMap := map[string]hrpc.RegionClient{}
+	// create map for all RegionInfos (Region Ptr -> JSONified RegionInfo)
+	keyRegionInfosMap := map[string]hrpc.RegionInfo{}
+
+	clientRegionCacheValues := rcc.ClientRegionCacheDebugInfo(keyRegionInfosMap, clientRegionsMap)
+	keyRegionCacheValues := krc.KeyRegionCacheDebugInfo(keyRegionInfosMap)
+
 	state := struct {
 		ClientType          region.ClientType
-		KeyRegionCache      *keyRegionCache
-		Client              *clientRegionCache
+		ClientRegionMap     map[string]hrpc.RegionClient
+		RegionInfoMap       map[string]hrpc.RegionInfo
+		KeyRegionCache      map[string]string
+		ClientRegionCache   map[string][]string
 		MetaRegionInfo      hrpc.RegionInfo
 		AdminRegionInfo     hrpc.RegionInfo
 		Done_Status         string
 		RegionLookupTimeout time.Duration
 		RegionReadTimeout   time.Duration
 	}{
-		c.clientType,
-		&c.regions,
-		&c.clients,
-		c.metaRegionInfo,
-		c.adminRegionInfo,
-		c.DoneStatus(),
-		c.regionLookupTimeout,
-		c.regionReadTimeout,
+		ClientType:          c.clientType,
+		ClientRegionMap:     clientRegionsMap,
+		RegionInfoMap:       keyRegionInfosMap,
+		KeyRegionCache:      keyRegionCacheValues,
+		ClientRegionCache:   clientRegionCacheValues,
+		MetaRegionInfo:      c.metaRegionInfo,
+		AdminRegionInfo:     c.adminRegionInfo,
+		Done_Status:         c.DoneStatus(),
+		RegionLookupTimeout: c.regionLookupTimeout,
+		RegionReadTimeout:   c.regionReadTimeout,
 	}
 
 	jsonVal, err := json.Marshal(state)

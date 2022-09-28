@@ -1,6 +1,7 @@
 package gohbase
 
 import (
+	"log"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -82,11 +83,12 @@ func TestDebugStateSanity(t *testing.T) {
 	region3.SetClient(regClient)
 	client.clients.put("regionserver:1", region3, newClientFn)
 
-	_, err := DebugState(client)
+	json, err := DebugState(client)
 
-	// Since we can't test the actual JSON values since the memory addresses are dynamic, we can make sure that no error was thrown when Marshalling. If no error was
-	// thrown, we can at least guarantee that the Marshaller ran without any errors
 	if err != nil {
 		t.Errorf("DebugInfo should not have an error: %v", err)
 	}
+
+	log.Println(string(json))
+
 }

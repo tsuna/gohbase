@@ -8,11 +8,12 @@ package region
 import (
 	"bytes"
 	"context"
-	"net"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/test"
@@ -160,16 +161,16 @@ func TestRegionInfoMarshalJson(t *testing.T) {
 	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 
+	var id uint64 = 1
+	namespace := []byte("test")
+	table := []byte("testTable")
+	name := []byte("testTableName")
+	startKey := []byte("startKey")
+	stopKey := []byte("stopKey")
 	queueSize := 30
 	flushInterval := 20 * time.Millisecond
-	var localAddr net.Addr
-	var remoteAddr net.Addr
-	localAddr = &net.TCPAddr{IP: []byte("172.16.254.1"), Port: 0, Zone: "testZone"}
-	remoteAddr = &net.TCPAddr{IP: []byte("10.16.254.1"), Port: 0, Zone: "testZone"}
 
 	mockConn := mock.NewMockConn(ctrl)
-	mockConn.EXPECT().LocalAddr().Return(localAddr)
-	mockConn.EXPECT().RemoteAddr().Return(remoteAddr)
 
 	c := &client{
 		conn:          mockConn,
@@ -187,14 +188,14 @@ func TestRegionInfoMarshalJson(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	info := &info{
-		id:        0,
+		id:        id,
 		ctx:       ctx,
 		cancel:    cancel,
-		namespace: []byte("test"),
-		table:     []byte("testTable"),
-		name:      []byte("testTableName"),
-		startKey:  []byte("startKey"),
-		stopKey:   []byte("stopKey"),
+		namespace: namespace,
+		table:     table,
+		name:      name,
+		startKey:  startKey,
+		stopKey:   stopKey,
 		specifier: &pb.RegionSpecifier{
 			Type:  pb.RegionSpecifier_REGION_NAME.Enum(),
 			Value: []byte("test"),
@@ -203,13 +204,27 @@ func TestRegionInfoMarshalJson(t *testing.T) {
 		available: nil,
 	}
 
-	_, err := info.MarshalJSON()
+	jsonVal, err := info.MarshalJSON()
 
-	// Since we can't test the actual JSON values since the memory addresses are dynamic, we can make sure that no error was thrown when Marshalling. If no error was
-	// thrown, we can at least guarantee that the Marshaller ran
 	if err != nil {
 		t.Errorf("Should not have thrown an error: %v", err)
 	}
+
+	var jsonUnMarshal map[string]interface{}
+	err = json.Unmarshal(jsonVal, &jsonUnMarshal)
+
+	if err != nil {
+		t.Errorf("Error while unmarshalling JSON, %v", err)
+	}
+
+	assert.Equal(t, float64(id), jsonUnMarshal[IdJsonKey])
+	assert.Equal(t, string(table), jsonUnMarshal[TableJsonKey])
+	assert.Equal(t, string(name), jsonUnMarshal[NameJsonKey])
+	assert.Equal(t, string(startKey), jsonUnMarshal[StartKeyJsonKey])
+	assert.Equal(t, string(stopKey), jsonUnMarshal[StopKeyJsonKey])
+	assert.Equal(t, true, jsonUnMarshal[AvailableJsonKey])
+	assert.Equal(t, string(namespace), jsonUnMarshal[NamespaceJsonKey])
+
 }
 
 func TestRegionInfoMarshalJsonNilValues(t *testing.T) {

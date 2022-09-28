@@ -96,6 +96,15 @@ const (
 	// MasterClient is a ClientType that means this client will talk to the
 	// master server
 	MasterClient = ClientType("MasterService")
+
+	// Marshal JSONKey constants
+	ConnectionLocalAddressJsonKey  = "ConnectionLocalAddress"
+	ConnectionRemoteAddressJsonKey = "ConnectionRemoteAddress"
+	RegionServerAddressJsonKey     = "RegionServerAddress"
+	ClientTypeJsonKey              = "ClientType"
+	InFlightJsonKey                = "InFlight"
+	NetworkJsonKey                 = "Network"
+	AddressJsonKey                 = "Address"
 )
 
 var bufferPool sync.Pool
@@ -764,7 +773,6 @@ func (c *client) MarshalJSON() ([]byte, error) {
 	}
 
 	state := struct {
-		Instance                string
 		ConnectionLocalAddress  Address
 		ConnectionRemoteAddress Address
 		RegionServerAddress     string
@@ -773,14 +781,13 @@ func (c *client) MarshalJSON() ([]byte, error) {
 		Id                      uint32
 		Done_status             string
 	}{
-		fmt.Sprintf("%p", c),
-		localAddr,
-		remoteAddr,
-		c.addr,
-		c.ctype,
-		c.InFlight(),
-		c.id,
-		c.DoneStatus(),
+		ConnectionLocalAddress:  localAddr,
+		ConnectionRemoteAddress: remoteAddr,
+		RegionServerAddress:     c.addr,
+		ClientType:              c.ctype,
+		InFlight:                c.InFlight(),
+		Id:                      c.id,
+		Done_status:             c.DoneStatus(),
 	}
 
 	return json.Marshal(state)

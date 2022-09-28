@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -22,6 +23,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/test"
@@ -1200,8 +1202,12 @@ func TestMarshalJSON(t *testing.T) {
 
 	var localAddr net.Addr
 	var remoteAddr net.Addr
-	localAddr = &net.TCPAddr{IP: []byte("172.16.254.1"), Port: 0, Zone: "testZone"}
-	remoteAddr = &net.TCPAddr{IP: []byte("10.16.254.1"), Port: 0, Zone: "testZone"}
+	var id uint32 = 111
+	tcp := "tcp"
+	localIp := []byte("172.16.254.1")
+	remoteIp := []byte("10.16.254.1")
+	localAddr = &net.TCPAddr{IP: localIp, Port: 0, Zone: "testZone"}
+	remoteAddr = &net.TCPAddr{IP: remoteIp, Port: 0, Zone: "testZone"}
 
 	mockConn := mock.NewMockConn(ctrl)
 	mockConn.EXPECT().LocalAddr().Return(localAddr)
@@ -1216,14 +1222,31 @@ func TestMarshalJSON(t *testing.T) {
 		rpcQueueSize:  1, // size one to skip sendBatch
 		flushInterval: 1000 * time.Second,
 		compressor:    &compressor{Codec: mockCodec{}},
-		id:            111,
+		id:            id,
 	}
 
-	_, err := c.MarshalJSON()
+	jsonVal, err := c.MarshalJSON()
 
 	if err != nil {
 		t.Fatalf("Did not expect Error to be thrown: %v", err)
 	}
+
+	var jsonUnMarshal map[string]interface{}
+	err = json.Unmarshal(jsonVal, &jsonUnMarshal)
+
+	if err != nil {
+		t.Errorf("Error while unmarshalling JSON, %v", err)
+	}
+
+	var actualLocalAddr map[string]interface{} = jsonUnMarshal[ConnectionLocalAddressJsonKey].(map[string]interface{})
+	var actualRemoteAddr map[string]interface{} = jsonUnMarshal[ConnectionRemoteAddressJsonKey].(map[string]interface{})
+
+	assert.Equal(t, tcp, actualLocalAddr[NetworkJsonKey])
+	assert.Equal(t, tcp, actualRemoteAddr[NetworkJsonKey])
+	assert.Equal(t, string(RegionClient), jsonUnMarshal[ClientTypeJsonKey])
+	assert.Equal(t, float64(0), jsonUnMarshal[InFlightJsonKey])
+	assert.Equal(t, float64(id), jsonUnMarshal[IdJsonKey])
+
 }
 
 func TestMarshalJSONNilValues(t *testing.T) {

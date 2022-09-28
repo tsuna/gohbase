@@ -3,14 +3,12 @@
 // Use of this source code is governed by the Apache License 2.0
 // that can be found in the COPYING file.
 
-//go:build integration
-// +build integration
-
 package gohbase_test
 
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -26,10 +24,12 @@ import (
 	"math"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 	"github.com/tsuna/gohbase"
 	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
+	"github.com/tsuna/gohbase/region"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -2274,4 +2274,48 @@ func TestMoveRegion(t *testing.T) {
 	if err := ac.MoveRegion(mr); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestDebugState(t *testing.T) {
+	key := "row1"
+	val := []byte("1")
+	if host == nil {
+		t.Fatal("Host is not set!")
+	}
+
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+	err := insertKeyValue(c, key, "cf", val)
+	if err != nil {
+		t.Errorf("Put returned an error: %v", err)
+	}
+
+	jsonVal, err := gohbase.DebugState(c)
+
+	if err != nil {
+		t.Errorf("DebugState returned an error when it shouldn't have: %v", err)
+	}
+
+	fmt.Println(string(jsonVal))
+	var jsonUnMarshal map[string]interface{}
+	err = json.Unmarshal(jsonVal, &jsonUnMarshal)
+
+	if err != nil {
+		t.Errorf("Encoutered eror when Unmarshalling: %v", err)
+	}
+
+	clientRegionMap := jsonUnMarshal[gohbase.ClientRegionMapJsonKey]
+	clientType := jsonUnMarshal[gohbase.ClientTypeJsonKey]
+	regionInfoMap := jsonUnMarshal[gohbase.RegionInfoMapJsonKey]
+	keyRegionCache := jsonUnMarshal[gohbase.KeyRegionCacheJson]
+	clientRegionCache := jsonUnMarshal[gohbase.ClientRegionCacheJsonKey]
+
+	expectedClientRegionSize := 1
+	regionInfoMapSize := 2
+
+	assert.Equal(t, clientType.(string), string(region.RegionClient))
+	assert.Equal(t, len(clientRegionMap.(map[string]interface{})), expectedClientRegionSize)
+	assert.Equal(t, len(regionInfoMap.(map[string]interface{})), regionInfoMapSize)
+	assert.Equal(t, len(keyRegionCache.(map[string]interface{})), 1)
+	assert.Equal(t, len(clientRegionCache.(map[string]interface{})), 1) // only have one client
 }

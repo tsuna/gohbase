@@ -19,6 +19,17 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const (
+	// Marshal JSON key names
+	IdJsonKey        = "Id"
+	NamespaceJsonKey = "Namespace"
+	TableJsonKey     = "Table"
+	NameJsonKey      = "Name"
+	StartKeyJsonKey  = "StartKey"
+	StopKeyJsonKey   = "StopKey"
+	AvailableJsonKey = "Available"
+)
+
 var defaultNamespace = []byte("default")
 
 // OfflineRegionError is returned if region is offline
@@ -370,7 +381,6 @@ func (i *info) MarshalJSON() ([]byte, error) {
 	}
 
 	state := struct {
-		Instance        string
 		Id              uint64
 		Namespace       string
 		Table           string
@@ -379,20 +389,19 @@ func (i *info) MarshalJSON() ([]byte, error) {
 		StopKey         string
 		ContextInstance string
 		Err             string
-		Client          hrpc.RegionClient
+		Client          string
 		Available       bool
 	}{
-		fmt.Sprintf("%p", i),
-		i.id,
-		string(i.namespace),
-		string(i.table),
-		string(i.name),
-		string(i.startKey),
-		string(i.stopKey),
-		fmt.Sprintf("%p", (i.ctx)),
-		ctxError,
-		i.client,
-		!i.IsUnavailable(),
+		Id:              i.id,
+		Namespace:       string(i.namespace),
+		Table:           string(i.table),
+		Name:            string(i.name),
+		StartKey:        string(i.startKey),
+		StopKey:         string(i.stopKey),
+		ContextInstance: fmt.Sprintf("%p", (i.ctx)),
+		Err:             ctxError,
+		Client:          fmt.Sprintf("%p", (i.client)),
+		Available:       !i.IsUnavailable(),
 	}
 	jsonVal, err := json.Marshal(state)
 

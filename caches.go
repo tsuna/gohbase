@@ -7,7 +7,7 @@ package gohbase
 
 import (
 	"bytes"
-	"encoding/json"
+	"fmt"
 	"io"
 	"sync"
 
@@ -93,26 +93,27 @@ func (rcc *clientRegionCache) clientDown(c hrpc.RegionClient) map[hrpc.RegionInf
 	return downregions
 }
 
-func (rcc *clientRegionCache) MarshalJSON() ([]byte, error) {
+// Collects information about the clientRegion cache and stores them in two maps to reduce duplication of data. We do this in one function to avoid running the iterations twice
+func (rcc *clientRegionCache) ClientRegionCacheDebugInfo(keyRegionInfosMap map[string]hrpc.RegionInfo, clientRegionsMap map[string]hrpc.RegionClient) map[string][]string {
+	// key = RegionClient memory address , value = List of RegionInfo addresses
+	clientRegionCacheMap := map[string][]string{}
 
-	type ClientRegionCacheKeyValue struct {
-		RegionClient  hrpc.RegionClient
-		RegionInfoMap []hrpc.RegionInfo
-	}
+	rcc.m.RLock()
+	for client, reginfos := range rcc.regions {
+		clientRegionInfoMap := make([]string, 0)
+		// put all the region infos in the client into the keyRegionInfosMap b/c its not guaranteed that rcc and krc will have the same infos
+		clientRegionsMap[fmt.Sprintf("%p", client)] = client
 
-	clientRegionCacheValues := make([]ClientRegionCacheKeyValue, 0)
-
-	for key, value := range rcc.regions {
-		clientRegionInfoMap := make([]hrpc.RegionInfo, 0)
-		for regionInfo := range value {
-			clientRegionInfoMap = append(clientRegionInfoMap, regionInfo)
+		for regionInfo := range reginfos {
+			clientRegionInfoMap = append(clientRegionInfoMap, fmt.Sprintf("%p", regionInfo))
+			keyRegionInfosMap[fmt.Sprintf("%p", regionInfo)] = regionInfo
 		}
 
-		clientRegionCacheValues = append(clientRegionCacheValues, ClientRegionCacheKeyValue{key, clientRegionInfoMap})
+		clientRegionCacheMap[fmt.Sprintf("%p", client)] = clientRegionInfoMap
 	}
+	rcc.m.RUnlock()
 
-	jsonVal, err := json.Marshal(clientRegionCacheValues)
-	return jsonVal, err
+	return clientRegionCacheMap
 }
 
 // key -> region cache.
@@ -144,23 +145,16 @@ func (krc *keyRegionCache) get(key []byte) ([]byte, hrpc.RegionInfo) {
 	return k.([]byte), v.(hrpc.RegionInfo)
 }
 
-// reads whole b tree in keyRegionCache
-func (krc *keyRegionCache) MarshalJSON() ([]byte, error) {
-
-	// key is the B+ key that the value is under
-	type RegionCacheKeyValue struct {
-		Key        string
-		RegionInfo hrpc.RegionInfo
-	}
-
-	regionCacheKeyValues := make([]RegionCacheKeyValue, 0)
+// reads whole b tree in keyRegionCache and gathers debug info
+func (krc *keyRegionCache) KeyRegionCacheDebugInfo(keyRegionInfosMap map[string]hrpc.RegionInfo) map[string]string {
+	regionCacheMap := map[string]string{}
 
 	krc.m.RLock()
 	enum, err := krc.regions.SeekFirst()
 	if err != nil {
 		log.Infof("No regions cached in keyRegionCache: %v", err)
 		krc.m.RUnlock()
-		return nil, err
+		return regionCacheMap
 	}
 	krc.m.RUnlock()
 
@@ -173,12 +167,11 @@ func (krc *keyRegionCache) MarshalJSON() ([]byte, error) {
 			log.Infof("No more regions in keyRegionCache: %v", err)
 			break
 		}
-		regionCacheKeyValues = append(regionCacheKeyValues, RegionCacheKeyValue{string(k.([]byte)), v.(hrpc.RegionInfo)})
+		keyRegionInfosMap[fmt.Sprintf("%p", v.(hrpc.RegionInfo))] = v.(hrpc.RegionInfo)
+		regionCacheMap[string(k.([]byte))] = fmt.Sprintf("%p", v.(hrpc.RegionInfo))
 	}
 
-	jsonVal, err := json.Marshal(regionCacheKeyValues)
-
-	return jsonVal, err
+	return regionCacheMap
 }
 
 func isRegionOverlap(regA, regB hrpc.RegionInfo) bool {
