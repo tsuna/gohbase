@@ -127,6 +127,34 @@ func (c *client) SendRPC(rpc hrpc.Call) (msg proto.Message, err error) {
 	}
 }
 
+func (c *client) handleResultError(err error, reg hrpc.RegionInfo, rc hrpc.RegionClient) {
+	// Check for errors
+	switch err.(type) {
+	case region.NotServingRegionError:
+		// There's an error specific to this region, but
+		// our region client is fine. Mark this region as
+		// unavailable (as opposed to all regions sharing
+		// the client), and start a goroutine to reestablish
+		// it.
+		if reg.MarkUnavailable() {
+			go c.reestablishRegion(reg)
+		}
+	case region.ServerError:
+		// If it was an unrecoverable error, the region client is
+		// considered dead.
+		if reg == c.adminRegionInfo {
+			// If this is the admin client, mark the region
+			// as unavailable and start up a goroutine to
+			// reconnect if it wasn't already marked as such.
+			if reg.MarkUnavailable() {
+				go c.reestablishRegion(reg)
+			}
+		} else {
+			c.clientDown(rc)
+		}
+	}
+}
+
 func sendBlocking(ctx context.Context, rc hrpc.RegionClient, rpc hrpc.Call) (
 	hrpc.RPCResult, error) {
 	rc.QueueRPC(rpc)
@@ -166,30 +194,8 @@ func (c *client) sendRPCToRegion(ctx context.Context, rpc hrpc.Call, reg hrpc.Re
 	if err != nil {
 		return nil, err
 	}
-	// Check for errors
-	switch res.Error.(type) {
-	case region.NotServingRegionError:
-		// There's an error specific to this region, but
-		// our region client is fine. Mark this region as
-		// unavailable (as opposed to all regions sharing
-		// the client), and start a goroutine to reestablish
-		// it.
-		if reg.MarkUnavailable() {
-			go c.reestablishRegion(reg)
-		}
-	case region.ServerError:
-		// If it was an unrecoverable error, the region client is
-		// considered dead.
-		if reg == c.adminRegionInfo {
-			// If this is the admin client, mark the region
-			// as unavailable and start up a goroutine to
-			// reconnect if it wasn't already marked as such.
-			if reg.MarkUnavailable() {
-				go c.reestablishRegion(reg)
-			}
-		} else {
-			c.clientDown(client)
-		}
+	if res.Error != nil {
+		c.handleResultError(res.Error, reg, client)
 	}
 	return res.Msg, res.Error
 }
