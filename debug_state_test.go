@@ -90,6 +90,28 @@ func TestDebugStateSanity(t *testing.T) {
 		t.Fatalf("DebugInfo should not have an error: %v", err)
 	}
 
+	var jsonUnMarshal map[string]interface{}
+	err = json.Unmarshal(jsonVal, &jsonUnMarshal)
+
+	if err != nil {
+		t.Fatalf("Encoutered eror when Unmarshalling: %v", err)
+	}
+
+	clientRegionMap := jsonUnMarshal["ClientRegionMap"]
+	clientType := jsonUnMarshal["ClientType"]
+	regionInfoMap := jsonUnMarshal["RegionInfoMap"]
+	keyRegionCache := jsonUnMarshal["KeyRegionCache"]
+	clientRegionCache := jsonUnMarshal["ClientRegionCache"]
+
+	expectedClientRegionSize := 1
+	regionInfoMapSize := 3
+
+	assert.Equal(t, clientType.(string), string(region.RegionClient))
+	assert.Equal(t, expectedClientRegionSize, len(clientRegionMap.(map[string]interface{})))
+	assert.Equal(t, regionInfoMapSize, len(regionInfoMap.(map[string]interface{})))
+	assert.Equal(t, 3, len(keyRegionCache.(map[string]interface{})))
+	assert.Equal(t, len(clientRegionCache.(map[string]interface{})), 1) // only have one client
+
 	assert.Equal(t, true, json.Valid(jsonVal))
 
 }

@@ -2315,9 +2315,9 @@ func TestDebugState(t *testing.T) {
 	expectedClientRegionSize := 1
 	regionInfoMapSize := 2
 
-	assert.Equal(t, clientType.(string), string(region.RegionClient))
-	assert.Equal(t, len(clientRegionMap.(map[string]interface{})), expectedClientRegionSize)
-	assert.Equal(t, len(regionInfoMap.(map[string]interface{})), regionInfoMapSize)
-	assert.Equal(t, len(keyRegionCache.(map[string]interface{})), 1)
-	assert.Equal(t, len(clientRegionCache.(map[string]interface{})), 1) // only have one client
+	assert.Equal(t, string(region.RegionClient), clientType.(string))
+	assert.Equal(t, expectedClientRegionSize, len(clientRegionMap.(map[string]interface{})))
+	assert.Equal(t, regionInfoMapSize, len(regionInfoMap.(map[string]interface{})))
+	assert.Equal(t, 1, len(keyRegionCache.(map[string]interface{})))
+	assert.Equal(t, 1, len(clientRegionCache.(map[string]interface{}))) // only have one client
 }
