@@ -207,23 +207,23 @@ func TestRegionInfoMarshalJson(t *testing.T) {
 	jsonVal, err := info.MarshalJSON()
 
 	if err != nil {
-		t.Errorf("Should not have thrown an error: %v", err)
+		t.Fatalf("Should not have thrown an error: %v", err)
 	}
 
 	var jsonUnMarshal map[string]interface{}
 	err = json.Unmarshal(jsonVal, &jsonUnMarshal)
 
 	if err != nil {
-		t.Errorf("Error while unmarshalling JSON, %v", err)
+		t.Fatalf("Error while unmarshalling JSON, %v", err)
 	}
 
-	assert.Equal(t, float64(id), jsonUnMarshal[IdJsonKey])
-	assert.Equal(t, string(table), jsonUnMarshal[TableJsonKey])
-	assert.Equal(t, string(name), jsonUnMarshal[NameJsonKey])
-	assert.Equal(t, string(startKey), jsonUnMarshal[StartKeyJsonKey])
-	assert.Equal(t, string(stopKey), jsonUnMarshal[StopKeyJsonKey])
-	assert.Equal(t, true, jsonUnMarshal[AvailableJsonKey])
-	assert.Equal(t, string(namespace), jsonUnMarshal[NamespaceJsonKey])
+	assert.Equal(t, float64(id), jsonUnMarshal["Id"])
+	assert.Equal(t, string(table), jsonUnMarshal["Table"])
+	assert.Equal(t, string(name), jsonUnMarshal["Name"])
+	assert.Equal(t, string(startKey), jsonUnMarshal["StartKey"])
+	assert.Equal(t, string(stopKey), jsonUnMarshal["StopKey"])
+	assert.Equal(t, true, jsonUnMarshal["Available"])
+	assert.Equal(t, string(namespace), jsonUnMarshal["Namespace"])
 
 }
 
@@ -247,6 +247,6 @@ func TestRegionInfoMarshalJsonNilValues(t *testing.T) {
 	_, err := info.MarshalJSON()
 
 	if err != nil {
-		t.Errorf("Should not have thrown an error: %v", err)
+		t.Fatalf("Should not have thrown an error: %v", err)
 	}
 }

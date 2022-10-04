@@ -1,10 +1,11 @@
 package gohbase
 
 import (
-	"log"
+	"encoding/json"
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/region"
 )
@@ -83,12 +84,12 @@ func TestDebugStateSanity(t *testing.T) {
 	region3.SetClient(regClient)
 	client.clients.put("regionserver:1", region3, newClientFn)
 
-	json, err := DebugState(client)
+	jsonVal, err := DebugState(client)
 
 	if err != nil {
-		t.Errorf("DebugInfo should not have an error: %v", err)
+		t.Fatalf("DebugInfo should not have an error: %v", err)
 	}
 
-	log.Println(string(json))
+	assert.Equal(t, true, json.Valid(jsonVal))
 
 }

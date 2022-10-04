@@ -2290,28 +2290,27 @@ func TestDebugState(t *testing.T) {
 	defer c.Close()
 	err := insertKeyValue(c, key, "cf", val)
 	if err != nil {
-		t.Errorf("Put returned an error: %v", err)
+		t.Fatalf("Put returned an error: %v", err)
 	}
 
 	jsonVal, err := gohbase.DebugState(c)
 
 	if err != nil {
-		t.Errorf("DebugState returned an error when it shouldn't have: %v", err)
+		t.Fatalf("DebugState returned an error when it shouldn't have: %v", err)
 	}
 
-	fmt.Println(string(jsonVal))
 	var jsonUnMarshal map[string]interface{}
 	err = json.Unmarshal(jsonVal, &jsonUnMarshal)
 
 	if err != nil {
-		t.Errorf("Encoutered eror when Unmarshalling: %v", err)
+		t.Fatalf("Encoutered eror when Unmarshalling: %v", err)
 	}
 
-	clientRegionMap := jsonUnMarshal[gohbase.ClientRegionMapJsonKey]
-	clientType := jsonUnMarshal[gohbase.ClientTypeJsonKey]
-	regionInfoMap := jsonUnMarshal[gohbase.RegionInfoMapJsonKey]
-	keyRegionCache := jsonUnMarshal[gohbase.KeyRegionCacheJson]
-	clientRegionCache := jsonUnMarshal[gohbase.ClientRegionCacheJsonKey]
+	clientRegionMap := jsonUnMarshal["ClientRegionMap"]
+	clientType := jsonUnMarshal["ClientType"]
+	regionInfoMap := jsonUnMarshal["RegionInfoMap"]
+	keyRegionCache := jsonUnMarshal["KeyRegionCache"]
+	clientRegionCache := jsonUnMarshal["ClientRegionCache"]
 
 	expectedClientRegionSize := 1
 	regionInfoMapSize := 2

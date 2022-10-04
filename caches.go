@@ -95,22 +95,25 @@ func (rcc *clientRegionCache) clientDown(c hrpc.RegionClient) map[hrpc.RegionInf
 
 // Collects information about the clientRegion cache and stores them in two maps to reduce
 // duplication of data. We do this in one function to avoid running the iterations twice
-func (rcc *clientRegionCache) ClientRegionCacheDebugInfo(
-	keyRegionInfosMap map[string]hrpc.RegionInfo,
-	clientRegionsMap map[string]hrpc.RegionClient) map[string][]string {
+func (rcc *clientRegionCache) debugInfo(
+	regions map[string]hrpc.RegionInfo,
+	clients map[string]hrpc.RegionClient) map[string][]string {
+
 	// key = RegionClient memory address , value = List of RegionInfo addresses
 	clientRegionCacheMap := map[string][]string{}
 
 	rcc.m.RLock()
 	for client, reginfos := range rcc.regions {
-		clientRegionInfoMap := make([]string, 0)
+		clientRegionInfoMap := make([]string, len(reginfos))
 		// put all the region infos in the client into the keyRegionInfosMap b/c its not
 		// guaranteed that rcc and krc will have the same infos
-		clientRegionsMap[fmt.Sprintf("%p", client)] = client
+		clients[fmt.Sprintf("%p", client)] = client
 
+		i := 0
 		for regionInfo := range reginfos {
-			clientRegionInfoMap = append(clientRegionInfoMap, fmt.Sprintf("%p", regionInfo))
-			keyRegionInfosMap[fmt.Sprintf("%p", regionInfo)] = regionInfo
+			clientRegionInfoMap[i] = fmt.Sprintf("%p", regionInfo)
+			regions[fmt.Sprintf("%p", regionInfo)] = regionInfo
+			i++
 		}
 
 		clientRegionCacheMap[fmt.Sprintf("%p", client)] = clientRegionInfoMap
@@ -150,14 +153,13 @@ func (krc *keyRegionCache) get(key []byte) ([]byte, hrpc.RegionInfo) {
 }
 
 // reads whole b tree in keyRegionCache and gathers debug info
-func (krc *keyRegionCache) KeyRegionCacheDebugInfo(
-	keyRegionInfosMap map[string]hrpc.RegionInfo) map[string]string {
+func (krc *keyRegionCache) debugInfo(
+	regions map[string]hrpc.RegionInfo) map[string]string {
 	regionCacheMap := map[string]string{}
 
 	krc.m.RLock()
 	enum, err := krc.regions.SeekFirst()
 	if err != nil {
-		log.Infof("No regions cached in keyRegionCache: %v", err)
 		krc.m.RUnlock()
 		return regionCacheMap
 	}
@@ -169,10 +171,9 @@ func (krc *keyRegionCache) KeyRegionCacheDebugInfo(
 		// release lock after each iteration to allow other processes a chance to get it
 		krc.m.RUnlock()
 		if err == io.EOF {
-			log.Infof("No more regions in keyRegionCache: %v", err)
 			break
 		}
-		keyRegionInfosMap[fmt.Sprintf("%p", v.(hrpc.RegionInfo))] = v.(hrpc.RegionInfo)
+		regions[fmt.Sprintf("%p", v.(hrpc.RegionInfo))] = v.(hrpc.RegionInfo)
 		regionCacheMap[string(k.([]byte))] = fmt.Sprintf("%p", v.(hrpc.RegionInfo))
 	}
 

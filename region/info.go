@@ -19,17 +19,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const (
-	// Marshal JSON key names
-	IdJsonKey        = "Id"
-	NamespaceJsonKey = "Namespace"
-	TableJsonKey     = "Table"
-	NameJsonKey      = "Name"
-	StartKeyJsonKey  = "StartKey"
-	StopKeyJsonKey   = "StopKey"
-	AvailableJsonKey = "Available"
-)
-
 var defaultNamespace = []byte("default")
 
 // OfflineRegionError is returned if region is offline

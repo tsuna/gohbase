@@ -1235,17 +1235,17 @@ func TestMarshalJSON(t *testing.T) {
 	err = json.Unmarshal(jsonVal, &jsonUnMarshal)
 
 	if err != nil {
-		t.Errorf("Error while unmarshalling JSON, %v", err)
+		t.Fatalf("Error while unmarshalling JSON, %v", err)
 	}
 
-	actualLocalAddr := jsonUnMarshal[ConnectionLocalAddressJsonKey].(map[string]interface{})
-	actualRemoteAddr := jsonUnMarshal[ConnectionRemoteAddressJsonKey].(map[string]interface{})
+	actualLocalAddr := jsonUnMarshal["ConnectionLocalAddress"].(map[string]interface{})
+	actualRemoteAddr := jsonUnMarshal["ConnectionRemoteAddress"].(map[string]interface{})
 
-	assert.Equal(t, tcp, actualLocalAddr[NetworkJsonKey])
-	assert.Equal(t, tcp, actualRemoteAddr[NetworkJsonKey])
-	assert.Equal(t, string(RegionClient), jsonUnMarshal[ClientTypeJsonKey])
-	assert.Equal(t, float64(0), jsonUnMarshal[InFlightJsonKey])
-	assert.Equal(t, float64(id), jsonUnMarshal[IdJsonKey])
+	assert.Equal(t, tcp, actualLocalAddr["Network"])
+	assert.Equal(t, tcp, actualRemoteAddr["Network"])
+	assert.Equal(t, string(RegionClient), jsonUnMarshal["ClientType"])
+	assert.Equal(t, float64(0), jsonUnMarshal["InFlight"])
+	assert.Equal(t, float64(id), jsonUnMarshal["Id"])
 
 }
 

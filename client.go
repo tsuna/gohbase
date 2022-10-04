@@ -28,18 +28,6 @@ const (
 	defaultZkRoot        = "/hbase"
 	defaultZkTimeout     = 30 * time.Second
 	defaultEffectiveUser = "root"
-
-	// variables here are used for testing the Marshalling interface
-	ClientTypeJsonKey          = "ClientType"
-	ClientRegionMapJsonKey     = "ClientRegionMap"
-	RegionInfoMapJsonKey       = "RegionInfoMap"
-	KeyRegionCacheJson         = "KeyRegionCache"
-	ClientRegionCacheJsonKey   = "ClientRegionCache"
-	MetaRegionInfoJsonKey      = "MetaRegionInfo"
-	AdminRegionInfoJsonKey     = "AdminRegionInfo"
-	Done_StatusJsonKey         = "Done_Status"
-	RegionLookupTimeoutJsonKey = "RegionLookupTimeout"
-	RegionReadTimeoutJsonKey   = "RegionReadTimeout"
 )
 
 // Client a regular HBase client
@@ -188,8 +176,8 @@ func (c *client) MarshalJSON() ([]byte, error) {
 	// create map for all RegionInfos (Region Ptr -> JSONified RegionInfo)
 	keyRegionInfosMap := map[string]hrpc.RegionInfo{}
 
-	clientRegionCacheValues := rcc.ClientRegionCacheDebugInfo(keyRegionInfosMap, clientRegionsMap)
-	keyRegionCacheValues := krc.KeyRegionCacheDebugInfo(keyRegionInfosMap)
+	clientRegionCacheValues := rcc.debugInfo(keyRegionInfosMap, clientRegionsMap)
+	keyRegionCacheValues := krc.debugInfo(keyRegionInfosMap)
 
 	state := struct {
 		ClientType          region.ClientType
