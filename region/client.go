@@ -96,15 +96,6 @@ const (
 	// MasterClient is a ClientType that means this client will talk to the
 	// master server
 	MasterClient = ClientType("MasterService")
-
-	// Marshal JSONKey constants
-	ConnectionLocalAddressJsonKey  = "ConnectionLocalAddress"
-	ConnectionRemoteAddressJsonKey = "ConnectionRemoteAddress"
-	RegionServerAddressJsonKey     = "RegionServerAddress"
-	ClientTypeJsonKey              = "ClientType"
-	InFlightJsonKey                = "InFlight"
-	NetworkJsonKey                 = "Network"
-	AddressJsonKey                 = "Address"
 )
 
 var bufferPool sync.Pool
