@@ -266,28 +266,6 @@ func (c *client) inFlightDown() error {
 	return nil
 }
 
-// InFlight returns inFlight value
-func (c *client) InFlight() uint32 {
-	c.inFlightM.Lock()
-	inFlight := c.inFlight
-	c.inFlightM.Unlock()
-	return inFlight
-}
-
-// DoneStatus returns the status of the Done channel as a string. Closed if its done, Not Closed o.w
-func (c *client) DoneStatus() string {
-	var done_status string
-	if c.done != nil {
-		select {
-		case <-c.done:
-			done_status = "Closed"
-		default:
-			done_status = "Not Closed"
-		}
-	}
-	return done_status
-}
-
 func (c *client) fail(err error) {
 	c.failOnce.Do(func() {
 		if err != ErrClientClosed {
@@ -754,6 +732,7 @@ func (c *client) MarshalJSON() ([]byte, error) {
 		Address string
 	}
 
+	// the status of the Done channel as a string. Closed if its done, Not Closed o.w
 	var done_status string
 	if c.done != nil {
 		select {
