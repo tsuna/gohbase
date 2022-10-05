@@ -152,7 +152,8 @@ func (krc *keyRegionCache) get(key []byte) ([]byte, hrpc.RegionInfo) {
 	return k.([]byte), v.(hrpc.RegionInfo)
 }
 
-// reads whole b tree in keyRegionCache and gathers debug info. We append that information in the given map
+// reads whole b tree in keyRegionCache and gathers debug info.
+// We append that information in the given map
 func (krc *keyRegionCache) debugInfo(
 	regions map[string]hrpc.RegionInfo) map[string]string {
 	regionCacheMap := map[string]string{}
