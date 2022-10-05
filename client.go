@@ -153,20 +153,19 @@ func DebugState(client Client) ([]byte, error) {
 	return debugInfoJson, err
 }
 
-func (c *client) DoneStatus() string {
+func (c *client) MarshalJSON() ([]byte, error) {
+
+	var done string
 	if c.done != nil {
 		select {
 		case <-c.done:
-			return "Closed"
+			done = "Closed"
 		default:
-			return "Not Closed"
+			done = "Not Closed"
 		}
 	} else {
-		return "nil"
+		done = "nil"
 	}
-}
-
-func (c *client) MarshalJSON() ([]byte, error) {
 
 	rcc := &c.clients
 	krc := &c.regions
@@ -198,7 +197,7 @@ func (c *client) MarshalJSON() ([]byte, error) {
 		ClientRegionCache:   clientRegionCacheValues,
 		MetaRegionInfo:      c.metaRegionInfo,
 		AdminRegionInfo:     c.adminRegionInfo,
-		Done_Status:         c.DoneStatus(),
+		Done_Status:         done,
 		RegionLookupTimeout: c.regionLookupTimeout,
 		RegionReadTimeout:   c.regionReadTimeout,
 	}

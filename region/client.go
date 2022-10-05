@@ -754,6 +754,20 @@ func (c *client) MarshalJSON() ([]byte, error) {
 		Address string
 	}
 
+	var done_status string
+	if c.done != nil {
+		select {
+		case <-c.done:
+			done_status = "Closed"
+		default:
+			done_status = "Not Closed"
+		}
+	}
+
+	c.inFlightM.Lock()
+	inFlight := c.inFlight
+	c.inFlightM.Unlock()
+
 	// if conn is nil then we don't want to panic. So just get the addresses if conn is not nil
 	var localAddr, remoteAddr Address
 	if c.conn != nil {
@@ -776,9 +790,9 @@ func (c *client) MarshalJSON() ([]byte, error) {
 		ConnectionRemoteAddress: remoteAddr,
 		RegionServerAddress:     c.addr,
 		ClientType:              c.ctype,
-		InFlight:                c.InFlight(),
+		InFlight:                inFlight,
 		Id:                      c.id,
-		Done_status:             c.DoneStatus(),
+		Done_status:             done_status,
 	}
 
 	return json.Marshal(state)

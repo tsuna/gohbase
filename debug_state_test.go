@@ -13,11 +13,6 @@ import (
 func TestDebugStateSanity(t *testing.T) {
 	client := newClient("~invalid.quorum~") // We shouldn't connect to ZK.
 
-	reg := client.getRegionFromCache([]byte("test"), []byte("theKey"))
-	if reg != nil {
-		t.Errorf("Found region %v even though the cache was empty?!", reg)
-	}
-
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 

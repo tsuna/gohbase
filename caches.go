@@ -93,7 +93,7 @@ func (rcc *clientRegionCache) clientDown(c hrpc.RegionClient) map[hrpc.RegionInf
 	return downregions
 }
 
-// Collects information about the clientRegion cache and stores them in two maps to reduce
+// Collects information about the clientRegion cache and appends them to the two maps to reduce
 // duplication of data. We do this in one function to avoid running the iterations twice
 func (rcc *clientRegionCache) debugInfo(
 	regions map[string]hrpc.RegionInfo,
@@ -152,7 +152,7 @@ func (krc *keyRegionCache) get(key []byte) ([]byte, hrpc.RegionInfo) {
 	return k.([]byte), v.(hrpc.RegionInfo)
 }
 
-// reads whole b tree in keyRegionCache and gathers debug info
+// reads whole b tree in keyRegionCache and gathers debug info. We append that information in the given map
 func (krc *keyRegionCache) debugInfo(
 	regions map[string]hrpc.RegionInfo) map[string]string {
 	regionCacheMap := map[string]string{}
