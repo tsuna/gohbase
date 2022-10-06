@@ -6,6 +6,7 @@
 package region
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -167,7 +168,7 @@ type client struct {
 	// failOnce used for concurrent calls to fail
 	failOnce sync.Once
 
-	rpcs chan hrpc.Call
+	rpcs chan []hrpc.Call
 	done chan struct{}
 
 	// sent contains the mapping of sent call IDs to RPC calls, so that when
@@ -201,7 +202,7 @@ func (c *client) QueueRPC(rpc hrpc.Call) {
 			// rpc timed out before being processed
 		case <-c.done:
 			returnResult(rpc, nil, ErrClientClosed)
-		case c.rpcs <- rpc:
+		case c.rpcs <- []hrpc.Call{rpc}:
 		}
 	} else {
 		select {
@@ -364,9 +365,9 @@ func (c *client) processRPCs() {
 			select {
 			case <-c.done:
 				return
-			case rpc := <-c.rpcs:
+			case rpcs := <-c.rpcs:
 				// have things queued up, batch them
-				if !m.add(rpc) {
+				if !m.add(rpcs) {
 					// can still put more rpcs into batch
 					continue
 				}
@@ -381,11 +382,11 @@ func (c *client) processRPCs() {
 			select {
 			case <-c.done:
 				return
-			case rpc := <-c.rpcs:
-				m.add(rpc)
+			case rpcs := <-c.rpcs:
+				m.add(rpcs)
 			}
 			continue
-		} else if l == c.rpcQueueSize || c.flushInterval == 0 {
+		} else if l >= c.rpcQueueSize || c.flushInterval == 0 {
 			// batch is full, flush
 			flush("queue full")
 			continue
@@ -403,8 +404,8 @@ func (c *client) processRPCs() {
 			case <-timer.C:
 				reason = "timeout"
 				// time to flush
-			case rpc := <-c.rpcs:
-				if !m.add(rpc) {
+			case rpcs := <-c.rpcs:
+				if !m.add(rpcs) {
 					// can still put more rpcs into batch
 					continue
 				}
