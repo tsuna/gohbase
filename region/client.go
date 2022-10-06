@@ -196,14 +196,7 @@ type client struct {
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine
 func (c *client) QueueRPC(rpc hrpc.Call) {
 	if b, ok := rpc.(hrpc.Batchable); ok && c.rpcQueueSize > 1 && !b.SkipBatch() {
-		// queue up the rpc
-		select {
-		case <-rpc.Context().Done():
-			// rpc timed out before being processed
-		case <-c.done:
-			returnResult(rpc, nil, ErrClientClosed)
-		case c.rpcs <- []hrpc.Call{rpc}:
-		}
+		c.QueueBatch(rpc.Context(), []hrpc.Call{rpc})
 	} else {
 		select {
 		case <-c.done:
@@ -220,6 +213,21 @@ func (c *client) QueueRPC(rpc hrpc.Call) {
 				returnResult(rpc, nil, err)
 			}
 		}
+	}
+}
+
+// QueueBatch will add rpcs to the queue for processing by the writer
+// goroutine
+func (c *client) QueueBatch(ctx context.Context, rpcs []hrpc.Call) {
+	select {
+	case <-ctx.Done():
+	case <-c.done:
+		// return error results
+		res := hrpc.RPCResult{Error: ErrClientClosed}
+		for _, c := range rpcs {
+			c.ResultChan() <- res
+		}
+	case c.rpcs <- rpcs:
 	}
 }
 
