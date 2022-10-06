@@ -10,8 +10,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -28,6 +30,7 @@ import (
 	mockZk "github.com/tsuna/gohbase/test/mock/zk"
 	"github.com/tsuna/gohbase/zk"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 	"modernc.org/b/v2"
 )
 
@@ -818,4 +821,706 @@ func BenchmarkPrometheusWith(b *testing.B) {
 			"result":    result,
 		})
 	}
+}
+
+func TestSendBatchBasic(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+	// we expect to ask zookeeper for where metaregion is
+	zkClient := mockZk.NewMockClient(ctrl)
+	zkClient.EXPECT().LocateResource(zk.Meta).Return("regionserver:1", nil).MinTimes(1)
+	c := newMockClient(zkClient)
+
+	call, err := hrpc.NewPutStr(context.Background(), "test", "theKey", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// pretend that response is successful
+	expMsg := &pb.MutateResponse{}
+	call.ResultChan() <- hrpc.RPCResult{Msg: expMsg}
+	msg, ok := c.SendBatch(context.Background(), []hrpc.Call{call})
+	if !ok {
+		t.Fatal(msg[0].Error)
+	}
+	if !proto.Equal(expMsg, msg[0].Msg) {
+		t.Errorf("expected %v, got %v", expMsg, msg)
+	}
+
+	if len(c.clients.regions) != 2 {
+		t.Errorf("Expected 2 clients in cache, got %d", len(c.clients.regions))
+	}
+
+	// addr -> region name
+	expClients := map[string]string{
+		"regionserver:1": "hbase:meta,,1",
+		"regionserver:2": "test,,1434573235908.56f833d5569a27c7a43fbf547b4924a4.",
+	}
+
+	// make sure those are the right clients
+	for c, rs := range c.clients.regions {
+		name, ok := expClients[c.Addr()]
+		if !ok {
+			t.Errorf("Got unexpected client %s in cache", c.Addr())
+			continue
+		}
+		if len(rs) != 1 {
+			t.Errorf("Expected to have only 1 region in cache for client %s", c.Addr())
+			continue
+		}
+		for r := range rs {
+			if string(r.Name()) != name {
+				t.Errorf("Unexpected name of region %q for client %s, expected %q",
+					r.Name(), c.Addr(), name)
+			}
+			// check bidirectional mapping, they have to be the same objects
+			rc := r.Client()
+			if c != rc {
+				t.Errorf("Invalid bidirectional mapping: forward=%s, backward=%s",
+					c.Addr(), rc.Addr())
+			}
+		}
+	}
+
+	if c.regions.regions.Len() != 1 {
+		// expecting only one region because meta isn't in cache, it's hard-coded
+		t.Errorf("Expected 1 regions in cache, got %d", c.regions.regions.Len())
+	}
+
+}
+
+func TestSendBatchBadInput(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+
+	zkc := mockZk.NewMockClient(ctrl)
+	zkc.EXPECT().LocateResource(zk.Meta).Return("regionserver:1", nil).AnyTimes()
+	c := newMockClient(zkc)
+
+	newRPC := func(table string, batchable bool) hrpc.Call {
+		if batchable {
+			rpc, err := hrpc.NewPutStr(context.Background(), table, "key",
+				map[string]map[string][]byte{"cf": {"foo": []byte("bar")}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return rpc
+		}
+		rpc, err := hrpc.NewScanStr(context.Background(), table)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rpc
+	}
+
+	rpc1 := newRPC("table", true)
+	rpc2 := newRPC("table", true)
+
+	for _, tc := range []struct {
+		name   string
+		batch  []hrpc.Call
+		expErr []string
+	}{{
+		name:   "duplicate",
+		batch:  []hrpc.Call{rpc1, rpc1},
+		expErr: []string{NotExecutedError.Error(), "duplicate call"},
+	}, {
+		name:  "duplicate2",
+		batch: []hrpc.Call{rpc1, rpc2, rpc2, newRPC("table", true), rpc1},
+		expErr: []string{NotExecutedError.Error(), NotExecutedError.Error(),
+			"duplicate call", NotExecutedError.Error(), "duplicate call"},
+	}, {
+		name:   "tables",
+		batch:  []hrpc.Call{newRPC("table", true), newRPC("different_table", true)},
+		expErr: []string{NotExecutedError.Error(), "multiple tables"},
+	}, {
+		name:   "batchable",
+		batch:  []hrpc.Call{newRPC("table", false)},
+		expErr: []string{"non-batchable"},
+	}, {
+		name: "various errors",
+		batch: []hrpc.Call{rpc1,
+			newRPC("table", false),
+			rpc1,
+			newRPC("table2", true),
+			newRPC("table", true)},
+		expErr: []string{NotExecutedError.Error(),
+			"non-batchable",
+			"duplicate call",
+			"multiple tables",
+			NotExecutedError.Error()},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			if len(tc.batch) != len(tc.expErr) {
+				t.Fatalf("test case provides mismatched batch (%d) and expErr (%d) sizes",
+					len(tc.batch), len(tc.expErr))
+			}
+
+			results, ok := c.SendBatch(context.Background(), tc.batch)
+			if ok {
+				t.Errorf("expected !ok from SendBatch, got %t", ok)
+			}
+			if len(results) != len(tc.batch) {
+				t.Fatalf("result size (%d) does not match batch size (%d)",
+					len(results), len(tc.batch))
+			}
+			for i, res := range results {
+				if res.Error == nil {
+					t.Errorf("expected error in res[%d], but got nil for request %v",
+						i, tc.batch[i])
+					continue
+				}
+				if !strings.Contains(res.Error.Error(), tc.expErr[i]) {
+					t.Errorf("expected error to contain %q, but got %q", tc.expErr[i], res.Error)
+				}
+			}
+		})
+	}
+}
+
+// TestFindClient ensures findClients groups RPCs in a batch by region
+// server and preserves the ordering of requests. And that each RPC
+// has its region assigned.
+func TestFindClients(t *testing.T) {
+	c := newMockClient(nil)
+	// pretend regionserver:0 has meta table
+	rc := c.clients.put("regionserver:0", c.metaRegionInfo, newRegionClientFn("regionserver:0"))
+	c.metaRegionInfo.SetClient(rc)
+
+	registerRegion := func(reg hrpc.RegionInfo, addr string) {
+		rc := c.clients.put(addr, reg, newRegionClientFn(addr))
+		reg.SetClient(rc)
+		overlaps, replaced := c.regions.put(reg)
+		if len(overlaps) > 0 {
+			t.Fatalf("overlaps: %v replaced: %t", overlaps, replaced)
+		}
+	}
+	// Create three region servers, each with three regions
+	regA := region.NewInfo(1434573235910, nil, []byte("test"),
+		[]byte("test,a,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("a"), []byte("az"))
+	regB := region.NewInfo(1434573235910, nil, []byte("test"),
+		[]byte("test,b,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("b"), []byte("bz"))
+	regC := region.NewInfo(1434573235910, nil, []byte("test"),
+		[]byte("test,c,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("c"), []byte("cz"))
+	for _, reg := range []hrpc.RegionInfo{regA, regB, regC} {
+		registerRegion(reg, "regionserver:0")
+	}
+	regD := region.NewInfo(1434573235910, nil, []byte("test"),
+		[]byte("test,d,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("d"), []byte("dz"))
+	regE := region.NewInfo(1434573235910, nil, []byte("test"),
+		[]byte("test,e,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("e"), []byte("ez"))
+	regF := region.NewInfo(1434573235910, nil, []byte("test"),
+		[]byte("test,f,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("f"), []byte("fz"))
+	for _, reg := range []hrpc.RegionInfo{regD, regE, regF} {
+		registerRegion(reg, "regionserver:1")
+	}
+	regG := region.NewInfo(1434573235910, nil, []byte("test"),
+		[]byte("test,g,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("g"), []byte("gz"))
+	regH := region.NewInfo(1434573235910, nil, []byte("test"),
+		[]byte("test,h,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("h"), []byte("hz"))
+	regI := region.NewInfo(1434573235910, nil, []byte("test"),
+		[]byte("test,i,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("i"), []byte("iz"))
+	for _, reg := range []hrpc.RegionInfo{regG, regH, regI} {
+		registerRegion(reg, "regionserver:2")
+	}
+
+	if l := len(c.clients.regions); l != 3 {
+		t.Errorf("expected 3 region clients, got %d", l)
+		t.Logf("%v", c.clients.regions)
+	}
+
+	if l := c.regions.regions.Len(); l != 9 {
+		t.Errorf("expected 9 regions, got %d", l)
+	}
+
+	newRPC := func(key string) hrpc.Call {
+		rpc, err := hrpc.NewPutStr(context.Background(), "test", key,
+			map[string]map[string][]byte{"cf": {"foo": []byte("bar")}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rpc
+	}
+
+	type kr struct {
+		key string
+		reg hrpc.RegionInfo
+	}
+
+	type testCase struct {
+		name    string
+		batch   []hrpc.Call
+		exp     map[string][]kr
+		expErrs []string
+	}
+
+	for _, tc := range []testCase{{
+		name: "one_rc",
+		batch: []hrpc.Call{
+			newRPC("aa"),
+			newRPC("ba"),
+			newRPC("ca"),
+		},
+		exp: map[string][]kr{
+			"regionserver:0": {
+				{"aa", regA},
+				{"ba", regB},
+				{"ca", regC},
+			},
+		},
+	}, {
+		name: "three_rc",
+		batch: []hrpc.Call{
+			newRPC("aa"),
+			newRPC("da"),
+			newRPC("ga"),
+			newRPC("ab"),
+		},
+		exp: map[string][]kr{
+			"regionserver:0": {
+				{"aa", regA},
+				{"ab", regA},
+			},
+			"regionserver:1": {
+				{"da", regD},
+			},
+			"regionserver:2": {
+				{"ga", regG},
+			},
+		},
+	}, {
+		name: "error end",
+		batch: []hrpc.Call{
+			newRPC("aa"),
+			newRPC("da"),
+			newRPC("ga"),
+			newRPC("zz"), // missing region
+		},
+		expErrs: []string{"", "", "", "cannot find region"},
+	}, {
+		name: "error middle",
+		batch: []hrpc.Call{
+			newRPC("aa"),
+			newRPC("da"),
+			newRPC("zz"), // missing region
+			newRPC("ga"),
+		},
+		expErrs: []string{"", "", "cannot find region", ""},
+	}, {
+		name: "error beginning",
+		batch: []hrpc.Call{
+			newRPC("zz"), // missing region
+			newRPC("aa"),
+			newRPC("da"),
+			newRPC("ga"),
+		},
+		expErrs: []string{"cannot find region", "", "", ""},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			results := make([]hrpc.RPCResult, len(tc.batch))
+			got, ok := c.findClients(context.Background(), tc.batch, results)
+			if ok && len(tc.expErrs) > 0 {
+				t.Fatalf("expected error, %v", results[3])
+
+			} else if !ok && len(tc.expErrs) == 0 {
+				t.Fatalf("unexpected !ok: %v", results)
+			} else if !ok {
+				for i, res := range results {
+					expErr := tc.expErrs[i]
+					if expErr == "" && res.Error != nil {
+						t.Errorf("unexpected error: %v", res.Error)
+					}
+					if expErr == "" {
+						continue
+					}
+					if !strings.Contains(res.Error.Error(), expErr) {
+						t.Errorf("expected error to contain %q, got: %v", expErr, res.Error)
+					}
+				}
+				return
+			}
+
+			for rc, rpcs := range got {
+				expRPCs, ok := tc.exp[rc.Addr()]
+				if !ok {
+					t.Errorf("unexpected region client: %q", rc.Addr())
+				}
+				delete(tc.exp, rc.Addr())
+				for i, rpc := range rpcs {
+					if i >= len(expRPCs) {
+						t.Errorf("unexpected RPC for region client %q: %s",
+							rc.Addr(), rpc.Key())
+						continue
+					}
+					expRPC := expRPCs[i]
+					if string(rpc.Key()) != expRPC.key {
+						t.Errorf("for region client %q expected rpc %s, but got %s",
+							rc.Addr(), expRPC.key, rpc.Key())
+					}
+					if rpc.Region() != expRPC.reg {
+						t.Errorf("for region client %q rpc %s, expected reg %v but got %v",
+							rc.Addr(), expRPC.key, rpc.Region(), expRPC.reg)
+					}
+				}
+				if len(expRPCs) > len(rpcs) {
+					for _, rpc := range expRPCs[len(rpcs):] {
+						t.Errorf("expected RPC for region client %q: %s",
+							rc.Addr(), rpc.key)
+					}
+				}
+			}
+			for rc, rpcs := range tc.exp {
+				t.Errorf("expected rpcs for region client %q: %v", rc, rpcs)
+			}
+		})
+	}
+}
+
+func TestSendBatchWaitForCompletion(t *testing.T) {
+	c := newMockClient(nil)
+	// pretend regionserver:0 has meta table
+	rc := c.clients.put("regionserver:0", c.metaRegionInfo, newRegionClientFn("regionserver:0"))
+	c.metaRegionInfo.SetClient(rc)
+
+	registerRegion := func(reg hrpc.RegionInfo, addr string) {
+		rc := c.clients.put(addr, reg, newRegionClientFn(addr))
+		reg.SetClient(rc)
+		overlaps, replaced := c.regions.put(reg)
+		if len(overlaps) > 0 {
+			t.Fatalf("overlaps: %v replaced: %t", overlaps, replaced)
+		}
+	}
+	// Create three region servers, each with three regions
+	regA := region.NewInfo(1434573235910, nil, []byte("test"),
+		[]byte("test,a,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("a"), []byte("az"))
+	regB := region.NewInfo(1434573235910, nil, []byte("test"),
+		[]byte("test,b,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("b"), []byte("bz"))
+	regC := region.NewInfo(1434573235910, nil, []byte("test"),
+		[]byte("test,c,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("c"), []byte("cz"))
+	for _, reg := range []hrpc.RegionInfo{regA, regB, regC} {
+		registerRegion(reg, "regionserver:0")
+	}
+	regD := region.NewInfo(1434573235910, nil, []byte("test"),
+		[]byte("test,d,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("d"), []byte("dz"))
+	regE := region.NewInfo(1434573235910, nil, []byte("test"),
+		[]byte("test,e,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("e"), []byte("ez"))
+	regF := region.NewInfo(1434573235910, nil, []byte("test"),
+		[]byte("test,f,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("f"), []byte("fz"))
+	for _, reg := range []hrpc.RegionInfo{regD, regE, regF} {
+		registerRegion(reg, "regionserver:1")
+	}
+	regG := region.NewInfo(1434573235910, nil, []byte("test"),
+		[]byte("test,g,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("g"), []byte("gz"))
+	regH := region.NewInfo(1434573235910, nil, []byte("test"),
+		[]byte("test,h,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("h"), []byte("hz"))
+	regI := region.NewInfo(1434573235910, nil, []byte("test"),
+		[]byte("test,i,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("i"), []byte("iz"))
+	for _, reg := range []hrpc.RegionInfo{regG, regH, regI} {
+		registerRegion(reg, "regionserver:2")
+	}
+
+	if l := len(c.clients.regions); l != 3 {
+		t.Errorf("expected 3 region clients, got %d", l)
+		t.Logf("%v", c.clients.regions)
+	}
+
+	if l := c.regions.regions.Len(); l != 9 {
+		t.Errorf("expected 9 regions, got %d", l)
+	}
+
+	newRPC := func(key string) hrpc.Call {
+		rpc, err := hrpc.NewPutStr(context.Background(), "test", key,
+			map[string]map[string][]byte{"cf": {"foo": []byte("bar")}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rpc
+	}
+
+	t.Run("success", func(t *testing.T) {
+		batch := make([]hrpc.Call, 9)
+		for i := 0; i < 9; i++ {
+			// Create an RPC for each region, "a"-"i"
+			batch[i] = newRPC(string(rune('a' + i)))
+		}
+		var (
+			result []hrpc.RPCResult
+			ok     bool
+			done   = make(chan struct{})
+		)
+		go func() {
+			result, ok = c.SendBatch(context.Background(), batch)
+			close(done)
+		}()
+		for i := 0; i < 9; i++ {
+			// Using an Int32 as a result. A real result would be a
+			// PutResponse, but any proto.Message works for the test.
+			batch[i].ResultChan() <- hrpc.RPCResult{Msg: wrapperspb.Int32(int32(i))}
+		}
+		<-done
+		if !ok {
+			t.Errorf("unexpected !ok")
+		}
+		if len(result) != 9 {
+			t.Fatalf("unexpected result size: %v", result)
+		}
+		for i, r := range result {
+			if r.Error != nil {
+				t.Errorf("unexpected error: %s", r.Error)
+				continue
+			}
+			if r.Msg.(*wrapperspb.Int32Value).Value != int32(i) {
+				t.Errorf("unexpected result: %v", r.Msg)
+			}
+		}
+	})
+
+	t.Run("error all", func(t *testing.T) {
+		batch := make([]hrpc.Call, 9)
+		for i := 0; i < 9; i++ {
+			// Create an RPC for each region, "a"-"i"
+			key := string(rune('a' + i))
+			batch[i] = newRPC(key)
+		}
+		var (
+			result []hrpc.RPCResult
+			ok     bool
+			done   = make(chan struct{})
+		)
+		go func() {
+			result, ok = c.SendBatch(context.Background(), batch)
+			close(done)
+		}()
+		for i := 0; i < 9; i++ {
+			batch[i].ResultChan() <- hrpc.RPCResult{Error: errors.New("error")}
+		}
+		<-done
+		if ok {
+			t.Errorf("expected !ok")
+		}
+
+		if len(result) != 9 {
+			t.Fatalf("unexpected result size: %v", result)
+		}
+		for _, r := range result {
+			if r.Error == nil || r.Error.Error() != "error" {
+				t.Errorf("expected error but got: %v", r.Error)
+			}
+			if r.Msg != nil {
+				t.Errorf("unexpected Msg: %v", r.Msg)
+			}
+			continue
+		}
+	})
+
+	t.Run("error one", func(t *testing.T) {
+		batch := make([]hrpc.Call, 9)
+		for i := 0; i < 9; i++ {
+			// Create an RPC for each region, "a"-"i"
+			key := string(rune('a' + i))
+			batch[i] = newRPC(key)
+		}
+		var (
+			result []hrpc.RPCResult
+			ok     bool
+			done   = make(chan struct{})
+		)
+		go func() {
+			result, ok = c.SendBatch(context.Background(), batch)
+			close(done)
+		}()
+		errIndex := rand.Intn(9)
+		for i := 0; i < 9; i++ {
+			if i == errIndex {
+				batch[i].ResultChan() <- hrpc.RPCResult{Error: errors.New("error")}
+				continue
+			}
+			// Using an Int32 as a result. A real result would be a
+			// PutResponse, but any proto.Message works for the test.
+			batch[i].ResultChan() <- hrpc.RPCResult{Msg: wrapperspb.Int32(int32(i))}
+		}
+		<-done
+		if ok {
+			t.Errorf("expected !ok")
+		}
+		if len(result) != 9 {
+			t.Fatalf("unexpected result size: %v", result)
+		}
+		for i, r := range result {
+			if i == errIndex {
+				if r.Error == nil || r.Error.Error() != "error" {
+					t.Errorf("expected error but got: %v", r.Error)
+				}
+				if r.Msg != nil {
+					t.Errorf("unexpected Msg: %v", r.Msg)
+				}
+				continue
+			}
+			if r.Error != nil {
+				t.Errorf("unexpected error: %s", r.Error)
+				continue
+			}
+			if r.Msg.(*wrapperspb.Int32Value).Value != int32(i) {
+				t.Errorf("unexpected result: %v", r.Msg)
+			}
+		}
+	})
+
+	t.Run("error some", func(t *testing.T) {
+		batch := make([]hrpc.Call, 9)
+		for i := 0; i < 9; i++ {
+			// Create an RPC for each region, "a"-"i"
+			key := string(rune('a' + i))
+			batch[i] = newRPC(key)
+		}
+		var (
+			result []hrpc.RPCResult
+			ok     bool
+			done   = make(chan struct{})
+		)
+		go func() {
+			result, ok = c.SendBatch(context.Background(), batch)
+			close(done)
+		}()
+
+		// Error on RPCs 0 (first RPC to a region server), 4 (middle
+		// RPC to a region server), 8 (last to a region server)
+		for i := 0; i < 9; i++ {
+			if i%4 == 0 {
+				batch[i].ResultChan() <- hrpc.RPCResult{Error: errors.New("error")}
+				continue
+			}
+			// Using an Int32 as a result. A real result would be a
+			// PutResponse, but any proto.Message works for the test.
+			batch[i].ResultChan() <- hrpc.RPCResult{Msg: wrapperspb.Int32(int32(i))}
+		}
+		<-done
+		if ok {
+			t.Errorf("expected !ok")
+		}
+		if len(result) != 9 {
+			t.Fatalf("unexpected result size: %v", result)
+		}
+		for i, r := range result {
+			if i%4 == 0 {
+				if r.Error == nil || r.Error.Error() != "error" {
+					t.Errorf("expected error but got: %v", r.Error)
+				}
+				if r.Msg != nil {
+					t.Errorf("unexpected Msg: %v", r.Msg)
+				}
+				continue
+			}
+			if r.Error != nil {
+				t.Errorf("unexpected error: %s", r.Error)
+				continue
+			}
+			if r.Msg.(*wrapperspb.Int32Value).Value != int32(i) {
+				t.Errorf("unexpected result: %v", r.Msg)
+			}
+		}
+	})
+
+	t.Run("cancel context all", func(t *testing.T) {
+		batch := make([]hrpc.Call, 9)
+		for i := 0; i < 9; i++ {
+			// Create an RPC for each region, "a"-"i"
+			key := string(rune('a' + i))
+			batch[i] = newRPC(key)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		var (
+			result []hrpc.RPCResult
+			ok     bool
+			done   = make(chan struct{})
+		)
+		go func() {
+			result, ok = c.SendBatch(ctx, batch)
+			close(done)
+		}()
+		cancel()
+		<-done
+		if ok {
+			t.Errorf("expected !ok")
+		}
+		if len(result) != 9 {
+			t.Fatalf("unexpected result size: %v", result)
+		}
+		for _, r := range result {
+			if r.Error == nil ||
+				!errors.Is(r.Error, context.Canceled) {
+				t.Errorf("expected canceled error but got: %v", r.Error)
+			}
+			if r.Msg != nil {
+				t.Errorf("unexpected Msg: %v", r.Msg)
+			}
+		}
+	})
+
+	t.Run("cancel context some", func(t *testing.T) {
+		batch := make([]hrpc.Call, 9)
+		for i := 0; i < 9; i++ {
+			// Create an RPC for each region, "a"-"i"
+			key := string(rune('a' + i))
+			batch[i] = newRPC(key)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		var (
+			result []hrpc.RPCResult
+			ok     bool
+			done   = make(chan struct{})
+		)
+		go func() {
+			result, ok = c.SendBatch(ctx, batch)
+			close(done)
+		}()
+		// Send results on RPCs except for 0 (first RPC to a region
+		// server), 4 (middle RPC to a region server), 8 (last to a
+		// region server).
+		for i := 0; i < 9; i++ {
+			if i%4 == 0 {
+				continue
+			}
+			// Error some responses
+			if i%2 == 0 {
+				batch[i].ResultChan() <- hrpc.RPCResult{Error: errors.New("error")}
+				continue
+			}
+			// Using an Int32 as a result. A real result would be a
+			// MutateResponse, but any proto.Message works for the test.
+			batch[i].ResultChan() <- hrpc.RPCResult{Msg: wrapperspb.Int32(int32(i))}
+		}
+		// Cancel the context. The completed RPCs, should still get
+		// their results.
+		cancel()
+		<-done
+		if ok {
+			t.Errorf("expected !ok")
+		}
+		if len(result) != 9 {
+			t.Fatalf("unexpected result size: %v", result)
+		}
+		for i, r := range result {
+			if i%2 == 0 {
+				expErrStr := "error"
+				if i%4 == 0 {
+					expErrStr = context.Canceled.Error()
+				}
+				if r.Error == nil ||
+					r.Error.Error() != expErrStr {
+					t.Errorf("expected canceled error but got: %v", r.Error)
+				}
+				if r.Msg != nil {
+					t.Errorf("unexpected Msg: %v", r.Msg)
+				}
+				continue
+			}
+			if r.Error != nil {
+				t.Errorf("unexpected error: %s", r.Error)
+				continue
+			}
+			if r.Msg.(*wrapperspb.Int32Value).Value != int32(i) {
+				t.Errorf("unexpected result: %v", r.Msg)
+			}
+		}
+	})
 }

@@ -256,4 +256,8 @@ func (c *testClient) QueueRPC(call hrpc.Call) {
 	}
 }
 
+func (c *testClient) QueueBatch(ctx context.Context, batch []hrpc.Call) {
+	// do nothing. Let the test fill in result.
+}
+
 func (c *testClient) Close() {}

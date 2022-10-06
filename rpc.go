@@ -13,6 +13,7 @@ import (
 	"io"
 	"math"
 	"strconv"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -156,6 +157,187 @@ func (c *client) getRegionAndClientForRPC(ctx context.Context, rpc hrpc.Call) (
 		rpc.SetRegion(reg)
 		return client, nil
 	}
+}
+
+var (
+	// NotExecutedError is returned when an RPC in a batch is not
+	// executed due to encountering a different error in the batch.
+	NotExecutedError = errors.New(
+		"RPC in batch not executed due to another error")
+)
+
+// SendBatch will execute all the Calls in batch. Every Call must have
+// the same table and must be Batchable.
+//
+// SendBatch will discover the correct region and region server for
+// each Call and dispatch the Calls accordingly. SendBatch is not an
+// atomic operation. Some calls may fail and others succeed. Calls
+// sharing a region will execute in the order passed into SendBatch.
+//
+// SendBatch returns a slice of [hrpc.RPCResult] each containing a
+// response and an error. The results will be returned in the same
+// order as the Calls in the batch, in other words the i'th result
+// will be for the i'th call. A nil error means the Call executed
+// successfully. allOK is true if all calls completed successfully,
+// and false if any calls failed and the errors in the results need to
+// be checked.
+func (c *client) SendBatch(ctx context.Context, batch []hrpc.Call) (
+	res []hrpc.RPCResult, allOK bool) {
+	if len(batch) == 0 {
+		return nil, true
+	}
+
+	allOK = true
+
+	start := time.Now()
+	description := "SendBatch"
+	ctx, sp := observability.StartSpan(ctx, description)
+	defer func() {
+		result := "ok"
+		if !allOK {
+			result = "error"
+			sp.SetStatus(codes.Error, "batch error")
+		}
+
+		o := operationDurationSeconds.WithLabelValues(description, result)
+
+		observability.ObserveWithTrace(ctx, o, time.Since(start).Seconds())
+		sp.End()
+	}()
+
+	table := batch[0].Table()
+	res = make([]hrpc.RPCResult, len(batch))
+	rpcToRes := make(map[hrpc.Call]int, len(batch))
+	for i, rpc := range batch {
+		// map Call to index in res so that we can set the correct
+		// result as Calls complete
+		if j, dup := rpcToRes[rpc]; dup {
+			res[i].Error = fmt.Errorf("duplicate call in batch at index %d", j)
+			allOK = false
+			continue
+		}
+		rpcToRes[rpc] = i
+
+		// Initialize res with NotExecutedError. As RPCs are executed this
+		// will be replaced by a more specific error or nil if no error
+		// occurs.
+		res[i].Error = NotExecutedError
+
+		if !bytes.Equal(rpc.Table(), table) {
+			res[i].Error = fmt.Errorf("multiple tables in batch request: %q and %q",
+				string(table), string(rpc.Table()))
+			allOK = false
+		} else if b, batchable := rpc.(hrpc.Batchable); !batchable || b.SkipBatch() {
+			res[i].Error = errors.New("non-batchable call passed to SendBatch")
+			allOK = false
+		}
+	}
+	if !allOK {
+		return res, allOK
+	}
+
+	rpcByClient, ok := c.findClients(ctx, batch, res)
+	if !ok {
+		return res, false
+	}
+
+	// Send each group of RPCs to region client to be executed.
+	var (
+		wg sync.WaitGroup
+
+		mu   sync.Mutex
+		fail bool
+	)
+	wg.Add(len(rpcByClient))
+	for client, rpcs := range rpcByClient {
+		// TODO: Move this to the RegionClient interface so we don't
+		// need to type assert here
+		qb := client.(interface {
+			QueueBatch(ctx context.Context, rpcs []hrpc.Call)
+		})
+		go func(client hrpc.RegionClient, rpcs []hrpc.Call) {
+			defer wg.Done()
+			qb.QueueBatch(ctx, rpcs)
+			ctx, sp := observability.StartSpan(ctx, "waitForResult")
+			defer sp.End()
+			ok := c.waitForCompletion(ctx, client, rpcs, res, rpcToRes)
+			if !ok {
+				mu.Lock()
+				fail = true
+				mu.Unlock()
+			}
+		}(client, rpcs)
+	}
+	wg.Wait()
+	allOK = !fail
+
+	return res, allOK
+}
+
+// findClients takes a batch of rpcs and discovers the region and
+// region client associated with each. A map is returned with rpcs
+// grouped by their region client. If any error is encountered, the
+// corresponding slot in res will be updated with that error and a
+// BatchError is returned.
+//
+// findClients will not return on the first errror encountered. It
+// will iterate through all the RPCs to ensure that all unknown
+// regions encountered in the batch will start being initialized.
+func (c *client) findClients(ctx context.Context, batch []hrpc.Call, res []hrpc.RPCResult) (
+	map[hrpc.RegionClient][]hrpc.Call, bool) {
+
+	rpcByClient := make(map[hrpc.RegionClient][]hrpc.Call)
+	ok := true
+	for i, rpc := range batch {
+		rc, err := c.getRegionAndClientForRPC(ctx, rpc)
+		if err != nil {
+			res[i].Error = err
+			ok = false
+			continue // see if any more RPCs are missing regions
+		}
+		rpcByClient[rc] = append(rpcByClient[rc], rpc)
+	}
+	return rpcByClient, ok
+}
+
+func (c *client) waitForCompletion(ctx context.Context, rc hrpc.RegionClient,
+	rpcs []hrpc.Call, results []hrpc.RPCResult, rpcToRes map[hrpc.Call]int) bool {
+
+	ok := true
+	canceledIndex := len(rpcs)
+loop:
+	for i, rpc := range rpcs {
+		select {
+		case res := <-rpc.ResultChan():
+			results[rpcToRes[rpc]] = res
+			if res.Error != nil {
+				c.handleResultError(res.Error, rpc.Region(), rc)
+				ok = false
+			}
+		case <-ctx.Done():
+			canceledIndex = i
+			ok = false
+			break loop
+		}
+	}
+
+	// If the context was canceled we may have exited the loop above
+	// without checking for every result. Do a non-blocking read of
+	// the ResultChan for the remaining RPCs. If not ready the result
+	// will be the context error.
+	for _, rpc := range rpcs[canceledIndex:] {
+		select {
+		case res := <-rpc.ResultChan():
+			results[rpcToRes[rpc]] = res
+			if res.Error != nil {
+				c.handleResultError(res.Error, rpc.Region(), rc)
+			}
+		default:
+			results[rpcToRes[rpc]].Error = ctx.Err()
+		}
+	}
+
+	return ok
 }
 
 func (c *client) handleResultError(err error, reg hrpc.RegionInfo, rc hrpc.RegionClient) {
