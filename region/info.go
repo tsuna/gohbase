@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -358,4 +359,40 @@ func findCommaFromEnd(b []byte, offset int) int {
 		}
 	}
 	panic(fmt.Errorf("no comma found in %q after offset %d", b, offset))
+}
+
+func (i *info) MarshalJSON() ([]byte, error) {
+
+	var ctxError string
+
+	if i.ctx != nil {
+		ctxError = fmt.Sprint(i.ctx.Err())
+	}
+
+	state := struct {
+		Id              uint64
+		Namespace       string
+		Table           string
+		Name            string
+		StartKey        string
+		StopKey         string
+		ContextInstance string
+		Err             string
+		Client          string
+		Available       bool
+	}{
+		Id:              i.id,
+		Namespace:       string(i.namespace),
+		Table:           string(i.table),
+		Name:            string(i.name),
+		StartKey:        string(i.startKey),
+		StopKey:         string(i.stopKey),
+		ContextInstance: fmt.Sprintf("%p", (i.ctx)),
+		Err:             ctxError,
+		Client:          fmt.Sprintf("%p", (i.client)),
+		Available:       !i.IsUnavailable(),
+	}
+	jsonVal, err := json.Marshal(state)
+
+	return jsonVal, err
 }

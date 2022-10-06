@@ -7,6 +7,7 @@ package region
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -722,4 +723,56 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 		return id, ServerError{err}
 	}
 	return id, nil
+}
+
+func (c *client) MarshalJSON() ([]byte, error) {
+
+	type Address struct {
+		Network string
+		Address string
+	}
+
+	// the status of the Done channel as a string. Closed if its done, Not Closed o.w
+	var done_status string
+	if c.done != nil {
+		select {
+		case <-c.done:
+			done_status = "Closed"
+		default:
+			done_status = "Not Closed"
+		}
+	}
+
+	c.inFlightM.Lock()
+	inFlight := c.inFlight
+	c.inFlightM.Unlock()
+
+	// if conn is nil then we don't want to panic. So just get the addresses if conn is not nil
+	var localAddr, remoteAddr Address
+	if c.conn != nil {
+		localAddress := c.conn.LocalAddr()
+		remoteAddress := c.conn.RemoteAddr()
+		localAddr = Address{localAddress.Network(), localAddress.String()}
+		remoteAddr = Address{remoteAddress.Network(), remoteAddress.String()}
+	}
+
+	state := struct {
+		ConnectionLocalAddress  Address
+		ConnectionRemoteAddress Address
+		RegionServerAddress     string
+		ClientType              ClientType
+		InFlight                uint32
+		Id                      uint32
+		Done_status             string
+	}{
+		ConnectionLocalAddress:  localAddr,
+		ConnectionRemoteAddress: remoteAddr,
+		RegionServerAddress:     c.addr,
+		ClientType:              c.ctype,
+		InFlight:                inFlight,
+		Id:                      c.id,
+		Done_status:             done_status,
+	}
+
+	return json.Marshal(state)
 }

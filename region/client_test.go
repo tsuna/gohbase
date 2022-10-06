@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -22,6 +23,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/test"
@@ -1192,4 +1194,74 @@ func TestBuffer(t *testing.T) {
 		t.Fatalf("Excpected len %d, got %d", size, len(b))
 	}
 	freeBuffer(b)
+}
+
+func TestMarshalJSON(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+
+	var localAddr net.Addr
+	var remoteAddr net.Addr
+	var id uint32 = 111
+	tcp := "tcp"
+	localIp := []byte("172.16.254.1")
+	remoteIp := []byte("10.16.254.1")
+	localAddr = &net.TCPAddr{IP: localIp, Port: 0, Zone: "testZone"}
+	remoteAddr = &net.TCPAddr{IP: remoteIp, Port: 0, Zone: "testZone"}
+
+	mockConn := mock.NewMockConn(ctrl)
+	mockConn.EXPECT().LocalAddr().Return(localAddr)
+	mockConn.EXPECT().RemoteAddr().Return(remoteAddr)
+	c := &client{
+		conn:          mockConn,
+		addr:          "testRegionServerAddress",
+		ctype:         RegionClient,
+		rpcs:          make(chan hrpc.Call),
+		done:          make(chan struct{}),
+		sent:          make(map[uint32]hrpc.Call),
+		rpcQueueSize:  1, // size one to skip sendBatch
+		flushInterval: 1000 * time.Second,
+		compressor:    &compressor{Codec: mockCodec{}},
+		id:            id,
+	}
+
+	jsonVal, err := c.MarshalJSON()
+
+	if err != nil {
+		t.Fatalf("Did not expect Error to be thrown: %v", err)
+	}
+
+	var jsonUnMarshal map[string]interface{}
+	err = json.Unmarshal(jsonVal, &jsonUnMarshal)
+
+	if err != nil {
+		t.Fatalf("Error while unmarshalling JSON, %v", err)
+	}
+
+	actualLocalAddr := jsonUnMarshal["ConnectionLocalAddress"].(map[string]interface{})
+	actualRemoteAddr := jsonUnMarshal["ConnectionRemoteAddress"].(map[string]interface{})
+
+	assert.Equal(t, tcp, actualLocalAddr["Network"])
+	assert.Equal(t, tcp, actualRemoteAddr["Network"])
+	assert.Equal(t, string(RegionClient), jsonUnMarshal["ClientType"])
+	assert.Equal(t, float64(0), jsonUnMarshal["InFlight"])
+	assert.Equal(t, float64(id), jsonUnMarshal["Id"])
+
+}
+
+func TestMarshalJSONNilValues(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+
+	c := &client{
+		conn: nil,
+		rpcs: nil,
+		done: nil,
+		sent: nil,
+	}
+
+	_, err := c.MarshalJSON()
+	if err != nil {
+		t.Fatalf("Did not expect Error to be thrown: %v", err)
+	}
 }

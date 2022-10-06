@@ -7,6 +7,7 @@ package gohbase
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"sync"
 
@@ -92,6 +93,36 @@ func (rcc *clientRegionCache) clientDown(c hrpc.RegionClient) map[hrpc.RegionInf
 	return downregions
 }
 
+// Collects information about the clientRegion cache and appends them to the two maps to reduce
+// duplication of data. We do this in one function to avoid running the iterations twice
+func (rcc *clientRegionCache) debugInfo(
+	regions map[string]hrpc.RegionInfo,
+	clients map[string]hrpc.RegionClient) map[string][]string {
+
+	// key = RegionClient memory address , value = List of RegionInfo addresses
+	clientRegionCacheMap := map[string][]string{}
+
+	rcc.m.RLock()
+	for client, reginfos := range rcc.regions {
+		clientRegionInfoMap := make([]string, len(reginfos))
+		// put all the region infos in the client into the keyRegionInfosMap b/c its not
+		// guaranteed that rcc and krc will have the same infos
+		clients[fmt.Sprintf("%p", client)] = client
+
+		i := 0
+		for regionInfo := range reginfos {
+			clientRegionInfoMap[i] = fmt.Sprintf("%p", regionInfo)
+			regions[fmt.Sprintf("%p", regionInfo)] = regionInfo
+			i++
+		}
+
+		clientRegionCacheMap[fmt.Sprintf("%p", client)] = clientRegionInfoMap
+	}
+	rcc.m.RUnlock()
+
+	return clientRegionCacheMap
+}
+
 // key -> region cache.
 type keyRegionCache struct {
 	m sync.RWMutex
@@ -119,6 +150,35 @@ func (krc *keyRegionCache) get(key []byte) ([]byte, hrpc.RegionInfo) {
 		return nil, nil
 	}
 	return k.([]byte), v.(hrpc.RegionInfo)
+}
+
+// reads whole b tree in keyRegionCache and gathers debug info.
+// We append that information in the given map
+func (krc *keyRegionCache) debugInfo(
+	regions map[string]hrpc.RegionInfo) map[string]string {
+	regionCacheMap := map[string]string{}
+
+	krc.m.RLock()
+	enum, err := krc.regions.SeekFirst()
+	if err != nil {
+		krc.m.RUnlock()
+		return regionCacheMap
+	}
+	krc.m.RUnlock()
+
+	for {
+		krc.m.RLock()
+		k, v, err := enum.Next()
+		// release lock after each iteration to allow other processes a chance to get it
+		krc.m.RUnlock()
+		if err == io.EOF {
+			break
+		}
+		regions[fmt.Sprintf("%p", v.(hrpc.RegionInfo))] = v.(hrpc.RegionInfo)
+		regionCacheMap[string(k.([]byte))] = fmt.Sprintf("%p", v.(hrpc.RegionInfo))
+	}
+
+	return regionCacheMap
 }
 
 func isRegionOverlap(regA, regB hrpc.RegionInfo) bool {
