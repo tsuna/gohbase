@@ -171,7 +171,7 @@ func TestRegionInfoMarshalJson(t *testing.T) {
 		conn:          mockConn,
 		addr:          "testAddr",
 		ctype:         RegionClient,
-		rpcs:          make(chan hrpc.Call),
+		rpcs:          make(chan []hrpc.Call),
 		done:          make(chan struct{}),
 		sent:          make(map[uint32]hrpc.Call),
 		inFlight:      20,

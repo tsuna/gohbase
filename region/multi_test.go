@@ -320,10 +320,8 @@ func TestMultiToProto(t *testing.T) {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			m := newMulti(1000)
 
-			for _, c := range tcase.calls {
-				if m.add(c) {
-					t.Fatal("multi is full")
-				}
+			if m.add(tcase.calls) {
+				t.Fatal("multi is full")
 			}
 
 			if tcase.panicMsg != "" {
@@ -366,10 +364,8 @@ func TestMultiToProto(t *testing.T) {
 
 			// test cellblocks
 			m = newMulti(1000)
-			for _, c := range tcase.calls {
-				if m.add(c) {
-					t.Fatal("multi is full")
-				}
+			if m.add(tcase.calls) {
+				t.Fatal("multi is full")
 			}
 			cellblocksProto, cellblocks, cellblocksLen := m.SerializeCellBlocks(nil)
 			out, ok = cellblocksProto.(*pb.MultiRequest)
@@ -692,10 +688,8 @@ func TestMultiReturnResults(t *testing.T) {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			m := newMulti(1000)
 
-			for _, c := range tcase.calls {
-				if m.add(c) {
-					t.Fatal("multi is full")
-				}
+			if m.add(tcase.calls) {
+				t.Fatal("multi is full")
 			}
 			m.regions = tcase.regions
 
@@ -986,10 +980,8 @@ func TestMultiDeserializeCellBlocks(t *testing.T) {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			m := newMulti(1000)
 
-			for _, c := range tcase.calls {
-				if m.add(c) {
-					t.Fatal("multi is full")
-				}
+			if m.add(tcase.calls) {
+				t.Fatal("multi is full")
 			}
 
 			n, err := m.DeserializeCellBlocks(tcase.response, tcase.cellblocks)
@@ -1028,19 +1020,19 @@ func BenchmarkMultiToProto(b *testing.B) {
 	var c hrpc.Call
 	c, _ = hrpc.NewGetStr(context.Background(), "reg0", "call0")
 	c.SetRegion(reg0)
-	m.add(c)
+	m.add([]hrpc.Call{c})
 	c, _ = hrpc.NewPutStr(context.Background(), "reg0", "call1", values)
 	c.SetRegion(reg0)
-	m.add(c)
+	m.add([]hrpc.Call{c})
 	c, _ = hrpc.NewAppStr(context.Background(), "reg1", "call2", values)
 	c.SetRegion(reg1)
-	m.add(c)
+	m.add([]hrpc.Call{c})
 	c, _ = hrpc.NewDelStr(context.Background(), "reg1", "call3", delValues)
 	c.SetRegion(reg1)
-	m.add(c)
+	m.add([]hrpc.Call{c})
 	c, _ = hrpc.NewIncStr(context.Background(), "reg2", "call4", delValues)
 	c.SetRegion(reg2)
-	m.add(c)
+	m.add([]hrpc.Call{c})
 	b.Run("cellblocks", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
@@ -1097,7 +1089,7 @@ func BenchmarkMultiToProtoLarge(b *testing.B) {
 			b.Fatal(err)
 		}
 		rpc.SetRegion(regions[i%10])
-		m.add(rpc)
+		m.add([]hrpc.Call{rpc})
 	}
 	b.Run("cellblocks", func(b *testing.B) {
 		b.ReportAllocs()

@@ -128,7 +128,7 @@ func TestFail(t *testing.T) {
 	c := &client{
 		conn: mockConn,
 		done: make(chan struct{}),
-		rpcs: make(chan hrpc.Call),
+		rpcs: make(chan []hrpc.Call),
 		sent: make(map[uint32]hrpc.Call),
 	}
 	expectedErr := errors.New("oooups")
@@ -161,7 +161,7 @@ func TestFail(t *testing.T) {
 	// check that failing undialed client doesn't panic
 	c = &client{
 		done: make(chan struct{}),
-		rpcs: make(chan hrpc.Call),
+		rpcs: make(chan []hrpc.Call),
 		sent: make(map[uint32]hrpc.Call),
 	}
 	c.fail(expectedErr)
@@ -196,7 +196,7 @@ func TestQueueRPCMultiWithClose(t *testing.T) {
 
 	c := &client{
 		conn:          &mc{MockConn: mockConn},
-		rpcs:          make(chan hrpc.Call),
+		rpcs:          make(chan []hrpc.Call),
 		done:          make(chan struct{}),
 		sent:          make(map[uint32]hrpc.Call),
 		rpcQueueSize:  10,
@@ -268,7 +268,7 @@ func TestProcessRPCsWithFail(t *testing.T) {
 
 	c := &client{
 		conn: mockConn,
-		rpcs: make(chan hrpc.Call),
+		rpcs: make(chan []hrpc.Call),
 		done: make(chan struct{}),
 		sent: make(map[uint32]hrpc.Call),
 		// never send anything
@@ -338,7 +338,7 @@ func TestQueueRPC(t *testing.T) {
 	mockConn.EXPECT().SetReadDeadline(gomock.Any()).AnyTimes()
 	c := &client{
 		conn:          mockConn,
-		rpcs:          make(chan hrpc.Call),
+		rpcs:          make(chan []hrpc.Call),
 		done:          make(chan struct{}),
 		sent:          make(map[uint32]hrpc.Call),
 		rpcQueueSize:  queueSize,
@@ -424,7 +424,7 @@ func TestServerErrorWrite(t *testing.T) {
 	mockConn := mock.NewMockConn(ctrl)
 	c := &client{
 		conn:          mockConn,
-		rpcs:          make(chan hrpc.Call),
+		rpcs:          make(chan []hrpc.Call),
 		done:          make(chan struct{}),
 		sent:          make(map[uint32]hrpc.Call),
 		rpcQueueSize:  queueSize,
@@ -465,7 +465,7 @@ func TestServerErrorRead(t *testing.T) {
 	mockConn := mock.NewMockConn(ctrl)
 	c := &client{
 		conn:          mockConn,
-		rpcs:          make(chan hrpc.Call),
+		rpcs:          make(chan []hrpc.Call),
 		done:          make(chan struct{}),
 		sent:          make(map[uint32]hrpc.Call),
 		rpcQueueSize:  queueSize,
@@ -504,7 +504,7 @@ func TestServerErrorExceptionResponse(t *testing.T) {
 	mockConn.EXPECT().SetReadDeadline(gomock.Any()).Times(2)
 	c := &client{
 		conn:          mockConn,
-		rpcs:          make(chan hrpc.Call),
+		rpcs:          make(chan []hrpc.Call),
 		done:          make(chan struct{}),
 		sent:          make(map[uint32]hrpc.Call),
 		rpcQueueSize:  1,
@@ -693,7 +693,7 @@ func TestUnexpectedSendError(t *testing.T) {
 	mockConn := mock.NewMockConn(ctrl)
 	c := &client{
 		conn:          mockConn,
-		rpcs:          make(chan hrpc.Call),
+		rpcs:          make(chan []hrpc.Call),
 		done:          make(chan struct{}),
 		sent:          make(map[uint32]hrpc.Call),
 		rpcQueueSize:  queueSize,
@@ -749,7 +749,7 @@ func TestProcessRPCs(t *testing.T) {
 
 			c := &client{
 				conn:          mockConn,
-				rpcs:          make(chan hrpc.Call),
+				rpcs:          make(chan []hrpc.Call),
 				done:          make(chan struct{}),
 				sent:          make(map[uint32]hrpc.Call),
 				rpcQueueSize:  tcase.qsize,
@@ -824,7 +824,7 @@ func TestRPCContext(t *testing.T) {
 	mockConn.EXPECT().Close()
 	c := &client{
 		conn:          mockConn,
-		rpcs:          make(chan hrpc.Call),
+		rpcs:          make(chan []hrpc.Call),
 		done:          make(chan struct{}),
 		sent:          make(map[uint32]hrpc.Call),
 		rpcQueueSize:  queueSize,
@@ -881,7 +881,7 @@ func TestSanity(t *testing.T) {
 	mockConn := mock.NewMockConn(ctrl)
 	c := &client{
 		conn:          mockConn,
-		rpcs:          make(chan hrpc.Call),
+		rpcs:          make(chan []hrpc.Call),
 		done:          make(chan struct{}),
 		sent:          make(map[uint32]hrpc.Call),
 		rpcQueueSize:  1, // size one to skip sendBatch
@@ -972,7 +972,7 @@ func TestSanityCompressor(t *testing.T) {
 	mockConn := mock.NewMockConn(ctrl)
 	c := &client{
 		conn:          mockConn,
-		rpcs:          make(chan hrpc.Call),
+		rpcs:          make(chan []hrpc.Call),
 		done:          make(chan struct{}),
 		sent:          make(map[uint32]hrpc.Call),
 		rpcQueueSize:  1, // size one to skip sendBatch
@@ -1097,7 +1097,7 @@ func BenchmarkSendBatchMemory(b *testing.B) {
 	mockConn := mock.NewMockConn(ctrl)
 	c := &client{
 		conn: mockConn,
-		rpcs: make(chan hrpc.Call),
+		rpcs: make(chan []hrpc.Call),
 		done: make(chan struct{}),
 		sent: make(map[uint32]hrpc.Call),
 		// queue size is 1 so that all QueueRPC calls trigger sendBatch,
@@ -1216,7 +1216,7 @@ func TestMarshalJSON(t *testing.T) {
 		conn:          mockConn,
 		addr:          "testRegionServerAddress",
 		ctype:         RegionClient,
-		rpcs:          make(chan hrpc.Call),
+		rpcs:          make(chan []hrpc.Call),
 		done:          make(chan struct{}),
 		sent:          make(map[uint32]hrpc.Call),
 		rpcQueueSize:  1, // size one to skip sendBatch

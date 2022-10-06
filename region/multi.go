@@ -279,9 +279,9 @@ func (m *multi) returnResults(msg proto.Message, err error) {
 }
 
 // add adds the call and returns wether the batch is full.
-func (m *multi) add(call hrpc.Call) bool {
-	m.calls = append(m.calls, call)
-	return len(m.calls) == m.size
+func (m *multi) add(calls []hrpc.Call) bool {
+	m.calls = append(m.calls, calls...)
+	return len(m.calls) >= m.size
 }
 
 // len returns number of batched calls.
