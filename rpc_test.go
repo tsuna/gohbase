@@ -28,7 +28,7 @@ import (
 	mockZk "github.com/tsuna/gohbase/test/mock/zk"
 	"github.com/tsuna/gohbase/zk"
 	"google.golang.org/protobuf/proto"
-	"modernc.org/b"
+	"modernc.org/b/v2"
 )
 
 func newRegionClientFn(addr string) func() hrpc.RegionClient {
@@ -41,7 +41,7 @@ func newRegionClientFn(addr string) func() hrpc.RegionClient {
 func newMockClient(zkClient zk.Client) *client {
 	return &client{
 		clientType: region.RegionClient,
-		regions:    keyRegionCache{regions: b.TreeNew(region.CompareGeneric)},
+		regions:    keyRegionCache{regions: b.TreeNew[[]byte, hrpc.RegionInfo](region.Compare)},
 		clients: clientRegionCache{
 			regions: make(map[hrpc.RegionClient]map[hrpc.RegionInfo]struct{}),
 		},

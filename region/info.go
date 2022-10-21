@@ -261,11 +261,6 @@ func (i *info) SetClient(c hrpc.RegionClient) {
 	i.m.Unlock()
 }
 
-// CompareGeneric is the same thing as Compare but for interface{}.
-func CompareGeneric(a, b interface{}) int {
-	return Compare(a.([]byte), b.([]byte))
-}
-
 // Compare compares two region names.
 // We can't just use bytes.Compare() because it doesn't play nicely
 // with the way META keys are built as the first region has an empty start

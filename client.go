@@ -19,7 +19,7 @@ import (
 	"github.com/tsuna/gohbase/region"
 	"github.com/tsuna/gohbase/zk"
 	"google.golang.org/protobuf/proto"
-	"modernc.org/b"
+	"modernc.org/b/v2"
 )
 
 const (
@@ -111,7 +111,7 @@ func newClient(zkquorum string, options ...Option) *client {
 	}).Debug("Creating new client.")
 	c := &client{
 		clientType: region.RegionClient,
-		regions:    keyRegionCache{regions: b.TreeNew(region.CompareGeneric)},
+		regions:    keyRegionCache{regions: b.TreeNew[[]byte, hrpc.RegionInfo](region.Compare)},
 		clients: clientRegionCache{
 			regions: make(map[hrpc.RegionClient]map[hrpc.RegionInfo]struct{}),
 		},
