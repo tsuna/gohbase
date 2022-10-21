@@ -12,7 +12,7 @@ require (
 	go.opentelemetry.io/otel v1.11.1
 	go.opentelemetry.io/otel/trace v1.11.1
 	google.golang.org/protobuf v1.28.1
-	modernc.org/b v1.0.3
+	modernc.org/b/v2 v2.1.0
 )
 
 require (
@@ -29,4 +29,6 @@ require (
 	github.com/prometheus/procfs v0.8.0 // indirect
 	golang.org/x/sys v0.1.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	modernc.org/mathutil v1.5.0 // indirect
+	modernc.org/strutil v1.1.3 // indirect
 )

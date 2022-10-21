@@ -135,11 +135,6 @@ func TestCompare(t *testing.T) {
 			t.Errorf("%q was found to be greater than %q (%d)", tcase.b, tcase.a, i)
 		}
 	}
-
-	meta := []byte("hbase:meta,,1")
-	if i := CompareGeneric(meta, meta); i != 0 {
-		t.Errorf("%q was found to not be equal to itself (%d)", meta, i)
-	}
 }
 
 func TestCompareBogusName(t *testing.T) {
