@@ -7,6 +7,7 @@ package gohbase
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -18,7 +19,7 @@ import (
 	"github.com/tsuna/gohbase/region"
 	"github.com/tsuna/gohbase/zk"
 	"google.golang.org/protobuf/proto"
-	"modernc.org/b"
+	"modernc.org/b/v2"
 )
 
 const (
@@ -110,7 +111,7 @@ func newClient(zkquorum string, options ...Option) *client {
 	}).Debug("Creating new client.")
 	c := &client{
 		clientType: region.RegionClient,
-		regions:    keyRegionCache{regions: b.TreeNew(region.CompareGeneric)},
+		regions:    keyRegionCache{regions: b.TreeNew[[]byte, hrpc.RegionInfo](region.Compare)},
 		clients: clientRegionCache{
 			regions: make(map[hrpc.RegionClient]map[hrpc.RegionInfo]struct{}),
 		},
@@ -140,6 +141,69 @@ func newClient(zkquorum string, options ...Option) *client {
 	c.zkClient = zk.NewClient(zkquorum, c.zkTimeout)
 
 	return c
+}
+
+// DebugState information about the clients keyRegionCache, and clientRegionCache
+func DebugState(client Client) ([]byte, error) {
+
+	debugInfoJson, err := json.Marshal(client)
+	if err != nil {
+		log.Errorf("Cannot turn client into JSON bytes array: %v", err)
+	}
+	return debugInfoJson, err
+}
+
+func (c *client) MarshalJSON() ([]byte, error) {
+
+	var done string
+	if c.done != nil {
+		select {
+		case <-c.done:
+			done = "Closed"
+		default:
+			done = "Not Closed"
+		}
+	} else {
+		done = "nil"
+	}
+
+	rcc := &c.clients
+	krc := &c.regions
+
+	// create map for all ClientRegions (clntRegion Ptr -> JSONified Client Region)
+	clientRegionsMap := map[string]hrpc.RegionClient{}
+	// create map for all RegionInfos (Region Ptr -> JSONified RegionInfo)
+	keyRegionInfosMap := map[string]hrpc.RegionInfo{}
+
+	clientRegionCacheValues := rcc.debugInfo(keyRegionInfosMap, clientRegionsMap)
+	keyRegionCacheValues := krc.debugInfo(keyRegionInfosMap)
+
+	state := struct {
+		ClientType          region.ClientType
+		ClientRegionMap     map[string]hrpc.RegionClient
+		RegionInfoMap       map[string]hrpc.RegionInfo
+		KeyRegionCache      map[string]string
+		ClientRegionCache   map[string][]string
+		MetaRegionInfo      hrpc.RegionInfo
+		AdminRegionInfo     hrpc.RegionInfo
+		Done_Status         string
+		RegionLookupTimeout time.Duration
+		RegionReadTimeout   time.Duration
+	}{
+		ClientType:          c.clientType,
+		ClientRegionMap:     clientRegionsMap,
+		RegionInfoMap:       keyRegionInfosMap,
+		KeyRegionCache:      keyRegionCacheValues,
+		ClientRegionCache:   clientRegionCacheValues,
+		MetaRegionInfo:      c.metaRegionInfo,
+		AdminRegionInfo:     c.adminRegionInfo,
+		Done_Status:         done,
+		RegionLookupTimeout: c.regionLookupTimeout,
+		RegionReadTimeout:   c.regionReadTimeout,
+	}
+
+	jsonVal, err := json.Marshal(state)
+	return jsonVal, err
 }
 
 // RpcQueueSize will return an option that will set the size of the RPC queues

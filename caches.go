@@ -7,12 +7,13 @@ package gohbase
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/tsuna/gohbase/hrpc"
-	"modernc.org/b"
+	"modernc.org/b/v2"
 )
 
 // clientRegionCache is client -> region cache. Used to quickly
@@ -92,12 +93,42 @@ func (rcc *clientRegionCache) clientDown(c hrpc.RegionClient) map[hrpc.RegionInf
 	return downregions
 }
 
+// Collects information about the clientRegion cache and appends them to the two maps to reduce
+// duplication of data. We do this in one function to avoid running the iterations twice
+func (rcc *clientRegionCache) debugInfo(
+	regions map[string]hrpc.RegionInfo,
+	clients map[string]hrpc.RegionClient) map[string][]string {
+
+	// key = RegionClient memory address , value = List of RegionInfo addresses
+	clientRegionCacheMap := map[string][]string{}
+
+	rcc.m.RLock()
+	for client, reginfos := range rcc.regions {
+		clientRegionInfoMap := make([]string, len(reginfos))
+		// put all the region infos in the client into the keyRegionInfosMap b/c its not
+		// guaranteed that rcc and krc will have the same infos
+		clients[fmt.Sprintf("%p", client)] = client
+
+		i := 0
+		for regionInfo := range reginfos {
+			clientRegionInfoMap[i] = fmt.Sprintf("%p", regionInfo)
+			regions[fmt.Sprintf("%p", regionInfo)] = regionInfo
+			i++
+		}
+
+		clientRegionCacheMap[fmt.Sprintf("%p", client)] = clientRegionInfoMap
+	}
+	rcc.m.RUnlock()
+
+	return clientRegionCacheMap
+}
+
 // key -> region cache.
 type keyRegionCache struct {
 	m sync.RWMutex
 
 	// Maps a []byte of a region start key to a hrpc.RegionInfo
-	regions *b.Tree
+	regions *b.Tree[[]byte, hrpc.RegionInfo]
 }
 
 func (krc *keyRegionCache) get(key []byte) ([]byte, hrpc.RegionInfo) {
@@ -118,7 +149,36 @@ func (krc *keyRegionCache) get(key []byte) ([]byte, hrpc.RegionInfo) {
 		// we are the beginning of the tree
 		return nil, nil
 	}
-	return k.([]byte), v.(hrpc.RegionInfo)
+	return k, v
+}
+
+// reads whole b tree in keyRegionCache and gathers debug info.
+// We append that information in the given map
+func (krc *keyRegionCache) debugInfo(
+	regions map[string]hrpc.RegionInfo) map[string]string {
+	regionCacheMap := map[string]string{}
+
+	krc.m.RLock()
+	enum, err := krc.regions.SeekFirst()
+	if err != nil {
+		krc.m.RUnlock()
+		return regionCacheMap
+	}
+	krc.m.RUnlock()
+
+	for {
+		krc.m.RLock()
+		k, v, err := enum.Next()
+		// release lock after each iteration to allow other processes a chance to get it
+		krc.m.RUnlock()
+		if err == io.EOF {
+			break
+		}
+		regions[fmt.Sprintf("%p", v)] = v
+		regionCacheMap[string(k)] = fmt.Sprintf("%p", v)
+	}
+
+	return regionCacheMap
 }
 
 func isRegionOverlap(regA, regB hrpc.RegionInfo) bool {
@@ -131,7 +191,7 @@ func isRegionOverlap(regA, regB hrpc.RegionInfo) bool {
 
 func (krc *keyRegionCache) getOverlaps(reg hrpc.RegionInfo) []hrpc.RegionInfo {
 	var overlaps []hrpc.RegionInfo
-	var v interface{}
+	var v hrpc.RegionInfo
 	var err error
 
 	// deal with empty tree in the beginning so that we don't have to check
@@ -179,15 +239,15 @@ func (krc *keyRegionCache) getOverlaps(reg hrpc.RegionInfo) []hrpc.RegionInfo {
 		log.Fatalf(
 			"error accessing first region when getting overlaps for region %v: %v", reg, err)
 	}
-	if isRegionOverlap(v.(hrpc.RegionInfo), reg) {
-		overlaps = append(overlaps, v.(hrpc.RegionInfo))
+	if isRegionOverlap(v, reg) {
+		overlaps = append(overlaps, v)
 	}
 	_, v, err = enum.Next()
 
 	// now append all regions that overlap until the end of the tree
 	// or until they don't overlap
-	for err != io.EOF && isRegionOverlap(v.(hrpc.RegionInfo), reg) {
-		overlaps = append(overlaps, v.(hrpc.RegionInfo))
+	for err != io.EOF && isRegionOverlap(v, reg) {
+		overlaps = append(overlaps, v)
 		_, v, err = enum.Next()
 	}
 	enum.Close()
@@ -201,11 +261,11 @@ func (krc *keyRegionCache) getOverlaps(reg hrpc.RegionInfo) []hrpc.RegionInfo {
 // passed region was put in the cache.
 func (krc *keyRegionCache) put(reg hrpc.RegionInfo) (overlaps []hrpc.RegionInfo, replaced bool) {
 	krc.m.Lock()
-	krc.regions.Put(reg.Name(), func(v interface{}, exists bool) (interface{}, bool) {
+	krc.regions.Put(reg.Name(), func(v hrpc.RegionInfo, exists bool) (hrpc.RegionInfo, bool) {
 		if exists {
 			// region is already in cache,
 			// note: regions with the same name have the same age
-			overlaps = []hrpc.RegionInfo{v.(hrpc.RegionInfo)}
+			overlaps = []hrpc.RegionInfo{v}
 			return nil, false
 		}
 		// find all entries that are overlapping with the range of the new region.

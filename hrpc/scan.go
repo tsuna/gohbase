@@ -224,6 +224,9 @@ func (s *Scan) ToProto() proto.Message {
 	if s.cacheBlocks != DefaultCacheBlocks {
 		scan.Scan.CacheBlocks = &s.cacheBlocks
 	}
+	if s.consistency != DefaultConsistency {
+		scan.Scan.Consistency = s.consistency.toProto()
+	}
 	scan.Scan.Filter = s.filter
 	return scan
 }

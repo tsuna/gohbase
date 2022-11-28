@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -37,6 +38,7 @@ type info struct {
 	name      []byte
 	startKey  []byte
 	stopKey   []byte
+	specifier *pb.RegionSpecifier
 	ctx       context.Context
 	cancel    context.CancelFunc
 
@@ -66,6 +68,10 @@ func NewInfo(id uint64, namespace, table, name, startKey, stopKey []byte) hrpc.R
 		name:      name,
 		startKey:  startKey,
 		stopKey:   stopKey,
+		specifier: &pb.RegionSpecifier{
+			Type:  pb.RegionSpecifier_REGION_NAME.Enum(),
+			Value: name,
+		},
 	}
 }
 
@@ -215,6 +221,11 @@ func (i *info) Name() []byte {
 	return i.name
 }
 
+// RegionSpecifier returns the RegionSpecifier proto for this region
+func (i *info) RegionSpecifier() *pb.RegionSpecifier {
+	return i.specifier
+}
+
 // StopKey return region stop key
 func (i *info) StopKey() []byte {
 	return i.stopKey
@@ -250,17 +261,14 @@ func (i *info) SetClient(c hrpc.RegionClient) {
 	i.m.Unlock()
 }
 
-// CompareGeneric is the same thing as Compare but for interface{}.
-func CompareGeneric(a, b interface{}) int {
-	return Compare(a.([]byte), b.([]byte))
-}
-
 // Compare compares two region names.
 // We can't just use bytes.Compare() because it doesn't play nicely
 // with the way META keys are built as the first region has an empty start
 // key.  Let's assume we know about those 2 regions in our cache:
-//   .META.,,1
-//   tableA,,1273018455182
+//
+//	.META.,,1
+//	tableA,,1273018455182
+//
 // We're given an RPC to execute on "tableA", row "\x00" (1 byte row key
 // containing a 0).  If we use Compare() to sort the entries in the cache,
 // when we search for the entry right before "tableA,\000,:"
@@ -346,4 +354,40 @@ func findCommaFromEnd(b []byte, offset int) int {
 		}
 	}
 	panic(fmt.Errorf("no comma found in %q after offset %d", b, offset))
+}
+
+func (i *info) MarshalJSON() ([]byte, error) {
+
+	var ctxError string
+
+	if i.ctx != nil {
+		ctxError = fmt.Sprint(i.ctx.Err())
+	}
+
+	state := struct {
+		Id              uint64
+		Namespace       string
+		Table           string
+		Name            string
+		StartKey        string
+		StopKey         string
+		ContextInstance string
+		Err             string
+		Client          string
+		Available       bool
+	}{
+		Id:              i.id,
+		Namespace:       string(i.namespace),
+		Table:           string(i.table),
+		Name:            string(i.name),
+		StartKey:        string(i.startKey),
+		StopKey:         string(i.stopKey),
+		ContextInstance: fmt.Sprintf("%p", (i.ctx)),
+		Err:             ctxError,
+		Client:          fmt.Sprintf("%p", (i.client)),
+		Available:       !i.IsUnavailable(),
+	}
+	jsonVal, err := json.Marshal(state)
+
+	return jsonVal, err
 }

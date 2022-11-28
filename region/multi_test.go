@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"strconv"
 	"testing"
@@ -242,18 +243,18 @@ func TestMultiToProto(t *testing.T) {
 			},
 			cellblocksLen: 130,
 			cellblocks: [][]byte{
-				[]byte("\x00\x00\x00\x1d\x00\x00\x00\x14\x00\x00\x00\x01\x00\x05"),
-				[]byte("call1"), []byte("\x02"), []byte("cf"), []byte("c"),
-				[]byte("\u007f\xff\xff\xff\xff\xff\xff\xff\x04"), []byte("v"),
-				[]byte("\x00\x00\x00\x1d\x00\x00\x00\x14\x00\x00\x00\x01\x00\x05"),
-				[]byte("call2"), []byte("\x02"), []byte("cf"), []byte("c"),
-				[]byte("\u007f\xff\xff\xff\xff\xff\xff\xff\x04"), []byte("v"),
-				[]byte("\x00\x00\x00\x1c\x00\x00\x00\x14\x00\x00\x00\x00\x00\x05"),
-				[]byte("call3"), []byte("\x02"), []byte("cf"), []byte("c"),
-				[]byte("\u007f\xff\xff\xff\xff\xff\xff\xff\f"),
-				[]byte("\x00\x00\x00\x1c\x00\x00\x00\x14\x00\x00\x00\x00\x00\x05"),
-				[]byte("call4"), []byte("\x02"), []byte("cf"), []byte("c"),
-				[]byte("\u007f\xff\xff\xff\xff\xff\xff\xff\x04")},
+				[]byte("\x00\x00\x00\x1d\x00\x00\x00\x14\x00\x00\x00\x01\x00\x05" +
+					"call1" + "\x02" + "cf" + "c" +
+					"\u007f\xff\xff\xff\xff\xff\xff\xff\x04" + "v"),
+				[]byte("\x00\x00\x00\x1d\x00\x00\x00\x14\x00\x00\x00\x01\x00\x05" +
+					"call2" + "\x02" + "cf" + "c" +
+					"\u007f\xff\xff\xff\xff\xff\xff\xff\x04" + "v"),
+				[]byte("\x00\x00\x00\x1c\x00\x00\x00\x14\x00\x00\x00\x00\x00\x05" +
+					"call3" + "\x02" + "cf" + "c" +
+					"\u007f\xff\xff\xff\xff\xff\xff\xff\f"),
+				[]byte("\x00\x00\x00\x1c\x00\x00\x00\x14\x00\x00\x00\x00\x00\x05" +
+					"call4" + "\x02" + "cf" + "c" +
+					"\u007f\xff\xff\xff\xff\xff\xff\xff\x04")},
 		},
 		{ // one call with expired context
 			calls: func() []hrpc.Call {
@@ -317,7 +318,7 @@ func TestMultiToProto(t *testing.T) {
 
 	for i, tcase := range tests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			m := newMulti(context.Background(), 1000)
+			m := newMulti(1000)
 
 			for _, c := range tcase.calls {
 				if m.add(c) {
@@ -364,7 +365,7 @@ func TestMultiToProto(t *testing.T) {
 			}
 
 			// test cellblocks
-			m = newMulti(context.Background(), 1000)
+			m = newMulti(1000)
 			for _, c := range tcase.calls {
 				if m.add(c) {
 					t.Fatal("multi is full")
@@ -689,7 +690,7 @@ func TestMultiReturnResults(t *testing.T) {
 
 	for i, tcase := range tests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			m := newMulti(context.Background(), 1000)
+			m := newMulti(1000)
 
 			for _, c := range tcase.calls {
 				if m.add(c) {
@@ -983,7 +984,7 @@ func TestMultiDeserializeCellBlocks(t *testing.T) {
 
 	for i, tcase := range tests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			m := newMulti(context.Background(), 1000)
+			m := newMulti(1000)
 
 			for _, c := range tcase.calls {
 				if m.add(c) {
@@ -1009,4 +1010,99 @@ func TestMultiDeserializeCellBlocks(t *testing.T) {
 			}
 		})
 	}
+}
+
+func BenchmarkMultiToProto(b *testing.B) {
+	values := map[string]map[string][]byte{
+		"cf": map[string][]byte{
+			"c": []byte("v"),
+		},
+	}
+	delValues := map[string]map[string][]byte{
+		"cf": map[string][]byte{
+			"c": nil,
+		},
+	}
+
+	m := newMulti(1000)
+	var c hrpc.Call
+	c, _ = hrpc.NewGetStr(context.Background(), "reg0", "call0")
+	c.SetRegion(reg0)
+	m.add(c)
+	c, _ = hrpc.NewPutStr(context.Background(), "reg0", "call1", values)
+	c.SetRegion(reg0)
+	m.add(c)
+	c, _ = hrpc.NewAppStr(context.Background(), "reg1", "call2", values)
+	c.SetRegion(reg1)
+	m.add(c)
+	c, _ = hrpc.NewDelStr(context.Background(), "reg1", "call3", delValues)
+	c.SetRegion(reg1)
+	m.add(c)
+	c, _ = hrpc.NewIncStr(context.Background(), "reg2", "call4", delValues)
+	c.SetRegion(reg2)
+	m.add(c)
+	b.Run("cellblocks", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			m.toProto(true)
+		}
+	})
+	b.Run("no_cellblocks", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			m.toProto(false)
+		}
+	})
+}
+
+func BenchmarkMultiToProtoLarge(b *testing.B) {
+	row := "12345678901234567890123456789012345678901234567890"
+	values := map[string]map[string][]byte{
+		"cf": {
+			"abcde":  []byte("1234567890"),
+			"fghij":  []byte("1234567890"),
+			"klmno":  []byte("1234567890"),
+			"pqrst":  []byte("1234567890"),
+			"uvxwyz": []byte("1234567890"),
+		},
+	}
+
+	regions := []hrpc.RegionInfo{
+		NewInfo(0, nil, []byte("reg0"),
+			[]byte("reg0,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil),
+		NewInfo(1, nil, []byte("reg1"),
+			[]byte("reg1,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil),
+		NewInfo(2, nil, []byte("reg2"),
+			[]byte("reg2,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil),
+		NewInfo(3, nil, []byte("reg3"),
+			[]byte("reg3,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil),
+		NewInfo(4, nil, []byte("reg4"),
+			[]byte("reg4,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil),
+		NewInfo(5, nil, []byte("reg5"),
+			[]byte("reg5,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil),
+		NewInfo(6, nil, []byte("reg6"),
+			[]byte("reg6,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil),
+		NewInfo(7, nil, []byte("reg7"),
+			[]byte("reg7,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil),
+		NewInfo(8, nil, []byte("reg8"),
+			[]byte("reg8,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil),
+		NewInfo(9, nil, []byte("reg9"),
+			[]byte("reg9,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil),
+	}
+
+	m := newMulti(1000)
+	for i := 0; i < 1000; i++ {
+		rpc, err := hrpc.NewPutStr(context.Background(), fmt.Sprintf("region%d", i%10), row, values)
+		if err != nil {
+			b.Fatal(err)
+		}
+		rpc.SetRegion(regions[i%10])
+		m.add(rpc)
+	}
+	b.Run("cellblocks", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			m.toProto(true)
+		}
+	})
 }

@@ -71,7 +71,7 @@ func newAdminClient(zkquorum string, options ...Option) AdminClient {
 	return c
 }
 
-//Get the status of the cluster
+// Get the status of the cluster
 func (c *client) ClusterStatus() (*pb.ClusterStatus, error) {
 	pbmsg, err := c.SendRPC(hrpc.NewClusterStatus())
 	if err != nil {

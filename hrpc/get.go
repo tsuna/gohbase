@@ -113,6 +113,9 @@ func (g *Get) ToProto() proto.Message {
 	if g.cacheBlocks != DefaultCacheBlocks {
 		get.Get.CacheBlocks = &g.cacheBlocks
 	}
+	if g.consistency != DefaultConsistency {
+		get.Get.Consistency = g.consistency.toProto()
+	}
 	get.Get.Filter = g.filter
 	return get
 }

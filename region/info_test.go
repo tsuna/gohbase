@@ -7,11 +7,17 @@ package region
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
+	"github.com/tsuna/gohbase/test"
+	"github.com/tsuna/gohbase/test/mock"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -129,11 +135,6 @@ func TestCompare(t *testing.T) {
 			t.Errorf("%q was found to be greater than %q (%d)", tcase.b, tcase.a, i)
 		}
 	}
-
-	meta := []byte("hbase:meta,,1")
-	if i := CompareGeneric(meta, meta); i != 0 {
-		t.Errorf("%q was found to not be equal to itself (%d)", meta, i)
-	}
 }
 
 func TestCompareBogusName(t *testing.T) {
@@ -149,4 +150,98 @@ func TestCompareBogusName(t *testing.T) {
 		}
 	}()
 	Compare([]byte("bogus"), []byte("bogus"))
+}
+
+func TestRegionInfoMarshalJson(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+
+	var id uint64 = 1
+	namespace := []byte("test")
+	table := []byte("testTable")
+	name := []byte("testTableName")
+	startKey := []byte("startKey")
+	stopKey := []byte("stopKey")
+	queueSize := 30
+	flushInterval := 20 * time.Millisecond
+
+	mockConn := mock.NewMockConn(ctrl)
+
+	c := &client{
+		conn:          mockConn,
+		addr:          "testAddr",
+		ctype:         RegionClient,
+		rpcs:          make(chan hrpc.Call),
+		done:          make(chan struct{}),
+		sent:          make(map[uint32]hrpc.Call),
+		inFlight:      20,
+		effectiveUser: "effectiveUser",
+		rpcQueueSize:  queueSize,
+		flushInterval: flushInterval,
+		readTimeout:   DefaultReadTimeout,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	info := &info{
+		id:        id,
+		ctx:       ctx,
+		cancel:    cancel,
+		namespace: namespace,
+		table:     table,
+		name:      name,
+		startKey:  startKey,
+		stopKey:   stopKey,
+		specifier: &pb.RegionSpecifier{
+			Type:  pb.RegionSpecifier_REGION_NAME.Enum(),
+			Value: []byte("test"),
+		},
+		client:    c,
+		available: nil,
+	}
+
+	jsonVal, err := info.MarshalJSON()
+
+	if err != nil {
+		t.Fatalf("Should not have thrown an error: %v", err)
+	}
+
+	var jsonUnMarshal map[string]interface{}
+	err = json.Unmarshal(jsonVal, &jsonUnMarshal)
+
+	if err != nil {
+		t.Fatalf("Error while unmarshalling JSON, %v", err)
+	}
+
+	assert.Equal(t, float64(id), jsonUnMarshal["Id"])
+	assert.Equal(t, string(table), jsonUnMarshal["Table"])
+	assert.Equal(t, string(name), jsonUnMarshal["Name"])
+	assert.Equal(t, string(startKey), jsonUnMarshal["StartKey"])
+	assert.Equal(t, string(stopKey), jsonUnMarshal["StopKey"])
+	assert.Equal(t, true, jsonUnMarshal["Available"])
+	assert.Equal(t, string(namespace), jsonUnMarshal["Namespace"])
+
+}
+
+func TestRegionInfoMarshalJsonNilValues(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+	info := &info{
+		id:        0,
+		ctx:       nil,
+		cancel:    nil,
+		namespace: nil,
+		table:     nil,
+		name:      nil,
+		startKey:  nil,
+		stopKey:   nil,
+		specifier: nil,
+		client:    nil,
+		available: nil,
+	}
+
+	_, err := info.MarshalJSON()
+
+	if err != nil {
+		t.Fatalf("Should not have thrown an error: %v", err)
+	}
 }
