@@ -11,6 +11,7 @@ package gohbase_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -26,10 +27,12 @@ import (
 	"math"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 	"github.com/tsuna/gohbase"
 	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
+	"github.com/tsuna/gohbase/region"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -125,7 +128,7 @@ func TestMain(m *testing.M) {
 	os.Exit(res)
 }
 
-//Test retrieval of cluster status
+// Test retrieval of cluster status
 func TestClusterStatus(t *testing.T) {
 	ac := gohbase.NewAdminClient(*host)
 
@@ -2274,4 +2277,47 @@ func TestMoveRegion(t *testing.T) {
 	if err := ac.MoveRegion(mr); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestDebugState(t *testing.T) {
+	key := "row1"
+	val := []byte("1")
+	if host == nil {
+		t.Fatal("Host is not set!")
+	}
+
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+	err := insertKeyValue(c, key, "cf", val)
+	if err != nil {
+		t.Fatalf("Put returned an error: %v", err)
+	}
+
+	jsonVal, err := gohbase.DebugState(c)
+
+	if err != nil {
+		t.Fatalf("DebugState returned an error when it shouldn't have: %v", err)
+	}
+
+	var jsonUnMarshal map[string]interface{}
+	err = json.Unmarshal(jsonVal, &jsonUnMarshal)
+
+	if err != nil {
+		t.Fatalf("Encoutered eror when Unmarshalling: %v", err)
+	}
+
+	clientRegionMap := jsonUnMarshal["ClientRegionMap"]
+	clientType := jsonUnMarshal["ClientType"]
+	regionInfoMap := jsonUnMarshal["RegionInfoMap"]
+	keyRegionCache := jsonUnMarshal["KeyRegionCache"]
+	clientRegionCache := jsonUnMarshal["ClientRegionCache"]
+
+	expectedClientRegionSize := 1
+	regionInfoMapSize := 2
+
+	assert.Equal(t, string(region.RegionClient), clientType.(string))
+	assert.Equal(t, expectedClientRegionSize, len(clientRegionMap.(map[string]interface{})))
+	assert.Equal(t, regionInfoMapSize, len(regionInfoMap.(map[string]interface{})))
+	assert.Equal(t, 1, len(keyRegionCache.(map[string]interface{})))
+	assert.Equal(t, 1, len(clientRegionCache.(map[string]interface{}))) // only have one client
 }

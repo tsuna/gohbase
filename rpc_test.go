@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/tsuna/gohbase/compression"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
@@ -27,7 +28,7 @@ import (
 	mockZk "github.com/tsuna/gohbase/test/mock/zk"
 	"github.com/tsuna/gohbase/zk"
 	"google.golang.org/protobuf/proto"
-	"modernc.org/b"
+	"modernc.org/b/v2"
 )
 
 func newRegionClientFn(addr string) func() hrpc.RegionClient {
@@ -40,7 +41,7 @@ func newRegionClientFn(addr string) func() hrpc.RegionClient {
 func newMockClient(zkClient zk.Client) *client {
 	return &client{
 		clientType: region.RegionClient,
-		regions:    keyRegionCache{regions: b.TreeNew(region.CompareGeneric)},
+		regions:    keyRegionCache{regions: b.TreeNew[[]byte, hrpc.RegionInfo](region.Compare)},
 		clients: clientRegionCache{
 			regions: make(map[hrpc.RegionClient]map[hrpc.RegionInfo]struct{}),
 		},
@@ -67,7 +68,6 @@ func TestSendRPCSanity(t *testing.T) {
 	// ask for "theKey" in table "test"
 	mockCall := mock.NewMockCall(ctrl)
 	mockCall.EXPECT().Context().Return(context.Background()).AnyTimes()
-	mockCall.EXPECT().SetContext(gomock.Any()).AnyTimes()
 	mockCall.EXPECT().Description().AnyTimes()
 	mockCall.EXPECT().Table().Return([]byte("test")).AnyTimes()
 	mockCall.EXPECT().Key().Return([]byte("theKey")).AnyTimes()
@@ -396,7 +396,6 @@ func TestEstablishServerErrorDuringProbe(t *testing.T) {
 
 	mockCall := mock.NewMockCall(ctrl)
 	mockCall.EXPECT().Context().Return(context.Background()).AnyTimes()
-	mockCall.EXPECT().SetContext(gomock.Any()).AnyTimes()
 	mockCall.EXPECT().Description().AnyTimes()
 	mockCall.EXPECT().Table().Return([]byte("down")).AnyTimes()
 	mockCall.EXPECT().Key().Return([]byte("yolo")).AnyTimes()
@@ -445,7 +444,6 @@ func TestSendRPCToRegionClientDownDelayed(t *testing.T) {
 
 	mockCall := mock.NewMockCall(ctrl)
 	mockCall.EXPECT().SetRegion(origlReg).Times(1)
-	mockCall.EXPECT().Context().Return(context.Background())
 	result := make(chan hrpc.RPCResult, 1)
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
 
@@ -469,7 +467,7 @@ func TestSendRPCToRegionClientDownDelayed(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		_, err := c.sendRPCToRegion(mockCall, origlReg)
+		_, err := c.sendRPCToRegion(context.Background(), mockCall, origlReg)
 		switch err.(type) {
 		case region.ServerError, region.NotServingRegionError:
 		default:
@@ -747,7 +745,6 @@ func TestConcurrentRetryableError(t *testing.T) {
 	for i := range calls {
 		mockCall := mock.NewMockCall(ctrl)
 		mockCall.EXPECT().SetRegion(origlReg).AnyTimes()
-		mockCall.EXPECT().Context().Return(context.Background()).AnyTimes()
 		result := make(chan hrpc.RPCResult, 1)
 		result <- hrpc.RPCResult{Error: region.NotServingRegionError{}}
 		mockCall.EXPECT().ResultChan().Return(result).AnyTimes()
@@ -758,7 +755,7 @@ func TestConcurrentRetryableError(t *testing.T) {
 	for _, mockCall := range calls {
 		wg.Add(1)
 		go func(mockCall hrpc.Call) {
-			_, err := c.sendRPCToRegion(mockCall, origlReg)
+			_, err := c.sendRPCToRegion(context.Background(), mockCall, origlReg)
 			if _, ok := err.(region.NotServingRegionError); !ok {
 				t.Errorf("Got unexpected error: %v", err)
 			}
@@ -800,5 +797,31 @@ func TestProbeKey(t *testing.T) {
 		t.Errorf("key %q is not within bounds of region %s: %v %v %v %v\n", key, reg,
 			isGreaterThanStartOfTable, isGreaterThanStartKey,
 			isLessThanEndOfTable, isLessThanStopKey)
+	}
+}
+
+var (
+	description = "GET"
+	result      = "SUCCESS"
+	o           prometheus.Observer
+)
+
+func BenchmarkPrometheusWithLabelValues(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		o = operationDurationSeconds.WithLabelValues(
+			description,
+			result,
+		)
+	}
+}
+
+func BenchmarkPrometheusWith(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		o = operationDurationSeconds.With(prometheus.Labels{
+			"operation": description,
+			"result":    result,
+		})
 	}
 }

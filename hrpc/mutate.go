@@ -179,18 +179,20 @@ func NewPutStr(ctx context.Context, table, key string,
 // To delete entire row, values should be nil.
 //
 // To delete specific families, qualifiers map should be nil:
-//  map[string]map[string][]byte{
-//		"cf1": nil,
-//		"cf2": nil,
-//  }
+//
+//	 map[string]map[string][]byte{
+//			"cf1": nil,
+//			"cf2": nil,
+//	 }
 //
 // To delete specific qualifiers:
-//  map[string]map[string][]byte{
-//      "cf": map[string][]byte{
-//			"q1": nil,
-//			"q2": nil,
-//		},
-//  }
+//
+//	 map[string]map[string][]byte{
+//	     "cf": map[string][]byte{
+//				"q1": nil,
+//				"q2": nil,
+//			},
+//	 }
 //
 // To delete all versions before and at a timestamp, pass hrpc.Timestamp() option.
 // By default all versions will be removed.
@@ -361,71 +363,69 @@ func (m *Mutate) valuesToProto(ts *uint64) []*pb.MutationProto_ColumnValue {
 	return cvs
 }
 
-// <keyvaluelength 4> <keylength 4> <valuelength 4> <rowlength 2>
-// <row>
-// <columnfamilylength 1>
-// <columnfamily>
-// <columnqualifier>
-// <timestamp 8> <keytype 1>
-// <value>
-const nSlicesPerCellblock = 7
-const lengthsAndTsSize = 4 + 4 + 4 + 2 + 1 + 8 + 1
+func toCellblock(row, family, qualifier, value []byte, ts uint64, typ byte) []byte {
+	// cellblock layout:
+	//
+	// Header:
+	// 4 byte length of key + value
+	// 4 byte length of key
+	// 4 byte length of value
+	//
+	// Key:
+	// 2 byte length of row
+	// <row>
+	// 1 byte length of row family
+	// <family>
+	// <qualifier>
+	// 8 byte timestamp
+	// 1 byte type
+	//
+	// Value:
+	// <value>
 
-func toCellblock(row, family, qualifier, value []byte, ts uint64, typ byte) ([][]byte, uint32) {
-	var cellblock [][]byte
-	if len(value) != 0 {
-		cellblock = make([][]byte, nSlicesPerCellblock)
-	} else {
-		cellblock = make([][]byte, nSlicesPerCellblock-1)
-	}
-	lengthsAndTs := make([]byte, lengthsAndTsSize)
-
-	// keyvaluelength
-	keylength := 2 /* row length */ + len(row) + 1 /* columnfamily length */ +
-		len(family) + len(qualifier) + 8 /* timestamp length */ + 1 /* key type length */
+	keylength := 2 + len(row) + 1 + len(family) + len(qualifier) + 8 + 1
 	valuelength := len(value)
 
-	keyvaluelength := 8 + uint32(keylength+valuelength)
+	keyvaluelength := 4 + 4 + keylength + valuelength
+	cellblocklength := 4 + keyvaluelength
+	cellblock := make([]byte, cellblocklength)
 
-	// keyvaluelength
-	binary.BigEndian.PutUint32(lengthsAndTs[0:4], keyvaluelength)
-	// keylength
-	binary.BigEndian.PutUint32(lengthsAndTs[4:8], uint32(keylength))
-	// valuelength
-	binary.BigEndian.PutUint32(lengthsAndTs[8:12], uint32(valuelength))
-	// row length
-	binary.BigEndian.PutUint16(lengthsAndTs[12:14], uint16(len(row)))
-	// column family length
-	lengthsAndTs[14] = byte(len(family))
-	// timestamp
-	binary.BigEndian.PutUint64(lengthsAndTs[15:23], ts)
-	// keytype
-	lengthsAndTs[23] = typ
+	// Header:
+	binary.BigEndian.PutUint32(cellblock[0:4], uint32(keyvaluelength))
+	binary.BigEndian.PutUint32(cellblock[4:8], uint32(keylength))
+	binary.BigEndian.PutUint32(cellblock[8:12], uint32(valuelength))
 
-	// add keyvalue length, key length, value length, row length
-	cellblock[0] = lengthsAndTs[:14]
-	// add row
-	cellblock[1] = row
-	// add column family length
-	cellblock[2] = lengthsAndTs[14:15]
-	// add column family
-	cellblock[3] = family
-	// add column qualifier
-	cellblock[4] = qualifier
-	// add timestamp and key type
-	cellblock[5] = lengthsAndTs[15:]
-	// add value
-	if len(value) != 0 {
-		cellblock[6] = value
-	}
+	// Key:
+	binary.BigEndian.PutUint16(cellblock[12:14], uint16(len(row)))
+	i := 14
+	i += copy(cellblock[i:], row)
+	cellblock[i] = byte(len(family))
+	i++
+	i += copy(cellblock[i:], family)
+	i += copy(cellblock[i:], qualifier)
+	binary.BigEndian.PutUint64(cellblock[i:], ts)
+	i += 8
+	cellblock[i] = typ
+	i++
 
-	return cellblock, 4 + keyvaluelength
+	// Value:
+	copy(cellblock[i:], value)
+
+	return cellblock
 }
 
 func (m *Mutate) valuesToCellblocks() ([][]byte, int32, uint32) {
 	var count int
-	var size uint32
-	var cellblocks [][]byte
+	for _, v := range m.values {
+		if v == nil {
+			count += len(emptyQualifier)
+		} else {
+			count += len(v)
+		}
+	}
+	cellblocks := make([][]byte, 0, count)
+
+	var size int
 	var ts uint64
 	if m.timestamp == MaxTimestamp {
 		ts = math.MaxInt64 // Java's Long.MAX_VALUE use for HBase's LATEST_TIMESTAMP
@@ -461,13 +461,12 @@ func (m *Mutate) valuesToCellblocks() ([][]byte, int32, uint32) {
 
 		family := []byte(k)
 		for k1, v1 := range v {
-			cellblock, sz := toCellblock(m.key, family, []byte(k1), v1, ts, mt)
-			cellblocks = append(cellblocks, cellblock...)
-			size += sz
-			count++
+			cellblock := toCellblock(m.key, family, []byte(k1), v1, ts, mt)
+			cellblocks = append(cellblocks, cellblock)
+			size += len(cellblock)
 		}
 	}
-	return cellblocks, int32(count), size
+	return cellblocks, int32(count), uint32(size)
 }
 
 var durabilities = []*pb.MutationProto_Durability{

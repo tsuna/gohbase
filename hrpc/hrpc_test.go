@@ -699,9 +699,9 @@ func TestMutate(t *testing.T) {
 			},
 			cellblocksLen: 35,
 			cellblocks: [][]byte{
-				[]byte("\x00\x00\x00\x1f\x00\x00\x00\x12\x00\x00\x00\x05\x00\x03"),
-				[]byte("key"), []byte("\x02"), []byte("cf"), []byte("q"),
-				[]byte("\u007f\xff\xff\xff\xff\xff\xff\xff\x04"), []byte("value")},
+				[]byte("\x00\x00\x00\x1f\x00\x00\x00\x12\x00\x00\x00\x05\x00\x03" +
+					"key" + "\x02" + "cf" + "q" +
+					"\u007f\xff\xff\xff\xff\xff\xff\xff\x04" + "value")},
 		},
 		{
 			in: func() (*Mutate, error) {
@@ -768,15 +768,16 @@ func TestMutate(t *testing.T) {
 				},
 			},
 			cellblocksLen: 111,
-			cellblocks: [][]byte{[]byte("\x00\x00\x00!\x00\x00\x00\x14\x00\x00\x00\x05\x00\x03"),
-				[]byte("key"), []byte("\x03"), []byte("cf1"), []byte("q1"),
-				[]byte("\u007f\xff\xff\xff\xff\xff\xff\xff\x04"), []byte("value"),
-				[]byte("\x00\x00\x00!\x00\x00\x00\x14\x00\x00\x00\x05\x00\x03"), []byte("key"),
-				[]byte("\x03"), []byte("cf1"), []byte("q2"),
-				[]byte("\u007f\xff\xff\xff\xff\xff\xff\xff\x04"), []byte("value"),
-				[]byte("\x00\x00\x00!\x00\x00\x00\x14\x00\x00\x00\x05\x00\x03"), []byte("key"),
-				[]byte("\x03"), []byte("cf2"), []byte("q1"),
-				[]byte("\u007f\xff\xff\xff\xff\xff\xff\xff\x04"), []byte("value")},
+			cellblocks: [][]byte{
+				[]byte("\x00\x00\x00!\x00\x00\x00\x14\x00\x00\x00\x05\x00\x03" +
+					"key" + "\x03" + "cf1" + "q1" +
+					"\u007f\xff\xff\xff\xff\xff\xff\xff\x04" + "value"),
+				[]byte("\x00\x00\x00!\x00\x00\x00\x14\x00\x00\x00\x05\x00\x03" +
+					"key" + "\x03" + "cf1" + "q2" +
+					"\u007f\xff\xff\xff\xff\xff\xff\xff\x04" + "value"),
+				[]byte("\x00\x00\x00!\x00\x00\x00\x14\x00\x00\x00\x05\x00\x03" +
+					"key" + "\x03" + "cf2" + "q1" +
+					"\u007f\xff\xff\xff\xff\xff\xff\xff\x04" + "value")},
 		},
 		{
 			in: func() (*Mutate, error) {
@@ -826,9 +827,9 @@ func TestMutate(t *testing.T) {
 			},
 			cellblocksLen: 35,
 			cellblocks: [][]byte{
-				[]byte("\x00\x00\x00\x1f\x00\x00\x00\x12\x00\x00\x00\x05\x00\x03"), []byte("key"),
-				[]byte("\x02"), []byte("cf"), []byte("q"),
-				[]byte("\x00\x00\x00\x00\x00\x00\x00*\x04"), []byte("value")},
+				[]byte("\x00\x00\x00\x1f\x00\x00\x00\x12\x00\x00\x00\x05\x00\x03" +
+					"key" + "\x02" + "cf" + "q" +
+					"\x00\x00\x00\x00\x00\x00\x00*\x04" + "value")},
 		},
 		{
 			in: func() (*Mutate, error) {
@@ -879,9 +880,9 @@ func TestMutate(t *testing.T) {
 			},
 			cellblocksLen: 35,
 			cellblocks: [][]byte{
-				[]byte("\x00\x00\x00\x1f\x00\x00\x00\x12\x00\x00\x00\x05\x00\x03"), []byte("key"),
-				[]byte("\x02"), []byte("cf"), []byte("q"),
-				[]byte("\x00\x00\x00\x00\x00\x00\x00*\x04"), []byte("value")},
+				[]byte("\x00\x00\x00\x1f\x00\x00\x00\x12\x00\x00\x00\x05\x00\x03" +
+					"key" + "\x02" + "cf" + "q" +
+					"\x00\x00\x00\x00\x00\x00\x00*\x04" + "value")},
 		},
 		{
 			in: func() (*Mutate, error) {
@@ -957,9 +958,9 @@ func TestMutate(t *testing.T) {
 			},
 			cellblocksLen: 35,
 			cellblocks: [][]byte{
-				[]byte("\x00\x00\x00\x1f\x00\x00\x00\x12\x00\x00\x00\x05\x00\x03"), []byte("key"),
-				[]byte("\x02"), []byte("cf"), []byte("q"),
-				[]byte("\x00\x00\x00\x00\x00\x00\x00*\f"), []byte("value")},
+				[]byte("\x00\x00\x00\x1f\x00\x00\x00\x12\x00\x00\x00\x05\x00\x03" +
+					"key" + "\x02" + "cf" + "q" +
+					"\x00\x00\x00\x00\x00\x00\x00*\f" + "value")},
 		},
 		{
 			in: func() (*Mutate, error) {
@@ -1047,10 +1048,11 @@ func TestMutate(t *testing.T) {
 				},
 			},
 			cellblocksLen: 38,
-			cellblocks: [][]byte{[]byte("\x00\x00\x00\"\x00\x00\x00\x12\x00\x00\x00\b\x00\x03"),
-				[]byte("key"), []byte("\x02"), []byte("cf"), []byte("q"),
-				[]byte("\u007f\xff\xff\xff\xff\xff\xff\xff\x04"),
-				[]byte("\x00\x00\x00\x00\x00\x00\x00\x01")},
+			cellblocks: [][]byte{
+				[]byte("\x00\x00\x00\"\x00\x00\x00\x12\x00\x00\x00\b\x00\x03" +
+					"key" + "\x02" + "cf" + "q" +
+					"\u007f\xff\xff\xff\xff\xff\xff\xff\x04" +
+					"\x00\x00\x00\x00\x00\x00\x00\x01")},
 		},
 		{
 			in: func() (*Mutate, error) {
@@ -1093,9 +1095,9 @@ func TestMutate(t *testing.T) {
 			},
 			cellblocksLen: 29,
 			cellblocks: [][]byte{
-				[]byte("\x00\x00\x00\x19\x00\x00\x00\x11\x00\x00\x00\x00\x00\x03"), []byte("key"),
-				[]byte("\x02"), []byte("cf"), []byte(""),
-				[]byte("\u007f\xff\xff\xff\xff\xff\xff\xff\x0e")},
+				[]byte("\x00\x00\x00\x19\x00\x00\x00\x11\x00\x00\x00\x00\x00\x03" +
+					"key" + "\x02" + "cf" + "" +
+					"\u007f\xff\xff\xff\xff\xff\xff\xff\x0e")},
 		},
 		{
 			in: func() (*Mutate, error) {
@@ -1141,9 +1143,9 @@ func TestMutate(t *testing.T) {
 			},
 			cellblocksLen: 29,
 			cellblocks: [][]byte{
-				[]byte("\x00\x00\x00\x19\x00\x00\x00\x11\x00\x00\x00\x00\x00\x03"), []byte("key"),
-				[]byte("\x02"), []byte("cf"), []byte(""),
-				[]byte("\x00\x00\x00\x00\x00\x00\x00*\x0e")},
+				[]byte("\x00\x00\x00\x19\x00\x00\x00\x11\x00\x00\x00\x00\x00\x03" +
+					"key" + "\x02" + "cf" + "" +
+					"\x00\x00\x00\x00\x00\x00\x00*\x0e")},
 		},
 		{
 			in: func() (*Mutate, error) {
@@ -1189,9 +1191,9 @@ func TestMutate(t *testing.T) {
 			},
 			cellblocksLen: 29,
 			cellblocks: [][]byte{
-				[]byte("\x00\x00\x00\x19\x00\x00\x00\x11\x00\x00\x00\x00\x00\x03"), []byte("key"),
-				[]byte("\x02"), []byte("cf"), []byte(""),
-				[]byte("\x00\x00\x00\x00\x00\x00\x00*\n")},
+				[]byte("\x00\x00\x00\x19\x00\x00\x00\x11\x00\x00\x00\x00\x00\x03" +
+					"key" + "\x02" + "cf" + "" +
+					"\x00\x00\x00\x00\x00\x00\x00*\n")},
 		},
 		{
 			in: func() (*Mutate, error) {
@@ -1241,9 +1243,9 @@ func TestMutate(t *testing.T) {
 			},
 			cellblocksLen: 30,
 			cellblocks: [][]byte{
-				[]byte("\x00\x00\x00\x1a\x00\x00\x00\x12\x00\x00\x00\x00\x00\x03"), []byte("key"),
-				[]byte("\x02"), []byte("cf"), []byte("a"),
-				[]byte("\x00\x00\x00\x00\x00\x00\x00*\b")},
+				[]byte("\x00\x00\x00\x1a\x00\x00\x00\x12\x00\x00\x00\x00\x00\x03" +
+					"key" + "\x02" + "cf" + "a" +
+					"\x00\x00\x00\x00\x00\x00\x00*\b")},
 		},
 		{
 			in: func() (*Mutate, error) {
@@ -1258,7 +1260,6 @@ func TestMutate(t *testing.T) {
 	}
 
 	run := func(t *testing.T, i int, m *Mutate) {
-		t.Helper()
 		if m.Name() != "Mutate" {
 			t.Fatalf("Expected name to be 'Mutate', got %s", m.Name())
 		}

@@ -13,8 +13,6 @@ import (
 
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -25,25 +23,27 @@ var multiPool = sync.Pool{
 }
 
 func freeMulti(m *multi) {
+	// Set pointers to nil to allow the objects to be garbage
+	// collected
+	for i := range m.calls {
+		m.calls[i] = nil
+	}
 	m.calls = m.calls[:0]
-	m.regions = m.regions[:0]
+	// set m.regions to nil because the slice is not reused.
+	m.regions = nil
 	m.size = 0
 	multiPool.Put(m)
 }
 
 type multi struct {
-	ctxM sync.Mutex
-	ctx  context.Context
-
 	size  int
 	calls []hrpc.Call
 	// regions preserves the order of regions to match against RegionActionResults
 	regions []hrpc.RegionInfo
 }
 
-func newMulti(ctx context.Context, queueSize int) *multi {
+func newMulti(queueSize int) *multi {
 	m := multiPool.Get().(*multi)
-	m.ctx = ctx
 	m.size = queueSize
 	return m
 }
@@ -75,12 +75,10 @@ func (m *multi) toProto(isCellblocks bool) (proto.Message, [][]byte, uint32) {
 	var size uint32
 
 	for i, c := range m.calls {
-		select {
-		case <-c.Context().Done():
+		if c.Context().Err() != nil {
 			// context has expired, don't bother sending it
 			m.calls[i] = nil
 			continue
-		default:
 		}
 
 		var msg proto.Message
@@ -276,16 +274,6 @@ func (m *multi) returnResults(msg proto.Message, err error) {
 
 // add adds the call and returns wether the batch is full.
 func (m *multi) add(call hrpc.Call) bool {
-	msp := trace.SpanFromContext(m.Context())
-	if msp.IsRecording() {
-		csp := trace.SpanContextFromContext(call.Context())
-		if csp.HasTraceID() {
-			msp.AddEvent("enqueue", trace.WithAttributes(
-				attribute.String("traceid", csp.TraceID().String()),
-			))
-		}
-	}
-
 	m.calls = append(m.calls, call)
 	return len(m.calls) == m.size
 }
@@ -326,24 +314,12 @@ func (m *multi) ResultChan() chan hrpc.RPCResult {
 
 // Context is not supported for Multi.
 func (m *multi) Context() context.Context {
-	// TODO: maybe pick the one with the longest deadline and use a context that has that deadline?
-	m.ctxM.Lock()
-	defer m.ctxM.Unlock()
-
-	return m.ctx
+	return context.Background()
 }
 
 // String returns a description of this call
 func (m *multi) String() string {
 	return "MULTI"
-}
-
-// SetContext is used for tracing implementations
-func (m *multi) SetContext(ctx context.Context) {
-	m.ctxM.Lock()
-	defer m.ctxM.Unlock()
-
-	m.ctx = ctx
 }
 
 // Key is not supported for Multi RPC.
@@ -354,23 +330,4 @@ func (m *multi) Key() []byte {
 // callCount returns how many calls are represented
 func (m *multi) callCount() int {
 	return len(m.calls)
-}
-
-// addSendEventsToCallSpans adds a send event
-// to each of the calls represented. This
-// will run when they are actually sent
-func (m *multi) addSendEventsToCallSpans() {
-	spCtx := trace.SpanContextFromContext(m.Context())
-	traceID := ""
-	if spCtx.HasTraceID() {
-		traceID = spCtx.TraceID().String()
-	}
-
-	for _, c := range m.calls {
-		sp := trace.SpanFromContext(c.Context())
-		sp.AddEvent(
-			"send",
-			trace.WithAttributes(attribute.String("traceID", traceID)),
-		)
-	}
 }

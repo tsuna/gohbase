@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -22,6 +23,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/test"
@@ -360,7 +362,6 @@ func TestQueueRPC(t *testing.T) {
 		p, payload := mockRPCProto(fmt.Sprintf("rpc_%d", i))
 		mockCall.EXPECT().ToProto().Return(p).Times(1)
 		mockCall.EXPECT().Context().Return(ctx).AnyTimes()
-		mockCall.EXPECT().SetContext(gomock.Any()).AnyTimes()
 		mockCall.EXPECT().Description().AnyTimes()
 		mockCall.EXPECT().ResultChan().Return(make(chan hrpc.RPCResult, 1)).Times(1)
 		calls[i] = mockCall
@@ -396,7 +397,6 @@ func TestQueueRPC(t *testing.T) {
 			result := make(chan hrpc.RPCResult, 1)
 			mockCall := mock.NewMockCall(ctrl)
 			mockCall.EXPECT().Context().Return(ctx).AnyTimes()
-			mockCall.EXPECT().SetContext(gomock.Any()).AnyTimes()
 			mockCall.EXPECT().Description().AnyTimes()
 			mockCall.EXPECT().ResultChan().Return(result).Times(1)
 			c.QueueRPC(mockCall)
@@ -436,7 +436,6 @@ func TestServerErrorWrite(t *testing.T) {
 	mockCall.EXPECT().ToProto().Return(p).Times(1)
 	mockCall.EXPECT().Name().Return("Get").Times(1)
 	mockCall.EXPECT().Context().Return(context.Background()).AnyTimes()
-	mockCall.EXPECT().SetContext(gomock.Any()).AnyTimes()
 	mockCall.EXPECT().Description().AnyTimes()
 	result := make(chan hrpc.RPCResult, 1)
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
@@ -705,7 +704,6 @@ func TestUnexpectedSendError(t *testing.T) {
 	mockCall := mock.NewMockCall(ctrl)
 	mockCall.EXPECT().ToProto().Return(nil).Times(1)
 	mockCall.EXPECT().Context().Return(context.Background()).AnyTimes()
-	mockCall.EXPECT().SetContext(gomock.Any()).AnyTimes()
 	mockCall.EXPECT().Description().AnyTimes()
 	result := make(chan hrpc.RPCResult, 1)
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
@@ -841,7 +839,6 @@ func TestRPCContext(t *testing.T) {
 	p, payload := mockRPCProto("yolo")
 	mockCall.EXPECT().ToProto().Return(p).Times(1)
 	mockCall.EXPECT().Context().Return(context.Background()).AnyTimes()
-	mockCall.EXPECT().SetContext(gomock.Any()).AnyTimes()
 	mockCall.EXPECT().Description().AnyTimes()
 	mockCall.EXPECT().ResultChan().Return(make(chan hrpc.RPCResult, 1)).Times(1)
 	mockConn.EXPECT().Write(newRPCMatcher(payload)).Times(1).Return(14+len(payload), nil)
@@ -851,7 +848,6 @@ func TestRPCContext(t *testing.T) {
 	cancel()
 	callWithCancel := mock.NewMockCall(ctrl)
 	callWithCancel.EXPECT().Context().Return(ctxCancel).AnyTimes()
-	callWithCancel.EXPECT().SetContext(gomock.Any()).AnyTimes()
 	mockCall.EXPECT().Description().AnyTimes()
 	// this shouldn't block
 	c.QueueRPC(callWithCancel)
@@ -909,7 +905,7 @@ func TestSanity(t *testing.T) {
 	app.SetRegion(
 		NewInfo(0, nil, []byte("test1"), []byte("test1,,lololololololololololo"), nil, nil))
 
-	mockConn.EXPECT().Write(gomock.Any()).Times(8).Return(0, nil)
+	mockConn.EXPECT().Write(gomock.Any()).Times(2).Return(0, nil)
 	mockConn.EXPECT().SetReadDeadline(gomock.Any()).Times(1)
 
 	c.QueueRPC(app)
@@ -1117,7 +1113,6 @@ func BenchmarkSendBatchMemory(b *testing.B) {
 	p, _ := mockRPCProto("rpc")
 	mockCall.EXPECT().ToProto().Return(p).AnyTimes()
 	mockCall.EXPECT().Context().Return(ctx).AnyTimes()
-	mockCall.EXPECT().SetContext(gomock.Any()).AnyTimes()
 	mockConn.EXPECT().Write(gomock.Any()).AnyTimes().Return(0, nil).Do(func(buf []byte) {
 		wgWrites.Done()
 	})
@@ -1199,4 +1194,74 @@ func TestBuffer(t *testing.T) {
 		t.Fatalf("Excpected len %d, got %d", size, len(b))
 	}
 	freeBuffer(b)
+}
+
+func TestMarshalJSON(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+
+	var localAddr net.Addr
+	var remoteAddr net.Addr
+	var id uint32 = 111
+	tcp := "tcp"
+	localIp := []byte("172.16.254.1")
+	remoteIp := []byte("10.16.254.1")
+	localAddr = &net.TCPAddr{IP: localIp, Port: 0, Zone: "testZone"}
+	remoteAddr = &net.TCPAddr{IP: remoteIp, Port: 0, Zone: "testZone"}
+
+	mockConn := mock.NewMockConn(ctrl)
+	mockConn.EXPECT().LocalAddr().Return(localAddr)
+	mockConn.EXPECT().RemoteAddr().Return(remoteAddr)
+	c := &client{
+		conn:          mockConn,
+		addr:          "testRegionServerAddress",
+		ctype:         RegionClient,
+		rpcs:          make(chan hrpc.Call),
+		done:          make(chan struct{}),
+		sent:          make(map[uint32]hrpc.Call),
+		rpcQueueSize:  1, // size one to skip sendBatch
+		flushInterval: 1000 * time.Second,
+		compressor:    &compressor{Codec: mockCodec{}},
+		id:            id,
+	}
+
+	jsonVal, err := c.MarshalJSON()
+
+	if err != nil {
+		t.Fatalf("Did not expect Error to be thrown: %v", err)
+	}
+
+	var jsonUnMarshal map[string]interface{}
+	err = json.Unmarshal(jsonVal, &jsonUnMarshal)
+
+	if err != nil {
+		t.Fatalf("Error while unmarshalling JSON, %v", err)
+	}
+
+	actualLocalAddr := jsonUnMarshal["ConnectionLocalAddress"].(map[string]interface{})
+	actualRemoteAddr := jsonUnMarshal["ConnectionRemoteAddress"].(map[string]interface{})
+
+	assert.Equal(t, tcp, actualLocalAddr["Network"])
+	assert.Equal(t, tcp, actualRemoteAddr["Network"])
+	assert.Equal(t, string(RegionClient), jsonUnMarshal["ClientType"])
+	assert.Equal(t, float64(0), jsonUnMarshal["InFlight"])
+	assert.Equal(t, float64(id), jsonUnMarshal["Id"])
+
+}
+
+func TestMarshalJSONNilValues(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+
+	c := &client{
+		conn: nil,
+		rpcs: nil,
+		done: nil,
+		sent: nil,
+	}
+
+	_, err := c.MarshalJSON()
+	if err != nil {
+		t.Fatalf("Did not expect Error to be thrown: %v", err)
+	}
 }

@@ -6,8 +6,8 @@
 package region
 
 import (
-	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -19,12 +19,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 
 	"github.com/tsuna/gohbase/hrpc"
-	"github.com/tsuna/gohbase/internal/observability"
 	"github.com/tsuna/gohbase/pb"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
@@ -102,21 +98,16 @@ const (
 	MasterClient = ClientType("MasterService")
 )
 
-var bufferPool = sync.Pool{
-	New: func() interface{} {
-		var b []byte
-		return b
-	},
-}
+var bufferPool sync.Pool
 
 func newBuffer(size int) []byte {
-	b := bufferPool.Get().([]byte)
+	v := bufferPool.Get()
+	var b []byte
+	if v != nil {
+		b = v.([]byte)
+	}
 	if cap(b) < size {
-		doublecap := 2 * cap(b)
-		if doublecap > size {
-			return make([]byte, size, doublecap)
-		}
-		return make([]byte, size)
+		return append(b[:0], make([]byte, size)...)[:size]
 	}
 	return b[:size]
 }
@@ -213,8 +204,20 @@ func (c *client) QueueRPC(rpc hrpc.Call) {
 		case c.rpcs <- rpc:
 		}
 	} else {
-		if err := c.trySend(rpc); err != nil {
-			returnResult(rpc, nil, err)
+		select {
+		case <-c.done:
+			// An unrecoverable error has occured,
+			// region client has been stopped,
+			// don't send rpcs
+			returnResult(rpc, nil, ErrClientClosed)
+		case <-rpc.Context().Done():
+			// If the deadline has been exceeded, don't bother sending the
+			// request. The function that placed the RPC in our queue should
+			// stop waiting for a result and return an error.
+		default:
+			if err := c.trySend(rpc); err != nil {
+				returnResult(rpc, nil, err)
+			}
 		}
 	}
 }
@@ -325,16 +328,9 @@ func (c *client) unregisterRPC(id uint32) hrpc.Call {
 }
 
 func (c *client) processRPCs() {
-	spCtx, sp := observability.StartSpan(context.Background(), "region.processRPCs")
-	defer func() {
-		// Ensure that the last span created is ended to
-		// prevent memory leaks
-		sp.End()
-	}()
-
 	// TODO: flush when the size is too large
 	// TODO: if multi has only one call, send that call instead
-	m := newMulti(spCtx, c.rpcQueueSize)
+	m := newMulti(c.rpcQueueSize)
 	defer func() {
 		m.returnResults(nil, ErrClientClosed)
 	}()
@@ -351,22 +347,12 @@ func (c *client) processRPCs() {
 			"reason": reason,
 		}).Inc()
 
-		m.addSendEventsToCallSpans()
-
-		sp.SetAttributes(
-			attribute.String("flush_reason", reason),
-			attribute.Int("calls", m.callCount()),
-		)
-
 		if err := c.trySend(m); err != nil {
 			m.returnResults(nil, err)
-			sp.SetStatus(codes.Error, err.Error())
 		}
-		sp.End()
 
 		// Start preparing for the next batch
-		spCtx, sp = observability.StartSpan(context.Background(), "region.processRPCs")
-		m = newMulti(spCtx, c.rpcQueueSize)
+		m = newMulti(c.rpcQueueSize)
 	}
 
 	for {
@@ -442,46 +428,17 @@ func returnResult(c hrpc.Call, msg proto.Message, err error) {
 }
 
 func (c *client) trySend(rpc hrpc.Call) (err error) {
-	// Replace the rpc's context with one that includes a
-	// tracing span, but restore it when returning from this
-	// function so that spans don't weirdly cascade when they
-	// are not supposed to
-	origCtx := rpc.Context()
-	spCtx, sp := observability.StartSpan(rpc.Context(), "trySend")
-	rpc.SetContext(spCtx)
-	defer func() {
-		if err != nil {
-			sp.SetStatus(codes.Error, err.Error())
+	if id, err := c.send(rpc); err != nil {
+		if _, ok := err.(ServerError); ok {
+			c.fail(err)
 		}
-
-		sp.End()
-		rpc.SetContext(origCtx)
-	}()
-
-	select {
-	case <-c.done:
-		// An unrecoverable error has occured,
-		// region client has been stopped,
-		// don't send rpcs
-		return ErrClientClosed
-	case <-rpc.Context().Done():
-		// If the deadline has been exceeded, don't bother sending the
-		// request. The function that placed the RPC in our queue should
-		// stop waiting for a result and return an error.
-		return nil
-	default:
-		if id, err := c.send(rpc); err != nil {
-			if _, ok := err.(ServerError); ok {
-				c.fail(err)
-			}
-			if r := c.unregisterRPC(id); r != nil {
-				// we are the ones to unregister the rpc,
-				// return err to notify client of it
-				return err
-			}
+		if r := c.unregisterRPC(id); r != nil {
+			// we are the ones to unregister the rpc,
+			// return err to notify client of it
+			return err
 		}
-		return nil
 	}
+	return nil
 }
 
 func (c *client) receiveRPCs() {
@@ -669,13 +626,6 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 		RequestParam: proto.Bool(true),
 	}
 
-	// Propagate any tracing information that is present in the rpc
-	// context into the HBase call
-	otel.GetTextMapPropagator().Inject(
-		rpc.Context(),
-		observability.RequestTracePropagator{RequestHeader: header},
-	)
-
 	if s, ok := rpc.(canSerializeCellBlocks); ok && s.CellBlocksEnabled() {
 		// request can be serialized to cellblocks
 		request, cellblocks, cellblocksLen = s.SerializeCellBlocks()
@@ -705,25 +655,59 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 	id := c.registerRPC(rpc)
 	header.CallId = &id
 
-	b := newBuffer(4)
-	defer func() { freeBuffer(b) }()
-
-	b = protowire.AppendVarint(b, uint64(proto.Size(header)))
-	b, err = proto.MarshalOptions{}.MarshalAppend(b, header)
-	if err != nil {
-		return id, fmt.Errorf("failed to marshal request header: %s", err)
-	}
+	// Wire protocol:
+	//
+	// 4 byte total length
+	//
+	// Protobuf data:
+	// varint length of header
+	// <header>
+	// varint length of request
+	// <request>
+	//
+	// Cellblocks:
+	// <cellblocks>
+	//
+	// As an optimization we use the net.Buffers.WriteTo API below to
+	// send a [][]byte in a single writev syscall rather than making a
+	// write syscall per []byte or concatenating the [][]byte into a
+	// single []byte. The cellblocks data is already organized into an
+	// [][]byte, so we just need to encode the total length and the
+	// protobuf data into a []byte.
 
 	if request == nil {
 		return id, errors.New("failed to marshal request: proto: Marshal called with nil")
 	}
-	b = protowire.AppendVarint(b, uint64(proto.Size(request)))
-	b, err = proto.MarshalOptions{}.MarshalAppend(b, request)
+
+	headerSize := proto.Size(header)
+	requestSize := proto.Size(request)
+
+	protobufLen := protowire.SizeVarint(uint64(headerSize)) + headerSize +
+		protowire.SizeVarint(uint64(requestSize)) + requestSize
+	totalLen := uint32(protobufLen) + cellblocksLen
+
+	b := make([]byte, 4, 4+protobufLen)
+
+	binary.BigEndian.PutUint32(b, totalLen)
+
+	b = protowire.AppendVarint(b, uint64(headerSize))
+	b, err = proto.MarshalOptions{UseCachedSize: true}.MarshalAppend(b, header)
+	if err != nil {
+		return id, fmt.Errorf("failed to marshal request header: %s", err)
+	}
+
+	b = protowire.AppendVarint(b, uint64(requestSize))
+	b, err = proto.MarshalOptions{UseCachedSize: true}.MarshalAppend(b, request)
 	if err != nil {
 		return id, fmt.Errorf("failed to marshal request: %s", err)
 	}
-
-	binary.BigEndian.PutUint32(b, uint32(len(b))+cellblocksLen-4)
+	if len(b) != 4+protobufLen {
+		// This shouldn't ever happen, if it does there is a bug in
+		// the size calculation.
+		panic(fmt.Errorf("size of data sent doesn't match expected. expected: %d actual: %d"+
+			"headerSize: %d requestSize: %d\nheader: %s\nrequest: %s",
+			4+protobufLen, len(b), headerSize, requestSize, header, request))
+	}
 
 	if cellblocks != nil {
 		bfs := append(net.Buffers{b}, cellblocks...)
@@ -739,4 +723,56 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 		return id, ServerError{err}
 	}
 	return id, nil
+}
+
+func (c *client) MarshalJSON() ([]byte, error) {
+
+	type Address struct {
+		Network string
+		Address string
+	}
+
+	// the status of the Done channel as a string. Closed if its done, Not Closed o.w
+	var done_status string
+	if c.done != nil {
+		select {
+		case <-c.done:
+			done_status = "Closed"
+		default:
+			done_status = "Not Closed"
+		}
+	}
+
+	c.inFlightM.Lock()
+	inFlight := c.inFlight
+	c.inFlightM.Unlock()
+
+	// if conn is nil then we don't want to panic. So just get the addresses if conn is not nil
+	var localAddr, remoteAddr Address
+	if c.conn != nil {
+		localAddress := c.conn.LocalAddr()
+		remoteAddress := c.conn.RemoteAddr()
+		localAddr = Address{localAddress.Network(), localAddress.String()}
+		remoteAddr = Address{remoteAddress.Network(), remoteAddress.String()}
+	}
+
+	state := struct {
+		ConnectionLocalAddress  Address
+		ConnectionRemoteAddress Address
+		RegionServerAddress     string
+		ClientType              ClientType
+		InFlight                uint32
+		Id                      uint32
+		Done_status             string
+	}{
+		ConnectionLocalAddress:  localAddr,
+		ConnectionRemoteAddress: remoteAddr,
+		RegionServerAddress:     c.addr,
+		ClientType:              c.ctype,
+		InFlight:                inFlight,
+		Id:                      c.id,
+		Done_status:             done_status,
+	}
+
+	return json.Marshal(state)
 }

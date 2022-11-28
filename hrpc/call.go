@@ -11,7 +11,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"sync"
 	"unsafe"
 
 	"github.com/tsuna/gohbase/pb"
@@ -62,7 +61,6 @@ type Call interface {
 	ResultChan() chan RPCResult
 	Description() string // Used for tracing and metrics
 	Context() context.Context
-	SetContext(context.Context)
 }
 
 type withOptions interface {
@@ -102,6 +100,7 @@ type hasQueryOptions interface {
 	setMaxResultsPerColumnFamily(maxresults uint32)
 	setResultOffset(offset uint32)
 	setCacheBlocks(cacheBlocks bool)
+	setConsistency(consistency ConsistencyType)
 }
 
 // RPCResult is struct that will contain both the resulting message from an RPC
@@ -112,8 +111,7 @@ type RPCResult struct {
 }
 
 type base struct {
-	ctxM sync.Mutex
-	ctx  context.Context
+	ctx context.Context
 
 	table   []byte
 	key     []byte
@@ -124,17 +122,7 @@ type base struct {
 }
 
 func (b *base) Context() context.Context {
-	b.ctxM.Lock()
-	defer b.ctxM.Unlock()
-
 	return b.ctx
-}
-
-func (b *base) SetContext(ctx context.Context) {
-	b.ctxM.Lock()
-	defer b.ctxM.Unlock()
-
-	b.ctx = ctx
 }
 
 func (b *base) Region() RegionInfo {
@@ -148,9 +136,12 @@ func (b *base) SetRegion(region RegionInfo) {
 var RegionSpecifierRegionName = pb.RegionSpecifier_REGION_NAME.Enum()
 
 func (b *base) regionSpecifier() *pb.RegionSpecifier {
+	if i, ok := b.region.(interface{ RegionSpecifier() *pb.RegionSpecifier }); ok {
+		return i.RegionSpecifier()
+	}
 	return &pb.RegionSpecifier{
 		Type:  RegionSpecifierRegionName,
-		Value: []byte(b.region.Name()),
+		Value: b.region.Name(),
 	}
 }
 
