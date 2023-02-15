@@ -27,9 +27,6 @@ func StartSpan(
 	name string,
 	opts ...trace.SpanStartOption,
 ) (context.Context, trace.Span) {
-	isNoopTracingMutex.Lock()
-	defer isNoopTracingMutex.Unlock()
-
 	if isNoopTracing {
 		return ctx, newNoopSpan()
 	}

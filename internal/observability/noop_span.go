@@ -1,8 +1,6 @@
 package observability
 
 import (
-	"sync"
-
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -63,15 +61,11 @@ func newNoopSpan() trace.Span {
 }
 
 var (
-	isNoopTracing      = false
-	isNoopTracingMutex sync.Mutex
+	isNoopTracing = false
 )
 
 // WithNoopTracing enable noop tracing operation
 // it is used when you don't want to observability
 func WithNoopTracing() {
-	isNoopTracingMutex.Lock()
-	defer isNoopTracingMutex.Unlock()
-
 	isNoopTracing = true
 }
