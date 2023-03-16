@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"time"
 
@@ -340,10 +341,17 @@ func (c *client) getRegionFromCache(table, key []byte) hrpc.RegionInfo {
 
 // Creates the META key to search for in order to locate the given key.
 func createRegionSearchKey(table, key []byte) []byte {
-	metaKey := make([]byte, 0, len(table)+len(key)+3)
+	// Shorten the key such that the generated meta key is <= MAX_ROW_LENGTH (MaxInt16), otherwise
+	// HBase will throw an exception.
+	keylen := math.MaxInt16 - len(table) - 3
+	if len(key) < keylen {
+		keylen = len(key)
+	}
+
+	metaKey := make([]byte, 0, len(table)+keylen+3)
 	metaKey = append(metaKey, table...)
 	metaKey = append(metaKey, ',')
-	metaKey = append(metaKey, key...)
+	metaKey = append(metaKey, key[:keylen]...)
 	metaKey = append(metaKey, ',')
 	// ':' is the first byte greater than '9'.  We always want to find the
 	// entry with the greatest timestamp, so by looking right before ':'
