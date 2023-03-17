@@ -11,6 +11,7 @@ package gohbase_test
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -306,6 +307,66 @@ func TestGetNonDefaultNamespace(t *testing.T) {
 }
 
 func TestPut(t *testing.T) {
+	values := map[string]map[string][]byte{"cf": {"a": []byte("1")}}
+	if host == nil {
+		t.Fatal("Host is not set!")
+	}
+
+	expectNoErr := func(t *testing.T, err error) {}
+
+	tests := []struct {
+		name      string
+		keylen    int
+		expectErr func(t *testing.T, err error)
+	}{
+		{
+			name:      "Normal",
+			keylen:    10,
+			expectErr: nil,
+		},
+		{
+			// Test that we can insert a row of len = MAX_ROW_LENGTH
+			name:      "MaxRowLength",
+			keylen:    math.MaxInt16,
+			expectErr: expectNoErr,
+		},
+		{
+			name:   "RowTooLong",
+			keylen: math.MaxInt16 + 1,
+			expectErr: func(t *testing.T, err error) {
+				javaException := "java.io.IOException: Row length 32768 is > 32767"
+				if err != nil && strings.Contains(err.Error(), javaException) {
+					return
+				}
+				t.Errorf("expected err=%q, got err=%v", javaException, err)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// It is important for some of these tests to be *100% isolated* to verify that we can
+			// first locate the region and then perform the put.
+			c := gohbase.NewClient(*host)
+			defer c.Close()
+
+			key := make([]byte, tc.keylen)
+			_, err := rand.Read(key)
+			if err != nil {
+				t.Fatalf("Failed to generate random key: %v", err)
+			}
+
+			putRequest, err := hrpc.NewPut(context.Background(), []byte(table), key, values)
+			if err != nil {
+				t.Errorf("NewPutStr returned an error: %v", err)
+			}
+			_, err = c.Put(putRequest)
+			expectNoErr(t, err)
+		})
+	}
+}
+
+func TestPutWithTimeout(t *testing.T) {
 	key := "row2"
 	values := map[string]map[string][]byte{"cf": map[string][]byte{"a": []byte("1")}}
 	if host == nil {
@@ -313,17 +374,9 @@ func TestPut(t *testing.T) {
 	}
 	c := gohbase.NewClient(*host)
 	defer c.Close()
-	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values)
-	if err != nil {
-		t.Errorf("NewPutStr returned an error: %v", err)
-	}
-	_, err = c.Put(putRequest)
-	if err != nil {
-		t.Errorf("Put returned an error: %v", err)
-	}
 
 	ctx, _ := context.WithTimeout(context.Background(), 0)
-	putRequest, err = hrpc.NewPutStr(ctx, table, key, values)
+	putRequest, err := hrpc.NewPutStr(ctx, table, key, values)
 	_, err = c.Put(putRequest)
 	if err != context.DeadlineExceeded {
 		t.Errorf("Put ignored the deadline")
