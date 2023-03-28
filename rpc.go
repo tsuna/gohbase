@@ -598,16 +598,19 @@ func sleepAndIncreaseBackoff(ctx context.Context, backoff time.Duration) (time.D
 	if backoff == 0 {
 		return backoffStart, nil
 	}
+
 	select {
 	case <-time.After(backoff):
 	case <-ctx.Done():
 		return 0, ctx.Err()
 	}
-	// TODO: Revisit how we back off here.
-	if backoff < 5000*time.Millisecond {
+
+	if backoff < 5*time.Second {
 		return backoff * 2, nil
+	} else if backoff < 30*time.Second {
+		return backoff + 5*time.Second, nil
 	}
-	return backoff + 5000*time.Millisecond, nil
+	return backoff, nil
 }
 
 // zkResult contains the result of a ZooKeeper lookup (when we're looking for
