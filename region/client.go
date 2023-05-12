@@ -346,6 +346,7 @@ func (c *client) processRPCs() {
 		flushReasonCount.With(prometheus.Labels{
 			"reason": reason,
 		}).Inc()
+		flushSize.WithLabelValues(c.Addr()).Observe(float64(m.len()))
 
 		if err := c.trySend(m); err != nil {
 			m.returnResults(nil, err)
