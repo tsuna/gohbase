@@ -19,4 +19,14 @@ var (
 		},
 		[]string{"reason"},
 	)
+
+	flushSize = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "gohbase",
+			Name:      "batch_flush_size",
+			Help:      "Number of RPCs sent in multis",
+			Buckets:   prometheus.ExponentialBuckets(1, 5, 8),
+		},
+		[]string{"regionserver"},
+	)
 )
