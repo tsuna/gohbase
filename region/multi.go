@@ -74,6 +74,8 @@ func (m *multi) toProto(isCellblocks bool) (proto.Message, [][]byte, uint32) {
 	actionsPerReg := map[hrpc.RegionInfo]actions{}
 	var size uint32
 
+	pbActions := make([]pb.Action, len(m.calls))
+	indices := make([]uint32, len(m.calls))
 	for i, c := range m.calls {
 		if c.Context().Err() != nil {
 			// context has expired, don't bother sending it
@@ -91,9 +93,9 @@ func (m *multi) toProto(isCellblocks bool) (proto.Message, [][]byte, uint32) {
 			msg = c.ToProto()
 		}
 
-		a := &pb.Action{
-			Index: proto.Uint32(uint32(i) + 1), // +1 because 0 index means there's no index
-		}
+		a := &pbActions[i]
+		indices[i] = uint32(i) + 1 // +1 because 0 index means there's no index
+		a.Index = &indices[i]
 
 		switch r := msg.(type) {
 		case *pb.GetRequest:
