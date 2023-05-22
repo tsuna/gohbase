@@ -1296,7 +1296,7 @@ func TestMutate(t *testing.T) {
 		}
 
 		// test cellblocks
-		cellblocksProto, cellblocks, cellblocksLen := m.SerializeCellBlocks()
+		cellblocksProto, cellblocks, cellblocksLen := m.SerializeCellBlocks(nil)
 		mr, ok = cellblocksProto.(*pb.MutateRequest)
 		if !ok {
 			t.Fatal("expected proto be of type *pb.MutateRequest")

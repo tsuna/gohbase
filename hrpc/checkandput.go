@@ -54,7 +54,7 @@ func NewCheckAndPut(put *Mutate, family string,
 
 // ToProto converts the RPC into a protobuf message
 func (cp *CheckAndPut) ToProto() proto.Message {
-	mutateRequest, _, _ := cp.toProto(false)
+	mutateRequest, _, _ := cp.toProto(false, nil)
 	mutateRequest.Condition = &pb.Condition{
 		Row:         cp.key,
 		Family:      cp.family,
