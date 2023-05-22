@@ -363,7 +363,14 @@ func (m *Mutate) valuesToProto(ts *uint64) []*pb.MutationProto_ColumnValue {
 	return cvs
 }
 
-func toCellblock(row, family, qualifier, value []byte, ts uint64, typ byte) []byte {
+func cellblockLen(rowLen, familyLen, qualifierLen, valueLen int) int {
+	keyLength := 2 + rowLen + 1 + familyLen + qualifierLen + 8 + 1
+	keyValueLength := 4 + 4 + keyLength + valueLen
+	return 4 + keyValueLength
+}
+
+func appendCellblock(row []byte, family, qualifier string, value []byte, ts uint64, typ byte,
+	cbs []byte) []byte {
 	// cellblock layout:
 	//
 	// Header:
@@ -382,57 +389,65 @@ func toCellblock(row, family, qualifier, value []byte, ts uint64, typ byte) []by
 	//
 	// Value:
 	// <value>
-
 	keylength := 2 + len(row) + 1 + len(family) + len(qualifier) + 8 + 1
 	valuelength := len(value)
 
 	keyvaluelength := 4 + 4 + keylength + valuelength
-	cellblocklength := 4 + keyvaluelength
-	cellblock := make([]byte, cellblocklength)
+	i := len(cbs)
+	cbs = append(cbs, make([]byte,
+		cellblockLen(len(row), len(family), len(qualifier), len(value)))...)
 
 	// Header:
-	binary.BigEndian.PutUint32(cellblock[0:4], uint32(keyvaluelength))
-	binary.BigEndian.PutUint32(cellblock[4:8], uint32(keylength))
-	binary.BigEndian.PutUint32(cellblock[8:12], uint32(valuelength))
+	binary.BigEndian.PutUint32(cbs[i:], uint32(keyvaluelength))
+	i += 4
+	binary.BigEndian.PutUint32(cbs[i:], uint32(keylength))
+	i += 4
+	binary.BigEndian.PutUint32(cbs[i:], uint32(valuelength))
+	i += 4
 
 	// Key:
-	binary.BigEndian.PutUint16(cellblock[12:14], uint16(len(row)))
-	i := 14
-	i += copy(cellblock[i:], row)
-	cellblock[i] = byte(len(family))
+	binary.BigEndian.PutUint16(cbs[i:], uint16(len(row)))
+	i += 2
+	i += copy(cbs[i:], row)
+	cbs[i] = byte(len(family))
 	i++
-	i += copy(cellblock[i:], family)
-	i += copy(cellblock[i:], qualifier)
-	binary.BigEndian.PutUint64(cellblock[i:], ts)
+	i += copy(cbs[i:], family)
+	i += copy(cbs[i:], qualifier)
+	binary.BigEndian.PutUint64(cbs[i:], ts)
 	i += 8
-	cellblock[i] = typ
+	cbs[i] = typ
 	i++
 
 	// Value:
-	copy(cellblock[i:], value)
+	copy(cbs[i:], value)
 
-	return cellblock
+	return cbs
 }
 
 func (m *Mutate) valuesToCellblocks() ([][]byte, int32, uint32) {
+	if len(m.values) == 0 {
+		return nil, 0, 0
+	}
+	var cbsLen int
 	var count int
-	for _, v := range m.values {
+	for family, v := range m.values {
 		if v == nil {
-			count += len(emptyQualifier)
-		} else {
-			count += len(v)
+			v = emptyQualifier
+		}
+		count += len(v)
+		for k1, v1 := range v {
+			cbsLen += cellblockLen(len(m.key), len(family), len(k1), len(v1))
 		}
 	}
-	cellblocks := make([][]byte, 0, count)
+	cbs := make([]byte, 0, cbsLen)
 
-	var size int
 	var ts uint64
 	if m.timestamp == MaxTimestamp {
 		ts = math.MaxInt64 // Java's Long.MAX_VALUE use for HBase's LATEST_TIMESTAMP
 	} else {
 		ts = m.timestamp
 	}
-	for k, v := range m.values {
+	for family, v := range m.values {
 		// figure out mutation type
 		var mt byte
 		if m.mutationType == pb.MutationProto_DELETE {
@@ -459,14 +474,14 @@ func (m *Mutate) valuesToCellblocks() ([][]byte, int32, uint32) {
 			mt = putType
 		}
 
-		family := []byte(k)
 		for k1, v1 := range v {
-			cellblock := toCellblock(m.key, family, []byte(k1), v1, ts, mt)
-			cellblocks = append(cellblocks, cellblock)
-			size += len(cellblock)
+			cbs = appendCellblock(m.key, family, k1, v1, ts, mt, cbs)
 		}
 	}
-	return cellblocks, int32(count), uint32(size)
+	if len(cbs) != cbsLen {
+		panic("cellblocks len mismatch")
+	}
+	return [][]byte{cbs}, int32(count), uint32(len(cbs))
 }
 
 var durabilities = []*pb.MutationProto_Durability{
