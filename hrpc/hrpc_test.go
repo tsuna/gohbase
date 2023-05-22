@@ -554,9 +554,14 @@ func TestMutate(t *testing.T) {
 		inStr           func() (*Mutate, error)
 		out             *pb.MutateRequest
 		cellblocksProto *pb.MutateRequest
-		cellblocks      [][]byte
-		cellblocksLen   uint32
-		err             error
+
+		// testcase contains multiple individual cellblocks. The
+		// actual output cellblocks will have each of these
+		// concatenated into a single slice, but in an
+		// non-deterministic order.
+		cellblocks    [][]byte
+		cellblocksLen uint32
+		err           error
 	}{
 		{
 			in: func() (*Mutate, error) {
@@ -1302,6 +1307,14 @@ func TestMutate(t *testing.T) {
 				tcase.cellblocksProto, cellblocksProto)
 		}
 
+		if len(tcase.cellblocks) == 0 {
+			if len(cellblocks) > 0 {
+				t.Errorf("Expected no cellblocks output, but got: %q", cellblocks)
+			}
+		} else if len(cellblocks) != 1 {
+			t.Errorf("expected one []byte, but got: %v", cellblocks)
+		}
+
 		if cellblocksLen != tcase.cellblocksLen {
 			t.Errorf("expected cellblocks length %d, got %d", tcase.cellblocksLen, cellblocksLen)
 		}
@@ -1313,17 +1326,12 @@ func TestMutate(t *testing.T) {
 		}
 
 		// because maps are iterated in random order, the best we can do here
-		// is sort cellblocks and make sure that each byte slice equals. This doesn't
+		// is check for the presence of each cellblock. This doesn't
 		// test that byte slices are written out in the correct order.
-		expected := make([][]byte, len(tcase.cellblocks))
-		copy(expected, tcase.cellblocks)
-		got := make([][]byte, len(cellblocks))
-		copy(got, cellblocks)
-
-		sort.Sort(bytesSlice(expected))
-		sort.Sort(bytesSlice(got))
-		if !bytesSlicesEqual(expected, got) {
-			t.Errorf("expected cellblocks %q, got %q", tcase.cellblocks, cellblocks)
+		for _, cb := range tcase.cellblocks {
+			if !bytes.Contains(cellblocks[0], cb) {
+				t.Errorf("missing cellblock %q in %q", cb, cellblocks)
+			}
 		}
 	}
 	for i, tcase := range tests {
