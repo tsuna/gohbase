@@ -118,7 +118,11 @@ func (m *multi) toProto(isCellblocks bool) (proto.Message, [][]byte, uint32) {
 	ra := make([]*pb.RegionAction, len(actionsPerReg))
 	m.regions = make([]hrpc.RegionInfo, len(actionsPerReg))
 
-	var cellblocks [][]byte
+	var cbCount int
+	for _, as := range actionsPerReg {
+		cbCount += len(as.cellblocks)
+	}
+	cellblocks := make([][]byte, 0, cbCount)
 	i := 0
 	for r, as := range actionsPerReg {
 		ra[i] = &pb.RegionAction{
