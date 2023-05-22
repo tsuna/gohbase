@@ -424,7 +424,7 @@ func appendCellblock(row []byte, family, qualifier string, value []byte, ts uint
 	return cbs
 }
 
-func (m *Mutate) valuesToCellblocks() ([][]byte, int32, uint32) {
+func (m *Mutate) valuesToCellblocks() ([]byte, int32, uint32) {
 	if len(m.values) == 0 {
 		return nil, 0, 0
 	}
@@ -481,7 +481,7 @@ func (m *Mutate) valuesToCellblocks() ([][]byte, int32, uint32) {
 	if len(cbs) != cbsLen {
 		panic("cellblocks len mismatch")
 	}
-	return [][]byte{cbs}, int32(count), uint32(len(cbs))
+	return cbs, int32(count), uint32(len(cbs))
 }
 
 var durabilities = []*pb.MutationProto_Durability{
@@ -492,13 +492,12 @@ var durabilities = []*pb.MutationProto_Durability{
 	pb.MutationProto_Durability(FsyncWal).Enum(),
 }
 
-func (m *Mutate) toProto(isCellblocks bool) (*pb.MutateRequest, [][]byte, uint32) {
+func (m *Mutate) toProto(isCellblocks bool, cbs [][]byte) (*pb.MutateRequest, [][]byte, uint32) {
 	var ts *uint64
 	if m.timestamp != MaxTimestamp {
 		ts = &m.timestamp
 	}
 
-	var cellblocks [][]byte
 	var size uint32
 	mProto := &pb.MutationProto{
 		Row:        m.key,
@@ -510,9 +509,12 @@ func (m *Mutate) toProto(isCellblocks bool) (*pb.MutateRequest, [][]byte, uint32
 	if isCellblocks {
 		// if cellblocks we only add associated cell count as the actual
 		// data will be sent after protobuf
-		var count int32
-		cellblocks, count, size = m.valuesToCellblocks()
+		cellblocks, count, sz := m.valuesToCellblocks()
 		mProto.AssociatedCellCount = &count
+		size = sz
+		if size > 0 {
+			cbs = append(cbs, cellblocks)
+		}
 	} else {
 		// otherwise, convert the values to protobuf
 		mProto.ColumnValue = m.valuesToProto(ts)
@@ -528,12 +530,12 @@ func (m *Mutate) toProto(isCellblocks bool) (*pb.MutateRequest, [][]byte, uint32
 	return &pb.MutateRequest{
 		Region:   m.regionSpecifier(),
 		Mutation: mProto,
-	}, cellblocks, size
+	}, cbs, size
 }
 
 // ToProto converts this mutate RPC into a protobuf message
 func (m *Mutate) ToProto() proto.Message {
-	p, _, _ := m.toProto(false)
+	p, _, _ := m.toProto(false, nil)
 	return p
 }
 
@@ -557,8 +559,8 @@ func (m *Mutate) DeserializeCellBlocks(pm proto.Message, b []byte) (uint32, erro
 	return read, nil
 }
 
-func (m *Mutate) SerializeCellBlocks() (proto.Message, [][]byte, uint32) {
-	return m.toProto(true)
+func (m *Mutate) SerializeCellBlocks(cbs [][]byte) (proto.Message, [][]byte, uint32) {
+	return m.toProto(true, cbs)
 }
 
 func (m *Mutate) CellBlocksEnabled() bool {

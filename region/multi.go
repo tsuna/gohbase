@@ -60,7 +60,7 @@ func (m *multi) Description() string {
 
 // ToProto converts all request in multi batch to a protobuf message.
 func (m *multi) ToProto() proto.Message {
-	msg, _, _ := m.toProto(false)
+	msg, _, _ := m.toProto(false, nil)
 	return msg
 }
 
@@ -69,7 +69,7 @@ type actions struct {
 	cellblocks [][]byte
 }
 
-func (m *multi) toProto(isCellblocks bool) (proto.Message, [][]byte, uint32) {
+func (m *multi) toProto(isCellblocks bool, cbs [][]byte) (proto.Message, [][]byte, uint32) {
 	// aggregate calls per region
 	actionsPerReg := map[hrpc.RegionInfo]actions{}
 	var size uint32
@@ -83,11 +83,15 @@ func (m *multi) toProto(isCellblocks bool) (proto.Message, [][]byte, uint32) {
 			continue
 		}
 
+		as, ok := actionsPerReg[c.Region()]
+		if !ok {
+			as = actions{}
+		}
+
 		var msg proto.Message
-		var cellblocks [][]byte
 		if s, ok := c.(canSerializeCellBlocks); isCellblocks && ok && s.CellBlocksEnabled() {
 			var sz uint32
-			msg, cellblocks, sz = s.SerializeCellBlocks()
+			msg, as.cellblocks, sz = s.SerializeCellBlocks(as.cellblocks)
 			size += sz
 		} else {
 			msg = c.ToProto()
@@ -106,12 +110,7 @@ func (m *multi) toProto(isCellblocks bool) (proto.Message, [][]byte, uint32) {
 			panic(fmt.Sprintf("unsupported call type for Multi: %T", c))
 		}
 
-		as, ok := actionsPerReg[c.Region()]
-		if !ok {
-			as = actions{}
-		}
 		as.pbs = append(as.pbs, a)
-		as.cellblocks = append(as.cellblocks, cellblocks...)
 
 		actionsPerReg[c.Region()] = as
 	}
@@ -120,11 +119,13 @@ func (m *multi) toProto(isCellblocks bool) (proto.Message, [][]byte, uint32) {
 	ra := make([]*pb.RegionAction, len(actionsPerReg))
 	m.regions = make([]hrpc.RegionInfo, len(actionsPerReg))
 
+	// grow cbs
 	var cbCount int
 	for _, as := range actionsPerReg {
 		cbCount += len(as.cellblocks)
 	}
-	cellblocks := make([][]byte, 0, cbCount)
+	cbs = append(cbs, make([][]byte, cbCount)...)[:len(cbs)]
+
 	i := 0
 	for r, as := range actionsPerReg {
 		ra[i] = &pb.RegionAction{
@@ -134,17 +135,17 @@ func (m *multi) toProto(isCellblocks bool) (proto.Message, [][]byte, uint32) {
 			},
 			Action: as.pbs,
 		}
-		cellblocks = append(cellblocks, as.cellblocks...)
+		cbs = append(cbs, as.cellblocks...)
 		// Track the order of RegionActions,
 		// so that we can handle whole region exceptions.
 		m.regions[i] = r
 		i++
 	}
-	return &pb.MultiRequest{RegionAction: ra}, cellblocks, size
+	return &pb.MultiRequest{RegionAction: ra}, cbs, size
 }
 
-func (m *multi) SerializeCellBlocks() (proto.Message, [][]byte, uint32) {
-	return m.toProto(true)
+func (m *multi) SerializeCellBlocks(cbs [][]byte) (proto.Message, [][]byte, uint32) {
+	return m.toProto(true, cbs)
 }
 
 func (m *multi) CellBlocksEnabled() bool {

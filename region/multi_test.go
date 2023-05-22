@@ -371,7 +371,7 @@ func TestMultiToProto(t *testing.T) {
 					t.Fatal("multi is full")
 				}
 			}
-			cellblocksProto, cellblocks, cellblocksLen := m.SerializeCellBlocks()
+			cellblocksProto, cellblocks, cellblocksLen := m.SerializeCellBlocks(nil)
 			out, ok = cellblocksProto.(*pb.MultiRequest)
 			if !ok {
 				t.Fatalf("unexpected proto type %T", cellblocksProto)
@@ -1044,13 +1044,13 @@ func BenchmarkMultiToProto(b *testing.B) {
 	b.Run("cellblocks", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			m.toProto(true)
+			m.toProto(true, nil)
 		}
 	})
 	b.Run("no_cellblocks", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			m.toProto(false)
+			m.toProto(false, nil)
 		}
 	})
 }
@@ -1102,7 +1102,7 @@ func BenchmarkMultiToProtoLarge(b *testing.B) {
 	b.Run("cellblocks", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			m.toProto(true)
+			m.toProto(true, nil)
 		}
 	})
 }

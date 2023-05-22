@@ -38,7 +38,7 @@ type canDeserializeCellBlocks interface {
 type canSerializeCellBlocks interface {
 	// SerializeCellBlocks serializes RPC into protobuf for metadata
 	// as well as cellblocks for payload.
-	SerializeCellBlocks() (proto.Message, [][]byte, uint32)
+	SerializeCellBlocks([][]byte) (proto.Message, [][]byte, uint32)
 	// CellBlocksEnabled returns true if cellblocks are enabled for this RPC
 	CellBlocksEnabled() bool
 }
@@ -628,7 +628,7 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 
 	if s, ok := rpc.(canSerializeCellBlocks); ok && s.CellBlocksEnabled() {
 		// request can be serialized to cellblocks
-		request, cellblocks, cellblocksLen = s.SerializeCellBlocks()
+		request, cellblocks, cellblocksLen = s.SerializeCellBlocks(nil)
 
 		if c.compressor != nil {
 			// we have compressor, encode the cellblocks
