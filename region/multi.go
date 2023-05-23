@@ -71,7 +71,7 @@ type actions struct {
 
 func (m *multi) toProto(isCellblocks bool, cbs [][]byte) (proto.Message, [][]byte, uint32) {
 	// aggregate calls per region
-	actionsPerReg := map[hrpc.RegionInfo]actions{}
+	actionsPerReg := map[hrpc.RegionInfo]*actions{}
 	var size uint32
 
 	pbActions := make([]pb.Action, len(m.calls))
@@ -85,7 +85,8 @@ func (m *multi) toProto(isCellblocks bool, cbs [][]byte) (proto.Message, [][]byt
 
 		as, ok := actionsPerReg[c.Region()]
 		if !ok {
-			as = actions{}
+			as = &actions{}
+			actionsPerReg[c.Region()] = as
 		}
 
 		var msg proto.Message
@@ -111,8 +112,6 @@ func (m *multi) toProto(isCellblocks bool, cbs [][]byte) (proto.Message, [][]byt
 		}
 
 		as.pbs = append(as.pbs, a)
-
-		actionsPerReg[c.Region()] = as
 	}
 
 	// construct the multi proto
