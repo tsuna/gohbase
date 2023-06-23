@@ -86,14 +86,13 @@ func (c *client) SendRPC(rpc hrpc.Call) (msg proto.Message, err error) {
 		sp.End()
 	}()
 
-	reg, err := c.getRegionForRpc(ctx, rpc)
-	if err != nil {
-		return nil, err
-	}
-
 	backoff := backoffStart
 	for {
-		msg, err = c.sendRPCToRegion(ctx, rpc, reg)
+		rc, err := c.getRegionAndClientForRPC(ctx, rpc)
+		if err != nil {
+			return nil, err
+		}
+		msg, err = c.sendRPCToRegionClient(ctx, rpc, rc)
 		switch err.(type) {
 		case region.RetryableError:
 			sp.AddEvent("retrySleep")
@@ -101,13 +100,44 @@ func (c *client) SendRPC(rpc hrpc.Call) (msg proto.Message, err error) {
 			if err != nil {
 				return msg, err
 			}
+			continue // retry
 		case region.ServerError, region.NotServingRegionError:
+			continue // retry
+		}
+		return msg, err
+	}
+}
+
+func (c *client) getRegionAndClientForRPC(ctx context.Context, rpc hrpc.Call) (
+	hrpc.RegionClient, error) {
+	for {
+		reg, err := c.getRegionForRpc(ctx, rpc)
+		if err != nil {
+			return nil, err
+		}
+		if ch := reg.AvailabilityChan(); ch != nil { // region is currently unavailable
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-c.done:
+				return nil, ErrClientClosed
+			case <-ch:
+			}
+		}
+
+		client := reg.Client()
+		if client == nil {
+			// There was an error getting the region client. Mark the
+			// region as unavailable.
+			if reg.MarkUnavailable() {
+				// If this was the first goroutine to mark the region as
+				// unavailable, start a goroutine to reestablish a connection
+				go c.reestablishRegion(reg)
+			}
 			if ch := reg.AvailabilityChan(); ch != nil {
-				// The region is unavailable. Wait for it to become available,
-				// a new region or for the deadline to be exceeded.
 				select {
 				case <-ctx.Done():
-					return nil, rpc.Context().Err()
+					return nil, ctx.Err()
 				case <-c.done:
 					return nil, ErrClientClosed
 				case <-ch:
@@ -115,15 +145,16 @@ func (c *client) SendRPC(rpc hrpc.Call) (msg proto.Message, err error) {
 			}
 			if reg.Context().Err() != nil {
 				// region is dead because it was split or merged,
-				// lookup a new one and retry
-				reg, err = c.getRegionForRpc(ctx, rpc)
-				if err != nil {
-					return nil, err
-				}
+				// retry lookup
+				continue
 			}
-		default:
-			return msg, err
+			client = reg.Client()
+			if client == nil {
+				continue
+			}
 		}
+		rpc.SetRegion(reg)
+		return client, nil
 	}
 }
 
@@ -171,31 +202,14 @@ func sendBlocking(ctx context.Context, rc hrpc.RegionClient, rpc hrpc.Call) (
 	}
 }
 
-func (c *client) sendRPCToRegion(ctx context.Context, rpc hrpc.Call, reg hrpc.RegionInfo) (
+func (c *client) sendRPCToRegionClient(ctx context.Context, rpc hrpc.Call, rc hrpc.RegionClient) (
 	proto.Message, error) {
-	if reg.IsUnavailable() {
-		return nil, region.NotServingRegionError{}
-	}
-	rpc.SetRegion(reg)
-
-	// Queue the RPC to be sent to the region
-	client := reg.Client()
-	if client == nil {
-		// There was an error queueing the RPC.
-		// Mark the region as unavailable.
-		if reg.MarkUnavailable() {
-			// If this was the first goroutine to mark the region as
-			// unavailable, start a goroutine to reestablish a connection
-			go c.reestablishRegion(reg)
-		}
-		return nil, region.NotServingRegionError{}
-	}
-	res, err := sendBlocking(ctx, client, rpc)
+	res, err := sendBlocking(ctx, rc, rpc)
 	if err != nil {
 		return nil, err
 	}
 	if res.Error != nil {
-		c.handleResultError(res.Error, reg, client)
+		c.handleResultError(res.Error, rpc.Region(), rc)
 	}
 	return res.Msg, res.Error
 }
