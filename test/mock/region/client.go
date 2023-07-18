@@ -75,6 +75,18 @@ func (mr *MockRegionClientMockRecorder) Dial(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dial", reflect.TypeOf((*MockRegionClient)(nil).Dial), arg0)
 }
 
+// QueueBatch mocks base method.
+func (m *MockRegionClient) QueueBatch(arg0 context.Context, arg1 []hrpc.Call) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "QueueBatch", arg0, arg1)
+}
+
+// QueueBatch indicates an expected call of QueueBatch.
+func (mr *MockRegionClientMockRecorder) QueueBatch(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueueBatch", reflect.TypeOf((*MockRegionClient)(nil).QueueBatch), arg0, arg1)
+}
+
 // QueueRPC mocks base method.
 func (m *MockRegionClient) QueueRPC(arg0 hrpc.Call) {
 	m.ctrl.T.Helper()

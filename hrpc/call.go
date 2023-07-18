@@ -43,6 +43,7 @@ type RegionClient interface {
 	Close()
 	Addr() string
 	QueueRPC(Call)
+	QueueBatch(context.Context, []Call)
 	String() string
 }
 
