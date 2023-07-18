@@ -250,14 +250,9 @@ func (c *client) SendBatch(ctx context.Context, batch []hrpc.Call) (
 	)
 	wg.Add(len(rpcByClient))
 	for client, rpcs := range rpcByClient {
-		// TODO: Move this to the RegionClient interface so we don't
-		// need to type assert here
-		qb := client.(interface {
-			QueueBatch(ctx context.Context, rpcs []hrpc.Call)
-		})
 		go func(client hrpc.RegionClient, rpcs []hrpc.Call) {
 			defer wg.Done()
-			qb.QueueBatch(ctx, rpcs)
+			client.QueueBatch(ctx, rpcs)
 			ctx, sp := observability.StartSpan(ctx, "waitForResult")
 			defer sp.End()
 			ok := c.waitForCompletion(ctx, client, rpcs, res, rpcToRes)
