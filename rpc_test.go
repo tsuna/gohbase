@@ -429,8 +429,9 @@ func TestSendRPCToRegionClientDownDelayed(t *testing.T) {
 	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 
-	// we don't expect any calls to zookeeper
-	c := newMockClient(nil)
+	zkClient := mockZk.NewMockClient(ctrl)
+	zkClient.EXPECT().LocateResource(zk.Meta).Return("regionserver:1", nil).AnyTimes()
+	c := newMockClient(zkClient)
 
 	// create region with mock client
 	origlReg := region.NewInfo(
@@ -440,7 +441,7 @@ func TestSendRPCToRegionClientDownDelayed(t *testing.T) {
 	c.regions.put(origlReg)
 	rc := mockRegion.NewMockRegionClient(ctrl)
 	rc.EXPECT().String().Return("mock region client").AnyTimes()
-	c.clients.put("regionserver:0", origlReg, func() hrpc.RegionClient {
+	c.clients.put("regionserver:1", origlReg, func() hrpc.RegionClient {
 		return rc
 	})
 	origlReg.SetClient(rc)
@@ -450,17 +451,15 @@ func TestSendRPCToRegionClientDownDelayed(t *testing.T) {
 	result := make(chan hrpc.RPCResult, 1)
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
 
-	rc2 := mockRegion.NewMockRegionClient(ctrl)
-	rc2.EXPECT().String().Return("mock region client").AnyTimes()
+	rc2 := newRegionClientFn("regionserver:1")()
 	rc.EXPECT().QueueRPC(mockCall).Times(1).Do(func(rpc hrpc.Call) {
 		// remove old client from clients cache
 		c.clients.clientDown(rc)
 		// replace client in region with new client
 		// this simulate other rpc toggling client reestablishment
 		c.regions.put(origlReg)
-		c.clients.put("regionserver:0", origlReg, func() hrpc.RegionClient {
-			return rc2
-		})
+		c.clients.put("regionserver:1", origlReg, func() hrpc.RegionClient { return rc2 })
+
 		origlReg.SetClient(rc2)
 
 		// return ServerError from QueueRPC, to emulate dead client
@@ -473,10 +472,17 @@ func TestSendRPCToRegionClientDownDelayed(t *testing.T) {
 	default:
 		t.Errorf("Got unexpected error: %v", err)
 	}
-
+	// Wait for establishRegion to complete
+	ch := origlReg.AvailabilityChan()
+	if ch != nil {
+		<-ch
+	}
 	// check that we did not down new client
 	if len(c.clients.regions) != 1 {
-		t.Errorf("There are %d cached clients", len(c.clients.regions))
+		t.Errorf("There are %d cached clients:", len(c.clients.regions))
+		for rc := range c.clients.regions {
+			t.Errorf("%s", rc.String())
+		}
 	}
 	_, ok := c.clients.regions[rc2]
 	if !ok {
