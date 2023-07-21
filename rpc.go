@@ -358,7 +358,7 @@ func (c *client) handleResultError(err error, reg hrpc.RegionInfo, rc hrpc.Regio
 				go c.reestablishRegion(reg)
 			}
 		} else {
-			c.clientDown(rc)
+			c.clientDown(rc, reg)
 		}
 	}
 }
@@ -391,13 +391,24 @@ func (c *client) sendRPCToRegionClient(ctx context.Context, rpc hrpc.Call, rc hr
 	return res.Msg, res.Error
 }
 
-// clientDown removes client from cache and marks
-// all the regions sharing this region's
-// client as unavailable, and start a goroutine
+// clientDown removes client from cache and marks all the regions
+// sharing this region's client as unavailable, and start a goroutine
 // to reconnect for each of them.
-func (c *client) clientDown(client hrpc.RegionClient) {
+//
+// Due to races filling in the clients cache it may not be completely
+// accurate. reg is the region we were trying to access when we saw an
+// issue with the region client, so make sure it is marked unavailable
+// even if it doesn't appear in the clients cache.
+func (c *client) clientDown(client hrpc.RegionClient, reg hrpc.RegionInfo) {
 	downregions := c.clients.clientDown(client)
+	if reg.MarkUnavailable() {
+		reg.SetClient(nil)
+		go c.reestablishRegion(reg)
+	}
 	for downreg := range downregions {
+		if downreg == reg {
+			continue
+		}
 		if downreg.MarkUnavailable() {
 			downreg.SetClient(nil)
 			go c.reestablishRegion(downreg)
@@ -767,7 +778,7 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 				return
 			} else if _, ok := err.(region.ServerError); ok {
 				// the client we got died
-				c.clientDown(client)
+				c.clientDown(client, reg)
 			}
 		} else if err == context.Canceled {
 			// region is dead
@@ -777,7 +788,7 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 			// otherwise Dial failed, purge the client and retry.
 			// note that it's safer to reestablish all regions for this client as well
 			// because they could have ended up setteling for the same client.
-			c.clientDown(client)
+			c.clientDown(client, reg)
 		}
 
 		log.WithFields(log.Fields{
