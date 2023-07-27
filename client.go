@@ -6,6 +6,7 @@
 package gohbase
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -40,6 +41,7 @@ type Client interface {
 	Increment(i *hrpc.Mutate) (int64, error)
 	CheckAndPut(p *hrpc.Mutate, family string, qualifier string,
 		expectedValue []byte) (bool, error)
+	SendBatch(ctx context.Context, batch []hrpc.Call) (res []hrpc.RPCResult, allOK bool)
 	Close()
 }
 
