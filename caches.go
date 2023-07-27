@@ -62,7 +62,6 @@ func (rcc *clientRegionCache) del(r hrpc.RegionInfo) {
 	rcc.m.Lock()
 	c := r.Client()
 	if c != nil {
-		r.SetClient(nil)
 		regions := rcc.regions[c]
 		delete(regions, r)
 	}
@@ -71,11 +70,7 @@ func (rcc *clientRegionCache) del(r hrpc.RegionInfo) {
 
 func (rcc *clientRegionCache) closeAll() {
 	rcc.m.Lock()
-	for client, regions := range rcc.regions {
-		for region := range regions {
-			region.MarkUnavailable()
-			region.SetClient(nil)
-		}
+	for client := range rcc.regions {
 		client.Close()
 	}
 	rcc.m.Unlock()

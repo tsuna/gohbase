@@ -68,6 +68,11 @@ func newAdminClient(zkquorum string, options ...Option) AdminClient {
 		option(c)
 	}
 	c.zkClient = zk.NewClient(zkquorum, c.zkTimeout)
+
+	// Get client connection for admin region
+	c.adminRegionInfo.MarkUnavailable()
+	go c.reestablishRegion(c.adminRegionInfo)
+
 	return c
 }
 

@@ -44,7 +44,7 @@ func TestDebugStateSanity(t *testing.T) {
 	} else if len(os) != 0 {
 		t.Errorf("Didn't expect any overlaps, got: %v", os)
 	}
-	region1.SetClient(regClient)
+	setRegionClient(region1, regClient)
 	client.clients.put("regionserver:1", region1, newClientFn)
 
 	region2 := region.NewInfo(
@@ -60,7 +60,7 @@ func TestDebugStateSanity(t *testing.T) {
 	} else if len(os) != 0 {
 		t.Errorf("Didn't expect any overlaps, got: %v", os)
 	}
-	region2.SetClient(regClient)
+	setRegionClient(region2, regClient)
 	client.clients.put("regionserver:1", region2, newClientFn)
 
 	region3 := region.NewInfo(
@@ -76,7 +76,7 @@ func TestDebugStateSanity(t *testing.T) {
 	} else if len(os) != 0 {
 		t.Errorf("Didn't expect any overlaps, got: %v", os)
 	}
-	region3.SetClient(regClient)
+	setRegionClient(region3, regClient)
 	client.clients.put("regionserver:1", region3, newClientFn)
 
 	jsonVal, err := DebugState(client)
