@@ -5,6 +5,7 @@
 package mock
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
@@ -148,4 +149,19 @@ func (m *MockClient) Scan(arg0 *hrpc.Scan) hrpc.Scanner {
 func (mr *MockClientMockRecorder) Scan(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scan", reflect.TypeOf((*MockClient)(nil).Scan), arg0)
+}
+
+// SendBatch mocks base method.
+func (m *MockClient) SendBatch(arg0 context.Context, arg1 []hrpc.Call) ([]hrpc.RPCResult, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SendBatch", arg0, arg1)
+	ret0, _ := ret[0].([]hrpc.RPCResult)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// SendBatch indicates an expected call of SendBatch.
+func (mr *MockClientMockRecorder) SendBatch(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendBatch", reflect.TypeOf((*MockClient)(nil).SendBatch), arg0, arg1)
 }
