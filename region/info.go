@@ -177,6 +177,7 @@ func (i *info) MarkUnavailable() bool {
 	created := false
 	i.m.Lock()
 	if i.available == nil {
+		i.client = nil
 		i.available = make(chan struct{})
 		created = true
 	}
@@ -186,10 +187,11 @@ func (i *info) MarkUnavailable() bool {
 
 // MarkAvailable will mark this region as available again, by closing the struct
 // returned by AvailabilityChan
-func (i *info) MarkAvailable() {
+func (i *info) MarkAvailable(c hrpc.RegionClient) {
 	i.m.Lock()
 	ch := i.available
 	i.available = nil
+	i.client = c
 	close(ch)
 	i.m.Unlock()
 }
@@ -254,7 +256,7 @@ func (i *info) Client() hrpc.RegionClient {
 	return c
 }
 
-// SetClient sets region client
+// SetClient sets region client. Used in tests only
 func (i *info) SetClient(c hrpc.RegionClient) {
 	i.m.Lock()
 	i.client = c

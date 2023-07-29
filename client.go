@@ -142,6 +142,10 @@ func newClient(zkquorum string, options ...Option) *client {
 	//since the zkTimeout could be changed as an option
 	c.zkClient = zk.NewClient(zkquorum, c.zkTimeout)
 
+	// Get client connection for meta region
+	c.metaRegionInfo.MarkUnavailable()
+	go c.reestablishRegion(c.metaRegionInfo)
+
 	return c
 }
 

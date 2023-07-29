@@ -482,7 +482,7 @@ func (ri mockRegionInfo) Name() []byte {
 func (ri mockRegionInfo) IsUnavailable() bool               { return true }
 func (ri mockRegionInfo) AvailabilityChan() <-chan struct{} { return nil }
 func (ri mockRegionInfo) MarkUnavailable() bool             { return true }
-func (ri mockRegionInfo) MarkAvailable()                    {}
+func (ri mockRegionInfo) MarkAvailable(RegionClient)        {}
 func (ri mockRegionInfo) MarkDead()                         {}
 func (ri mockRegionInfo) Context() context.Context          { return nil }
 func (ri mockRegionInfo) String() string                    { return "" }
@@ -491,7 +491,6 @@ func (ri mockRegionInfo) StartKey() []byte                  { return nil }
 func (ri mockRegionInfo) StopKey() []byte                   { return nil }
 func (ri mockRegionInfo) Namespace() []byte                 { return nil }
 func (ri mockRegionInfo) Table() []byte                     { return nil }
-func (ri mockRegionInfo) SetClient(RegionClient)            {}
 func (ri mockRegionInfo) Client() RegionClient              { return nil }
 
 type byFamily []*pb.MutationProto_ColumnValue

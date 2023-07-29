@@ -17,11 +17,29 @@ import (
 )
 
 // RegionInfo represents HBase region.
+//
+// A RegionInfo may be in one of three states:
+//
+// 1. Unavailable: AvailabilityChan() is non-nil and Client() is nil
+// 2. Available: AvailabilityChan() is nil and Client() is non-nil
+// 3. Stale: AvailabilityChan() is nil and Client() is nil
+//
+// RegionInfo lifecycle:
+//
+// On creation and when seeing certain errors a region should have
+// MarkUnavailable called to initialize the AvailabilityChan. If
+// MarkUnavailable returns true then (re)establishRegion will need to
+// be called to find a client for the region. The user of the
+// RegionInfo can watch the AvailabilityChan to know when the region
+// has been established. After the AvailabilityChan is closed Client()
+// may return an initialized RegionClient or it may return nil, in
+// which case the region is stale and the region lookup should be
+// performed again.
 type RegionInfo interface {
 	IsUnavailable() bool
 	AvailabilityChan() <-chan struct{}
 	MarkUnavailable() bool
-	MarkAvailable()
+	MarkAvailable(RegionClient)
 	MarkDead()
 	Context() context.Context
 	String() string
@@ -31,7 +49,6 @@ type RegionInfo interface {
 	StopKey() []byte
 	Namespace() []byte
 	Table() []byte
-	SetClient(RegionClient)
 	Client() RegionClient
 }
 

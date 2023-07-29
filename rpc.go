@@ -128,31 +128,9 @@ func (c *client) getRegionAndClientForRPC(ctx context.Context, rpc hrpc.Call) (
 
 		client := reg.Client()
 		if client == nil {
-			// There was an error getting the region client. Mark the
-			// region as unavailable.
-			if reg.MarkUnavailable() {
-				// If this was the first goroutine to mark the region as
-				// unavailable, start a goroutine to reestablish a connection
-				go c.reestablishRegion(reg)
-			}
-			if ch := reg.AvailabilityChan(); ch != nil {
-				select {
-				case <-ctx.Done():
-					return nil, ctx.Err()
-				case <-c.done:
-					return nil, ErrClientClosed
-				case <-ch:
-				}
-			}
-			if reg.Context().Err() != nil {
-				// region is dead because it was split or merged,
-				// retry lookup
-				continue
-			}
-			client = reg.Client()
-			if client == nil {
-				continue
-			}
+			// region client is nil after marked available, likely
+			// means the region is dead. Let's retry
+			continue
 		}
 		rpc.SetRegion(reg)
 		return client, nil
@@ -399,7 +377,6 @@ func (c *client) clientDown(client hrpc.RegionClient) {
 	downregions := c.clients.clientDown(client)
 	for downreg := range downregions {
 		if downreg.MarkUnavailable() {
-			downreg.SetClient(nil)
 			go c.reestablishRegion(downreg)
 		}
 	}
@@ -656,6 +633,20 @@ func isRegionEstablished(rc hrpc.RegionClient, reg hrpc.RegionInfo) error {
 	}
 }
 
+// establishRegion will attempt to find a region client for reg and
+// create a connection to that region client.
+//
+// reg must have had MarkUnavailable called on it before being passed
+// to establishRegion to have its AvailabilityChan created.
+// establishRegion will call MarkAvailable on the region before
+// returning, closing the AvailabilityChan.
+//
+// When successfully connected to a region server, the region will
+// have its Client set. On error it will retry. If the region is found
+// to be stale, eg. it has been replaced with a newer region due to a
+// split, or otherwise is not found in the meta region then the region
+// will have a nil Client associated with it. Callers will need to
+// retry lookup.
 func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 	var backoff time.Duration
 	var err error
@@ -663,7 +654,7 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 		backoff, err = sleepAndIncreaseBackoff(reg.Context(), backoff)
 		if err != nil {
 			// region is dead
-			reg.MarkAvailable()
+			reg.MarkAvailable(nil) // unblock waiters
 			return
 		}
 		if addr == "" {
@@ -677,7 +668,7 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 				// region doesn't exist, delete it from caches
 				c.regions.del(originalReg)
 				c.clients.del(originalReg)
-				originalReg.MarkAvailable()
+				originalReg.MarkAvailable(nil) // unblock waiters
 
 				log.WithFields(log.Fields{
 					"region":  originalReg.String(),
@@ -686,9 +677,10 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 				}).Info("region does not exist anymore")
 
 				return
-			} else if originalReg.Context().Err() != nil {
+			}
+			if originalReg.Context().Err() != nil {
 				// region is dead
-				originalReg.MarkAvailable()
+				originalReg.MarkAvailable(nil) // unblock waiters
 
 				log.WithFields(log.Fields{
 					"region":  originalReg.String(),
@@ -697,10 +689,12 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 				}).Info("region became dead while establishing client for it")
 
 				return
-			} else if err == ErrClientClosed {
-				// client has been closed
+			}
+			if err == ErrClientClosed {
+				// gohbase client has been closed
 				return
-			} else if err != nil {
+			}
+			if err != nil {
 				log.WithFields(log.Fields{
 					"region":  originalReg.String(),
 					"err":     err,
@@ -714,8 +708,8 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 				overlaps, replaced := c.regions.put(reg)
 				if !replaced {
 					// a region that is the same or younger is already in cache
-					reg.MarkAvailable()
-					originalReg.MarkAvailable()
+					reg.MarkAvailable(nil)
+					originalReg.MarkAvailable(nil)
 					return
 				}
 				// otherwise delete the overlapped regions in cache
@@ -724,7 +718,7 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 				}
 				// let rpcs know that they can retry and either get the newly
 				// added region from cache or lookup the one they need
-				originalReg.MarkAvailable()
+				originalReg.MarkAvailable(nil)
 			} else {
 				// same region, discard the looked up one
 				reg = originalReg
@@ -754,16 +748,12 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 
 		if err == nil {
 			if reg == c.adminRegionInfo {
-				reg.SetClient(client)
-				reg.MarkAvailable()
+				reg.MarkAvailable(client)
 				return
 			}
 
 			if err = isRegionEstablished(client, reg); err == nil {
-				// set region client so that as soon as we mark it available,
-				// concurrent readers are able to find the client
-				reg.SetClient(client)
-				reg.MarkAvailable()
+				reg.MarkAvailable(client)
 				return
 			} else if _, ok := err.(region.ServerError); ok {
 				// the client we got died
@@ -771,7 +761,7 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 			}
 		} else if err == context.Canceled {
 			// region is dead
-			reg.MarkAvailable()
+			reg.MarkAvailable(nil)
 			return
 		} else {
 			// otherwise Dial failed, purge the client and retry.
