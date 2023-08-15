@@ -475,7 +475,7 @@ func TestServerErrorRead(t *testing.T) {
 	mockCall := mock.NewMockCall(ctrl)
 	result := make(chan hrpc.RPCResult, 1)
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
-	mockConn.EXPECT().Read([]byte{0, 0, 0, 0}).Return(0, errors.New("read failure"))
+	mockConn.EXPECT().Read(gomock.Any()).Return(0, errors.New("read failure"))
 	mockConn.EXPECT().Close()
 
 	// pretend we already unqueued and sent the rpc
@@ -546,7 +546,7 @@ func TestServerErrorExceptionResponse(t *testing.T) {
 	expErr := exceptionToError(
 		"org.apache.hadoop.hbase.regionserver.RegionServerAbortedException", "ooops")
 
-	err = c.receive()
+	err = c.receive(mockConn)
 	if _, ok := err.(ServerError); !ok {
 		if err.Error() != expErr.Error() {
 			t.Fatalf("expected ServerError with message %q, got %T: %v", expErr, err, err)
@@ -625,7 +625,7 @@ func TestReceiveDecodeProtobufError(t *testing.T) {
 	mockConn.EXPECT().SetReadDeadline(time.Time{}).Times(1)
 	expErrorPefix := "region.RetryableError: failed to decode the response: proto:"
 
-	err := c.receive()
+	err := c.receive(mockConn)
 	if err == nil || strings.HasPrefix(expErrorPefix, err.Error()) {
 		t.Errorf("Expected error prefix %v, got %v", expErrorPefix, err)
 	}
@@ -673,7 +673,7 @@ func TestReceiveDeserializeCellblocksError(t *testing.T) {
 	mockConn.EXPECT().SetReadDeadline(time.Time{}).Times(1)
 	expError := errors.New("region.RetryableError: failed to decode the response: OOPS")
 
-	err := c.receive()
+	err := c.receive(mockConn)
 	if err == nil || err.Error() != expError.Error() {
 		t.Errorf("Expected error %v, got %v", expError, err)
 	}
@@ -913,16 +913,16 @@ func TestSanity(t *testing.T) {
 	response := []byte{6, 8, 1, 26, 2, 8, 38, 6, 10, 4, 16, 1, 32, 0, 0, 0, 0, 34, 0, 0, 0, 22,
 		0, 0, 0, 4, 0, 4, 121, 111, 108, 111, 2, 99, 102, 115, 119, 97, 103, 0, 0, 0, 0, 0, 0,
 		0, 0, 4, 109, 101, 111, 119}
-	mockConn.EXPECT().Read(readBufSizeMatcher{l: 4}).Times(1).Return(4, nil).
+	mockConn.EXPECT().Read(gomock.Any()).Times(1).Return(4, nil).
 		Do(func(buf []byte) {
 			binary.BigEndian.PutUint32(buf, uint32(len(response)))
 		})
-	mockConn.EXPECT().Read(readBufSizeMatcher{l: len(response)}).Times(1).
+	mockConn.EXPECT().Read(gomock.Any()).Times(1).
 		Return(len(response), nil).Do(func(buf []byte) {
 		copy(buf, response)
 
 		// stall the next read
-		mockConn.EXPECT().Read(readBufSizeMatcher{l: 4}).MaxTimes(1).
+		mockConn.EXPECT().Read(gomock.Any()).MaxTimes(1).
 			Return(0, errors.New("closed")).Do(func(buf []byte) { <-c.done })
 	})
 	mockConn.EXPECT().SetReadDeadline(time.Time{}).Times(1)
@@ -1038,16 +1038,16 @@ func TestSanityCompressor(t *testing.T) {
 	}
 
 	response = append(response, []byte(compressedCellblocks)...)
-	mockConn.EXPECT().Read(readBufSizeMatcher{l: 4}).Times(1).Return(4, nil).
+	mockConn.EXPECT().Read(gomock.Any()).Times(1).Return(4, nil).
 		Do(func(buf []byte) {
 			binary.BigEndian.PutUint32(buf, uint32(len(response)))
 		})
-	mockConn.EXPECT().Read(readBufSizeMatcher{l: len(response)}).Times(1).
+	mockConn.EXPECT().Read(gomock.Any()).Times(1).
 		Return(len(response), nil).Do(func(buf []byte) {
 		copy(buf, response)
 
 		// stall the next read
-		mockConn.EXPECT().Read(readBufSizeMatcher{l: 4}).MaxTimes(1).
+		mockConn.EXPECT().Read(gomock.Any()).MaxTimes(1).
 			Return(0, errors.New("closed")).Do(func(buf []byte) { <-c.done })
 	})
 	mockConn.EXPECT().SetReadDeadline(time.Time{}).Times(1)
