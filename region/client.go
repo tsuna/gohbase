@@ -6,6 +6,7 @@
 package region
 
 import (
+	"bufio"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -452,12 +453,13 @@ func (c *client) trySend(rpc hrpc.Call) (err error) {
 }
 
 func (c *client) receiveRPCs() {
+	reader := bufio.NewReader(c.conn)
 	for {
 		select {
 		case <-c.done:
 			return
 		default:
-			if err := c.receive(); err != nil {
+			if err := c.receive(reader); err != nil {
 				if _, ok := err.(ServerError); ok {
 					// fail the client and let the callers establish a new one
 					c.fail(err)
@@ -470,14 +472,14 @@ func (c *client) receiveRPCs() {
 	}
 }
 
-func (c *client) receive() (err error) {
+func (c *client) receive(r io.Reader) (err error) {
 	var (
 		sz       [4]byte
 		header   pb.ResponseHeader
 		response proto.Message
 	)
 
-	err = c.readFully(sz[:])
+	_, err = io.ReadFull(r, sz[:])
 	if err != nil {
 		return ServerError{err}
 	}
@@ -485,7 +487,7 @@ func (c *client) receive() (err error) {
 	size := binary.BigEndian.Uint32(sz[:])
 	b := make([]byte, size)
 
-	err = c.readFully(b)
+	_, err = io.ReadFull(r, b)
 	if err != nil {
 		return ServerError{err}
 	}
@@ -588,12 +590,6 @@ func exceptionToError(class, stack string) error {
 // write sends the given buffer to the RegionServer.
 func (c *client) write(buf []byte) error {
 	_, err := c.conn.Write(buf)
-	return err
-}
-
-// Tries to read enough data to fully fill up the given buffer.
-func (c *client) readFully(buf []byte) error {
-	_, err := io.ReadFull(c.conn, buf)
 	return err
 }
 
