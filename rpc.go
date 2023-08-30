@@ -239,6 +239,7 @@ func (c *client) SendBatch(ctx context.Context, batch []hrpc.Call) (
 	if !ok {
 		return res, false
 	}
+	sendBatchSplitCount.Observe(float64(len(rpcByClient)))
 
 	// Send each group of RPCs to region client to be executed.
 	type clientAndRPCs struct {
