@@ -41,11 +41,11 @@ func (dt *DeleteTable) Description() string {
 
 // ToProto converts the RPC into a protobuf message
 func (dt *DeleteTable) ToProto() proto.Message {
+	namespace, table := dt.parseTableName()
 	return &pb.DeleteTableRequest{
 		TableName: &pb.TableName{
-			// TODO: hadle namespaces properly
-			Namespace: []byte("default"),
-			Qualifier: dt.table,
+			Namespace: namespace,
+			Qualifier: table,
 		},
 	}
 }

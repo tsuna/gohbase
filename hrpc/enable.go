@@ -41,11 +41,11 @@ func (et *EnableTable) Description() string {
 
 // ToProto converts the RPC into a protobuf message
 func (et *EnableTable) ToProto() proto.Message {
+	namespace, table := et.parseTableName()
 	return &pb.EnableTableRequest{
 		TableName: &pb.TableName{
-			// TODO: handle namespaces
-			Namespace: []byte("default"),
-			Qualifier: et.table,
+			Namespace: namespace,
+			Qualifier: table,
 		},
 	}
 }

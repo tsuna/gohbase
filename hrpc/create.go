@@ -16,8 +16,10 @@ import (
 type CreateTable struct {
 	base
 
-	families  map[string]map[string]string
-	splitKeys [][]byte
+	families      map[string]map[string]string
+	splitKeys     [][]byte
+	attributes    map[string]string
+	configuration map[string]string
 }
 
 var defaultAttributes = map[string]string{
@@ -46,7 +48,9 @@ func NewCreateTable(ctx context.Context, table []byte,
 			ctx:      ctx,
 			resultch: make(chan RPCResult, 1),
 		},
-		families: make(map[string]map[string]string, len(families)),
+		families:      make(map[string]map[string]string, len(families)),
+		attributes:    make(map[string]string),
+		configuration: make(map[string]string),
 	}
 	for _, option := range options {
 		option(ct)
@@ -68,6 +72,20 @@ func NewCreateTable(ctx context.Context, table []byte,
 func SplitKeys(sk [][]byte) func(*CreateTable) {
 	return func(ct *CreateTable) {
 		ct.splitKeys = sk
+	}
+}
+
+// Attributes will add create table attributes params
+func Attributes(key, value string) func(table *CreateTable) {
+	return func(ct *CreateTable) {
+		ct.attributes[key] = value
+	}
+}
+
+// Configuration will add create table conf
+func Configuration(name, value string) func(table *CreateTable) {
+	return func(ct *CreateTable) {
+		ct.configuration[name] = value
 	}
 }
 
@@ -97,14 +115,36 @@ func (ct *CreateTable) ToProto() proto.Message {
 		}
 		pbFamilies = append(pbFamilies, f)
 	}
+
+	// Attributes
+	pbAttributes := make([]*pb.BytesBytesPair, 0, len(ct.attributes))
+	for k, v := range ct.attributes {
+		pbAttributes = append(pbAttributes, &pb.BytesBytesPair{
+			First:  []byte(k),
+			Second: []byte(v),
+		})
+	}
+
+	// Configuration
+	pbConfiguration := make([]*pb.NameStringPair, 0, len(ct.configuration))
+	for k, v := range ct.configuration {
+		pbConfiguration = append(pbConfiguration, &pb.NameStringPair{
+			Name:  proto.String(k),
+			Value: proto.String(v),
+		})
+	}
+
+	// TableName
+	namespace, table := ct.parseTableName()
 	return &pb.CreateTableRequest{
 		TableSchema: &pb.TableSchema{
 			TableName: &pb.TableName{
-				// TODO: handle namespaces
-				Namespace: []byte("default"),
-				Qualifier: ct.table,
+				Namespace: namespace,
+				Qualifier: table,
 			},
 			ColumnFamilies: pbFamilies,
+			Attributes:     pbAttributes,
+			Configuration:  pbConfiguration,
 		},
 		SplitKeys: ct.splitKeys,
 	}
