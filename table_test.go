@@ -30,8 +30,10 @@ var infoFamily = map[string][]string{
 }
 
 var cFamilies = map[string]map[string]string{
-	"cf":  nil,
-	"cf2": nil,
+	"cf": nil,
+	"cf2": {
+		"MIN_VERSIONS": "1",
+	},
 }
 
 func TestCreateTable(t *testing.T) {
@@ -111,6 +113,52 @@ func TestCreatePresplitTable(t *testing.T) {
 	}
 	if len(rsp) != 4 {
 		t.Errorf("Meta returned %d rows for prefix '%s' , want 2", len(rsp), metaKey)
+	}
+}
+
+func TestCreateTableWithAttributes(t *testing.T) {
+	testTableName := t.Name() + "_" + getTimestampString()
+	t.Log("testTableName=" + testTableName)
+
+	attrs := map[string]string{
+		"NORMALIZATION_ENABLED": "TRUE",
+	}
+
+	ac := gohbase.NewAdminClient(*host)
+	crt := hrpc.NewCreateTable(
+		context.Background(),
+		[]byte(testTableName),
+		cFamilies,
+		hrpc.TableAttributes(attrs),
+	)
+
+	if err := ac.CreateTable(crt); err != nil {
+		t.Errorf("CreateTable returned an error: %v", err)
+	}
+
+	// check in hbase:meta if there's a region for the table
+	c := gohbase.NewClient(*host)
+	metaKey := testTableName + ","
+	keyFilter := filter.NewPrefixFilter([]byte(metaKey))
+	scan, err := hrpc.NewScanStr(context.Background(), metaTableName, hrpc.Filters(keyFilter))
+	if err != nil {
+		t.Fatalf("Failed to create Scan request: %s", err)
+	}
+
+	var rsp []*hrpc.Result
+	scanner := c.Scan(scan)
+	for {
+		res, err := scanner.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		rsp = append(rsp, res)
+	}
+	if len(rsp) != 1 {
+		t.Errorf("Meta returned %d rows for prefix '%s' , want 1", len(rsp), metaKey)
 	}
 }
 
