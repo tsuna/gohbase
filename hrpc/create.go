@@ -16,11 +16,12 @@ import (
 type CreateTable struct {
 	base
 
-	families  map[string]map[string]string
-	splitKeys [][]byte
+	attributes map[string]string
+	families   map[string]map[string]string
+	splitKeys  [][]byte
 }
 
-var defaultAttributes = map[string]string{
+var defaultFamiliesAttributes = map[string]string{
 	"BLOOMFILTER":         "ROW",
 	"VERSIONS":            "3",
 	"IN_MEMORY":           "false",
@@ -52,8 +53,8 @@ func NewCreateTable(ctx context.Context, table []byte,
 		option(ct)
 	}
 	for family, attrs := range families {
-		ct.families[family] = make(map[string]string, len(defaultAttributes))
-		for k, dv := range defaultAttributes {
+		ct.families[family] = make(map[string]string, len(defaultFamiliesAttributes))
+		for k, dv := range defaultFamiliesAttributes {
 			if v, ok := attrs[k]; ok {
 				ct.families[family][k] = v
 			} else {
@@ -71,6 +72,13 @@ func SplitKeys(sk [][]byte) func(*CreateTable) {
 	}
 }
 
+// TableAttributes will return an option that will set attributes on the created table
+func TableAttributes(attrs map[string]string) func(*CreateTable) {
+	return func(ct *CreateTable) {
+		ct.attributes = attrs
+	}
+}
+
 // Name returns the name of this RPC call.
 func (ct *CreateTable) Name() string {
 	return "CreateTable"
@@ -83,6 +91,14 @@ func (ct *CreateTable) Description() string {
 
 // ToProto converts the RPC into a protobuf message
 func (ct *CreateTable) ToProto() proto.Message {
+	pbAttributes := make([]*pb.BytesBytesPair, 0, len(ct.attributes))
+	for k, v := range ct.attributes {
+		pbAttributes = append(pbAttributes, &pb.BytesBytesPair{
+			First:  []byte(k),
+			Second: []byte(v),
+		})
+	}
+
 	pbFamilies := make([]*pb.ColumnFamilySchema, 0, len(ct.families))
 	for family, attrs := range ct.families {
 		f := &pb.ColumnFamilySchema{
@@ -97,6 +113,7 @@ func (ct *CreateTable) ToProto() proto.Message {
 		}
 		pbFamilies = append(pbFamilies, f)
 	}
+
 	return &pb.CreateTableRequest{
 		TableSchema: &pb.TableSchema{
 			TableName: &pb.TableName{
@@ -104,6 +121,7 @@ func (ct *CreateTable) ToProto() proto.Message {
 				Namespace: []byte("default"),
 				Qualifier: ct.table,
 			},
+			Attributes:     pbAttributes,
 			ColumnFamilies: pbFamilies,
 		},
 		SplitKeys: ct.splitKeys,
