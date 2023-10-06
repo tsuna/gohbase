@@ -180,6 +180,10 @@ var (
 // successfully. allOK is true if all calls completed successfully,
 // and false if any calls failed and the errors in the results need to
 // be checked.
+//
+// SendBatch will continue retrying each RPC in batch until it
+// succeeds, fails with a non-retryable error, or the context is
+// canceled.
 func (c *client) SendBatch(ctx context.Context, batch []hrpc.Call) (
 	res []hrpc.RPCResult, allOK bool) {
 	if len(batch) == 0 {
@@ -235,37 +239,80 @@ func (c *client) SendBatch(ctx context.Context, batch []hrpc.Call) (
 		return res, allOK
 	}
 
-	rpcByClient, ok := c.findClients(ctx, batch, res)
-	if !ok {
-		return res, false
-	}
-	sendBatchSplitCount.Observe(float64(len(rpcByClient)))
+	// Send and wait for responses loop. This loop will partition the
+	// batch per-regionserver batches, send those batches to the
+	// region server and wait for results. Any RPCs that hit retryable
+	// errors will be made into a new batch and passed through this
+	// loop again.
 
-	// Send each group of RPCs to region client to be executed.
-	type clientAndRPCs struct {
-		client hrpc.RegionClient
-		rpcs   []hrpc.Call
-	}
-	// keep track of the order requests are queued so that we can wait
-	// for their responses in the same order.
-	cAndRs := make([]clientAndRPCs, 0, len(rpcByClient))
-	for client, rpcs := range rpcByClient {
-		client.QueueBatch(ctx, rpcs)
-		cAndRs = append(cAndRs, clientAndRPCs{client, rpcs})
-	}
+	// unretryableErrorSeen set to true when any RPC in the batch hits
+	// an error that is not retryable. This is used to remember to
+	// return allOK=false even after we retry RPCs that hit retryable
+	// errors and those all succeed.
+	var unretryableErrorSeen bool
+	var retries []hrpc.Call
+	backoff := backoffStart
 
-	var fail bool
-	func() { // func used to scope the span
-		ctx, sp := observability.StartSpan(ctx, "waitForResult")
-		defer sp.End()
-		for _, cAndR := range cAndRs {
-			ok := c.waitForCompletion(ctx, cAndR.client, cAndR.rpcs, res, rpcToRes)
-			if !ok {
-				fail = true
-			}
+	for {
+		rpcByClient, ok := c.findClients(ctx, batch, res)
+		if !ok {
+			return res, false
 		}
-	}()
-	allOK = !fail
+		sendBatchSplitCount.Observe(float64(len(rpcByClient)))
+
+		// Send each group of RPCs to region client to be executed.
+		type clientAndRPCs struct {
+			client hrpc.RegionClient
+			rpcs   []hrpc.Call
+		}
+		// keep track of the order requests are queued so that we can wait
+		// for their responses in the same order.
+		cAndRs := make([]clientAndRPCs, 0, len(rpcByClient))
+		for client, rpcs := range rpcByClient {
+			client.QueueBatch(ctx, rpcs)
+			cAndRs = append(cAndRs, clientAndRPCs{client, rpcs})
+		}
+
+		// batch wil be used to hold any RPCs that need to be retried
+		batch = batch[:0]
+		var needBackoff bool
+
+		func() { // func used to scope the span
+			ctx, sp := observability.StartSpan(ctx, "waitForResult")
+			defer sp.End()
+			for _, cAndR := range cAndRs {
+				shouldRetry, shouldBackoff, unretryableError, ok := c.waitForCompletion(
+					ctx, cAndR.client, cAndR.rpcs, res, rpcToRes)
+				if !ok {
+					allOK = false
+					retries = append(retries, shouldRetry...)
+					needBackoff = needBackoff || shouldBackoff
+					unretryableErrorSeen = unretryableErrorSeen || unretryableError
+				}
+			}
+		}()
+
+		// Exit retry loop if no RPCs are retryable because they all
+		// succeeded or hit unretryable errors (this is true if
+		// retries is empty), or the context is done.
+		if len(retries) == 0 || ctx.Err() != nil {
+			break
+		}
+		if needBackoff {
+			sp.AddEvent("retrySleep")
+			var err error
+			backoff, err = sleepAndIncreaseBackoff(ctx, backoff)
+			if err != nil {
+				break
+			}
+		} else {
+			sp.AddEvent("retry")
+		}
+		// Set state for next loop iteration
+		batch = retries
+		retries = retries[:0]
+		allOK = !unretryableErrorSeen
+	}
 
 	return res, allOK
 }
@@ -296,11 +343,24 @@ func (c *client) findClients(ctx context.Context, batch []hrpc.Call, res []hrpc.
 	return rpcByClient, ok
 }
 
+// waitForCompletion waits for the completion of all rpcs, updating
+// the appropriate index in results with the help of rpcToRes. If all
+// rpcs succeed then ok will return true, otherwise:
+//   - ok will be false
+//   - retryables will contain RPCs that can be retried
+//   - shouldBackoff will be true if any retryable RPCs need a backoff before retrying
+//   - unretryableError will be true if there were errors seen on RPCs
+//     that were not retryable. It communicates that retryables does
+//     not contain all the RPCs that failed, so even though those
+//     retryable RPCs may eventually succeed we need to return !ok to
+//     the caller of SendBatch.
 func (c *client) waitForCompletion(ctx context.Context, rc hrpc.RegionClient,
-	rpcs []hrpc.Call, results []hrpc.RPCResult, rpcToRes map[hrpc.Call]int) bool {
+	rpcs []hrpc.Call, results []hrpc.RPCResult, rpcToRes map[hrpc.Call]int) (
+	retryables []hrpc.Call, shouldBackoff, unretryableError, ok bool) {
 
-	ok := true
+	ok = true
 	canceledIndex := len(rpcs)
+
 loop:
 	for i, rpc := range rpcs {
 		select {
@@ -309,7 +369,17 @@ loop:
 			if res.Error != nil {
 				c.handleResultError(res.Error, rpc.Region(), rc)
 				ok = false
+				switch res.Error.(type) {
+				case region.RetryableError:
+					shouldBackoff = true
+					retryables = append(retryables, rpc)
+				case region.ServerError, region.NotServingRegionError:
+					retryables = append(retryables, rpc)
+				default:
+					unretryableError = true
+				}
 			}
+
 		case <-ctx.Done():
 			canceledIndex = i
 			ok = false
@@ -333,7 +403,7 @@ loop:
 		}
 	}
 
-	return ok
+	return retryables, shouldBackoff, unretryableError, ok
 }
 
 func (c *client) handleResultError(err error, reg hrpc.RegionInfo, rc hrpc.RegionClient) {
@@ -668,7 +738,16 @@ func isRegionEstablished(rc hrpc.RegionClient, reg hrpc.RegionInfo) error {
 	}
 }
 
+// establishRegionOverride can be set by tests to override the
+// behavior of establishRegion
+var establishRegionOverride func(reg hrpc.RegionInfo, addr string)
+
 func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
+	if establishRegionOverride != nil {
+		establishRegionOverride(reg, addr)
+		return
+	}
+
 	var backoff time.Duration
 	var err error
 	for {
@@ -803,7 +882,15 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 	}
 }
 
+// sleepAndIncreaseBackoffOverride can be set by tests to override the
+// behavior of sleepAndIncreaseBackoff
+var sleepAndIncreaseBackoffOverride func(
+	ctx context.Context, backoff time.Duration) (time.Duration, error)
+
 func sleepAndIncreaseBackoff(ctx context.Context, backoff time.Duration) (time.Duration, error) {
+	if sleepAndIncreaseBackoffOverride != nil {
+		return sleepAndIncreaseBackoffOverride(ctx, backoff)
+	}
 	if backoff == 0 {
 		return backoffStart, nil
 	}
