@@ -1172,6 +1172,23 @@ func TestFindClients(t *testing.T) {
 }
 
 func TestSendBatchWaitForCompletion(t *testing.T) {
+	sleepCh := make(chan struct{})
+	sleepAndIncreaseBackoffOverride = func(ctx context.Context, backoff time.Duration) (
+		time.Duration, error) {
+		sleepCh <- struct{}{}
+		return backoff, nil
+	}
+	estRegCh := make(chan hrpc.RegionInfo)
+	establishRegionOverride = func(reg hrpc.RegionInfo, addr string) {
+		estRegCh <- reg
+	}
+	defer func() {
+		close(sleepCh) // panic any unexpected calls to sleepAndIncreaseBackoff
+		sleepAndIncreaseBackoffOverride = nil
+		close(estRegCh) // panic any unexpected calls to establishRegion
+		establishRegionOverride = nil
+	}()
+
 	c := newMockClient(nil)
 	// pretend regionserver:0 has meta table
 	rc := c.clients.put("regionserver:0", c.metaRegionInfo, newRegionClientFn("regionserver:0"))
@@ -1504,6 +1521,260 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 				if r.Error == nil ||
 					r.Error.Error() != expErrStr {
 					t.Errorf("expected canceled error but got: %v", r.Error)
+				}
+				if r.Msg != nil {
+					t.Errorf("unexpected Msg: %v", r.Msg)
+				}
+				continue
+			}
+			if r.Error != nil {
+				t.Errorf("unexpected error: %s", r.Error)
+				continue
+			}
+			if r.Msg.(*wrapperspb.Int32Value).Value != int32(i) {
+				t.Errorf("unexpected result: %v", r.Msg)
+			}
+		}
+	})
+
+	t.Run("retryable error some", func(t *testing.T) {
+		batch := make([]hrpc.Call, 9)
+		for i := 0; i < 9; i++ {
+			// Create an RPC for each region, "a"-"i"
+			key := string(rune('a' + i))
+			batch[i] = newRPC(key)
+		}
+		var (
+			result []hrpc.RPCResult
+			ok     bool
+			done   = make(chan struct{})
+		)
+		go func() {
+			result, ok = c.SendBatch(context.Background(), batch)
+			close(done)
+		}()
+
+		for i := 0; i < 9; i++ {
+			// Error some responses
+			if i%2 == 0 {
+				batch[i].ResultChan() <- hrpc.RPCResult{Error: region.RetryableError{}}
+				continue
+			}
+			// Using an Int32 as a result. A real result would be a
+			// MutateResponse, but any proto.Message works for the test.
+			batch[i].ResultChan() <- hrpc.RPCResult{Msg: wrapperspb.Int32(int32(i))}
+		}
+
+		// We should see retries on retryable errors. So, handle the
+		// sleep and then send back new results. Half succeed, the
+		// other half get more retryable errors.
+		<-sleepCh // Expect one call to sleepAndIncreaseBackoff
+		for i := 0; i < 9; i++ {
+			if i%4 == 0 {
+				batch[i].ResultChan() <- hrpc.RPCResult{Error: region.RetryableError{}}
+			} else if i%2 == 0 {
+				batch[i].ResultChan() <- hrpc.RPCResult{Msg: wrapperspb.Int32(int32(i))}
+			}
+		}
+
+		// Send successes for the remaining requests
+		<-sleepCh // Expect one call to sleepAndIncreaseBackoff
+		for i := 0; i < 9; i++ {
+			if i%4 == 0 {
+				batch[i].ResultChan() <- hrpc.RPCResult{Msg: wrapperspb.Int32(int32(i))}
+			}
+		}
+
+		<-done
+		if !ok {
+			t.Errorf("unexpected !ok")
+		}
+		if len(result) != 9 {
+			t.Fatalf("unexpected result size: %v", result)
+		}
+
+		for i, r := range result {
+			if r.Error != nil {
+				t.Errorf("unexpected error: %s", r.Error)
+				continue
+			}
+			if r.Msg.(*wrapperspb.Int32Value).Value != int32(i) {
+				t.Errorf("unexpected result: %v", r.Msg)
+			}
+		}
+	})
+
+	t.Run("retryable error and non-retryable errors", func(t *testing.T) {
+		batch := make([]hrpc.Call, 9)
+		for i := 0; i < 9; i++ {
+			// Create an RPC for each region, "a"-"i"
+			key := string(rune('a' + i))
+			batch[i] = newRPC(key)
+		}
+		var (
+			result []hrpc.RPCResult
+			ok     bool
+			done   = make(chan struct{})
+		)
+		go func() {
+			result, ok = c.SendBatch(context.Background(), batch)
+			close(done)
+		}()
+
+		for i := 0; i < 9; i++ {
+			if i%4 == 0 {
+				// Non-retryable error for some
+				batch[i].ResultChan() <- hrpc.RPCResult{Error: errors.New("error")}
+				continue
+			}
+			// Retryable error for some
+			batch[i].ResultChan() <- hrpc.RPCResult{Error: region.RetryableError{}}
+		}
+
+		<-sleepCh // Expect one call to sleepAndIncreaseBackoff
+
+		// We should see retries on retryable errors. So now send the
+		// correct response.
+		for i := 0; i < 9; i++ {
+			if i%4 == 0 {
+				continue
+			}
+			batch[i].ResultChan() <- hrpc.RPCResult{Msg: wrapperspb.Int32(int32(i))}
+		}
+		<-done
+		if ok {
+			t.Errorf("expected !ok")
+		}
+		if len(result) != 9 {
+			t.Fatalf("unexpected result size: %v", result)
+		}
+		for i, r := range result {
+			if i%4 == 0 {
+				if r.Error == nil || r.Error.Error() != "error" {
+					t.Errorf("expected error but got: %v", r.Error)
+				}
+				if r.Msg != nil {
+					t.Errorf("unexpected Msg: %v", r.Msg)
+				}
+				continue
+			}
+			if r.Error != nil {
+				t.Errorf("unexpected error: %s", r.Error)
+				continue
+			}
+			if r.Msg.(*wrapperspb.Int32Value).Value != int32(i) {
+				t.Errorf("unexpected result: %v", r.Msg)
+			}
+		}
+	})
+
+	t.Run("not serving region error", func(t *testing.T) {
+		batch := make([]hrpc.Call, 9)
+		for i := 0; i < 9; i++ {
+			// Create an RPC for each region, "a"-"i"
+			key := string(rune('a' + i))
+			batch[i] = newRPC(key)
+		}
+		var (
+			result []hrpc.RPCResult
+			ok     bool
+			done   = make(chan struct{})
+		)
+		go func() {
+			result, ok = c.SendBatch(context.Background(), batch)
+			close(done)
+		}()
+
+		for i := 0; i < 9; i++ {
+			if i%4 == 0 {
+				// NSRE for some
+				batch[i].ResultChan() <- hrpc.RPCResult{Error: region.NotServingRegionError{}}
+				continue
+			}
+			// success for some
+			batch[i].ResultChan() <- hrpc.RPCResult{Msg: wrapperspb.Int32(int32(i))}
+		}
+
+		for i := 0; i < 9; i++ {
+			if i%4 != 0 {
+				continue
+			}
+			// For each failed NSRE we should expect an establishRegion call
+			reg := <-estRegCh
+			// reestablish the region:
+			reg.MarkAvailable()
+		}
+
+		// We should see retries on the RPCs hitting NSREs. So now
+		// send the correct response.
+		for i := 0; i < 9; i++ {
+			if i%4 != 0 {
+				continue
+			}
+			batch[i].ResultChan() <- hrpc.RPCResult{Msg: wrapperspb.Int32(int32(i))}
+		}
+		<-done
+		if !ok {
+			t.Errorf("unexpected !ok")
+		}
+		if len(result) != 9 {
+			t.Fatalf("unexpected result size: %v", result)
+		}
+
+		for i, r := range result {
+			if r.Error != nil {
+				t.Errorf("unexpected error: %s", r.Error)
+				continue
+			}
+			if r.Msg.(*wrapperspb.Int32Value).Value != int32(i) {
+				t.Errorf("unexpected result: %v", r.Msg)
+			}
+		}
+	})
+
+	t.Run("retryable error some with context cancellation", func(t *testing.T) {
+		batch := make([]hrpc.Call, 9)
+		for i := 0; i < 9; i++ {
+			// Create an RPC for each region, "a"-"i"
+			key := string(rune('a' + i))
+			batch[i] = newRPC(key)
+		}
+		var (
+			result      []hrpc.RPCResult
+			ok          bool
+			done        = make(chan struct{})
+			ctx, cancel = context.WithCancel(context.Background())
+		)
+		go func() {
+			result, ok = c.SendBatch(ctx, batch)
+			close(done)
+		}()
+
+		for i := 0; i < 9; i++ {
+			// Error some responses
+			if i%2 == 0 {
+				batch[i].ResultChan() <- hrpc.RPCResult{Error: region.RetryableError{}}
+				continue
+			}
+			// Using an Int32 as a result. A real result would be a
+			// MutateResponse, but any proto.Message works for the test.
+			batch[i].ResultChan() <- hrpc.RPCResult{Msg: wrapperspb.Int32(int32(i))}
+		}
+
+		cancel()
+
+		<-done
+		if ok {
+			t.Errorf("unexpected ok")
+		}
+		if len(result) != 9 {
+			t.Fatalf("unexpected result size: %v", result)
+		}
+
+		for i, r := range result {
+			if i%2 == 0 {
+				if r.Error == nil || !errors.Is(r.Error, region.RetryableError{}) {
+					t.Errorf("expected error but got: %v", r.Error)
 				}
 				if r.Msg != nil {
 					t.Errorf("unexpected Msg: %v", r.Msg)
