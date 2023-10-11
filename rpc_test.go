@@ -717,15 +717,6 @@ func TestConcurrentRetryableError(t *testing.T) {
 		nil,
 		nil,
 	)
-	// fake region to make sure we don't close the client
-	whateverRegion := region.NewInfo(
-		0,
-		nil,
-		[]byte("test2"),
-		[]byte("test2,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."),
-		nil,
-		nil,
-	)
 
 	rc := mockRegion.NewMockRegionClient(ctrl)
 	rc.EXPECT().String().Return("mock region client").AnyTimes()
@@ -733,12 +724,11 @@ func TestConcurrentRetryableError(t *testing.T) {
 	newRC := func() hrpc.RegionClient {
 		return rc
 	}
+	c.clients.put("host:1234", c.metaRegionInfo, newRC)
+	c.metaRegionInfo.SetClient(rc)
 	c.regions.put(origlReg)
-	c.regions.put(whateverRegion)
 	c.clients.put("host:1234", origlReg, newRC)
-	c.clients.put("host:1234", whateverRegion, newRC)
 	origlReg.SetClient(rc)
-	whateverRegion.SetClient(rc)
 
 	numCalls := 100
 	rc.EXPECT().QueueRPC(gomock.Any()).MinTimes(1)
