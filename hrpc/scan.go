@@ -67,6 +67,7 @@ type Scan struct {
 	maxResultSize uint64
 	numberOfRows  uint32
 	reversed      bool
+	attribute     []*pb.NameBytesPair
 
 	closeScanner        bool
 	allowPartialResults bool
@@ -227,6 +228,7 @@ func (s *Scan) ToProto() proto.Message {
 	if s.consistency != DefaultConsistency {
 		scan.Scan.Consistency = s.consistency.toProto()
 	}
+	scan.Scan.Attribute = s.attribute
 	scan.Scan.Filter = s.filter
 	return scan
 }
@@ -341,6 +343,22 @@ func Reversed() func(Call) error {
 			return errors.New("'Reversed' option can only be used with Scan queries")
 		}
 		scan.reversed = true
+		return nil
+	}
+}
+
+// Attribute is a Scan-only option which set metadata-like attribute on the request. Attribute
+// option can be used multiple times and will be appended to a list. Attribute are useful to
+// communicate special information about the Scan request to HBase, such as:
+// - retrieve MOB metadata
+// - change behaviour of coprocessors
+func Attribute(key string, val []byte) func(Call) error {
+	return func(g Call) error {
+		scan, ok := g.(*Scan)
+		if !ok {
+			return errors.New("'Attributes' option can only be used with Scan queries")
+		}
+		scan.attribute = append(scan.attribute, &pb.NameBytesPair{Name: &key, Value: val})
 		return nil
 	}
 }
