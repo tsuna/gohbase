@@ -395,6 +395,31 @@ func TestScanToProto(t *testing.T) {
 				},
 			},
 		},
+		{ // set scan attribute
+			s: func() *Scan {
+				s, _ := NewScanStr(ctx, "",
+					Attribute("key1", []byte("value1")),
+					Attribute("key2", []byte("value2")),
+				)
+				return s
+			}(),
+			expProto: &pb.ScanRequest{
+				Region:                  rs,
+				NumberOfRows:            proto.Uint32(DefaultNumberOfRows),
+				CloseScanner:            proto.Bool(false),
+				ClientHandlesPartials:   proto.Bool(true),
+				ClientHandlesHeartbeats: proto.Bool(true),
+				Scan: &pb.Scan{
+					MaxResultSize: proto.Uint64(DefaultMaxResultSize),
+					Column:        []*pb.Column{},
+					TimeRange:     &pb.TimeRange{},
+					Attribute: []*pb.NameBytesPair{
+						{Name: proto.String("key1"), Value: []byte("value1")},
+						{Name: proto.String("key2"), Value: []byte("value2")},
+					},
+				},
+			},
+		},
 		{ // scan key range
 			s: func() *Scan {
 				s, _ := NewScanRange(ctx, nil, startRow, stopRow)
