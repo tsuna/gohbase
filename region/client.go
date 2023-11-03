@@ -623,15 +623,9 @@ func (c *client) sendHello() error {
 // send sends an RPC out to the wire.
 // Returns the response (for now, as the call is synchronous).
 func (c *client) send(rpc hrpc.Call) (uint32, error) {
-	var err error
 	var request proto.Message
 	var cellblocks net.Buffers
 	var cellblocksLen uint32
-	header := &pb.RequestHeader{
-		MethodName:   proto.String(rpc.Name()),
-		RequestParam: proto.Bool(true),
-	}
-
 	if s, ok := rpc.(canSerializeCellBlocks); ok && s.CellBlocksEnabled() {
 		// request can be serialized to cellblocks
 		request, cellblocks, cellblocksLen = s.SerializeCellBlocks(nil)
@@ -642,11 +636,6 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 			defer freeBuffer(compressed)
 			cellblocks = net.Buffers{compressed}
 			cellblocksLen = uint32(len(compressed))
-		}
-
-		// specify cellblocks length
-		header.CellBlockMeta = &pb.CellBlockMeta{
-			Length: &cellblocksLen,
 		}
 	} else {
 		// plain protobuf request
@@ -659,7 +648,41 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 	// If that happens, client can retry sending the rpc
 	// again potentially changing it's contents.
 	id := c.registerRPC(rpc)
-	header.CallId = &id
+
+	b, err := marshalProto(rpc, id, request, cellblocksLen)
+	if err != nil {
+		return id, err
+	}
+
+	if cellblocks != nil {
+		bfs := append(net.Buffers{b}, cellblocks...)
+		_, err = bfs.WriteTo(c.conn)
+	} else {
+		err = c.write(b)
+	}
+	if err != nil {
+		return id, ServerError{err}
+	}
+
+	if err := c.inFlightUp(); err != nil {
+		return id, ServerError{err}
+	}
+	return id, nil
+}
+
+func marshalProto(rpc hrpc.Call, callID uint32, request proto.Message,
+	cellblocksLen uint32) ([]byte, error) {
+	header := &pb.RequestHeader{
+		MethodName:   proto.String(rpc.Name()),
+		RequestParam: proto.Bool(true),
+		CallId:       &callID,
+	}
+
+	if cellblocksLen > 0 {
+		header.CellBlockMeta = &pb.CellBlockMeta{
+			Length: &cellblocksLen,
+		}
+	}
 
 	// Wire protocol:
 	//
@@ -682,7 +705,7 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 	// protobuf data into a []byte.
 
 	if request == nil {
-		return id, errors.New("failed to marshal request: proto: Marshal called with nil")
+		return nil, errors.New("failed to marshal request: proto: Marshal called with nil")
 	}
 
 	headerSize := proto.Size(header)
@@ -697,15 +720,15 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 	binary.BigEndian.PutUint32(b, totalLen)
 
 	b = protowire.AppendVarint(b, uint64(headerSize))
-	b, err = proto.MarshalOptions{UseCachedSize: true}.MarshalAppend(b, header)
+	b, err := proto.MarshalOptions{UseCachedSize: true}.MarshalAppend(b, header)
 	if err != nil {
-		return id, fmt.Errorf("failed to marshal request header: %s", err)
+		return nil, fmt.Errorf("failed to marshal request header: %s", err)
 	}
 
 	b = protowire.AppendVarint(b, uint64(requestSize))
 	b, err = proto.MarshalOptions{UseCachedSize: true}.MarshalAppend(b, request)
 	if err != nil {
-		return id, fmt.Errorf("failed to marshal request: %s", err)
+		return nil, fmt.Errorf("failed to marshal request: %s", err)
 	}
 	if len(b) != 4+protobufLen {
 		// This shouldn't ever happen, if it does there is a bug in
@@ -714,21 +737,7 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 			"headerSize: %d requestSize: %d\nheader: %s\nrequest: %s",
 			4+protobufLen, len(b), headerSize, requestSize, header, request))
 	}
-
-	if cellblocks != nil {
-		bfs := append(net.Buffers{b}, cellblocks...)
-		_, err = bfs.WriteTo(c.conn)
-	} else {
-		err = c.write(b)
-	}
-	if err != nil {
-		return id, ServerError{err}
-	}
-
-	if err := c.inFlightUp(); err != nil {
-		return id, ServerError{err}
-	}
-	return id, nil
+	return b, nil
 }
 
 func (c *client) MarshalJSON() ([]byte, error) {
