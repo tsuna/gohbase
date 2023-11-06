@@ -632,6 +632,15 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 		RequestParam: proto.Bool(true),
 	}
 
+	deadline, ok := rpc.Context().Deadline()
+	if ok {
+		// Timeout shouldn't be negative, as we just tested the .Done() channel before entering this
+		// function. But if this happen, it's okay, the cast to uint32 will give us a big timeout
+		// value.
+		timeout := time.Until(deadline)
+		header.Timeout = proto.Uint32(uint32(timeout.Milliseconds()))
+	}
+
 	if s, ok := rpc.(canSerializeCellBlocks); ok && s.CellBlocksEnabled() {
 		// request can be serialized to cellblocks
 		request, cellblocks, cellblocksLen = s.SerializeCellBlocks(nil)
