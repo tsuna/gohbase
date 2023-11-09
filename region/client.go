@@ -670,13 +670,30 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 	return id, nil
 }
 
+var headerPool = sync.Pool{
+	New: func() any {
+		return &pb.RequestHeader{}
+	},
+}
+
+func getHeader() *pb.RequestHeader {
+	return headerPool.Get().(*pb.RequestHeader)
+}
+
+func returnHeader(header *pb.RequestHeader) {
+	header.Reset()
+	headerPool.Put(header)
+}
+
+var pbTrue = proto.Bool(true)
+
 func marshalProto(rpc hrpc.Call, callID uint32, request proto.Message,
 	cellblocksLen uint32) ([]byte, error) {
-	header := &pb.RequestHeader{
-		MethodName:   proto.String(rpc.Name()),
-		RequestParam: proto.Bool(true),
-		CallId:       &callID,
-	}
+	header := getHeader()
+	header.MethodName = proto.String(rpc.Name())
+	header.RequestParam = pbTrue
+	header.CallId = &callID
+	defer returnHeader(header)
 
 	if cellblocksLen > 0 {
 		header.CellBlockMeta = &pb.CellBlockMeta{
