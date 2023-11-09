@@ -1039,10 +1039,26 @@ func BenchmarkMultiToProto(b *testing.B) {
 			m.toProto(true, nil)
 		}
 	})
+	request, _, cellblocksLen := m.toProto(true, nil)
+	b.Run("cellblocks_marshalProto", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			marshalProto(m, 42, request, cellblocksLen)
+		}
+	})
+
 	b.Run("no_cellblocks", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
 			m.toProto(false, nil)
+		}
+	})
+
+	request, _, _ = m.toProto(false, nil)
+	b.Run("no_cellblocks_marshalProto", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			marshalProto(m, 42, request, 0)
 		}
 	})
 }
@@ -1095,6 +1111,14 @@ func BenchmarkMultiToProtoLarge(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
 			m.toProto(true, nil)
+		}
+	})
+
+	request, _, cellblocksLen := m.toProto(true, nil)
+	b.Run("marshalProto", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			marshalProto(m, 42, request, cellblocksLen)
 		}
 	})
 }

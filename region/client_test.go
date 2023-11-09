@@ -1265,3 +1265,42 @@ func TestMarshalJSONNilValues(t *testing.T) {
 		t.Fatalf("Did not expect Error to be thrown: %v", err)
 	}
 }
+
+func BenchmarkSendScanRequest(b *testing.B) {
+	var (
+		table    = []byte("table")
+		startRow = []byte("startRow")
+		stopRow  = []byte("stopRow")
+	)
+	b.Run("NewScan", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, err := hrpc.NewScanRange(context.Background(), table, startRow, stopRow)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+
+	s, err := hrpc.NewScanRange(context.Background(), table, startRow, stopRow)
+	if err != nil {
+		b.Fatal(err)
+	}
+	s.SetRegion(
+		NewInfo(0, nil, []byte("reg0"),
+			[]byte("reg0,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil))
+	b.Run("ToProto", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			s.ToProto()
+		}
+	})
+
+	request := s.ToProto()
+	b.Run("marshalProto", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			marshalProto(s, 42, request, 0)
+		}
+	})
+}
