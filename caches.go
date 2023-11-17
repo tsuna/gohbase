@@ -261,6 +261,15 @@ func (krc *keyRegionCache) getOverlaps(reg hrpc.RegionInfo) []hrpc.RegionInfo {
 // passed region was put in the cache.
 func (krc *keyRegionCache) put(reg hrpc.RegionInfo) (overlaps []hrpc.RegionInfo, replaced bool) {
 	krc.m.Lock()
+	defer krc.m.Unlock()
+
+	// Update region cache metric
+	beforeLen := krc.regions.Len()
+	defer func() {
+		afterLen := krc.regions.Len()
+		cachedRegionTotal.Add(float64(afterLen - beforeLen))
+	}()
+
 	krc.regions.Put(reg.Name(), func(v hrpc.RegionInfo, exists bool) (hrpc.RegionInfo, bool) {
 		if exists {
 			// region is already in cache,
@@ -285,8 +294,6 @@ func (krc *keyRegionCache) put(reg hrpc.RegionInfo) (overlaps []hrpc.RegionInfo,
 		return reg, true
 	})
 	if !replaced {
-		krc.m.Unlock()
-
 		log.WithFields(log.Fields{
 			"region":   reg,
 			"overlaps": overlaps,
@@ -302,7 +309,6 @@ func (krc *keyRegionCache) put(reg hrpc.RegionInfo) (overlaps []hrpc.RegionInfo,
 		// let region establishers know that they can give up
 		o.MarkDead()
 	}
-	krc.m.Unlock()
 
 	log.WithFields(log.Fields{
 		"region":   reg,
@@ -319,6 +325,9 @@ func (krc *keyRegionCache) del(reg hrpc.RegionInfo) bool {
 	// let region establishers know that they can give up
 	reg.MarkDead()
 
+	if success {
+		cachedRegionTotal.Dec()
+	}
 	log.WithFields(log.Fields{
 		"region": reg,
 	}).Debug("removed region")

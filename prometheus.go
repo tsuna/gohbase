@@ -34,4 +34,11 @@ var (
 			Buckets: prometheus.ExponentialBuckets(1, 2, 10),
 		},
 	)
+
+	cachedRegionTotal = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gohbase",
+		Subsystem: "cache",
+		Name:      "regions_total",
+		Help:      "Total number of regions in the cache",
+	})
 )
