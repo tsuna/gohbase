@@ -17,7 +17,7 @@ type snap struct {
 	name         string
 	table        string
 	snapshotType *pb.SnapshotDescription_Type
-	version      int32
+	version      *int32
 	owner        string
 }
 
@@ -26,13 +26,13 @@ func (s *snap) ToProto() *pb.SnapshotDescription {
 		Type:    s.snapshotType,
 		Table:   proto.String(s.table),
 		Name:    proto.String(s.name),
-		Version: proto.Int32(s.version),
+		Version: s.version,
 		Owner:   proto.String(s.owner),
 	}
 }
 
 func (s *snap) Version(v int32) {
-	s.version = v
+	s.version = &v
 }
 
 func (s *snap) Owner(o string) {
