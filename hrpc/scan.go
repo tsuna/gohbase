@@ -49,9 +49,14 @@ type Scanner interface {
 
 	// Close should be called if it is desired to stop scanning before getting all of results.
 	// If you call Next() after calling Close() you might still get buffered results.
-	// Othwerwise, in case all results have been delivered or in case of an error, the Scanner
+	// Otherwise, in case all results have been delivered or in case of an error, the Scanner
 	// will be closed automatically. It's okay to close an already closed scanner.
 	Close() error
+	// GetScanMetrics returns the scan metrics for the scanner.
+	// The scan metrics are non-nil only if the Scan has TrackScanMetrics() enabled.
+	// GetScanMetrics should only be called after the scanner has been closed with an io.EOF
+	// (ie there are no more rows left to be returned by calls to Next()).
+	GetScanMetrics() map[string]int64
 }
 
 // Scan represents a scanner on an HBase table.
@@ -64,10 +69,11 @@ type Scan struct {
 
 	scannerID uint64
 
-	maxResultSize uint64
-	numberOfRows  uint32
-	reversed      bool
-	attribute     []*pb.NameBytesPair
+	maxResultSize    uint64
+	numberOfRows     uint32
+	reversed         bool
+	attribute        []*pb.NameBytesPair
+	trackScanMetrics bool
 
 	closeScanner        bool
 	allowPartialResults bool
@@ -178,6 +184,11 @@ func (s *Scan) NumberOfRows() uint32 {
 	return s.numberOfRows
 }
 
+// TrackScanMetrics returns true if the client is requesting to track scan metrics.
+func (s *Scan) TrackScanMetrics() bool {
+	return s.trackScanMetrics
+}
+
 // ToProto converts this Scan into a protobuf message
 func (s *Scan) ToProto() proto.Message {
 	scan := &pb.ScanRequest{
@@ -189,6 +200,7 @@ func (s *Scan) ToProto() proto.Message {
 		// tell server that we "handle" heartbeats by ignoring them
 		// since we don't really time out our scans (unless context was cancelled)
 		ClientHandlesHeartbeats: proto.Bool(true),
+		TrackScanMetrics:        &s.trackScanMetrics,
 	}
 	if s.scannerID != math.MaxUint64 {
 		scan.ScannerId = &s.scannerID
@@ -330,6 +342,19 @@ func AllowPartialResults() func(Call) error {
 			return errors.New("'AllowPartialResults' option can only be used with Scan queries")
 		}
 		scan.allowPartialResults = true
+		return nil
+	}
+}
+
+// TrackScanMetrics is an option for scan requests.
+// Enables tracking scan metrics from HBase, which will be returned in the scan response.
+func TrackScanMetrics() func(Call) error {
+	return func(g Call) error {
+		scan, ok := g.(*Scan)
+		if !ok {
+			return errors.New("'TrackScanMetrics' option can only be used with Scan queries")
+		}
+		scan.trackScanMetrics = true
 		return nil
 	}
 }

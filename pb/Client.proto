@@ -108,7 +108,7 @@ message Result {
   //  in the query.
   optional bool exists = 3;
 
-  // Whether or not the results are coming from possibly stale data 
+  // Whether or not the results are coming from possibly stale data
   optional bool stale = 4 [default = false];
 
   // Whether or not the entire result could be returned. Results will be split when
@@ -323,17 +323,21 @@ message ScanResponse {
   // reasons such as the size in bytes or quantity of results accumulated. This field
   // will true when more results exist in the current region.
   optional bool more_results_in_region = 8;
-  
+
   // This field is filled in if the server is sending back a heartbeat message.
   // Heartbeat messages are sent back to the client to prevent the scanner from
   // timing out. Seeing a heartbeat message communicates to the Client that the
   // server would have continued to scan had the time limit not been reached.
   optional bool heartbeat_message = 9;
-  
+
   // This field is filled in if the client has requested that scan metrics be tracked.
-  // The metrics tracked here are sent back to the client to be tracked together with 
+  // The metrics tracked here are sent back to the client to be tracked together with
   // the existing client side metrics.
-  //optional ScanMetrics scan_metrics = 10; // not in gohbase
+  optional ScanMetrics scan_metrics = 10;
+}
+
+message ScanMetrics {
+    repeated NameInt64Pair metrics = 1;
 }
 
 /**
@@ -476,7 +480,7 @@ service ClientService {
 
   rpc ExecService(CoprocessorServiceRequest)
     returns(CoprocessorServiceResponse);
-    
+
   rpc ExecRegionServerService(CoprocessorServiceRequest)
     returns(CoprocessorServiceResponse);
 

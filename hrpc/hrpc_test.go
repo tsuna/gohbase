@@ -285,6 +285,7 @@ func TestScanToProto(t *testing.T) {
 					Column:        []*pb.Column{},
 					TimeRange:     &pb.TimeRange{},
 				},
+				TrackScanMetrics: proto.Bool(false),
 			},
 		},
 		{ // explicitly set configurable attributes to default values
@@ -317,6 +318,7 @@ func TestScanToProto(t *testing.T) {
 					MaxVersions:   nil,
 					CacheBlocks:   nil,
 				},
+				TrackScanMetrics: proto.Bool(false),
 			},
 		},
 		{ // set configurable attributes to non-default values
@@ -350,6 +352,7 @@ func TestScanToProto(t *testing.T) {
 					MaxVersions: proto.Uint32(89),
 					CacheBlocks: proto.Bool(!DefaultCacheBlocks),
 				},
+				TrackScanMetrics: proto.Bool(false),
 			},
 		},
 		{ // test that pb.ScanRequest.Scan is nil when scanner id is specificed
@@ -374,6 +377,7 @@ func TestScanToProto(t *testing.T) {
 				ClientHandlesPartials:   proto.Bool(true),
 				ClientHandlesHeartbeats: proto.Bool(true),
 				Scan:                    nil,
+				TrackScanMetrics:        proto.Bool(false),
 			},
 		},
 		{ // set reversed attribute
@@ -393,6 +397,7 @@ func TestScanToProto(t *testing.T) {
 					TimeRange:     &pb.TimeRange{},
 					Reversed:      proto.Bool(true),
 				},
+				TrackScanMetrics: proto.Bool(false),
 			},
 		},
 		{ // set scan attribute
@@ -418,6 +423,7 @@ func TestScanToProto(t *testing.T) {
 						{Name: proto.String("key2"), Value: []byte("value2")},
 					},
 				},
+				TrackScanMetrics: proto.Bool(false),
 			},
 		},
 		{ // scan key range
@@ -438,6 +444,7 @@ func TestScanToProto(t *testing.T) {
 					StartRow:      startRow,
 					StopRow:       stopRow,
 				},
+				TrackScanMetrics: proto.Bool(false),
 			},
 		},
 		{ // set filters and families
@@ -459,6 +466,7 @@ func TestScanToProto(t *testing.T) {
 						TimeRange:     &pb.TimeRange{},
 						Filter:        pbFilter,
 					},
+					TrackScanMetrics: proto.Bool(false),
 				}
 			}(),
 		},
@@ -478,7 +486,29 @@ func TestScanToProto(t *testing.T) {
 					Column:        []*pb.Column{},
 					TimeRange:     &pb.TimeRange{},
 				},
+				TrackScanMetrics: proto.Bool(false),
 			},
+		},
+		// set TrackScanMetrics
+		{
+			s: func() *Scan {
+				s, _ := NewScanStr(ctx, "", TrackScanMetrics())
+				return s
+			}(),
+			expProto: func() *pb.ScanRequest {
+				return &pb.ScanRequest{
+					Region:                  rs,
+					NumberOfRows:            proto.Uint32(DefaultNumberOfRows),
+					CloseScanner:            proto.Bool(false),
+					ClientHandlesPartials:   proto.Bool(true),
+					ClientHandlesHeartbeats: proto.Bool(true),
+					Scan: &pb.Scan{
+						MaxResultSize: proto.Uint64(DefaultMaxResultSize),
+						TimeRange:     &pb.TimeRange{},
+					},
+					TrackScanMetrics: proto.Bool(true),
+				}
+			}(),
 		},
 	}
 
