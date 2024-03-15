@@ -88,9 +88,9 @@ var (
 )
 
 const (
-	//DefaultLookupTimeout is the default region lookup timeout
+	// DefaultLookupTimeout is the default region lookup timeout
 	DefaultLookupTimeout = 30 * time.Second
-	//DefaultReadTimeout is the default region read timeout
+	// DefaultReadTimeout is the default region read timeout
 	DefaultReadTimeout = 30 * time.Second
 	// RegionClient is a ClientType that means this will be a normal client
 	RegionClient = ClientType("ClientService")
@@ -346,12 +346,10 @@ func (c *client) processRPCs() {
 	}()
 
 	flush := func(reason string) {
-		if log.GetLevel() == log.DebugLevel {
-			log.WithFields(log.Fields{
-				"len":  m.len(),
-				"addr": c.Addr(),
-			}).Debug("flushing MultiRequest")
-		}
+		log.WithFields(log.Fields{
+			"len":  m.len(),
+			"addr": c.Addr(),
+		}).Debug("flushing MultiRequest")
 
 		flushReasonCount.With(prometheus.Labels{
 			"reason": reason,
