@@ -15,14 +15,14 @@ import (
 
 	gzk "github.com/go-zookeeper/zk"
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
-	"modernc.org/b/v2"
 
 	"github.com/tsuna/gohbase/compression"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
 	"github.com/tsuna/gohbase/zk"
+	"google.golang.org/protobuf/proto"
+	"modernc.org/b/v2"
 )
 
 const (
