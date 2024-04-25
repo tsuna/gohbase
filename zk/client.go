@@ -7,6 +7,7 @@
 package zk
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -58,11 +59,11 @@ type Client interface {
 type client struct {
 	zks            []string
 	sessionTimeout time.Duration
-	dialer         zk.Dialer
+	dialer         func(ctx context.Context, network, addr string) (net.Conn, error)
 }
 
 // NewClient establishes connection to zookeeper and returns the client
-func NewClient(zkquorum string, st time.Duration, dialer zk.Dialer) Client {
+func NewClient(zkquorum string, st time.Duration, dialer func(ctx context.Context, network, addr string) (net.Conn, error)) Client {
 	return &client{
 		zks:            strings.Split(zkquorum, ","),
 		sessionTimeout: st,
@@ -75,7 +76,7 @@ func (c *client) LocateResource(resource ResourceName) (string, error) {
 	var conn *zk.Conn
 	var err error
 	if c.dialer != nil {
-		conn, _, err = zk.Connect(c.zks, c.sessionTimeout, zk.WithDialer(c.dialer))
+		conn, _, err = zk.Connect(c.zks, c.sessionTimeout, zk.WithDialer(makeZKDialer(c.dialer)))
 	} else {
 		conn, _, err = zk.Connect(c.zks, c.sessionTimeout)
 	}
@@ -123,4 +124,12 @@ func (c *client) LocateResource(resource ResourceName) (string, error) {
 		server = master.Master
 	}
 	return net.JoinHostPort(*server.HostName, fmt.Sprint(*server.Port)), nil
+}
+
+func makeZKDialer(ctxDialer func(ctx context.Context, network, addr string) (net.Conn, error)) zk.Dialer {
+	return func(network, addr string, timeout time.Duration) (net.Conn, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		return ctxDialer(ctx, network, addr)
+	}
 }

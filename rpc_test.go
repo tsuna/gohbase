@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"net"
 	"reflect"
 	"strconv"
 	"strings"
@@ -20,7 +21,6 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/prometheus/client_golang/prometheus"
-
 	"github.com/tsuna/gohbase/compression"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
@@ -302,7 +302,7 @@ func TestEstablishRegionDialFail(t *testing.T) {
 
 	newRegionClientFnCallCount := 0
 	c.newRegionClientFn = func(_ string, _ region.ClientType, _ int, _ time.Duration,
-		_ string, _ time.Duration, _ compression.Codec, _ region.Dialer) hrpc.RegionClient {
+		_ string, _ time.Duration, _ compression.Codec, _ func(ctx context.Context, network, addr string) (net.Conn, error)) hrpc.RegionClient {
 		var rc hrpc.RegionClient
 		if newRegionClientFnCallCount == 0 {
 			rc = rcFailDial

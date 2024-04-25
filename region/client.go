@@ -194,7 +194,7 @@ type client struct {
 	compressor *compressor
 
 	// dialer is used to connect to region servers in non-standard ways
-	dialer Dialer
+	dialer func(ctx context.Context, network, addr string) (net.Conn, error)
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine

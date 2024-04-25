@@ -16,7 +16,6 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/internal/observability"
 	"github.com/tsuna/gohbase/region"

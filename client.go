@@ -10,12 +10,11 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
-	gzk "github.com/go-zookeeper/zk"
 	log "github.com/sirupsen/logrus"
-
 	"github.com/tsuna/gohbase/compression"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
@@ -99,15 +98,15 @@ type client struct {
 	closeOnce sync.Once
 
 	newRegionClientFn func(string, region.ClientType, int, time.Duration,
-		string, time.Duration, compression.Codec, region.Dialer) hrpc.RegionClient
+		string, time.Duration, compression.Codec, func(ctx context.Context, network, addr string) (net.Conn, error)) hrpc.RegionClient
 
 	compressionCodec compression.Codec
 
-	// zkDialer is passed through to Zk Connect() to configure custom connection settings
-	zkDialer gzk.Dialer
+	// zkDialer is used in the zkClient to connect to the quorum
+	zkDialer func(ctx context.Context, network, addr string) (net.Conn, error)
 	// regionDialer is passed into the region client to connect to hbase in a custom way,
 	// such as SOCKS proxy.
-	regionDialer region.Dialer
+	regionDialer func(ctx context.Context, network, addr string) (net.Conn, error)
 }
 
 // NewClient creates a new HBase client.
@@ -279,7 +278,7 @@ func CompressionCodec(codec string) Option {
 // ZooKeeperDialer will return an option to pass the given dialer function
 // into the ZooKeeper client Connect() call, which allows for customizing
 // network connections.
-func ZooKeeperDialer(dialer gzk.Dialer) Option {
+func ZooKeeperDialer(dialer func(ctx context.Context, network, addr string) (net.Conn, error)) Option {
 	return func(c *client) {
 		c.zkDialer = dialer
 	}
@@ -287,7 +286,7 @@ func ZooKeeperDialer(dialer gzk.Dialer) Option {
 
 // RegionDialer will return an option that uses the specified Dialer for
 // connecting to region servers. This allows for connecting through proxies.
-func RegionDialer(dialer region.Dialer) Option {
+func RegionDialer(dialer func(ctx context.Context, network, addr string) (net.Conn, error)) Option {
 	return func(c *client) {
 		c.regionDialer = dialer
 	}
