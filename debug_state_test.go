@@ -6,6 +6,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/region"
 )
@@ -25,6 +26,7 @@ func TestDebugStateSanity(t *testing.T) {
 		defaultEffectiveUser,
 		region.DefaultReadTimeout,
 		client.compressionCodec,
+		nil,
 	)
 	newClientFn := func() hrpc.RegionClient {
 		return regClient

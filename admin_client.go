@@ -67,7 +67,7 @@ func newAdminClient(zkquorum string, options ...Option) AdminClient {
 	for _, option := range options {
 		option(c)
 	}
-	c.zkClient = zk.NewClient(zkquorum, c.zkTimeout)
+	c.zkClient = zk.NewClient(zkquorum, c.zkTimeout, c.zkDialer)
 	return c
 }
 

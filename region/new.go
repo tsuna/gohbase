@@ -20,7 +20,8 @@ import (
 
 // NewClient creates a new RegionClient.
 func NewClient(addr string, ctype ClientType, queueSize int, flushInterval time.Duration,
-	effectiveUser string, readTimeout time.Duration, codec compression.Codec) hrpc.RegionClient {
+	effectiveUser string, readTimeout time.Duration, codec compression.Codec,
+	dialer func(ctx context.Context, network, addr string) (net.Conn, error)) hrpc.RegionClient {
 	c := &client{
 		addr:          addr,
 		ctype:         ctype,
@@ -36,14 +37,21 @@ func NewClient(addr string, ctype ClientType, queueSize int, flushInterval time.
 	if codec != nil {
 		c.compressor = &compressor{Codec: codec}
 	}
+
+	if dialer != nil {
+		c.dialer = dialer
+	} else {
+		var d net.Dialer
+		c.dialer = d.DialContext
+	}
+
 	return c
 }
 
 func (c *client) Dial(ctx context.Context) error {
 	c.dialOnce.Do(func() {
-		var d net.Dialer
 		var err error
-		c.conn, err = d.DialContext(ctx, "tcp", c.addr)
+		c.conn, err = c.dialer(ctx, "tcp", c.addr)
 		if err != nil {
 			c.fail(fmt.Errorf("failed to dial RegionServer: %s", err))
 			return
