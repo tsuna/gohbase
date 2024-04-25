@@ -16,13 +16,13 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"go.opentelemetry.io/otel/codes"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/internal/observability"
 	"github.com/tsuna/gohbase/region"
 	"github.com/tsuna/gohbase/zk"
+	"go.opentelemetry.io/otel/codes"
+	"google.golang.org/protobuf/proto"
 )
 
 // Constants
