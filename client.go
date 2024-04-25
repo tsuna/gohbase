@@ -98,7 +98,8 @@ type client struct {
 	closeOnce sync.Once
 
 	newRegionClientFn func(string, region.ClientType, int, time.Duration,
-		string, time.Duration, compression.Codec, func(ctx context.Context, network, addr string) (net.Conn, error)) hrpc.RegionClient
+		string, time.Duration, compression.Codec,
+		func(ctx context.Context, network, addr string) (net.Conn, error)) hrpc.RegionClient
 
 	compressionCodec compression.Codec
 
@@ -278,7 +279,8 @@ func CompressionCodec(codec string) Option {
 // ZooKeeperDialer will return an option to pass the given dialer function
 // into the ZooKeeper client Connect() call, which allows for customizing
 // network connections.
-func ZooKeeperDialer(dialer func(ctx context.Context, network, addr string) (net.Conn, error)) Option {
+func ZooKeeperDialer(dialer func(
+	ctx context.Context, network, addr string) (net.Conn, error)) Option {
 	return func(c *client) {
 		c.zkDialer = dialer
 	}
@@ -286,7 +288,8 @@ func ZooKeeperDialer(dialer func(ctx context.Context, network, addr string) (net
 
 // RegionDialer will return an option that uses the specified Dialer for
 // connecting to region servers. This allows for connecting through proxies.
-func RegionDialer(dialer func(ctx context.Context, network, addr string) (net.Conn, error)) Option {
+func RegionDialer(dialer func(
+	ctx context.Context, network, addr string) (net.Conn, error)) Option {
 	return func(c *client) {
 		c.regionDialer = dialer
 	}

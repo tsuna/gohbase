@@ -302,7 +302,8 @@ func TestEstablishRegionDialFail(t *testing.T) {
 
 	newRegionClientFnCallCount := 0
 	c.newRegionClientFn = func(_ string, _ region.ClientType, _ int, _ time.Duration,
-		_ string, _ time.Duration, _ compression.Codec, _ func(ctx context.Context, network, addr string) (net.Conn, error)) hrpc.RegionClient {
+		_ string, _ time.Duration, _ compression.Codec,
+		_ func(ctx context.Context, network, addr string) (net.Conn, error)) hrpc.RegionClient {
 		var rc hrpc.RegionClient
 		if newRegionClientFnCallCount == 0 {
 			rc = rcFailDial

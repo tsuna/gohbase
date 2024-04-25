@@ -63,7 +63,8 @@ type client struct {
 }
 
 // NewClient establishes connection to zookeeper and returns the client
-func NewClient(zkquorum string, st time.Duration, dialer func(ctx context.Context, network, addr string) (net.Conn, error)) Client {
+func NewClient(zkquorum string, st time.Duration,
+	dialer func(ctx context.Context, network, addr string) (net.Conn, error)) Client {
 	return &client{
 		zks:            strings.Split(zkquorum, ","),
 		sessionTimeout: st,
@@ -126,7 +127,8 @@ func (c *client) LocateResource(resource ResourceName) (string, error) {
 	return net.JoinHostPort(*server.HostName, fmt.Sprint(*server.Port)), nil
 }
 
-func makeZKDialer(ctxDialer func(ctx context.Context, network, addr string) (net.Conn, error)) zk.Dialer {
+func makeZKDialer(ctxDialer func(
+	ctx context.Context, network, addr string) (net.Conn, error)) zk.Dialer {
 	return func(network, addr string, timeout time.Duration) (net.Conn, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
