@@ -17,8 +17,9 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/go-zookeeper/zk"
-	"github.com/tsuna/gohbase/pb"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/tsuna/gohbase/pb"
 )
 
 type logger struct{}
@@ -58,19 +59,27 @@ type Client interface {
 type client struct {
 	zks            []string
 	sessionTimeout time.Duration
+	dialer         zk.Dialer
 }
 
 // NewClient establishes connection to zookeeper and returns the client
-func NewClient(zkquorum string, st time.Duration) Client {
+func NewClient(zkquorum string, st time.Duration, dialer zk.Dialer) Client {
 	return &client{
 		zks:            strings.Split(zkquorum, ","),
 		sessionTimeout: st,
+		dialer:         dialer,
 	}
 }
 
 // LocateResource returns address of the server for the specified resource.
 func (c *client) LocateResource(resource ResourceName) (string, error) {
-	conn, _, err := zk.Connect(c.zks, c.sessionTimeout)
+	var conn *zk.Conn
+	var err error
+	if c.dialer != nil {
+		conn, _, err = zk.Connect(c.zks, c.sessionTimeout, zk.WithDialer(c.dialer))
+	} else {
+		conn, _, err = zk.Connect(c.zks, c.sessionTimeout)
+	}
 	if err != nil {
 		return "", fmt.Errorf("error connecting to ZooKeeper at %v: %s", c.zks, err)
 	}

@@ -22,10 +22,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/tsuna/gohbase/hrpc"
-	"github.com/tsuna/gohbase/pb"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/tsuna/gohbase/hrpc"
+	"github.com/tsuna/gohbase/pb"
 )
 
 // ClientType is a type alias to represent the type of this region client
@@ -192,6 +193,9 @@ type client struct {
 
 	// compressor for cellblocks. if nil, then no compression
 	compressor *compressor
+
+	// dialer is used to connect to region servers in non-standard ways
+	dialer Dialer
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine

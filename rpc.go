@@ -16,12 +16,13 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/codes"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/internal/observability"
 	"github.com/tsuna/gohbase/region"
 	"github.com/tsuna/gohbase/zk"
-	"go.opentelemetry.io/otel/codes"
-	"google.golang.org/protobuf/proto"
 )
 
 // Constants
@@ -828,11 +829,11 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 			// master that we don't add to the cache
 			// TODO: consider combining this case with the regular regionserver path
 			client = c.newRegionClientFn(addr, c.clientType, c.rpcQueueSize, c.flushInterval,
-				c.effectiveUser, c.regionReadTimeout, nil)
+				c.effectiveUser, c.regionReadTimeout, nil, c.regionDialer)
 		} else {
 			client = c.clients.put(addr, reg, func() hrpc.RegionClient {
 				return c.newRegionClientFn(addr, c.clientType, c.rpcQueueSize, c.flushInterval,
-					c.effectiveUser, c.regionReadTimeout, c.compressionCodec)
+					c.effectiveUser, c.regionReadTimeout, c.compressionCodec, c.regionDialer)
 			})
 		}
 

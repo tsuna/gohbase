@@ -13,11 +13,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/tsuna/gohbase/compression"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
-	"google.golang.org/protobuf/proto"
 )
 
 type testClient struct {
@@ -177,7 +178,7 @@ func init() {
 
 func newMockRegionClient(addr string, ctype region.ClientType, queueSize int,
 	flushInterval time.Duration, effectiveUser string,
-	readTimeout time.Duration, codec compression.Codec) hrpc.RegionClient {
+	readTimeout time.Duration, codec compression.Codec, dialer region.Dialer) hrpc.RegionClient {
 	m.Lock()
 	clients[addr]++
 	m.Unlock()

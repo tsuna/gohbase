@@ -12,6 +12,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
@@ -67,7 +68,7 @@ func newAdminClient(zkquorum string, options ...Option) AdminClient {
 	for _, option := range options {
 		option(c)
 	}
-	c.zkClient = zk.NewClient(zkquorum, c.zkTimeout)
+	c.zkClient = zk.NewClient(zkquorum, c.zkTimeout, c.zkDialer)
 	return c
 }
 

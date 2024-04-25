@@ -20,6 +20,10 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/prometheus/client_golang/prometheus"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/wrapperspb"
+	"modernc.org/b/v2"
+
 	"github.com/tsuna/gohbase/compression"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
@@ -29,15 +33,12 @@ import (
 	mockRegion "github.com/tsuna/gohbase/test/mock/region"
 	mockZk "github.com/tsuna/gohbase/test/mock/zk"
 	"github.com/tsuna/gohbase/zk"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/wrapperspb"
-	"modernc.org/b/v2"
 )
 
 func newRegionClientFn(addr string) func() hrpc.RegionClient {
 	return func() hrpc.RegionClient {
 		return newMockRegionClient(addr, region.RegionClient,
-			0, 0, "root", region.DefaultReadTimeout, nil)
+			0, 0, "root", region.DefaultReadTimeout, nil, nil)
 	}
 }
 
@@ -301,7 +302,7 @@ func TestEstablishRegionDialFail(t *testing.T) {
 
 	newRegionClientFnCallCount := 0
 	c.newRegionClientFn = func(_ string, _ region.ClientType, _ int, _ time.Duration,
-		_ string, _ time.Duration, _ compression.Codec) hrpc.RegionClient {
+		_ string, _ time.Duration, _ compression.Codec, _ region.Dialer) hrpc.RegionClient {
 		var rc hrpc.RegionClient
 		if newRegionClientFnCallCount == 0 {
 			rc = rcFailDial
