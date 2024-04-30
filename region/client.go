@@ -158,7 +158,8 @@ func (e NotServingRegionError) Error() string {
 
 // client manages a connection to a RegionServer.
 type client struct {
-	conn net.Conn
+	connM sync.Mutex
+	conn  net.Conn
 
 	// Address of the RegionServer.
 	addr  string
@@ -784,9 +785,12 @@ func (c *client) MarshalJSON() ([]byte, error) {
 
 	// if conn is nil then we don't want to panic. So just get the addresses if conn is not nil
 	var localAddr, remoteAddr Address
-	if c.conn != nil {
-		localAddress := c.conn.LocalAddr()
-		remoteAddress := c.conn.RemoteAddr()
+	c.connM.Lock()
+	conn := c.conn
+	c.connM.Unlock()
+	if conn != nil {
+		localAddress := conn.LocalAddr()
+		remoteAddress := conn.RemoteAddr()
 		localAddr = Address{localAddress.Network(), localAddress.String()}
 		remoteAddr = Address{remoteAddress.Network(), remoteAddress.String()}
 	}
@@ -805,7 +809,7 @@ func (c *client) MarshalJSON() ([]byte, error) {
 		RegionServerAddress:     c.addr,
 		ClientType:              c.ctype,
 		InFlight:                inFlight,
-		Id:                      c.id,
+		Id:                      atomic.LoadUint32(&c.id),
 		Done_status:             done_status,
 	}
 

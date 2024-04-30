@@ -43,6 +43,7 @@ type Client interface {
 	CheckAndPut(p *hrpc.Mutate, family string, qualifier string,
 		expectedValue []byte) (bool, error)
 	SendBatch(ctx context.Context, batch []hrpc.Call) (res []hrpc.RPCResult, allOK bool)
+	CacheRegions(table []byte) error
 	Close()
 }
 
@@ -390,4 +391,11 @@ func (c *client) CheckAndPut(p *hrpc.Mutate, family string,
 	}
 
 	return r.GetProcessed(), nil
+}
+
+// CacheRegions scan the meta region to get all the regions and populate to cache.
+// This can be used to warm up region cache
+func (c *client) CacheRegions(table []byte) error {
+	_, err := c.findAllRegions(context.Background(), table)
+	return err
 }

@@ -2374,3 +2374,41 @@ func TestDebugState(t *testing.T) {
 	assert.Equal(t, 1, len(keyRegionCache.(map[string]interface{})))
 	assert.Equal(t, 1, len(clientRegionCache.(map[string]interface{}))) // only have one client
 }
+
+type regionInfoAndAddr struct {
+	regionInfo hrpc.RegionInfo
+	addr       string
+}
+
+// Test loading region cache
+func TestCacheRegions(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+
+	// make sure region cache is empty at startup
+	var jsonUnMarshalStart map[string]interface{}
+	jsonVal, err := gohbase.DebugState(c)
+	err = json.Unmarshal(jsonVal, &jsonUnMarshalStart)
+	if err != nil {
+		t.Fatalf("Encoutered eror when Unmarshalling: %v", err)
+	}
+	cacheLength := len(jsonUnMarshalStart["KeyRegionCache"].(map[string]interface{}))
+	if cacheLength != 0 {
+		t.Fatal("expected empty region cache when creating a new client")
+	}
+
+	c.CacheRegions([]byte(table))
+
+	var jsonUnMarshalCached map[string]interface{}
+	jsonVal, err = gohbase.DebugState(c)
+	err = json.Unmarshal(jsonVal, &jsonUnMarshalCached)
+	if err != nil {
+		t.Fatalf("Encoutered eror when Unmarshalling: %v", err)
+	}
+	// CreateTable init function starts hbase with 4 regions
+	cacheLength = len(jsonUnMarshalCached["KeyRegionCache"].(map[string]interface{}))
+	if cacheLength != 4 {
+		t.Fatalf("Expect 4 regions but got: %v", cacheLength)
+	}
+
+}
