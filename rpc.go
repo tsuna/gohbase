@@ -24,6 +24,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+type regionInfoAndAddr struct {
+	regionInfo hrpc.RegionInfo
+	addr       string
+}
+
 // Constants
 var (
 	// Name of the meta region.
@@ -554,6 +559,85 @@ func (c *client) lookupRegion(ctx context.Context,
 	}
 }
 
+func (c *client) lookupAllRegions(ctx context.Context,
+	table []byte) ([]regionInfoAndAddr, error) {
+	var regs []regionInfoAndAddr
+	var err error
+	backoff := backoffStart
+	for {
+		// If it takes longer than regionLookupTimeout, fail so that we can sleep
+		lookupCtx, cancel := context.WithTimeout(ctx, c.regionLookupTimeout)
+		log.WithFields(log.Fields{
+			"table": strconv.Quote(string(table)),
+		}).Debug("looking up regions")
+
+		regs, err = c.metaLookupForTable(lookupCtx, table)
+		cancel()
+		if err == TableNotFound {
+			log.WithFields(log.Fields{
+				"table": strconv.Quote(string(table)),
+				"err":   err,
+			}).Debug("hbase:meta does not know about this table")
+
+			return nil, err
+		} else if err == ErrClientClosed {
+			return nil, err
+		}
+
+		if err == nil {
+			log.WithFields(log.Fields{
+				"table":          strconv.Quote(string(table)),
+				"regionsAndAddr": regs,
+			}).Debug("looked up all regions")
+
+			return regs, nil
+		}
+
+		log.WithFields(log.Fields{
+			"table":   strconv.Quote(string(table)),
+			"backoff": backoff,
+			"err":     err,
+		}).Error("failed looking up regions")
+
+		// This will be hit if there was an error locating the region
+		backoff, err = sleepAndIncreaseBackoff(ctx, backoff)
+		if err != nil {
+			return nil, err
+		}
+	}
+}
+
+func (c *client) findAllRegions(ctx context.Context, table []byte) ([]regionInfoAndAddr, error) {
+	regs, err := c.lookupAllRegions(ctx, table)
+	if err != nil {
+		return nil, err
+	}
+	for _, regaddr := range regs {
+		reg, addr := regaddr.regionInfo, regaddr.addr
+		reg.MarkUnavailable()
+
+		if reg != c.metaRegionInfo && reg != c.adminRegionInfo {
+			// Check that the region wasn't added to
+			// the cache while we were looking it up.
+			overlaps, replaced := c.regions.put(reg)
+			if !replaced {
+				// the same or younger regions are already in cache
+				continue
+			}
+
+			// otherwise, new region in cache, delete overlaps from client's cache
+			for _, r := range overlaps {
+				c.clients.del(r)
+			}
+		}
+
+		// Start a goroutine to connect to the region
+		go c.establishRegion(reg, addr)
+	}
+
+	return regs, nil
+}
+
 func (c *client) findRegion(ctx context.Context, table, key []byte) (hrpc.RegionInfo, error) {
 	// The region was not in the cache, it
 	// must be looked up in the meta table
@@ -676,6 +760,52 @@ func (c *client) metaLookup(ctx context.Context,
 			"  Looked up table=%q key=%q got region=%s", table, key, reg)
 	}
 	return reg, addr, nil
+}
+
+// Creates the META key to search for all regions
+func createAllRegionSearchKey(table []byte) []byte {
+	metaKey := make([]byte, 0, len(table)+1)
+	metaKey = append(metaKey, table...)
+	// '.' is the first byte greater than ','.  Meta table entry has
+	// the format table,key,timestamp. By adding '.' to the stop row
+	// we scan all keys for table
+	metaKey = append(metaKey, '.')
+	return metaKey
+}
+
+// metaLookupForTable checks meta table for all the region in which the given table is.
+func (c *client) metaLookupForTable(ctx context.Context,
+	table []byte) ([]regionInfoAndAddr, error) {
+	metaKey := createAllRegionSearchKey(table)
+	rpc, err := hrpc.NewScanRange(ctx, metaTableName, table, metaKey,
+		hrpc.Families(infoFamily))
+	if err != nil {
+		return nil, err
+	}
+
+	var regions []regionInfoAndAddr
+	scanner := c.Scan(rpc)
+	for {
+		resp, err := scanner.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		reg, addr, err := region.ParseRegionInfo(resp)
+		if err != nil {
+			return nil, err
+		}
+
+		regions = append(regions, regionInfoAndAddr{regionInfo: reg, addr: addr})
+	}
+
+	if len(regions) == 0 {
+		return nil, TableNotFound
+	}
+	return regions, nil
 }
 
 func fullyQualifiedTable(reg hrpc.RegionInfo) []byte {

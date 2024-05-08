@@ -384,7 +384,7 @@ func (i *info) MarshalJSON() ([]byte, error) {
 		StopKey:         string(i.stopKey),
 		ContextInstance: fmt.Sprintf("%p", (i.ctx)),
 		Err:             ctxError,
-		Client:          fmt.Sprintf("%p", (i.client)),
+		Client:          fmt.Sprintf("%p", (i.Client())),
 		Available:       !i.IsUnavailable(),
 	}
 	jsonVal, err := json.Marshal(state)

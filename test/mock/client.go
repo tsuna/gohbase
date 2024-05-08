@@ -50,6 +50,20 @@ func (mr *MockClientMockRecorder) Append(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Append", reflect.TypeOf((*MockClient)(nil).Append), arg0)
 }
 
+// CacheRegions mocks base method.
+func (m *MockClient) CacheRegions(arg0 []byte) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CacheRegions", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CacheRegions indicates an expected call of CacheRegions.
+func (mr *MockClientMockRecorder) CacheRegions(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CacheRegions", reflect.TypeOf((*MockClient)(nil).CacheRegions), arg0)
+}
+
 // CheckAndPut mocks base method.
 func (m *MockClient) CheckAndPut(arg0 *hrpc.Mutate, arg1, arg2 string, arg3 []byte) (bool, error) {
 	m.ctrl.T.Helper()

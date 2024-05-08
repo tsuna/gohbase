@@ -50,12 +50,15 @@ func NewClient(addr string, ctype ClientType, queueSize int, flushInterval time.
 
 func (c *client) Dial(ctx context.Context) error {
 	c.dialOnce.Do(func() {
-		var err error
-		c.conn, err = c.dialer(ctx, "tcp", c.addr)
+		conn, err := c.dialer(ctx, "tcp", c.addr)
 		if err != nil {
 			c.fail(fmt.Errorf("failed to dial RegionServer: %s", err))
 			return
 		}
+
+		c.connM.Lock()
+		c.conn = conn
+		c.connM.Unlock()
 
 		// time out send hello if it take long
 		if deadline, ok := ctx.Deadline(); ok {

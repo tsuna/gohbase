@@ -702,6 +702,20 @@ func TestMetaLookupCanceledContext(t *testing.T) {
 	}
 }
 
+func TestMetaLookupAllRegionsCanceledContext(t *testing.T) {
+	c := newMockClient(nil)
+	// pretend regionserver:0 has meta table
+	rc := c.clients.put("regionserver:0", c.metaRegionInfo, newRegionClientFn("regionserver:0"))
+	c.metaRegionInfo.SetClient(rc)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := c.metaLookupForTable(ctx, []byte("tablenotfound"))
+	if err != context.Canceled {
+		t.Errorf("Expected error %v, got error %v", context.Canceled, err)
+	}
+}
+
 func TestConcurrentRetryableError(t *testing.T) {
 	ctrl := test.NewController(t)
 	defer ctrl.Finish()
