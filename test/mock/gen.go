@@ -6,7 +6,7 @@
 package mock
 
 // To run this command, mockgen need to be installed, by running
-//    go install github.com/golang/mock/mockgen@v1.6.0
+//    go install go.uber.org/mock/mockgen@v0.4.0
 // then run 'go generate' to auto-generate mock_client.
 
 //go:generate mockgen -destination=client.go -package=mock github.com/tsuna/gohbase Client
