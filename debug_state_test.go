@@ -2,6 +2,7 @@ package gohbase
 
 import (
 	"encoding/json"
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,6 +28,7 @@ func TestDebugStateSanity(t *testing.T) {
 		region.DefaultReadTimeout,
 		client.compressionCodec,
 		nil,
+		slog.Default(),
 	)
 	newClientFn := func() hrpc.RegionClient {
 		return regClient

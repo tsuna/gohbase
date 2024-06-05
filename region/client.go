@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"strings"
 	"sync"
@@ -20,7 +21,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
@@ -193,6 +193,8 @@ type client struct {
 
 	// dialer is used to connect to region servers in non-standard ways
 	dialer func(ctx context.Context, network, addr string) (net.Conn, error)
+
+	logger *slog.Logger
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine
@@ -280,10 +282,7 @@ func (c *client) inFlightDown() error {
 func (c *client) fail(err error) {
 	c.failOnce.Do(func() {
 		if err != ErrClientClosed {
-			log.WithFields(log.Fields{
-				"client": c,
-				"err":    err,
-			}).Error("error occured, closing region client")
+			c.logger.Error("error occured, closing region client", "client", c, "err", err)
 		}
 
 		// we don't close c.rpcs channel to make it block in select of QueueRPC
@@ -311,10 +310,7 @@ func (c *client) failSentRPCs() {
 	c.sent = make(map[uint32]hrpc.Call)
 	c.sentM.Unlock()
 
-	log.WithFields(log.Fields{
-		"client": c,
-		"count":  len(sent),
-	}).Debug("failing awaiting RPCs")
+	c.logger.Debug("failing awaiting RPCs", "client", c, "count", len(sent))
 
 	// send error to awaiting rpcs
 	for _, rpc := range sent {
@@ -347,12 +343,7 @@ func (c *client) processRPCs() {
 	}()
 
 	flush := func(reason string) {
-		if log.GetLevel() == log.DebugLevel {
-			log.WithFields(log.Fields{
-				"len":  m.len(),
-				"addr": c.Addr(),
-			}).Debug("flushing MultiRequest")
-		}
+		c.logger.Debug("flushing MultiRequest", "len", m.len(), "addr", c.Addr())
 
 		flushReasonCount.With(prometheus.Labels{
 			"reason": reason,

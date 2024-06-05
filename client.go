@@ -10,11 +10,11 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"sync"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/tsuna/gohbase/compression"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
@@ -100,7 +100,8 @@ type client struct {
 
 	newRegionClientFn func(string, region.ClientType, int, time.Duration,
 		string, time.Duration, compression.Codec,
-		func(ctx context.Context, network, addr string) (net.Conn, error)) hrpc.RegionClient
+		func(ctx context.Context, network, addr string) (net.Conn, error),
+		*slog.Logger) hrpc.RegionClient
 
 	compressionCodec compression.Codec
 
@@ -109,6 +110,8 @@ type client struct {
 	// regionDialer is passed into the region client to connect to hbase in a custom way,
 	// such as SOCKS proxy.
 	regionDialer func(ctx context.Context, network, addr string) (net.Conn, error)
+	// logger that could be defined by user
+	logger *slog.Logger
 }
 
 // NewClient creates a new HBase client.
@@ -117,15 +120,8 @@ func NewClient(zkquorum string, options ...Option) Client {
 }
 
 func newClient(zkquorum string, options ...Option) *client {
-	log.WithFields(log.Fields{
-		"Host": zkquorum,
-	}).Debug("Creating new client.")
 	c := &client{
-		clientType: region.RegionClient,
-		regions:    keyRegionCache{regions: b.TreeNew[[]byte, hrpc.RegionInfo](region.Compare)},
-		clients: clientRegionCache{
-			regions: make(map[hrpc.RegionClient]map[hrpc.RegionInfo]struct{}),
-		},
+		clientType:    region.RegionClient,
 		rpcQueueSize:  defaultRPCQueueSize,
 		flushInterval: defaultFlushInterval,
 		metaRegionInfo: region.NewInfo(
@@ -142,24 +138,38 @@ func newClient(zkquorum string, options ...Option) *client {
 		regionReadTimeout:   region.DefaultReadTimeout,
 		done:                make(chan struct{}),
 		newRegionClientFn:   region.NewClient,
+		logger:              slog.Default(),
 	}
 	for _, option := range options {
 		option(c)
 	}
+	c.logger.Debug("Creating new client.", "Host", slog.StringValue(zkquorum))
 
 	//Have to create the zkClient after the Options have been set
 	//since the zkTimeout could be changed as an option
-	c.zkClient = zk.NewClient(zkquorum, c.zkTimeout, c.zkDialer)
+	c.zkClient = zk.NewClient(zkquorum, c.zkTimeout, c.zkDialer, c.logger)
+	c.regions = keyRegionCache{
+		logger:  c.logger,
+		regions: b.TreeNew[[]byte, hrpc.RegionInfo](region.Compare),
+	}
+	c.clients = clientRegionCache{
+		logger:  c.logger,
+		regions: make(map[hrpc.RegionClient]map[hrpc.RegionInfo]struct{}),
+	}
 
 	return c
 }
 
 // DebugState information about the clients keyRegionCache, and clientRegionCache
-func DebugState(client Client) ([]byte, error) {
+func DebugState(c Client) ([]byte, error) {
 
-	debugInfoJson, err := json.Marshal(client)
+	debugInfoJson, err := json.Marshal(c)
 	if err != nil {
-		log.Errorf("Cannot turn client into JSON bytes array: %v", err)
+		if cclient, ok := c.(*client); ok {
+			cclient.logger.Error("Cannot turn client into JSON bytes array", "error", err)
+		} else {
+			slog.Error("Cannot turn client into JSON bytes array", "error", err)
+		}
 	}
 	return debugInfoJson, err
 }
@@ -293,6 +303,13 @@ func RegionDialer(dialer func(
 	ctx context.Context, network, addr string) (net.Conn, error)) Option {
 	return func(c *client) {
 		c.regionDialer = dialer
+	}
+}
+
+// Logger will return an option to set *slog.Logger instance
+func Logger(logger *slog.Logger) Option {
+	return func(c *client) {
+		c.logger = logger
 	}
 }
 

@@ -9,9 +9,9 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log/slog"
 	"sync"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/tsuna/gohbase/hrpc"
 	"modernc.org/b/v2"
 )
@@ -19,7 +19,8 @@ import (
 // clientRegionCache is client -> region cache. Used to quickly
 // look up all the regioninfos that map to a specific client
 type clientRegionCache struct {
-	m sync.RWMutex
+	m      sync.RWMutex
+	logger *slog.Logger
 
 	regions map[hrpc.RegionClient]map[hrpc.RegionInfo]struct{}
 }
@@ -42,19 +43,17 @@ func (rcc *clientRegionCache) put(addr string, r hrpc.RegionInfo,
 			}
 			rcc.m.Unlock()
 
-			log.WithFields(log.Fields{
-				"client": existingClient,
-			}).Debug("region client is already in client's cache")
+			rcc.logger.Debug("region client is already in client's cache", "client", existingClient)
 			return existingClient
 		}
 	}
 
 	// no such client yet
 	c := newClient()
-	rcc.regions[c] = map[hrpc.RegionInfo]struct{}{r: struct{}{}}
+	rcc.regions[c] = map[hrpc.RegionInfo]struct{}{r: {}}
 	rcc.m.Unlock()
 
-	log.WithField("client", c).Info("added new region client")
+	rcc.logger.Info("added new region client", "client", c)
 	return c
 }
 
@@ -88,7 +87,7 @@ func (rcc *clientRegionCache) clientDown(c hrpc.RegionClient) map[hrpc.RegionInf
 	rcc.m.Unlock()
 
 	if ok {
-		log.WithField("client", c).Info("removed region client")
+		rcc.logger.Info("removed region client", "client", c)
 	}
 	return downregions
 }
@@ -125,7 +124,8 @@ func (rcc *clientRegionCache) debugInfo(
 
 // key -> region cache.
 type keyRegionCache struct {
-	m sync.RWMutex
+	m      sync.RWMutex
+	logger *slog.Logger
 
 	// Maps a []byte of a region start key to a hrpc.RegionInfo
 	regions *b.Tree[[]byte, hrpc.RegionInfo]
@@ -137,8 +137,7 @@ func (krc *keyRegionCache) get(key []byte) ([]byte, hrpc.RegionInfo) {
 	enum, ok := krc.regions.Seek(key)
 	if ok {
 		krc.m.RUnlock()
-		log.Fatalf("WTF: got exact match for region search key %q", key)
-		return nil, nil
+		panic(fmt.Errorf("WTF: got exact match for region search key %q", key))
 	}
 	k, v, err := enum.Prev()
 	enum.Close()
@@ -204,7 +203,7 @@ func (krc *keyRegionCache) getOverlaps(reg hrpc.RegionInfo) []hrpc.RegionInfo {
 	key := createRegionSearchKey(fullyQualifiedTable(reg), reg.StartKey())
 	enum, ok := krc.regions.Seek(key)
 	if ok {
-		log.Fatalf("WTF: found a region with exact name as the search key %q", key)
+		panic(fmt.Errorf("WTF: found a region with exact name as the search key %q", key))
 	}
 
 	// case 1: landed before the first region in cache
@@ -229,15 +228,15 @@ func (krc *keyRegionCache) getOverlaps(reg hrpc.RegionInfo) []hrpc.RegionInfo {
 		enum.Close()
 		enum, err = krc.regions.SeekFirst()
 		if err != nil {
-			log.Fatalf(
-				"error seeking first region when getting overlaps for region %v: %v", reg, err)
+			panic(fmt.Errorf(
+				"error seeking first region when getting overlaps for region %v: %v", reg, err))
 		}
 	}
 
 	_, v, err = enum.Next()
 	if err != nil {
-		log.Fatalf(
-			"error accessing first region when getting overlaps for region %v: %v", reg, err)
+		panic(fmt.Errorf(
+			"error accessing first region when getting overlaps for region %v: %v", reg, err))
 	}
 	if isRegionOverlap(v, reg) {
 		overlaps = append(overlaps, v)
@@ -294,11 +293,8 @@ func (krc *keyRegionCache) put(reg hrpc.RegionInfo) (overlaps []hrpc.RegionInfo,
 		return reg, true
 	})
 	if !replaced {
-		log.WithFields(log.Fields{
-			"region":   reg,
-			"overlaps": overlaps,
-			"replaced": replaced,
-		}).Debug("region is already in cache")
+		krc.logger.Debug("region is already in cache",
+			"region", reg, "overlaps", overlaps, "replaced", replaced)
 		return
 	}
 	// delete overlapping regions
@@ -310,11 +306,8 @@ func (krc *keyRegionCache) put(reg hrpc.RegionInfo) (overlaps []hrpc.RegionInfo,
 		o.MarkDead()
 	}
 
-	log.WithFields(log.Fields{
-		"region":   reg,
-		"overlaps": overlaps,
-		"replaced": replaced,
-	}).Info("added new region")
+	krc.logger.Info("added new region",
+		"region", reg, "overlaps", overlaps, "replaced", replaced)
 	return
 }
 
@@ -328,8 +321,6 @@ func (krc *keyRegionCache) del(reg hrpc.RegionInfo) bool {
 	if success {
 		cachedRegionTotal.Dec()
 	}
-	log.WithFields(log.Fields{
-		"region": reg,
-	}).Debug("removed region")
+	krc.logger.Debug("removed region", "region", reg)
 	return success
 }

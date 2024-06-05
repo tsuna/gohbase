@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand"
 	"net"
 	"reflect"
@@ -38,15 +39,19 @@ import (
 func newRegionClientFn(addr string) func() hrpc.RegionClient {
 	return func() hrpc.RegionClient {
 		return newMockRegionClient(addr, region.RegionClient,
-			0, 0, "root", region.DefaultReadTimeout, nil, nil)
+			0, 0, "root", region.DefaultReadTimeout, nil, nil, slog.Default())
 	}
 }
 
 func newMockClient(zkClient zk.Client) *client {
 	return &client{
 		clientType: region.RegionClient,
-		regions:    keyRegionCache{regions: b.TreeNew[[]byte, hrpc.RegionInfo](region.Compare)},
+		regions: keyRegionCache{
+			logger:  slog.Default(),
+			regions: b.TreeNew[[]byte, hrpc.RegionInfo](region.Compare),
+		},
 		clients: clientRegionCache{
+			logger:  slog.Default(),
 			regions: make(map[hrpc.RegionClient]map[hrpc.RegionInfo]struct{}),
 		},
 		rpcQueueSize:  defaultRPCQueueSize,
@@ -58,6 +63,7 @@ func newMockClient(zkClient zk.Client) *client {
 		regionLookupTimeout: region.DefaultLookupTimeout,
 		regionReadTimeout:   region.DefaultReadTimeout,
 		newRegionClientFn:   newMockRegionClient,
+		logger:              slog.Default(),
 	}
 }
 
@@ -303,7 +309,8 @@ func TestEstablishRegionDialFail(t *testing.T) {
 	newRegionClientFnCallCount := 0
 	c.newRegionClientFn = func(_ string, _ region.ClientType, _ int, _ time.Duration,
 		_ string, _ time.Duration, _ compression.Codec,
-		_ func(ctx context.Context, network, addr string) (net.Conn, error)) hrpc.RegionClient {
+		_ func(ctx context.Context, network, addr string) (net.Conn, error),
+		_ *slog.Logger) hrpc.RegionClient {
 		var rc hrpc.RegionClient
 		if newRegionClientFnCallCount == 0 {
 			rc = rcFailDial

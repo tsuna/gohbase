@@ -9,9 +9,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
@@ -48,9 +48,6 @@ func NewAdminClient(zkquorum string, options ...Option) AdminClient {
 }
 
 func newAdminClient(zkquorum string, options ...Option) AdminClient {
-	log.WithFields(log.Fields{
-		"Host": zkquorum,
-	}).Debug("Creating new admin client.")
 	c := &client{
 		clientType:    region.MasterClient,
 		rpcQueueSize:  defaultRPCQueueSize,
@@ -63,11 +60,13 @@ func newAdminClient(zkquorum string, options ...Option) AdminClient {
 		regionLookupTimeout: region.DefaultLookupTimeout,
 		regionReadTimeout:   region.DefaultReadTimeout,
 		newRegionClientFn:   region.NewClient,
+		logger:              slog.Default(),
 	}
 	for _, option := range options {
 		option(c)
 	}
-	c.zkClient = zk.NewClient(zkquorum, c.zkTimeout, c.zkDialer)
+	c.logger.Debug("Creating new admin client.", "Host", slog.StringValue(zkquorum))
+	c.zkClient = zk.NewClient(zkquorum, c.zkTimeout, c.zkDialer, c.logger)
 	return c
 }
 

@@ -16,6 +16,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"os"
 	"os/exec"
@@ -26,7 +27,6 @@ import (
 	"testing"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/tsuna/gohbase"
 	"github.com/tsuna/gohbase/filter"
@@ -100,7 +100,7 @@ func TestMain(m *testing.M) {
 		panic("Host is not set!")
 	}
 
-	log.SetLevel(log.DebugLevel)
+	slog.SetLogLoggerLevel(slog.LevelDebug)
 
 	ac := gohbase.NewAdminClient(*host)
 

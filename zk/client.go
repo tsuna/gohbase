@@ -10,26 +10,27 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"log/slog"
 	"net"
 	"path"
 	"strings"
 	"time"
-
-	log "github.com/sirupsen/logrus"
 
 	"github.com/go-zookeeper/zk"
 	"github.com/tsuna/gohbase/pb"
 	"google.golang.org/protobuf/proto"
 )
 
-type logger struct{}
+type logger struct {
+	slogger *slog.Logger
+}
 
 func (l *logger) Printf(format string, args ...interface{}) {
-	log.Debugf(format, args...)
+	l.slogger.Debug(fmt.Sprintf(format, args...))
 }
 
 func init() {
-	zk.DefaultLogger = &logger{}
+	zk.DefaultLogger = &logger{slogger: slog.Default()}
 }
 
 // ResourceName is a type alias that is used to represent different resources
@@ -60,15 +61,19 @@ type client struct {
 	zks            []string
 	sessionTimeout time.Duration
 	dialer         func(ctx context.Context, network, addr string) (net.Conn, error)
+	logger         *slog.Logger
 }
 
 // NewClient establishes connection to zookeeper and returns the client
 func NewClient(zkquorum string, st time.Duration,
-	dialer func(ctx context.Context, network, addr string) (net.Conn, error)) Client {
+	dialer func(ctx context.Context, network, addr string) (net.Conn, error),
+	slogger *slog.Logger) Client {
+
 	return &client{
 		zks:            strings.Split(zkquorum, ","),
 		sessionTimeout: st,
 		dialer:         dialer,
+		logger:         slogger,
 	}
 }
 
@@ -91,7 +96,7 @@ func (c *client) LocateResource(resource ResourceName) (string, error) {
 		return "", fmt.Errorf("failed to read the %s znode: %s", resource, err)
 	}
 	if len(buf) == 0 {
-		log.Fatalf("%s was empty!", resource)
+		panic(fmt.Errorf("%s was empty", resource))
 	} else if buf[0] != 0xFF {
 		return "", fmt.Errorf("the first byte of %s was 0x%x, not 0xFF", resource, buf[0])
 	}
