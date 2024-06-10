@@ -1,6 +1,6 @@
 module github.com/tsuna/gohbase
 
-go 1.18
+go 1.22
 
 require (
 	github.com/go-zookeeper/zk v1.0.3
