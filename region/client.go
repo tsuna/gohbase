@@ -658,6 +658,7 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 		return id, err
 	}
 
+	rpcSize.WithLabelValues(c.Addr()).Observe(float64(uint32(len(b)) + cellblocksLen))
 	if cellblocks != nil {
 		bfs := append(net.Buffers{b}, cellblocks...)
 		_, err = bfs.WriteTo(c.conn)

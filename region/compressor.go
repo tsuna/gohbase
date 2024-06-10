@@ -38,9 +38,9 @@ func resizeBufferCap(b []byte, capacity int) []byte {
 		return b
 	}
 
-	l := len(b)
-	b = append(b, make([]byte, capacity-l)...)
-	return b[:l]
+	b2 := make([]byte, capacity)
+	copy(b2, b)
+	return b2[:len(b)]
 }
 
 func (c *compressor) compressCellblocks(cbs net.Buffers, uncompressedLen uint32) []byte {

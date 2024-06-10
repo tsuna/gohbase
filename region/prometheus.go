@@ -29,4 +29,16 @@ var (
 		},
 		[]string{"regionserver"},
 	)
+
+	rpcSize = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "gohbase",
+			Name:      "rpc_size_bytes",
+			Help:      "Number of bytes sent per RPC call to HBase",
+			// >>> [1024*(4**i) for i in range(8)]
+			// [1024, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216]
+			Buckets: prometheus.ExponentialBuckets(1024, 4, 8),
+		},
+		[]string{"regionserver"},
+	)
 )
