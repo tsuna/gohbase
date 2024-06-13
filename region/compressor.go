@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"slices"
 
 	"github.com/tsuna/gohbase/compression"
 )
@@ -23,24 +24,6 @@ func min(x, y uint32) int {
 		return int(x)
 	}
 	return int(y)
-}
-
-func growBuffer(b []byte, sz int) []byte {
-	l := len(b) + sz
-	if l <= cap(b) {
-		return b[:l]
-	}
-	return append(b, make([]byte, sz)...)
-}
-
-func resizeBufferCap(b []byte, capacity int) []byte {
-	if capacity <= cap(b) {
-		return b
-	}
-
-	b2 := make([]byte, capacity)
-	copy(b2, b)
-	return b2[:len(b)]
 }
 
 func (c *compressor) compressCellblocks(cbs net.Buffers, uncompressedLen uint32) []byte {
@@ -62,7 +45,7 @@ func (c *compressor) compressCellblocks(cbs net.Buffers, uncompressedLen uint32)
 
 		// grow for chunk length
 		lenOffset = len(b)
-		b = growBuffer(b, 4)
+		b = append(b, make([]byte, 4)...)
 
 		b, chunkLen = c.Encode(uncompressedBuffer[:n], b)
 
@@ -122,7 +105,7 @@ func (c *compressor) decompressCellblocks(b []byte) ([]byte, error) {
 			return nil, fmt.Errorf("failed to read uncompressed block length: %w", err)
 		}
 
-		out = resizeBufferCap(out, len(out)+int(uncompressedBlockLen))
+		out = slices.Grow(out, int(uncompressedBlockLen))
 
 		// read and decompress encoded chunks until whole block is read
 		var uncompressedSoFar uint32

@@ -108,10 +108,7 @@ func newBuffer(size int) []byte {
 	if v != nil {
 		b = v.([]byte)
 	}
-	if cap(b) < size {
-		return append(b[:0], make([]byte, size)...)[:size]
-	}
-	return b[:size]
+	return append(b[:0], make([]byte, size)...)
 }
 
 func freeBuffer(b []byte) {
