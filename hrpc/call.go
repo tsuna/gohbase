@@ -259,12 +259,12 @@ type Result struct {
 	Cells   []*Cell
 	Stale   bool
 	Partial bool
-	// Exists is only set if existance_only was set in the request query.
+	// Exists is only set if existence_only was set in the request query.
 	Exists *bool
 }
 
 func (c *Result) String() string {
-	return fmt.Sprintf("cells:%v stale:%v partial:%v exists:%v ",
+	return fmt.Sprintf("cells:%v stale:%v partial:%v exists:%v",
 		c.Cells, c.Stale, c.Partial, c.Exists)
 }
 

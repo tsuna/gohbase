@@ -18,7 +18,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const noScannerID = math.MaxUint64
+const (
+	noScannerID = math.MaxUint64
+
+	rowsScanned  = "ROWS_SCANNED"
+	rowsFiltered = "ROWS_FILTERED"
+)
 
 // rowPadding used to pad the row key when constructing a row before
 var rowPadding = []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -30,15 +35,22 @@ type scanner struct {
 	// curRegionScannerID is the id of scanner on current region
 	curRegionScannerID uint64
 	// startRow is the start row in the current region
-	startRow []byte
-	results  []*pb.Result
-	closed   bool
+	startRow    []byte
+	results     []*pb.Result
+	closed      bool
+	scanMetrics map[string]int64
 }
 
 func (s *scanner) fetch() ([]*pb.Result, error) {
 	// keep looping until we have error, some non-empty result or until close
 	for {
 		resp, region, err := s.request()
+		if s.rpc.TrackScanMetrics() && resp.ScanMetrics != nil {
+			metrics := resp.ScanMetrics.GetMetrics()
+			for _, m := range metrics {
+				s.scanMetrics[m.GetName()] += m.GetValue()
+			}
+		}
 		if err != nil {
 			s.Close()
 			return nil, err
@@ -60,12 +72,16 @@ func (s *scanner) fetch() ([]*pb.Result, error) {
 
 func (s *scanner) peek() (*pb.Result, error) {
 	if len(s.results) == 0 {
+		var (
+			err error
+			rs  []*pb.Result
+		)
 		if s.closed {
 			// done scanning
 			return nil, io.EOF
 		}
 
-		rs, err := s.fetch()
+		rs, err = s.fetch()
 		if err != nil {
 			return nil, err
 		}
@@ -111,11 +127,16 @@ func (s *scanner) coalesce(result, partial *pb.Result) (*pb.Result, bool) {
 }
 
 func newScanner(c RPCClient, rpc *hrpc.Scan) *scanner {
+	var sm map[string]int64
+	if rpc.TrackScanMetrics() {
+		sm = make(map[string]int64)
+	}
 	return &scanner{
 		RPCClient:          c,
 		rpc:                rpc,
 		startRow:           rpc.StartRow(),
 		curRegionScannerID: noScannerID,
+		scanMetrics:        sm,
 	}
 }
 
@@ -123,7 +144,8 @@ func toLocalResult(r *pb.Result) *hrpc.Result {
 	if r == nil {
 		return nil
 	}
-	return hrpc.ToLocalResult(r)
+	res := hrpc.ToLocalResult(r)
+	return res
 }
 
 func (s *scanner) Next() (*hrpc.Result, error) {
@@ -141,7 +163,7 @@ func (s *scanner) Next() (*hrpc.Result, error) {
 
 	if s.rpc.AllowPartialResults() {
 		// if client handles partials, just return it
-		result, err := s.peek()
+		result, err = s.peek()
 		if err != nil {
 			return nil, err
 		}
@@ -257,6 +279,14 @@ func (s *scanner) Close() error {
 	// close the last region scanner
 	s.closeRegionScanner()
 	return nil
+}
+
+// GetScanMetrics returns the scan metrics for the scanner.
+// The scan metrics are non-nil only if the Scan has TrackScanMetrics() enabled.
+// GetScanMetrics should only be called after the scanner has been closed with an io.EOF
+// (there are no more rows left to be returned by calls to Next()).
+func (s *scanner) GetScanMetrics() map[string]int64 {
+	return s.scanMetrics
 }
 
 // isDone check if this scanner is done fetching new results

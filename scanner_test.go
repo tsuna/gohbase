@@ -9,7 +9,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"reflect"
+	"sync"
+	"testing"
 
+	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
@@ -17,11 +22,6 @@ import (
 	"github.com/tsuna/gohbase/test/mock"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/proto"
-
-	"io"
-	"reflect"
-	"sync"
-	"testing"
 )
 
 func cp(i uint64) *uint64 {
@@ -257,6 +257,215 @@ func TestAllowPartialResults(t *testing.T) {
 		hrpc.ToLocalResult(&pb.Result{Cell: cells[9:], Partial: proto.Bool(true)}),
 	}
 	testPartialResults(t, scan, expected)
+}
+
+func TestScanMetrics(t *testing.T) {
+	scanned, filtered := rowsScanned, rowsFiltered
+	i0, i1, i2, i4 := int64(0), int64(1), int64(2), int64(4)
+	tcases := []struct {
+		description          string
+		trackScanMetrics     func(call hrpc.Call) error
+		filter               func(call hrpc.Call) error
+		results              []*pb.Result
+		scanMetrics          *pb.ScanMetrics
+		expectedResults      []*hrpc.Result
+		expectedRowsScanned  int64
+		expectedRowsFiltered int64
+	}{
+		{
+			description: "ScanMetrics not enabled",
+			results: []*pb.Result{
+				{Cell: cells[:3]},
+			},
+			scanMetrics:     nil,
+			expectedResults: []*hrpc.Result{hrpc.ToLocalResult(&pb.Result{Cell: cells[:3]})},
+		},
+		{
+			description:          "Empty results",
+			trackScanMetrics:     hrpc.TrackScanMetrics(),
+			results:              nil,
+			scanMetrics:          nil,
+			expectedResults:      nil,
+			expectedRowsScanned:  0,
+			expectedRowsFiltered: 0,
+		},
+		{
+			description:      "ScanMetrics: 1 row scanned",
+			trackScanMetrics: hrpc.TrackScanMetrics(),
+			results: []*pb.Result{
+				{Cell: cells[:3]},
+			},
+			scanMetrics: &pb.ScanMetrics{
+				Metrics: []*pb.NameInt64Pair{
+					{
+						Name:  &scanned,
+						Value: &i1,
+					},
+					{
+						Name:  &filtered,
+						Value: &i0,
+					},
+				},
+			},
+			expectedResults:      []*hrpc.Result{toLocalResult(&pb.Result{Cell: cells[:3]})},
+			expectedRowsScanned:  1,
+			expectedRowsFiltered: 0,
+		},
+		{
+			description:      "ScanMetrics: 2 rows scanned",
+			trackScanMetrics: hrpc.TrackScanMetrics(),
+			results: []*pb.Result{
+				{Cell: cells[:5]},
+			},
+			scanMetrics: &pb.ScanMetrics{
+				Metrics: []*pb.NameInt64Pair{
+					{
+						Name:  &scanned,
+						Value: &i2,
+					},
+					{
+						Name:  &filtered,
+						Value: &i0,
+					},
+				},
+			},
+			expectedResults:      []*hrpc.Result{toLocalResult(&pb.Result{Cell: cells[:5]})},
+			expectedRowsScanned:  2,
+			expectedRowsFiltered: 0,
+		},
+		{
+			description:      "ScanMetrics: 4 rows scanned, 2 row filtered",
+			trackScanMetrics: hrpc.TrackScanMetrics(),
+			filter:           hrpc.Filters(filter.NewPrefixFilter([]byte("b"))),
+			results: []*pb.Result{
+				{Cell: cells},
+			},
+			scanMetrics: &pb.ScanMetrics{
+				Metrics: []*pb.NameInt64Pair{
+					{
+						Name:  &scanned,
+						Value: &i4,
+					},
+					{
+						Name:  &filtered,
+						Value: &i2,
+					},
+				},
+			},
+			expectedResults:      []*hrpc.Result{toLocalResult(&pb.Result{Cell: cells})},
+			expectedRowsScanned:  4,
+			expectedRowsFiltered: 2,
+		},
+		{
+			description:      "ScanMetrics: 2 rows scanned, 1 row filtered",
+			trackScanMetrics: hrpc.TrackScanMetrics(),
+			filter:           hrpc.Filters(filter.NewPrefixFilter([]byte("a"))),
+			results: []*pb.Result{
+				{Cell: cells[:5]},
+			},
+			scanMetrics: &pb.ScanMetrics{
+				Metrics: []*pb.NameInt64Pair{
+					{
+						Name:  &scanned,
+						Value: &i2,
+					},
+					{
+						Name:  &filtered,
+						Value: &i1,
+					},
+				},
+			},
+			expectedResults:      []*hrpc.Result{toLocalResult(&pb.Result{Cell: cells[:5]})},
+			expectedRowsScanned:  2,
+			expectedRowsFiltered: 1,
+		},
+		{
+			description:      "ScanMetrics: 0 rows scanned, 1 row filtered",
+			trackScanMetrics: hrpc.TrackScanMetrics(),
+			filter:           hrpc.Filters(filter.NewPrefixFilter([]byte("a"))),
+			results: []*pb.Result{
+				{Cell: cells[:3]},
+			},
+			scanMetrics: &pb.ScanMetrics{
+				Metrics: []*pb.NameInt64Pair{
+					{
+						Name:  &scanned,
+						Value: &i0,
+					},
+					{
+						Name:  &filtered,
+						Value: &i1,
+					},
+				},
+			},
+			expectedResults:      []*hrpc.Result{toLocalResult(&pb.Result{Cell: cells[:3]})},
+			expectedRowsScanned:  0,
+			expectedRowsFiltered: 1,
+		},
+	}
+
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+	c := mock.NewMockRPCClient(ctrl)
+
+	for _, tcase := range tcases {
+		t.Run(tcase.description, func(t *testing.T) {
+			ctx := context.Background()
+			var scan *hrpc.Scan
+			var err error
+			if tcase.trackScanMetrics != nil && tcase.filter != nil {
+				scan, err = hrpc.NewScan(ctx, table, tcase.trackScanMetrics, tcase.filter)
+			} else if tcase.trackScanMetrics != nil {
+				scan, err = hrpc.NewScan(ctx, table, tcase.trackScanMetrics)
+			} else {
+				scan, err = hrpc.NewScan(ctx, table)
+			}
+
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			sc := newScanner(c, scan)
+
+			c.EXPECT().SendRPC(&scanMatcher{scan: scan}).Return(&pb.ScanResponse{
+				Results:     tcase.results,
+				ScanMetrics: tcase.scanMetrics,
+			}, nil).Times(1)
+
+			var res []*hrpc.Result
+			for {
+				var r *hrpc.Result
+				r, err = sc.Next()
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				res = append(res, r)
+			}
+
+			actualMetrics := sc.GetScanMetrics()
+
+			if tcase.trackScanMetrics == nil && actualMetrics != nil {
+				t.Fatalf("Got non-nil scan metrics when not enabled: %v", actualMetrics)
+			}
+
+			if tcase.expectedRowsScanned != actualMetrics[rowsScanned] {
+				t.Errorf("Did not get expected rows scanned - expected: %d, actual %d",
+					tcase.expectedRowsScanned, actualMetrics[rowsScanned])
+			}
+
+			if tcase.expectedRowsFiltered != actualMetrics[rowsFiltered] {
+				t.Errorf("Did not get expected rows filtered - expected: %d, actual %d",
+					tcase.expectedRowsFiltered, actualMetrics[rowsFiltered])
+			}
+
+			if !reflect.DeepEqual(tcase.expectedResults, res) {
+				t.Fatalf("expected: %+v\ngot: %+v", tcase.expectedResults, res)
+			}
+		})
+	}
 }
 
 func TestErrorScanFromID(t *testing.T) {

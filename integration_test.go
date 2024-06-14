@@ -16,6 +16,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"os/exec"
 	"reflect"
@@ -24,8 +25,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"math"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -1022,6 +1021,110 @@ func TestScanTimeRangeVersions(t *testing.T) {
 	}
 }
 
+func TestScanWithScanMetrics(t *testing.T) {
+	var (
+		key          = "TestScanWithScanMetrics"
+		now          = time.Now()
+		r1           = fmt.Sprintf("%s_%d", key, 1)
+		r2           = fmt.Sprintf("%s_%d", key, 2)
+		r3           = fmt.Sprintf("%s_%d", key, 3)
+		val          = []byte("1")
+		family       = "cf"
+		ctx          = context.Background()
+		rowsScanned  = "ROWS_SCANNED"
+		rowsFiltered = "ROWS_FILTERED"
+	)
+
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+
+	for _, r := range []string{r1, r2, r3} {
+		err := insertKeyValue(c, r, family, val, hrpc.Timestamp(now))
+		if err != nil {
+			t.Fatalf("Put failed: %s", err)
+		}
+	}
+
+	tcases := []struct {
+		description          string
+		filters              func(call hrpc.Call) error
+		expectedRowsScanned  int64
+		expectedRowsFiltered int64
+		noScanMetrics        bool
+	}{
+		{
+			description:          "scan metrics not enabled",
+			expectedRowsScanned:  0,
+			expectedRowsFiltered: 0,
+			noScanMetrics:        true,
+		},
+		{
+			description:          "2 rows scanned",
+			expectedRowsScanned:  2,
+			expectedRowsFiltered: 0,
+		},
+		{
+			description:          "1 row scanned 1 row filtered",
+			filters:              hrpc.Filters(filter.NewPrefixFilter([]byte(r1))),
+			expectedRowsScanned:  1,
+			expectedRowsFiltered: 1,
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Run(tc.description, func(t *testing.T) {
+			var (
+				scan *hrpc.Scan
+				err  error
+			)
+			if tc.noScanMetrics {
+				scan, err = hrpc.NewScanRangeStr(ctx, table, r1, r3)
+			} else if tc.filters == nil {
+				scan, err = hrpc.NewScanRangeStr(ctx, table, r1, r3, hrpc.TrackScanMetrics())
+			} else {
+				scan, err = hrpc.NewScanRangeStr(ctx, table, r1, r3, hrpc.TrackScanMetrics(),
+					tc.filters)
+			}
+			if err != nil {
+				t.Fatalf("Scan req failed: %s", err)
+			}
+
+			var results []*hrpc.Result
+			scanner := c.Scan(scan)
+			for {
+				var r *hrpc.Result
+				r, err = scanner.Next()
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				results = append(results, r)
+			}
+
+			actualMetrics := scanner.GetScanMetrics()
+
+			if tc.noScanMetrics && actualMetrics != nil {
+				t.Fatalf("Expected nil scan metrics, got %v", actualMetrics)
+			}
+
+			scanned := actualMetrics[rowsScanned]
+			if tc.expectedRowsScanned != scanned {
+				t.Errorf("Did not get expected rows scanned - expected: %d, actual %d",
+					tc.expectedRowsScanned, scanned)
+			}
+
+			filtered := actualMetrics[rowsFiltered]
+			if tc.expectedRowsFiltered != filtered {
+				t.Errorf("Did not get expected rows filtered - expected: %d, actual %d",
+					tc.expectedRowsFiltered, filtered)
+			}
+		})
+	}
+
+}
+
 func TestPutTTL(t *testing.T) {
 	key := "TestPutTTL"
 	c := gohbase.NewClient(*host)
@@ -1034,13 +1137,13 @@ func TestPutTTL(t *testing.T) {
 		t.Fatalf("Put failed: %s", err)
 	}
 
-	//Wait ttl duration and try to get the value
+	// Wait ttl duration and try to get the value
 	time.Sleep(ttl)
 
 	get, err := hrpc.NewGetStr(context.Background(), table, key,
 		hrpc.Families(map[string][]string{"cf": nil}))
 
-	//Make sure we dont get a result back
+	// Make sure we don't get a result back
 	res, err := c.Get(get)
 	if err != nil {
 		t.Fatalf("Get failed: %s", err)
