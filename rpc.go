@@ -15,7 +15,6 @@ import (
 	"strconv"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/internal/observability"
 	"github.com/tsuna/gohbase/region"
@@ -502,31 +501,27 @@ func (c *client) lookupRegion(ctx context.Context,
 		// If it takes longer than regionLookupTimeout, fail so that we can sleep
 		lookupCtx, cancel := context.WithTimeout(ctx, c.regionLookupTimeout)
 		if c.clientType == region.MasterClient {
-			log.WithField("resource", zk.Master).Debug("looking up master")
+			c.logger.Debug("looking up master", "resource", zk.Master)
 
 			addr, err = c.zkLookup(lookupCtx, zk.Master)
 			cancel()
 			reg = c.adminRegionInfo
 		} else if bytes.Equal(table, metaTableName) {
-			log.WithField("resource", zk.Meta).Debug("looking up region server of hbase:meta")
+			c.logger.Debug("looking up region server of hbase:meta", "resource", zk.Meta)
 
 			addr, err = c.zkLookup(lookupCtx, zk.Meta)
 			cancel()
 			reg = c.metaRegionInfo
 		} else {
-			log.WithFields(log.Fields{
-				"table": strconv.Quote(string(table)),
-				"key":   strconv.Quote(string(key)),
-			}).Debug("looking up region")
+			c.logger.Debug("looking up region",
+				"table", strconv.Quote(string(table)), "key", strconv.Quote(string(key)))
 
 			reg, addr, err = c.metaLookup(lookupCtx, table, key)
 			cancel()
 			if err == TableNotFound {
-				log.WithFields(log.Fields{
-					"table": strconv.Quote(string(table)),
-					"key":   strconv.Quote(string(key)),
-					"err":   err,
-				}).Debug("hbase:meta does not know about this table/key")
+				c.logger.Debug("hbase:meta does not know about this table/key",
+					"table", strconv.Quote(string(table)),
+					"key", strconv.Quote(string(key)), "err", err)
 
 				return nil, "", err
 			} else if err == ErrClientClosed {
@@ -534,22 +529,14 @@ func (c *client) lookupRegion(ctx context.Context,
 			}
 		}
 		if err == nil {
-			log.WithFields(log.Fields{
-				"table":  strconv.Quote(string(table)),
-				"key":    strconv.Quote(string(key)),
-				"region": reg,
-				"addr":   addr,
-			}).Debug("looked up a region")
+			c.logger.Debug("looked up a region", "table", strconv.Quote(string(table)),
+				"key", strconv.Quote(string(key)), "region", reg, "addr", addr)
 
 			return reg, addr, nil
 		}
 
-		log.WithFields(log.Fields{
-			"table":   strconv.Quote(string(table)),
-			"key":     strconv.Quote(string(key)),
-			"backoff": backoff,
-			"err":     err,
-		}).Error("failed looking up region")
+		c.logger.Error("failed looking up region", "table", strconv.Quote(string(table)),
+			"key", strconv.Quote(string(key)), "backoff", backoff, "err", err)
 
 		// This will be hit if there was an error locating the region
 		backoff, err = sleepAndIncreaseBackoff(ctx, backoff)
@@ -567,17 +554,13 @@ func (c *client) lookupAllRegions(ctx context.Context,
 	for {
 		// If it takes longer than regionLookupTimeout, fail so that we can sleep
 		lookupCtx, cancel := context.WithTimeout(ctx, c.regionLookupTimeout)
-		log.WithFields(log.Fields{
-			"table": strconv.Quote(string(table)),
-		}).Debug("looking up regions")
+		c.logger.Debug("looking up regions", "table", strconv.Quote(string(table)))
 
 		regs, err = c.metaLookupForTable(lookupCtx, table)
 		cancel()
 		if err == TableNotFound {
-			log.WithFields(log.Fields{
-				"table": strconv.Quote(string(table)),
-				"err":   err,
-			}).Debug("hbase:meta does not know about this table")
+			c.logger.Debug("hbase:meta does not know about this table",
+				"table", strconv.Quote(string(table)), "err", err)
 
 			return nil, err
 		} else if err == ErrClientClosed {
@@ -585,19 +568,14 @@ func (c *client) lookupAllRegions(ctx context.Context,
 		}
 
 		if err == nil {
-			log.WithFields(log.Fields{
-				"table":          strconv.Quote(string(table)),
-				"regionsAndAddr": regs,
-			}).Debug("looked up all regions")
+			c.logger.Debug("looked up all regions",
+				"table", strconv.Quote(string(table)), "regionsAndAddr", regs)
 
 			return regs, nil
 		}
 
-		log.WithFields(log.Fields{
-			"table":   strconv.Quote(string(table)),
-			"backoff": backoff,
-			"err":     err,
-		}).Error("failed looking up regions")
+		c.logger.Error("failed looking up regions", "table", strconv.Quote(string(table)),
+			"backoff", backoff, "err", err)
 
 		// This will be hit if there was an error locating the region
 		backoff, err = sleepAndIncreaseBackoff(ctx, backoff)
@@ -829,7 +807,7 @@ func (c *client) reestablishRegion(reg hrpc.RegionInfo) {
 	default:
 	}
 
-	log.WithField("region", reg).Debug("reestablishing region")
+	c.logger.Debug("reestablishing region", "region", reg)
 	c.establishRegion(reg, "")
 }
 
@@ -900,33 +878,24 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 				c.clients.del(originalReg)
 				originalReg.MarkAvailable()
 
-				log.WithFields(log.Fields{
-					"region":  originalReg.String(),
-					"err":     err,
-					"backoff": backoff,
-				}).Info("region does not exist anymore")
+				c.logger.Info("region does not exist anymore",
+					"region", originalReg.String(), "err", err, "backoff", backoff)
 
 				return
 			} else if originalReg.Context().Err() != nil {
 				// region is dead
 				originalReg.MarkAvailable()
 
-				log.WithFields(log.Fields{
-					"region":  originalReg.String(),
-					"err":     err,
-					"backoff": backoff,
-				}).Info("region became dead while establishing client for it")
+				c.logger.Info("region became dead while establishing client for it",
+					"region", originalReg.String(), "err", err, "backoff", backoff)
 
 				return
 			} else if err == ErrClientClosed {
 				// client has been closed
 				return
 			} else if err != nil {
-				log.WithFields(log.Fields{
-					"region":  originalReg.String(),
-					"err":     err,
-					"backoff": backoff,
-				}).Fatal("unknown error occured when looking up region")
+				panic(fmt.Errorf("unknown error occurred when looking up region %q, "+
+					"backoff=%s: %s", originalReg.String(), backoff, err))
 			}
 			if !bytes.Equal(reg.Name(), originalReg.Name()) {
 				// put new region and remove overlapping ones.
@@ -958,11 +927,12 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 			// master that we don't add to the cache
 			// TODO: consider combining this case with the regular regionserver path
 			client = c.newRegionClientFn(addr, c.clientType, c.rpcQueueSize, c.flushInterval,
-				c.effectiveUser, c.regionReadTimeout, nil, c.regionDialer)
+				c.effectiveUser, c.regionReadTimeout, nil, c.regionDialer, c.logger)
 		} else {
 			client = c.clients.put(addr, reg, func() hrpc.RegionClient {
 				return c.newRegionClientFn(addr, c.clientType, c.rpcQueueSize, c.flushInterval,
-					c.effectiveUser, c.regionReadTimeout, c.compressionCodec, c.regionDialer)
+					c.effectiveUser, c.regionReadTimeout, c.compressionCodec,
+					c.regionDialer, c.logger)
 			})
 		}
 
@@ -1001,11 +971,8 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 			c.clientDown(client, reg)
 		}
 
-		log.WithFields(log.Fields{
-			"region":  reg,
-			"backoff": backoff,
-			"err":     err,
-		}).Debug("region was not established, retrying")
+		c.logger.Debug("region was not established, retrying",
+			"region", reg, "backoff", backoff, "err", err)
 		// reset address because we weren't able to connect to it
 		// or regionserver says it's still offline, should look up again
 		addr = ""

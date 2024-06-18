@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"net"
 	"reflect"
@@ -126,10 +127,11 @@ func TestFail(t *testing.T) {
 	defer ctrl.Finish()
 	mockConn := mock.NewMockConn(ctrl)
 	c := &client{
-		conn: mockConn,
-		done: make(chan struct{}),
-		rpcs: make(chan []hrpc.Call),
-		sent: make(map[uint32]hrpc.Call),
+		conn:   mockConn,
+		done:   make(chan struct{}),
+		rpcs:   make(chan []hrpc.Call),
+		sent:   make(map[uint32]hrpc.Call),
+		logger: slog.Default(),
 	}
 	expectedErr := errors.New("oooups")
 
@@ -160,9 +162,10 @@ func TestFail(t *testing.T) {
 
 	// check that failing undialed client doesn't panic
 	c = &client{
-		done: make(chan struct{}),
-		rpcs: make(chan []hrpc.Call),
-		sent: make(map[uint32]hrpc.Call),
+		done:   make(chan struct{}),
+		rpcs:   make(chan []hrpc.Call),
+		sent:   make(map[uint32]hrpc.Call),
+		logger: slog.Default(),
 	}
 	c.fail(expectedErr)
 }
@@ -201,6 +204,7 @@ func TestQueueRPCMultiWithClose(t *testing.T) {
 		sent:          make(map[uint32]hrpc.Call),
 		rpcQueueSize:  10,
 		flushInterval: 30 * time.Millisecond,
+		logger:        slog.Default(),
 	}
 
 	var wgProcessRPCs sync.WaitGroup
@@ -274,6 +278,7 @@ func TestProcessRPCsWithFail(t *testing.T) {
 		// never send anything
 		rpcQueueSize:  ncalls + 1,
 		flushInterval: 1000 * time.Hour,
+		logger:        slog.Default(),
 	}
 
 	var wgProcessRPCs sync.WaitGroup
@@ -343,6 +348,7 @@ func TestQueueRPC(t *testing.T) {
 		sent:          make(map[uint32]hrpc.Call),
 		rpcQueueSize:  queueSize,
 		flushInterval: flushInterval,
+		logger:        slog.Default(),
 	}
 	var wgProcessRPCs sync.WaitGroup
 	wgProcessRPCs.Add(1)
@@ -429,6 +435,7 @@ func TestServerErrorWrite(t *testing.T) {
 		sent:          make(map[uint32]hrpc.Call),
 		rpcQueueSize:  queueSize,
 		flushInterval: flushInterval,
+		logger:        slog.Default(),
 	}
 	// define rpcs behaviour
 	mockCall := mock.NewMockCall(ctrl)
@@ -470,6 +477,7 @@ func TestServerErrorRead(t *testing.T) {
 		sent:          make(map[uint32]hrpc.Call),
 		rpcQueueSize:  queueSize,
 		flushInterval: flushInterval,
+		logger:        slog.Default(),
 	}
 	// define rpcs behavior
 	mockCall := mock.NewMockCall(ctrl)
@@ -698,6 +706,7 @@ func TestUnexpectedSendError(t *testing.T) {
 		sent:          make(map[uint32]hrpc.Call),
 		rpcQueueSize:  queueSize,
 		flushInterval: flushInterval,
+		logger:        slog.Default(),
 	}
 	go c.processRPCs()
 	// define rpcs behaviour
@@ -754,6 +763,7 @@ func TestProcessRPCs(t *testing.T) {
 				sent:          make(map[uint32]hrpc.Call),
 				rpcQueueSize:  tcase.qsize,
 				flushInterval: tcase.interval,
+				logger:        slog.Default(),
 			}
 
 			var wgProcessRPCs sync.WaitGroup
@@ -829,6 +839,7 @@ func TestRPCContext(t *testing.T) {
 		sent:          make(map[uint32]hrpc.Call),
 		rpcQueueSize:  queueSize,
 		flushInterval: flushInterval,
+		logger:        slog.Default(),
 	}
 
 	mockConn.EXPECT().SetReadDeadline(gomock.Any()).Times(1)
@@ -886,6 +897,7 @@ func TestSanity(t *testing.T) {
 		sent:          make(map[uint32]hrpc.Call),
 		rpcQueueSize:  1, // size one to skip sendBatch
 		flushInterval: 1000 * time.Second,
+		logger:        slog.Default(),
 	}
 
 	var wg sync.WaitGroup
@@ -978,6 +990,7 @@ func TestSanityCompressor(t *testing.T) {
 		rpcQueueSize:  1, // size one to skip sendBatch
 		flushInterval: 1000 * time.Second,
 		compressor:    &compressor{Codec: mockCodec{}},
+		logger:        slog.Default(),
 	}
 
 	var wg sync.WaitGroup
@@ -1104,6 +1117,7 @@ func BenchmarkSendBatchMemory(b *testing.B) {
 		// and buffer slice reset
 		rpcQueueSize:  1,
 		flushInterval: 1000 * time.Second,
+		logger:        slog.Default(),
 	}
 
 	var wgWrites sync.WaitGroup
