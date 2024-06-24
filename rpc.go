@@ -19,7 +19,9 @@ import (
 	"github.com/tsuna/gohbase/internal/observability"
 	"github.com/tsuna/gohbase/region"
 	"github.com/tsuna/gohbase/zk"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -76,7 +78,11 @@ func (c *client) getRegionForRpc(ctx context.Context, rpc hrpc.Call) (hrpc.Regio
 func (c *client) SendRPC(rpc hrpc.Call) (msg proto.Message, err error) {
 	start := time.Now()
 	description := rpc.Description()
-	ctx, sp := observability.StartSpan(rpc.Context(), description)
+	ctx, sp := observability.StartSpan(rpc.Context(), description,
+		trace.WithAttributes(
+			attribute.String("table", strconv.Quote(string(rpc.Table()))),
+			attribute.String("key", strconv.Quote(string(rpc.Key()))),
+		))
 	defer func() {
 		result := "ok"
 		if err != nil {
