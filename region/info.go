@@ -12,6 +12,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"sync"
 
 	"github.com/tsuna/gohbase/hrpc"
@@ -358,10 +359,13 @@ func findCommaFromEnd(b []byte, offset int) int {
 
 func (i *info) MarshalJSON() ([]byte, error) {
 
-	var ctxError string
+	var ctxError, client string
 
 	if i.ctx != nil {
 		ctxError = fmt.Sprint(i.ctx.Err())
+	}
+	if i.Client() != nil {
+		client = i.Client().String()
 	}
 
 	state := struct {
@@ -373,18 +377,20 @@ func (i *info) MarshalJSON() ([]byte, error) {
 		StopKey         string
 		ContextInstance string
 		Err             string
+		ClientPtr       string
 		Client          string
 		Available       bool
 	}{
 		Id:              i.id,
-		Namespace:       string(i.namespace),
-		Table:           string(i.table),
-		Name:            string(i.name),
-		StartKey:        string(i.startKey),
-		StopKey:         string(i.stopKey),
+		Namespace:       strconv.QuoteToASCII(string(i.namespace)),
+		Table:           strconv.QuoteToASCII(string(i.table)),
+		Name:            strconv.QuoteToASCII(string(i.name)),
+		StartKey:        strconv.QuoteToASCII(string(i.startKey)),
+		StopKey:         strconv.QuoteToASCII(string(i.stopKey)),
 		ContextInstance: fmt.Sprintf("%p", (i.ctx)),
 		Err:             ctxError,
-		Client:          fmt.Sprintf("%p", (i.Client())),
+		ClientPtr:       fmt.Sprintf("%p", (i.Client())),
+		Client:          client,
 		Available:       !i.IsUnavailable(),
 	}
 	jsonVal, err := json.Marshal(state)
