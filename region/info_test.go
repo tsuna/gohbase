@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -213,12 +214,12 @@ func TestRegionInfoMarshalJson(t *testing.T) {
 	}
 
 	assert.Equal(t, float64(id), jsonUnMarshal["Id"])
-	assert.Equal(t, string(table), jsonUnMarshal["Table"])
-	assert.Equal(t, string(name), jsonUnMarshal["Name"])
-	assert.Equal(t, string(startKey), jsonUnMarshal["StartKey"])
-	assert.Equal(t, string(stopKey), jsonUnMarshal["StopKey"])
+	assert.Equal(t, strconv.QuoteToASCII(string(table)), jsonUnMarshal["Table"])
+	assert.Equal(t, strconv.QuoteToASCII(string(name)), jsonUnMarshal["Name"])
+	assert.Equal(t, strconv.QuoteToASCII(string(startKey)), jsonUnMarshal["StartKey"])
+	assert.Equal(t, strconv.QuoteToASCII(string(stopKey)), jsonUnMarshal["StopKey"])
 	assert.Equal(t, true, jsonUnMarshal["Available"])
-	assert.Equal(t, string(namespace), jsonUnMarshal["Namespace"])
+	assert.Equal(t, strconv.QuoteToASCII(string(namespace)), jsonUnMarshal["Namespace"])
 
 }
 
