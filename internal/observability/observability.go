@@ -27,8 +27,7 @@ func StartSpan(
 	name string,
 	opts ...trace.SpanStartOption,
 ) (context.Context, trace.Span) {
-	tracer := otel.GetTracerProvider().Tracer("gohbase")
-	return tracer.Start(ctx, name, opts...)
+	return otel.Tracer("gohbase").Start(ctx, name, opts...)
 }
 
 // ObserveWithTrace observes the value, providing the traceID as
