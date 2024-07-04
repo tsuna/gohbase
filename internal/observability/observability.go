@@ -27,6 +27,10 @@ func StartSpan(
 	name string,
 	opts ...trace.SpanStartOption,
 ) (context.Context, trace.Span) {
+	if isNoopTracing {
+		return ctx, newNoopSpan()
+	}
+
 	tracer := otel.GetTracerProvider().Tracer("gohbase")
 	return tracer.Start(ctx, name, opts...)
 }
