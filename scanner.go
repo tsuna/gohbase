@@ -240,7 +240,7 @@ func (s *scanner) update(resp *pb.ScanResponse, region hrpc.RegionInfo) {
 	}
 	if !resp.GetMoreResultsInRegion() {
 		// we are done with this region, prepare scan for next region
-		s.closeRegionScanner()
+		s.curRegionScannerID = noScannerID
 
 		// Normal Scan
 		if !s.rpc.Reversed() {
