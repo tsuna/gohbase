@@ -13,7 +13,7 @@ jobs:
       matrix:
         go: [~1.22, ^1]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: Setup | Download HBase
         run: |
@@ -27,7 +27,7 @@ jobs:
         run: hbase/bin/hbase-daemon.sh --config hbase/conf start master
 
       - name: Setup | Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
 
