@@ -323,6 +323,11 @@ func (m *multi) Context() context.Context {
 	return context.Background()
 }
 
+// SkipRetry always returns false for Multi.
+func (m *multi) SkipRetry() bool {
+	return false
+}
+
 // String returns a description of this call
 func (m *multi) String() string {
 	return "MULTI"
