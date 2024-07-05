@@ -61,6 +61,7 @@ type Call interface {
 	ResultChan() chan RPCResult
 	Description() string // Used for tracing and metrics
 	Context() context.Context
+	SkipRetry() bool
 }
 
 type withOptions interface {
@@ -88,6 +89,20 @@ func SkipBatch() func(Call) error {
 		}
 		return errors.New("'SkipBatch' option only works with Get and Mutate requests")
 	}
+}
+
+func SkipRetry() func(Call) error {
+	return func(c Call) error {
+		if b, ok := c.(canSetSkipRetry); ok {
+			b.setSkipRetry(true)
+			return nil
+		}
+		return errors.New("'SkipRetry' is not implemented for this call")
+	}
+}
+
+type canSetSkipRetry interface {
+	setSkipRetry(v bool)
 }
 
 // hasQueryOptions is interface that needs to be implemented by calls
@@ -119,10 +134,20 @@ type base struct {
 
 	region   RegionInfo
 	resultch chan RPCResult
+
+	skipRetry bool
 }
 
 func (b *base) Context() context.Context {
 	return b.ctx
+}
+
+func (b *base) SkipRetry() bool {
+	return b.skipRetry
+}
+
+func (b *base) setSkipRetry() {
+	b.skipRetry = true
 }
 
 func (b *base) Region() RegionInfo {

@@ -97,16 +97,18 @@ func (c *client) SendRPC(rpc hrpc.Call) (msg proto.Message, err error) {
 			return nil, err
 		}
 		msg, err = c.sendRPCToRegionClient(ctx, rpc, rc)
-		switch err.(type) {
-		case region.RetryableError:
-			sp.AddEvent("retrySleep")
-			backoff, err = sleepAndIncreaseBackoff(ctx, backoff)
-			if err != nil {
-				return msg, err
+		if !rpc.SkipRetry() {
+			switch err.(type) {
+			case region.RetryableError:
+				sp.AddEvent("retrySleep")
+				backoff, err = sleepAndIncreaseBackoff(ctx, backoff)
+				if err != nil {
+					return msg, err
+				}
+				continue // retry
+			case region.ServerError, region.NotServingRegionError:
+				continue // retry
 			}
-			continue // retry
-		case region.ServerError, region.NotServingRegionError:
-			continue // retry
 		}
 		return msg, err
 	}

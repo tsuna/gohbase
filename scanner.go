@@ -337,22 +337,20 @@ func (s *scanner) closeRegionScanner() {
 		return
 	}
 	if !s.rpc.IsClosing() {
-		// Not closed at server side
-		// if we are closing in the middle of scanning a region,
-		// send a close scanner request
-		// TODO: add a deadline
+		// Not closed at server side if we are closing in the middle of scanning
+		// a region, so send a close scanner request. This is a fire-and-forget
+		// call, as if we fail the scanner lease will expire and be closed
+		// automatically by HBase.
 		rpc, err := hrpc.NewScanRange(context.Background(),
 			s.rpc.Table(), s.startRow, nil,
 			hrpc.ScannerID(s.curRegionScannerID),
 			hrpc.CloseScanner(),
-			hrpc.NumberOfRows(0))
+			hrpc.NumberOfRows(0),
+			hrpc.SkipRetry(),
+		)
 		if err != nil {
 			panic(fmt.Sprintf("should not happen: %s", err))
 		}
-
-		// If the request fails, the scanner lease will be expired
-		// and it will be closed automatically by hbase.
-		// No need to bother clients about that.
 		go s.SendRPC(rpc)
 	}
 	s.curRegionScannerID = noScannerID
