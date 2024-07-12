@@ -91,6 +91,7 @@ func (c *client) SendRPC(rpc hrpc.Call) (msg proto.Message, err error) {
 	}()
 
 	backoff := backoffStart
+	serverErrorCount := 0
 	for {
 		rc, err := c.getRegionAndClientForRPC(ctx, rpc)
 		if err != nil {
@@ -105,7 +106,20 @@ func (c *client) SendRPC(rpc hrpc.Call) (msg proto.Message, err error) {
 				return msg, err
 			}
 			continue // retry
-		case region.ServerError, region.NotServingRegionError:
+		case region.ServerError:
+			// Retry ServerError immediately, as we want failover fast to
+			// another server. But if HBase keep sending us ServerError, we
+			// should start to backoff. We don't want to overwhelm HBase.
+			if serverErrorCount > 1 {
+				sp.AddEvent("retrySleep")
+				backoff, err = sleepAndIncreaseBackoff(ctx, backoff)
+				if err != nil {
+					return msg, err
+				}
+			}
+			serverErrorCount++
+			continue // retry
+		case region.NotServingRegionError:
 			continue // retry
 		}
 		return msg, err
