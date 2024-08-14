@@ -101,6 +101,7 @@ type hasQueryOptions interface {
 	setResultOffset(offset uint32)
 	setCacheBlocks(cacheBlocks bool)
 	setConsistency(consistency ConsistencyType)
+	setPriority(priority uint32)
 }
 
 // RPCResult is struct that will contain both the resulting message from an RPC

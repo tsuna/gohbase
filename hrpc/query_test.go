@@ -208,3 +208,49 @@ func TestCacheBlocks(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestPriority(t *testing.T) {
+	get, err := NewGet(nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := get.Priority(); got != nil {
+		t.Errorf("expected nil, got %v", got)
+	}
+	get, err = NewGet(nil, nil, nil, Priority(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := get.Priority(); got != nil {
+		t.Errorf("expected nil, got %v", got)
+	}
+	get, err = NewGet(nil, nil, nil, Priority(5))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := get.Priority(); *got != 5 {
+		t.Errorf("expected priority 5, got %v", got)
+	}
+
+	scan, err := NewScan(nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := scan.Priority(); got != nil {
+		t.Errorf("expected nil, got %v", got)
+	}
+	scan, err = NewScan(nil, nil, Priority(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := scan.Priority(); got != nil {
+		t.Errorf("expected nil, got %v", got)
+	}
+	scan, err = NewScan(nil, nil, Priority(5))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := scan.Priority(); *got != 5 {
+		t.Errorf("expected priority 5, got %v", got)
+	}
+}
