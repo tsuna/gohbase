@@ -23,6 +23,7 @@ type baseQuery struct {
 	maxVersions   uint32
 	storeLimit    uint32
 	storeOffset   uint32
+	priority      uint32
 	cacheBlocks   bool
 	consistency   ConsistencyType
 }
@@ -96,6 +97,15 @@ func (bq *baseQuery) setCacheBlocks(cacheBlocks bool) {
 }
 func (bq *baseQuery) setConsistency(consistency ConsistencyType) {
 	bq.consistency = consistency
+}
+func (bq *baseQuery) setPriority(priority uint32) {
+	bq.priority = priority
+}
+func (bq *baseQuery) Priority() *uint32 {
+	if bq.priority == 0 {
+		return nil
+	}
+	return &bq.priority
 }
 
 // Families option adds families constraint to a Scan or Get request.
@@ -216,5 +226,15 @@ func Consistency(consistency ConsistencyType) func(Call) error {
 			return nil
 		}
 		return errors.New("'Consistency' option can only be used with Get or Scan requests")
+	}
+}
+
+func Priority(priority uint32) func(Call) error {
+	return func(hc Call) error {
+		if c, ok := hc.(hasQueryOptions); ok {
+			c.setPriority(priority)
+			return nil
+		}
+		return errors.New("'Priority' option can only be used with Get or Scan requests")
 	}
 }

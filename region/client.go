@@ -683,10 +683,13 @@ var pbTrue = proto.Bool(true)
 func marshalProto(rpc hrpc.Call, callID uint32, request proto.Message,
 	cellblocksLen uint32) ([]byte, error) {
 	header := getHeader()
+	defer returnHeader(header)
 	header.MethodName = proto.String(rpc.Name())
 	header.RequestParam = pbTrue
 	header.CallId = &callID
-	defer returnHeader(header)
+	if p, ok := rpc.(interface{ Priority() *uint32 }); ok {
+		header.Priority = p.Priority()
+	}
 
 	if cellblocksLen > 0 {
 		header.CellBlockMeta = &pb.CellBlockMeta{
