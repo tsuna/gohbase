@@ -101,11 +101,8 @@ func (bq *baseQuery) setConsistency(consistency ConsistencyType) {
 func (bq *baseQuery) setPriority(priority uint32) {
 	bq.priority = priority
 }
-func (bq *baseQuery) Priority() *uint32 {
-	if bq.priority == 0 {
-		return nil
-	}
-	return &bq.priority
+func (bq *baseQuery) Priority() uint32 {
+	return bq.priority
 }
 
 // Families option adds families constraint to a Scan or Get request.
