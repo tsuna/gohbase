@@ -216,7 +216,9 @@ func (s *scanner) request() (*pb.ScanResponse, hrpc.RegionInfo, error) {
 			s.startRow,
 			nil,
 			hrpc.ScannerID(s.curRegionScannerID),
-			hrpc.NumberOfRows(s.rpc.NumberOfRows()))
+			hrpc.NumberOfRows(s.rpc.NumberOfRows()),
+			hrpc.Priority(s.rpc.Priority()),
+		)
 	}
 	if err != nil {
 		return nil, nil, err

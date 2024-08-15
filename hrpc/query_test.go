@@ -214,43 +214,34 @@ func TestPriority(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := get.Priority(); got != nil {
-		t.Errorf("expected nil, got %v", got)
-	}
-	get, err = NewGet(nil, nil, nil, Priority(0))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := get.Priority(); got != nil {
-		t.Errorf("expected nil, got %v", got)
+	if got := get.Priority(); got != 0 {
+		t.Errorf("expected 0, got %d", got)
 	}
 	get, err = NewGet(nil, nil, nil, Priority(5))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := get.Priority(); *got != 5 {
-		t.Errorf("expected priority 5, got %v", got)
+	if got := get.Priority(); got != 5 {
+		t.Errorf("expected priority 5, got %d", got)
 	}
 
 	scan, err := NewScan(nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := scan.Priority(); got != nil {
-		t.Errorf("expected nil, got %v", got)
-	}
-	scan, err = NewScan(nil, nil, Priority(0))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := scan.Priority(); got != nil {
-		t.Errorf("expected nil, got %v", got)
+	if got := scan.Priority(); got != 0 {
+		t.Errorf("expected 0, got %d", got)
 	}
 	scan, err = NewScan(nil, nil, Priority(5))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := scan.Priority(); *got != 5 {
-		t.Errorf("expected priority 5, got %v", got)
+	if got := scan.Priority(); got != 5 {
+		t.Errorf("expected priority 5, got %d", got)
+	}
+
+	_, err = NewPut(nil, nil, nil, nil, Priority(5))
+	if err == nil {
+		t.Errorf("expected error when creating Put with Priority, but got none")
 	}
 }
