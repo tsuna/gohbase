@@ -240,7 +240,7 @@ func (c *client) SendBatch(ctx context.Context, batch []hrpc.Call) (
 			res[i].Error = fmt.Errorf("multiple tables in batch request: %q and %q",
 				string(table), string(rpc.Table()))
 			allOK = false
-		} else if b, batchable := rpc.(hrpc.Batchable); !batchable || b.SkipBatch() {
+		} else if !hrpc.CanBatch(rpc) {
 			res[i].Error = errors.New("non-batchable call passed to SendBatch")
 			allOK = false
 		}

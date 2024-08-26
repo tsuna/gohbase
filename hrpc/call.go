@@ -90,6 +90,13 @@ func SkipBatch() func(Call) error {
 	}
 }
 
+// CanBatch returns true if this RPC can be included in a batch/multi
+// request.
+func CanBatch(c Call) bool {
+	b, ok := c.(Batchable)
+	return ok && !b.SkipBatch()
+}
+
 // hasQueryOptions is interface that needs to be implemented by calls
 // that allow to provide Families and Filters options.
 type hasQueryOptions interface {

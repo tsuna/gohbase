@@ -199,7 +199,7 @@ type client struct {
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine
 func (c *client) QueueRPC(rpc hrpc.Call) {
-	if b, ok := rpc.(hrpc.Batchable); ok && c.rpcQueueSize > 1 && !b.SkipBatch() {
+	if c.rpcQueueSize > 1 && hrpc.CanBatch(rpc) {
 		c.QueueBatch(rpc.Context(), []hrpc.Call{rpc})
 	} else {
 		select {
@@ -687,10 +687,8 @@ func marshalProto(rpc hrpc.Call, callID uint32, request proto.Message,
 	header.MethodName = proto.String(rpc.Name())
 	header.RequestParam = pbTrue
 	header.CallId = &callID
-	if p, ok := rpc.(interface{ Priority() uint32 }); ok {
-		if p := p.Priority(); p > 0 {
-			header.Priority = &p
-		}
+	if p := hrpc.GetPriority(rpc); p > 0 {
+		header.Priority = &p
 	}
 
 	if cellblocksLen > 0 {

@@ -105,6 +105,16 @@ func (bq *baseQuery) Priority() uint32 {
 	return bq.priority
 }
 
+// GetPriority returns the priority of a Call. Returns 0 for calls
+// that don't have a priority set or don't support setting a priority.
+func GetPriority(c Call) uint32 {
+	p, ok := c.(interface{ Priority() uint32 })
+	if !ok {
+		return 0
+	}
+	return p.Priority()
+}
+
 // Families option adds families constraint to a Scan or Get request.
 func Families(f map[string][]string) func(Call) error {
 	return func(hc Call) error {
