@@ -151,6 +151,20 @@ func (mr *MockCallMockRecorder) SetRegion(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRegion", reflect.TypeOf((*MockCall)(nil).SetRegion), arg0)
 }
 
+// SkipRetry mocks base method.
+func (m *MockCall) SkipRetry() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SkipRetry")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// SkipRetry indicates an expected call of SkipRetry.
+func (mr *MockCallMockRecorder) SkipRetry() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SkipRetry", reflect.TypeOf((*MockCall)(nil).SkipRetry))
+}
+
 // Table mocks base method.
 func (m *MockCall) Table() []byte {
 	m.ctrl.T.Helper()
