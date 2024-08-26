@@ -554,7 +554,8 @@ func TestServerErrorExceptionResponse(t *testing.T) {
 	expErr := exceptionToError(
 		"org.apache.hadoop.hbase.regionserver.RegionServerAbortedException", "ooops")
 
-	err = c.receive(mockConn)
+	rpc2, resp, err := c.receive(mockConn)
+	returnResult(rpc2, resp, err)
 	if _, ok := err.(ServerError); !ok {
 		if err.Error() != expErr.Error() {
 			t.Fatalf("expected ServerError with message %q, got %T: %v", expErr, err, err)
@@ -633,7 +634,8 @@ func TestReceiveDecodeProtobufError(t *testing.T) {
 	mockConn.EXPECT().SetReadDeadline(time.Time{}).Times(1)
 	expErrorPefix := "region.RetryableError: failed to decode the response: proto:"
 
-	err := c.receive(mockConn)
+	rpc, resp, err := c.receive(mockConn)
+	returnResult(rpc, resp, err)
 	if err == nil || strings.HasPrefix(expErrorPefix, err.Error()) {
 		t.Errorf("Expected error prefix %v, got %v", expErrorPefix, err)
 	}
@@ -681,7 +683,8 @@ func TestReceiveDeserializeCellblocksError(t *testing.T) {
 	mockConn.EXPECT().SetReadDeadline(time.Time{}).Times(1)
 	expError := errors.New("region.RetryableError: failed to decode the response: OOPS")
 
-	err := c.receive(mockConn)
+	rpc, resp, err := c.receive(mockConn)
+	returnResult(rpc, resp, err)
 	if err == nil || err.Error() != expError.Error() {
 		t.Errorf("Expected error %v, got %v", expError, err)
 	}

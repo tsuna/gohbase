@@ -423,6 +423,9 @@ func (c *client) processRPCs() {
 }
 
 func returnResult(c hrpc.Call, msg proto.Message, err error) {
+	if c == nil {
+		return
+	}
 	if m, ok := c.(*multi); ok {
 		m.returnResults(msg, err)
 	} else {
@@ -451,91 +454,79 @@ func (c *client) receiveRPCs() {
 		case <-c.done:
 			return
 		default:
-			if err := c.receive(reader); err != nil {
-				if _, ok := err.(ServerError); ok {
-					// fail the client and let the callers establish a new one
-					c.fail(err)
-					return
-				}
-				// in other cases we consider that the region client is healthy
-				// and return the error to caller to let them retry
+		}
+		rpc, resp, err := c.receive(reader)
+		returnResult(rpc, resp, err)
+		if err != nil {
+			if _, ok := err.(ServerError); ok {
+				// fail the client and let the callers establish a new one
+				c.fail(err)
+				return
 			}
+			// in other cases we consider that the region client is healthy
+			// and return the error to caller to let them retry
 		}
 	}
 }
 
-func (c *client) receive(r io.Reader) (err error) {
-	var (
-		sz       [4]byte
-		header   pb.ResponseHeader
-		response proto.Message
-	)
-
-	_, err = io.ReadFull(r, sz[:])
-	if err != nil {
-		return ServerError{err}
+func (c *client) receive(r io.Reader) (hrpc.Call, proto.Message, error) {
+	var sz [4]byte
+	if _, err := io.ReadFull(r, sz[:]); err != nil {
+		return nil, nil, ServerError{err}
 	}
 
 	size := binary.BigEndian.Uint32(sz[:])
 	b := make([]byte, size)
 
-	_, err = io.ReadFull(r, b)
-	if err != nil {
-		return ServerError{err}
+	if _, err := io.ReadFull(r, b); err != nil {
+		return nil, nil, ServerError{err}
 	}
 
 	// unmarshal header
+	var header pb.ResponseHeader
 	headerBytes, headerLen := protowire.ConsumeBytes(b)
 	if headerLen < 0 {
-		return ServerError{fmt.Errorf("failed to decode the response header: %v",
+		return nil, nil, ServerError{fmt.Errorf("failed to decode the response header: %v",
 			protowire.ParseError(headerLen))}
 	}
-	if err = proto.Unmarshal(headerBytes, &header); err != nil {
-		return ServerError{fmt.Errorf("failed to decode the response header: %v", err)}
+	if err := proto.Unmarshal(headerBytes, &header); err != nil {
+		return nil, nil, ServerError{fmt.Errorf("failed to decode the response header: %v", err)}
 	}
 
 	if header.CallId == nil {
-		return ErrMissingCallID
+		return nil, nil, ErrMissingCallID
 	}
 
 	callID := *header.CallId
 	rpc := c.unregisterRPC(callID)
 	if rpc == nil {
-		return ServerError{fmt.Errorf("got a response with an unexpected call ID: %d", callID)}
+		return nil, nil, ServerError{
+			fmt.Errorf("got a response with an unexpected call ID: %d", callID)}
 	}
 	if err := c.inFlightDown(); err != nil {
-		return ServerError{err}
+		return nil, nil, ServerError{err}
 	}
 
-	select {
-	case <-rpc.Context().Done():
+	if err := rpc.Context().Err(); err != nil {
 		// context has expired, don't bother deserializing
-		return
-	default:
+		return rpc, nil, err
 	}
-
-	// Here we know for sure that we got a response for rpc we asked.
-	// It's our responsibility to deliver the response or error to the
-	// caller as we unregistered the rpc.
-	defer func() { returnResult(rpc, response, err) }()
 
 	if header.Exception != nil {
-		err = exceptionToError(*header.Exception.ExceptionClassName, *header.Exception.StackTrace)
-		return
+		return rpc, nil, exceptionToError(
+			*header.Exception.ExceptionClassName, *header.Exception.StackTrace)
 	}
 
-	response = rpc.NewResponse()
+	response := rpc.NewResponse()
 
 	responseBytes, responseLen := protowire.ConsumeBytes(b[headerLen:])
 	if responseLen < 0 {
-		err = RetryableError{fmt.Errorf("failed to decode the response: %s",
+		return rpc, nil, RetryableError{fmt.Errorf("failed to decode the response: %s",
 			protowire.ParseError(responseLen))}
-		return
 	}
 
-	if err = proto.Unmarshal(responseBytes, response); err != nil {
-		err = RetryableError{fmt.Errorf("failed to decode the response: %s", err)}
-		return
+	if err := proto.Unmarshal(responseBytes, response); err != nil {
+		return rpc, nil, RetryableError{fmt.Errorf("failed to decode the response: %s", err)}
 	}
 
 	var cellsLen uint32
@@ -545,26 +536,25 @@ func (c *client) receive(r io.Reader) (err error) {
 	if d, ok := rpc.(canDeserializeCellBlocks); cellsLen > 0 && ok {
 		b := b[size-cellsLen:]
 		if c.compressor != nil {
+			var err error
 			b, err = c.compressor.decompressCellblocks(b)
 			if err != nil {
-				err = RetryableError{fmt.Errorf("failed to decompress the response: %s", err)}
-				return
+				return rpc, response, RetryableError{
+					fmt.Errorf("failed to decompress the response: %s", err)}
 			}
 		}
-		var nread uint32
-		nread, err = d.DeserializeCellBlocks(response, b)
+		nread, err := d.DeserializeCellBlocks(response, b)
 		if err != nil {
-			err = RetryableError{fmt.Errorf("failed to decode the response: %s", err)}
-			return
+			return rpc, response, RetryableError{
+				fmt.Errorf("failed to decode the response: %s", err)}
 		}
 
 		if int(nread) < len(b) {
-			err = RetryableError{
+			return rpc, response, RetryableError{
 				fmt.Errorf("short read: buffer length %d, read %d", len(b), nread)}
-			return
 		}
 	}
-	return
+	return rpc, response, nil
 }
 
 func exceptionToError(class, stack string) error {
