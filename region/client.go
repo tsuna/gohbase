@@ -65,25 +65,25 @@ var (
 	}
 
 	// If a Java exception listed here is returned by HBase, the client should
-	// backoff and resend the RPC message to the same region and region server
+	// backoff and resend the RPC message to the same region and region server.
 	// The value of exception should be contained in the stack trace.
 	javaRetryableExceptions = map[string]string{
 		"org.apache.hadoop.hbase.CallQueueTooBigException":          "",
 		"org.apache.hadoop.hbase.exceptions.RegionOpeningException": "",
-		"org.apache.hadoop.hbase.ipc.ServerNotRunningYetException":  "",
 		"org.apache.hadoop.hbase.quotas.RpcThrottlingException":     "",
 		"org.apache.hadoop.hbase.RetryImmediatelyException":         "",
 		"org.apache.hadoop.hbase.RegionTooBusyException":            "",
+		"org.apache.hadoop.hbase.PleaseHoldException":               "",
 	}
 
-	// javaServerExceptions is a map where all Java exceptions that signify
-	// the RPC should be sent again are listed (as keys). If a Java exception
-	// listed here is returned by HBase, the RegionClient will be closed and a new
-	// one should be established.
+	// If a Java exception listed here is returned by HBase, the RegionClient
+	// will be closed and a new one should be established.
 	// The value of exception should be contained in the stack trace.
 	javaServerExceptions = map[string]string{
 		"org.apache.hadoop.hbase.regionserver.RegionServerAbortedException": "",
 		"org.apache.hadoop.hbase.regionserver.RegionServerStoppedException": "",
+		"org.apache.hadoop.hbase.exceptions.MasterStoppedException":         "",
+		"org.apache.hadoop.hbase.ipc.ServerNotRunningYetException":          "",
 	}
 )
 
