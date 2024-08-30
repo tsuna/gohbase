@@ -41,4 +41,13 @@ var (
 		},
 		[]string{"regionserver"},
 	)
+
+	windowSize = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "gohbase",
+			Name:      "congestion_window",
+			Help:      "Window size in number of requests for congestion control",
+		},
+		[]string{"regionserver"},
+	)
 )

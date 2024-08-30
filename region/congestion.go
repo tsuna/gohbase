@@ -10,6 +10,7 @@ import (
 	"io"
 	"sync"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/tsuna/gohbase/hrpc"
 	"google.golang.org/protobuf/proto"
 )
@@ -36,9 +37,12 @@ type congestionControl struct {
 	// IO functions overridable for testing
 	trySend func(hrpc.Call) error
 	receive func(io.Reader) (hrpc.Call, proto.Message, error)
+
+	windowSizeMetric prometheus.Gauge
 }
 
-func newCongestion(c *client, minWindowSize, maxWindowSize int) *congestionControl {
+func newCongestion(c *client, minWindowSize, maxWindowSize int,
+	windowSizeMetric prometheus.Gauge) *congestionControl {
 	cc := &congestionControl{
 		c: c,
 		// retry is buffered to maxWindowSize to make it unlikely it
@@ -51,8 +55,11 @@ func newCongestion(c *client, minWindowSize, maxWindowSize int) *congestionContr
 
 		trySend: c.trySend,
 		receive: c.receive,
+
+		windowSizeMetric: windowSizeMetric,
 	}
 	cc.sema = newSemaphore(cc.sendWindow, maxWindowSize)
+	cc.windowSizeMetric.Set(float64(cc.sendWindow))
 
 	return cc
 }
@@ -130,10 +137,9 @@ func (cc *congestionControl) read(r io.Reader) error {
 				// Get the semaphore in line with our window size by
 				// adding the difference between the newSendWindow and
 				// the existing sendWindow.
-				diff := newSendWindow - cc.sendWindow
-				cc.sema.add(diff)
-				cc.windowDecreases.Add(float64(-diff))
+				cc.sema.add(newSendWindow - cc.sendWindow)
 				cc.sendWindow = newSendWindow
+				cc.windowSizeMetric.Set(float64(cc.sendWindow))
 			}
 			cc.sema.release1()
 			// Prioritize this request by putting it on cc.retry.
@@ -154,7 +160,10 @@ func (cc *congestionControl) read(r io.Reader) error {
 
 	// Request succeeded or hit an error unrelated to congestion, so
 	// expand sendWindow
-	cc.sendWindow = min(cc.sendWindow+1, cc.maxWindow)
+	if cc.sendWindow < cc.maxWindow {
+		cc.sendWindow++
+		cc.windowSizeMetric.Set(float64(cc.sendWindow))
+	}
 	// increase the sema by 2, (1 for the received response and 1
 	// because the window size has increased)
 	cc.sema.add(2)

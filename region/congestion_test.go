@@ -10,6 +10,7 @@ import (
 	"io"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/tsuna/gohbase/hrpc"
 	"google.golang.org/protobuf/proto"
 )
@@ -34,6 +35,12 @@ func (rs *fakeRegionServer) receive(io.Reader) (hrpc.Call, proto.Message, error)
 	return resp.rpc, nil, resp.err
 }
 
+type fakeGauge struct {
+	prometheus.Gauge
+}
+
+func (fakeGauge) Set(float64) {}
+
 func newRPC() hrpc.Call {
 	get, err := hrpc.NewGet(nil, nil, nil)
 	if err != nil {
@@ -47,7 +54,7 @@ func TestCongestion(t *testing.T) {
 		reqs:  make(chan hrpc.Call, 1),
 		resps: make(chan resp, 1),
 	}
-	cc := newCongestion(nil, 1, 10)
+	cc := newCongestion(nil, 1, 10, fakeGauge{})
 	cc.trySend = rs.trySend
 	cc.receive = rs.receive
 
