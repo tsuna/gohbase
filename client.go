@@ -101,7 +101,7 @@ type client struct {
 	newRegionClientFn func(string, region.ClientType, int, time.Duration,
 		string, time.Duration, compression.Codec,
 		func(ctx context.Context, network, addr string) (net.Conn, error),
-		*slog.Logger) hrpc.RegionClient
+		*slog.Logger, int, int) hrpc.RegionClient
 
 	compressionCodec compression.Codec
 
@@ -112,6 +112,9 @@ type client struct {
 	regionDialer func(ctx context.Context, network, addr string) (net.Conn, error)
 	// logger that could be defined by user
 	logger *slog.Logger
+
+	minWindowSize int
+	maxWindowSize int
 }
 
 // NewClient creates a new HBase client.

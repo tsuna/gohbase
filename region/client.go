@@ -167,8 +167,9 @@ type client struct {
 	// failOnce used for concurrent calls to fail
 	failOnce sync.Once
 
-	rpcs chan []hrpc.Call
-	done chan struct{}
+	rpcBatches chan []hrpc.Call
+	rpcs       chan hrpc.Call
+	done       chan struct{}
 
 	// sent contains the mapping of sent call IDs to RPC calls, so that when
 	// a response is received it can be tied to the correct RPC
@@ -196,12 +197,28 @@ type client struct {
 	dialer func(ctx context.Context, network, addr string) (net.Conn, error)
 
 	logger *slog.Logger
+
+	minWindowSize int
+	maxWindowSize int
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine
 func (c *client) QueueRPC(rpc hrpc.Call) {
 	if c.rpcQueueSize > 1 && hrpc.CanBatch(rpc) {
 		c.QueueBatch(rpc.Context(), []hrpc.Call{rpc})
+	} else if c.maxWindowSize > 0 && hrpc.GetPriority(rpc) == 0 {
+		select {
+		case <-c.done:
+			// An unrecoverable error has occured,
+			// region client has been stopped,
+			// don't send rpcs
+			returnResult(rpc, nil, ErrClientClosed)
+		case <-rpc.Context().Done():
+			// If the deadline has been exceeded, don't bother sending the
+			// request. The function that placed the RPC in our queue should
+			// stop waiting for a result and return an error.
+		case c.rpcs <- rpc:
+		}
 	} else {
 		select {
 		case <-c.done:
@@ -232,7 +249,7 @@ func (c *client) QueueBatch(ctx context.Context, rpcs []hrpc.Call) {
 		for _, c := range rpcs {
 			c.ResultChan() <- res
 		}
-	case c.rpcs <- rpcs:
+	case c.rpcBatches <- rpcs:
 	}
 }
 
@@ -365,7 +382,7 @@ func (c *client) processRPCs() {
 			select {
 			case <-c.done:
 				return
-			case rpcs := <-c.rpcs:
+			case rpcs := <-c.rpcBatches:
 				// have things queued up, batch them
 				if !m.add(rpcs) {
 					// can still put more rpcs into batch
@@ -382,7 +399,7 @@ func (c *client) processRPCs() {
 			select {
 			case <-c.done:
 				return
-			case rpcs := <-c.rpcs:
+			case rpcs := <-c.rpcBatches:
 				m.add(rpcs)
 			}
 			continue
@@ -404,7 +421,7 @@ func (c *client) processRPCs() {
 			case <-timer.C:
 				reason = "timeout"
 				// time to flush
-			case rpcs := <-c.rpcs:
+			case rpcs := <-c.rpcBatches:
 				if !m.add(rpcs) {
 					// can still put more rpcs into batch
 					continue

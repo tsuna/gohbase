@@ -39,7 +39,7 @@ import (
 func newRegionClientFn(addr string) func() hrpc.RegionClient {
 	return func() hrpc.RegionClient {
 		return newMockRegionClient(addr, region.RegionClient,
-			0, 0, "root", region.DefaultReadTimeout, nil, nil, slog.Default())
+			0, 0, "root", region.DefaultReadTimeout, nil, nil, slog.Default(), 0, 0)
 	}
 }
 
@@ -310,7 +310,7 @@ func TestEstablishRegionDialFail(t *testing.T) {
 	c.newRegionClientFn = func(_ string, _ region.ClientType, _ int, _ time.Duration,
 		_ string, _ time.Duration, _ compression.Codec,
 		_ func(ctx context.Context, network, addr string) (net.Conn, error),
-		_ *slog.Logger) hrpc.RegionClient {
+		_ *slog.Logger, _, _ int) hrpc.RegionClient {
 		var rc hrpc.RegionClient
 		if newRegionClientFnCallCount == 0 {
 			rc = rcFailDial

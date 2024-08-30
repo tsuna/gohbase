@@ -29,6 +29,8 @@ func TestDebugStateSanity(t *testing.T) {
 		client.compressionCodec,
 		nil,
 		slog.Default(),
+		0,
+		0,
 	)
 	newClientFn := func() hrpc.RegionClient {
 		return regClient

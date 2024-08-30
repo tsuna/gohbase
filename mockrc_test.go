@@ -181,7 +181,7 @@ func newMockRegionClient(addr string, ctype region.ClientType, queueSize int,
 	flushInterval time.Duration, effectiveUser string,
 	readTimeout time.Duration, codec compression.Codec,
 	dialer func(ctx context.Context, network, addr string) (net.Conn, error),
-	log *slog.Logger) hrpc.RegionClient {
+	log *slog.Logger, minWindowSize, maxWindowSize int) hrpc.RegionClient {
 	m.Lock()
 	clients[addr]++
 	m.Unlock()
