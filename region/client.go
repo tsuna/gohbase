@@ -175,6 +175,7 @@ type client struct {
 	sentM sync.Mutex // protects sent
 	sent  map[uint32]hrpc.Call
 
+	// TODO: Delete this. inFlight can be replaced with len(sent)
 	// inFlight is number of rpcs sent to regionserver awaiting response
 	inFlightM sync.Mutex // protects inFlight and SetReadDeadline
 	inFlight  uint32
@@ -254,28 +255,26 @@ func (c *client) String() string {
 
 func (c *client) inFlightUp() error {
 	c.inFlightM.Lock()
+	defer c.inFlightM.Unlock()
 	c.inFlight++
 	// we expect that at least the last request can be completed within readTimeout
 	if err := c.conn.SetReadDeadline(time.Now().Add(c.readTimeout)); err != nil {
-		c.inFlightM.Unlock()
 		return err
 	}
-	c.inFlightM.Unlock()
 	return nil
 }
 
 func (c *client) inFlightDown() error {
 	c.inFlightM.Lock()
+	defer c.inFlightM.Unlock()
 	c.inFlight--
 	// reset read timeout if we are not waiting for any responses
 	// in order to prevent from closing this client if there are no request
 	if c.inFlight == 0 {
 		if err := c.conn.SetReadDeadline(time.Time{}); err != nil {
-			c.inFlightM.Unlock()
 			return err
 		}
 	}
-	c.inFlightM.Unlock()
 	return nil
 }
 
