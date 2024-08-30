@@ -316,6 +316,26 @@ func Logger(logger *slog.Logger) Option {
 	}
 }
 
+// CongestionControl enables per-regionserver congestion control,
+// limiting the number of outstanding Get/Scan requests. The window
+// size will adjust larged when seeing successful results and adjust
+// smaller when seeing errors within the bounds of the minWindowSize
+// and maxWindowSize.
+func CongestionControl(minWindowSize, maxWindowSize int) Option {
+	return func(c *client) {
+		if minWindowSize > maxWindowSize {
+			panic(fmt.Errorf("minWindowSize is greater than maxMindowSize: %d and %d",
+				minWindowSize, maxWindowSize))
+		}
+		if minWindowSize < 0 || maxWindowSize < 0 {
+			panic(fmt.Errorf("minWindowSize or maxWindowSize are negative: %d and %d",
+				minWindowSize, maxWindowSize))
+		}
+		c.minWindowSize = minWindowSize
+		c.maxWindowSize = maxWindowSize
+	}
+}
+
 // Close closes connections to hbase master and regionservers
 func (c *client) Close() {
 	c.closeOnce.Do(func() {
