@@ -1004,6 +1004,11 @@ func sleepAndIncreaseBackoff(ctx context.Context, backoff time.Duration) (time.D
 		return 0, ctx.Err()
 	}
 
+	// Keep track of the amount of time spend sleeping in retry backoff. Ignore if context was
+	// canceled.
+	retryBackoffDuration.Observe(backoff.Seconds())
+
+	// When changing this formula, update the buckets of the retryBackoffDuration metric too.
 	if backoff < 5*time.Second {
 		return backoff * 2, nil
 	} else if backoff < 30*time.Second {
