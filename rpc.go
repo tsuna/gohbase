@@ -757,7 +757,7 @@ func createAllRegionSearchKey(table []byte) []byte {
 	return metaKey
 }
 
-// metaLookupForTable checks meta table for all the region in which the given table is.
+// metaLookupForTable checks meta table for all the open table regions.
 func (c *client) metaLookupForTable(ctx context.Context,
 	table []byte) ([]regionInfoAndAddr, error) {
 	metaKey := createAllRegionSearchKey(table)
@@ -780,7 +780,12 @@ func (c *client) metaLookupForTable(ctx context.Context,
 
 		reg, addr, err := region.ParseRegionInfo(resp)
 		if err != nil {
-			return nil, err
+			// Ignore error, but log if it's anything else than OfflineRegionError. This really
+			// shouldn't happen unless HBase meta table is corrupted/changed format.
+			if _, ok := err.(region.OfflineRegionError); !ok {
+				c.logger.Debug("failed to parse region", "err", err)
+			}
+			continue
 		}
 
 		regions = append(regions, regionInfoAndAddr{regionInfo: reg, addr: addr})
