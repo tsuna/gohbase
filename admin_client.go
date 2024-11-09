@@ -24,7 +24,7 @@ const (
 	snaphotValidateInterval time.Duration = time.Second / 2
 )
 
-// AdminClient to perform admistrative operations with HMaster
+// AdminClient to perform administrative operations with HMaster
 type AdminClient interface {
 	CreateTable(t *hrpc.CreateTable) error
 	DeleteTable(t *hrpc.DeleteTable) error
