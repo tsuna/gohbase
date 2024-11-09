@@ -17,7 +17,7 @@ import (
 	"github.com/tsuna/gohbase/test"
 )
 
-func TestFamilesOption(t *testing.T) {
+func TestFamiliesOption(t *testing.T) {
 	f := map[string][]string{"yolo": []string{"swag", "meow"}}
 
 	g, err := NewGet(context.Background(), nil, nil, Families(f))

@@ -219,7 +219,7 @@ type RestoreSnapshot struct {
 	*Snapshot
 }
 
-// NewRestoreSnapshot creates a new RestoreSnapshot request that will delete
+// NewRestoreSnapshot creates a new RestoreSnapshot request that will restore
 // the given snapshot.
 func NewRestoreSnapshot(t *Snapshot) *RestoreSnapshot {
 	return &RestoreSnapshot{t}

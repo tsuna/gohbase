@@ -2279,9 +2279,9 @@ func TestSnapshot(t *testing.T) {
 	}
 }
 
-// Test snapshot restoration
+// TestRestoreSnapshot tests using a snapshot to restore a table.
 func TestRestoreSnapshot(t *testing.T) {
-	// Prochedure for this test is roughly:
+	// Procedure for this test is roughly:
 	// - Create some data in a table.
 	// - Create a snapshot.
 	// - Remove all data.
@@ -2514,4 +2514,123 @@ func TestCacheRegions(t *testing.T) {
 		t.Fatalf("Expect 4 regions but got: %v", cacheLength)
 	}
 
+}
+
+// TestNewTableFromSnapshot tests the ability to create a snapshot from a table,
+// and then use this snapshot to create a new, different table from the table the
+// snapshot was created from. This is different from restoring the snapshot to the
+// table it was created from.
+func TestNewTableFromSnapshot(t *testing.T) {
+	var (
+		key          = t.Name() + "_Get"
+		snapshotName = "snapshot-" + table
+	)
+
+	c := gohbase.NewClient(*host, gohbase.RpcQueueSize(1))
+	defer c.Close()
+	// Insert some data into the main test table.
+	if err := insertKeyValue(c, key, "cf", []byte{1}); err != nil {
+		t.Fatal(err)
+	}
+
+	ac := gohbase.NewAdminClient(*host)
+	// Create snapshot from the main test table.
+	sn, err := hrpc.NewSnapshot(context.Background(), snapshotName, table)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = ac.CreateSnapshot(sn); err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		err = ac.DeleteSnapshot(sn)
+		if err != nil {
+			t.Error(err)
+		}
+	}()
+
+	// Delete the data from main test table after taking snapshot.
+	if err = deleteKeyValue(c, key, "cf", []byte{1}); err != nil {
+		t.Fatal(err)
+	}
+	// Confirm data has been deleted.
+	gMain, err := hrpc.NewGetStr(context.Background(), table, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r, err := c.Get(gMain)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(r.Cells) != 0 {
+		t.Fatalf("expected no cells in table %s key %s", table, key)
+	}
+
+	// Restore the snapshot of the same name to a new table.
+	// The new table doesn't exist yet, HBase will create it when trying to restore a snapshot to a
+	// table that does not already exist. If the snapshot table doesn't exist, as in this case,
+	// HBase will clone the snapshot to a new table.
+	tableNew := fmt.Sprintf("gohbase_test_%d_%s", time.Now().UnixNano(), t.Name())
+	sn, err = hrpc.NewSnapshot(context.Background(), snapshotName, tableNew)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = ac.RestoreSnapshot(sn); err != nil {
+		t.Fatal(err)
+	}
+
+	// It may take some time for the new table with the restored data to be created,
+	// wait some time for this to complete.
+	var tn *hrpc.ListTableNames
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+	tn, err = hrpc.NewListTableNames(ctx, hrpc.ListRegex(tableNew))
+	for {
+		var names []*pb.TableName
+		names, err = ac.ListTableNames(tn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(names) != 0 {
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
+
+	// Now that this table has been created, clean up after test.
+	defer func() {
+		err = DeleteTable(ac, tableNew)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	// Check that the snapshot data has been cloned to the new table.
+	gNew, err := hrpc.NewGetStr(context.Background(), tableNew, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err = c.Get(gNew)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Cells) == 0 {
+		t.Fatal("Expected non-empty result")
+	}
+	expV := []byte{1}
+	if !bytes.Equal(r.Cells[0].Value, expV) {
+		t.Fatalf("expected %v, got %v:", expV, r.Cells[0].Value)
+	}
+
+	// Checking that the data did not get restored to the main test table:
+	r, err = c.Get(gMain)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(r.Cells) != 0 {
+		t.Fatalf("expected no cells after RestoreSnapshot in table %s key %s", table, key)
+	}
 }
