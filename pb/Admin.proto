@@ -1,0 +1,69 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+syntax = "proto2";
+// This file contains protocol buffers that are used for Admin service.
+package pb;
+
+option java_package = "org.apache.hadoop.hbase.protobuf.generated";
+option java_outer_classname = "AdminProtos";
+option java_generic_services = true;
+option java_generate_equals_and_hash = true;
+option optimize_for = SPEED;
+option go_package = "../pb";
+
+import "HBase.proto";
+
+message GetRegionInfoRequest {
+  required RegionSpecifier region = 1;
+  optional bool compaction_state = 2;
+}
+
+message GetRegionInfoResponse {
+  required RegionInfo region_info = 1;
+  optional CompactionState compaction_state = 2;
+  optional bool isRecovering = 3;
+
+  enum CompactionState {
+    NONE = 0;
+    MINOR = 1;
+    MAJOR = 2;
+    MAJOR_AND_MINOR = 3;
+  }
+}
+
+/**
+ * Compacts the specified region.  Performs a major compaction if specified.
+ * <p>
+ * This method is asynchronous.
+ */
+message CompactRegionRequest {
+  required RegionSpecifier region = 1;
+  optional bool major = 2;
+  optional bytes family = 3;
+}
+
+message CompactRegionResponse {
+}
+
+service AdminService {
+  rpc CompactRegion(CompactRegionRequest)
+    returns(CompactRegionResponse);
+
+  rpc GetRegionInfo(GetRegionInfoRequest)
+      returns(GetRegionInfoResponse);
+}
