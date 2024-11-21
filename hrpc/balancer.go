@@ -18,7 +18,7 @@ type SetBalancer struct {
 	req *pb.SetBalancerRunningRequest
 }
 
-// NewListTableNames creates a new SetBalancer request that will set balancer state.
+// NewSetBalancer creates a new SetBalancer request that will set balancer state.
 func NewSetBalancer(ctx context.Context, enabled bool) (*SetBalancer, error) {
 	return &SetBalancer{
 		base: base{
