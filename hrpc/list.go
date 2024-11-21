@@ -54,7 +54,7 @@ func ListSysTables(b bool) func(Call) error {
 
 // NewListTableNames creates a new GetTableNames request that will list tables in hbase.
 //
-// By default matchs all tables. Use the options (ListRegex, ListNamespace, ListSysTables) to
+// By default, matches all tables. Use the options (ListRegex, ListNamespace, ListSysTables) to
 // set non default behaviour.
 func NewListTableNames(ctx context.Context, opts ...func(Call) error) (*ListTableNames, error) {
 	tn := &ListTableNames{
