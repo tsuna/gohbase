@@ -44,6 +44,8 @@ func init() {
 	table = fmt.Sprintf("gohbase_test_%d", time.Now().UnixNano())
 }
 
+const scannerLease = 5 * time.Second
+
 // CreateTable creates the given table with the given families
 func CreateTable(client gohbase.AdminClient, table string, cFamilies []string) error {
 	// If the table exists, delete it
@@ -2632,5 +2634,180 @@ func TestNewTableFromSnapshot(t *testing.T) {
 
 	if len(r.Cells) != 0 {
 		t.Fatalf("expected no cells after RestoreSnapshot in table %s key %s", table, key)
+	}
+}
+
+// TestScannerTimeout makes sure that without the Renew flag on we get
+// a lease timeout between Next calls if the wait between them is too long.
+func TestScannerTimeout(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+	// Insert test data
+	keyPrefix := "scanner_timeout_test_"
+	numRows := 2
+	for i := 0; i < numRows; i++ {
+		key := fmt.Sprintf("%s%d", keyPrefix, i)
+		value := []byte(strconv.Itoa(i))
+		err := insertKeyValue(c, key, "cf", value)
+		if err != nil {
+			t.Fatalf("Failed to insert test data: %v", err)
+		}
+	}
+
+	// Create a scan request
+	// renewal is default set to false
+	// We set result size to 1 to force a lease timeout between Next calls
+	scan, err := hrpc.NewScanStr(context.Background(), table,
+		hrpc.Families(map[string][]string{"cf": nil}),
+		hrpc.Filters(filter.NewPrefixFilter([]byte(keyPrefix))),
+		hrpc.NumberOfRows(1),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create scan request: %v", err)
+	}
+
+	scanner := c.Scan(scan)
+	defer scanner.Close()
+	rsp, err := scanner.Next()
+	if err != nil {
+		t.Fatalf("Scanner.Next() returned error: %v", err)
+	}
+	if rsp == nil {
+		t.Fatalf("Unexpected end of scanner")
+	}
+	expectedValue := []byte(strconv.Itoa(0))
+	if !bytes.Equal(rsp.Cells[0].Value, expectedValue) {
+		t.Errorf("Unexpected value. Got %v, want %v", rsp.Cells[0].Value, expectedValue)
+	}
+
+	// force lease timeout
+	time.Sleep(scannerLease)
+
+	_, err = scanner.Next()
+
+	// lease timeout should return an UnknownScannerException
+	if err != nil && strings.Contains(err.Error(),
+		"org.apache.hadoop.hbase.UnknownScannerException") {
+		fmt.Println("Error matches: UnknownScannerException")
+	} else {
+		t.Fatalf("Error does not match org.apache.hadoop.hbase.UnknownScannerException")
+	}
+}
+
+// TestScannerRenewal tests for the renewal process of scanners
+// if the renew flag is enabled for a scan requset. If there is a long
+// period of waiting between Next calls, the latter Next call should
+// still succeed because we are renewing every lease timeout / 2 seconds
+func TestScannerRenewal(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+	// Insert test data
+	keyPrefix := "scanner_renewal_test_"
+	numRows := 2
+	for i := 0; i < numRows; i++ {
+		key := fmt.Sprintf("%s%d", keyPrefix, i)
+		value := []byte(strconv.Itoa(i))
+		err := insertKeyValue(c, key, "cf", value)
+		if err != nil {
+			t.Fatalf("Failed to insert test data: %v", err)
+		}
+	}
+
+	// Create a scan request
+	// Turn on renewal
+	// We set result size to 1 to force a lease timeout between Next calls
+	scan, err := hrpc.NewScanStr(context.Background(), table,
+		hrpc.Families(map[string][]string{"cf": nil}),
+		hrpc.Filters(filter.NewPrefixFilter([]byte(keyPrefix))),
+		hrpc.NumberOfRows(1),
+		hrpc.RenewInterval(scannerLease/2),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create scan request: %v", err)
+	}
+
+	scanner := c.Scan(scan)
+	defer scanner.Close()
+	for i := 0; i < numRows; i++ {
+		rsp, err := scanner.Next()
+		// Sleep to trigger renewal
+		time.Sleep(scannerLease)
+		if err != nil {
+			t.Fatalf("Scanner.Next() returned error: %v", err)
+		}
+		if rsp == nil {
+			t.Fatalf("Unexpected end of scanner")
+		}
+		expectedValue := []byte(strconv.Itoa(i))
+		if !bytes.Equal(rsp.Cells[0].Value, expectedValue) {
+			t.Fatalf("Unexpected value. Got %v, want %v", rsp.Cells[0].Value, expectedValue)
+		}
+	}
+	// Ensure scanner is exhausted
+	rsp, err := scanner.Next()
+	if err != io.EOF {
+		t.Fatalf("Expected EOF error, got: %v", err)
+	}
+	if rsp != nil {
+		t.Fatalf("Expected nil response at end of scan, got: %v", rsp)
+	}
+}
+
+func TestScannerRenewalCancellation(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+
+	// Insert test data
+	keyPrefix := "scanner_renewal_cancel_test_"
+	numRows := 2
+	for i := 0; i < numRows; i++ {
+		key := fmt.Sprintf("%s%d", keyPrefix, i)
+		value := []byte(strconv.Itoa(i))
+		err := insertKeyValue(c, key, "cf", value)
+		if err != nil {
+			t.Fatalf("Failed to insert test data: %v", err)
+		}
+	}
+
+	// Create a context with cancellation
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	scan, err := hrpc.NewScanStr(ctx, table,
+		hrpc.Families(map[string][]string{"cf": nil}),
+		hrpc.Filters(filter.NewPrefixFilter([]byte(keyPrefix))),
+		hrpc.NumberOfRows(1),
+		hrpc.RenewInterval(scannerLease/2),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create scan request: %v", err)
+	}
+
+	scanner := c.Scan(scan)
+	defer scanner.Close()
+
+	rsp, err := scanner.Next()
+	if err != nil {
+		t.Fatalf("Scanner.Next() returned error: %v", err)
+	}
+	if rsp == nil {
+		t.Fatalf("Unexpected end of scanner")
+	}
+	expectedValue := []byte(strconv.Itoa(0))
+	if !bytes.Equal(rsp.Cells[0].Value, expectedValue) {
+		t.Errorf("Unexpected value. Got %v, want %v", rsp.Cells[0].Value, expectedValue)
+	}
+
+	// Cancel the context
+	cancel()
+
+	// Next call should return an error
+	_, err = scanner.Next()
+
+	if err == nil {
+		t.Fatal("Expected error after context cancellation, got nil")
+	}
+	if err != context.Canceled {
+		t.Fatalf("Expected context.Canceled error, got: %v", err)
 	}
 }
