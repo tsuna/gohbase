@@ -23,6 +23,17 @@ jobs:
           tar zxf hbase-$ver-bin.tar.gz --exclude=docs &&
           ln -s hbase-$ver hbase
 
+      - name: Setup | Config HBase
+        # quick and dirty sed script to insert config into
+        # hbase-site.xml.
+        #
+        # Set scanner timeout to 5s from default of 60s, to make tests
+        # for scanner expiration faster.
+        run: |
+          sed -i '/<\/configuration>/i \
+          <property><name>hbase.client.scanner.timeout.period</name><value>5000</value></property>
+          ' hbase/conf/hbase-site.xml
+
       - name: Setup | Start HBase
         run: hbase/bin/hbase-daemon.sh --config hbase/conf start master
 
@@ -45,7 +56,7 @@ jobs:
 
       - name: Upload HBase logs
         uses: actions/upload-artifact@v4
-        if: ${{ always() }}
+        if: ${{ failure() }}
         with:
           name: hbase-logs
           path: hbase/logs/

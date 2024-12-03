@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/tsuna/gohbase/pb"
 	"google.golang.org/protobuf/proto"
@@ -77,6 +78,9 @@ type Scan struct {
 
 	closeScanner        bool
 	allowPartialResults bool
+
+	renewInterval time.Duration
+	renewalScan   bool
 }
 
 // baseScan returns a Scan struct with default values set.
@@ -93,6 +97,8 @@ func baseScan(ctx context.Context, table []byte,
 		maxResultSize: DefaultMaxResultSize,
 		numberOfRows:  DefaultNumberOfRows,
 		reversed:      false,
+		renewInterval: 0 * time.Second,
+		renewalScan:   false,
 	}
 	err := applyOptions(s, options...)
 	if err != nil {
@@ -104,10 +110,12 @@ func baseScan(ctx context.Context, table []byte,
 func (s *Scan) String() string {
 	return fmt.Sprintf("Scan{Table=%q StartRow=%q StopRow=%q TimeRange=(%d, %d) "+
 		"MaxVersions=%d NumberOfRows=%d MaxResultSize=%d Familes=%v Filter=%v "+
-		"StoreLimit=%d StoreOffset=%d ScannerID=%d Close=%v}",
+		"StoreLimit=%d StoreOffset=%d ScannerID=%d Close=%v RenewInterval=%v"+
+		"RenewalScan=%v}",
 		s.table, s.startRow, s.stopRow, s.fromTimestamp, s.toTimestamp,
 		s.maxVersions, s.numberOfRows, s.maxResultSize, s.families, s.filter,
-		s.storeLimit, s.storeOffset, s.scannerID, s.closeScanner)
+		s.storeLimit, s.storeOffset, s.scannerID, s.closeScanner, s.renewInterval,
+		s.renewalScan)
 }
 
 // NewScan creates a scanner for the given table.
@@ -189,6 +197,18 @@ func (s *Scan) TrackScanMetrics() bool {
 	return s.trackScanMetrics
 }
 
+// RenewInterval returns the interval at which the scanner will be renewed
+// which is usually lease timeout / 2 secs
+func (s *Scan) RenewInterval() time.Duration {
+	return s.renewInterval
+}
+
+// RenewalScan returns whether this scan is to be used only a renewal request
+// to hbase
+func (s *Scan) RenewalScan() bool {
+	return s.renewalScan
+}
+
 // ToProto converts this Scan into a protobuf message
 func (s *Scan) ToProto() proto.Message {
 	scan := &pb.ScanRequest{
@@ -201,6 +221,11 @@ func (s *Scan) ToProto() proto.Message {
 		// since we don't really time out our scans (unless context was cancelled)
 		ClientHandlesHeartbeats: proto.Bool(true),
 		TrackScanMetrics:        &s.trackScanMetrics,
+		Renew:                   proto.Bool(false),
+	}
+	// Tells hbase whether this request is for scanner renewal
+	if s.renewalScan {
+		scan.Renew = &s.renewalScan
 	}
 	if s.scannerID != math.MaxUint64 {
 		scan.ScannerId = &s.scannerID
@@ -384,6 +409,33 @@ func Attribute(key string, val []byte) func(Call) error {
 			return errors.New("'Attributes' option can only be used with Scan queries")
 		}
 		scan.attribute = append(scan.attribute, &pb.NameBytesPair{Name: &key, Value: val})
+		return nil
+	}
+}
+
+// RenewInterval is a an option for scan requests.
+// Enables renewal of scanners at an interval to prevent timeout of scanners due to
+// waiting/starvation
+func RenewInterval(interval time.Duration) func(Call) error {
+	return func(g Call) error {
+		scan, ok := g.(*Scan)
+		if !ok {
+			return errors.New("'RenewInterval' option can only be used with Scan queries")
+		}
+		scan.renewInterval = interval
+		return nil
+	}
+}
+
+// RenewalScan is an option for scan requests.
+// Indicates that this Scan request will be used for the renewal of a scanner only
+func RenewalScan() func(Call) error {
+	return func(g Call) error {
+		scan, ok := g.(*Scan)
+		if !ok {
+			return errors.New("'RenewScan' option can only be used with Scan queries")
+		}
+		scan.renewalScan = true
 		return nil
 	}
 }

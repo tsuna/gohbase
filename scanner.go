@@ -11,7 +11,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
+	"time"
 
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
@@ -39,6 +41,9 @@ type scanner struct {
 	results     []*pb.Result
 	closed      bool
 	scanMetrics map[string]int64
+
+	logger      *slog.Logger
+	renewCancel context.CancelFunc
 }
 
 func (s *scanner) fetch() ([]*pb.Result, error) {
@@ -57,7 +62,6 @@ func (s *scanner) fetch() ([]*pb.Result, error) {
 		}
 
 		s.update(resp, region)
-
 		if s.isDone(resp, region) {
 			s.Close()
 		}
@@ -137,6 +141,7 @@ func newScanner(c RPCClient, rpc *hrpc.Scan) *scanner {
 		startRow:           rpc.StartRow(),
 		curRegionScannerID: noScannerID,
 		scanMetrics:        sm,
+		logger:             slog.Default(),
 	}
 }
 
@@ -149,6 +154,21 @@ func toLocalResult(r *pb.Result) *hrpc.Result {
 }
 
 func (s *scanner) Next() (*hrpc.Result, error) {
+	if s.rpc.RenewInterval() > 0 && s.renewCancel != nil {
+		s.renewCancel()
+	}
+
+	res, err := s.nextInternal()
+
+	if err == nil && s.rpc.RenewInterval() > 0 {
+		renewCtx, cancel := context.WithCancel(s.rpc.Context())
+		s.renewCancel = cancel
+		go s.renewLoop(renewCtx, s.startRow)
+	}
+	return res, err
+}
+
+func (s *scanner) nextInternal() (*hrpc.Result, error) {
 	var (
 		result, partial *pb.Result
 		err             error
@@ -218,6 +238,7 @@ func (s *scanner) request() (*pb.ScanResponse, hrpc.RegionInfo, error) {
 			hrpc.ScannerID(s.curRegionScannerID),
 			hrpc.NumberOfRows(s.rpc.NumberOfRows()),
 			hrpc.Priority(s.rpc.Priority()),
+			hrpc.RenewInterval(s.rpc.RenewInterval()),
 		)
 	}
 	if err != nil {
@@ -276,6 +297,9 @@ func (s *scanner) update(resp *pb.ScanResponse, region hrpc.RegionInfo) {
 func (s *scanner) Close() error {
 	if s.closed {
 		return nil
+	}
+	if s.renewCancel != nil {
+		s.renewCancel()
 	}
 	s.closed = true
 	// close the last region scanner
@@ -358,4 +382,41 @@ func (s *scanner) closeRegionScanner() {
 		go s.SendRPC(rpc)
 	}
 	s.curRegionScannerID = noScannerID
+}
+
+// renews a scanner by resending scan request with renew = true
+func (s *scanner) renew(startRow []byte) error {
+	if err := s.rpc.Context().Err(); err != nil {
+		return err
+	}
+	rpc, err := hrpc.NewScanRange(s.rpc.Context(),
+		s.rpc.Table(),
+		startRow,
+		nil,
+		hrpc.ScannerID(s.curRegionScannerID),
+		hrpc.Priority(s.rpc.Priority()),
+		hrpc.RenewalScan(),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = s.SendRPC(rpc)
+	return err
+}
+
+func (s *scanner) renewLoop(ctx context.Context, startRow []byte) {
+	t := time.NewTicker(s.rpc.RenewInterval())
+	defer t.Stop()
+
+	for {
+		select {
+		case <-t.C:
+			if err := s.renew(startRow); err != nil {
+				s.logger.Error("error renewing scanner", "err", err)
+				return
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
 }
