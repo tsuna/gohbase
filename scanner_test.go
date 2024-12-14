@@ -479,7 +479,7 @@ func TestErrorScanFromIDAllowPartials(t *testing.T) {
 	testErrorScanFromID(t, scan, expected)
 }
 
-func TestErrorFirstFetch(t *testing.T) {
+func TestErrorFirstFetchNoMetrics(t *testing.T) {
 	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 	c := mock.NewMockRPCClient(ctrl)
@@ -491,6 +491,47 @@ func TestErrorFirstFetch(t *testing.T) {
 	scanner := newScanner(c, scan)
 
 	srange, err := hrpc.NewScanRange(context.Background(), table, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	outErr := errors.New("WTF")
+	c.EXPECT().SendRPC(&scanMatcher{scan: srange}).Do(func(rpc hrpc.Call) {
+		rpc.SetRegion(region1)
+	}).Return(nil, outErr).Times(1)
+
+	var r *hrpc.Result
+	var rs []*hrpc.Result
+	for {
+		r, err = scanner.Next()
+		if r != nil {
+			rs = append(rs, r)
+		}
+		if err != nil {
+			break
+		}
+	}
+	if err != outErr {
+		t.Errorf("Expected error %v, got error %v", outErr, err)
+	}
+	if len(rs) != 0 {
+		t.Fatalf("expected no results, got %v", rs)
+	}
+}
+
+func TestErrorFirstFetchWithMetrics(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+	c := mock.NewMockRPCClient(ctrl)
+
+	scan, err := hrpc.NewScan(context.Background(), table, hrpc.TrackScanMetrics())
+	if err != nil {
+		t.Fatal(err)
+	}
+	scanner := newScanner(c, scan)
+
+	srange, err := hrpc.NewScanRange(context.Background(), table, nil, nil,
+		hrpc.TrackScanMetrics())
 	if err != nil {
 		t.Fatal(err)
 	}
