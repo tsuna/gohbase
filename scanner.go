@@ -45,15 +45,15 @@ func (s *scanner) fetch() ([]*pb.Result, error) {
 	// keep looping until we have error, some non-empty result or until close
 	for {
 		resp, region, err := s.request()
+		if err != nil {
+			s.Close()
+			return nil, err
+		}
 		if s.rpc.TrackScanMetrics() && resp.ScanMetrics != nil {
 			metrics := resp.ScanMetrics.GetMetrics()
 			for _, m := range metrics {
 				s.scanMetrics[m.GetName()] += m.GetValue()
 			}
-		}
-		if err != nil {
-			s.Close()
-			return nil, err
 		}
 
 		s.update(resp, region)
