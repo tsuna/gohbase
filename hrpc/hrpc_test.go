@@ -218,37 +218,47 @@ func TestNewScan(t *testing.T) {
 	stopb := []byte("100")
 	scan, err := NewScan(ctx, tableb)
 	if err != nil || !confirmScanAttributes(ctx, scan, tableb, nil, nil, nil, nil,
-		DefaultNumberOfRows) {
+		DefaultNumberOfRows, 0, false) {
 		t.Errorf("Scan1 didn't set attributes correctly.")
 	}
 	scan, err = NewScanRange(ctx, tableb, startb, stopb)
 	if err != nil || !confirmScanAttributes(ctx, scan, tableb, startb, stopb, nil, nil,
-		DefaultNumberOfRows) {
+		DefaultNumberOfRows, 0, false) {
 		t.Errorf("Scan2 didn't set attributes correctly.")
 	}
 	scan, err = NewScanStr(ctx, table)
 	if err != nil || !confirmScanAttributes(ctx, scan, tableb, nil, nil, nil, nil,
-		DefaultNumberOfRows) {
+		DefaultNumberOfRows, 0, false) {
 		t.Errorf("Scan3 didn't set attributes correctly.")
 	}
 	scan, err = NewScanRangeStr(ctx, table, start, stop)
 	if err != nil || !confirmScanAttributes(ctx, scan, tableb, startb, stopb, nil, nil,
-		DefaultNumberOfRows) {
+		DefaultNumberOfRows, 0, false) {
 		t.Errorf("Scan4 didn't set attributes correctly.")
 	}
 	scan, err = NewScanRange(ctx, tableb, startb, stopb, Families(fam), Filters(filter1))
 	if err != nil || !confirmScanAttributes(ctx, scan, tableb, startb, stopb, fam, filter1,
-		DefaultNumberOfRows) {
+		DefaultNumberOfRows, 0, false) {
 		t.Errorf("Scan5 didn't set attributes correctly.")
 	}
 	scan, err = NewScan(ctx, tableb, Filters(filter1), Families(fam))
 	if err != nil || !confirmScanAttributes(ctx, scan, tableb, nil, nil, fam, filter1,
-		DefaultNumberOfRows) {
+		DefaultNumberOfRows, 0, false) {
 		t.Errorf("Scan6 didn't set attributes correctly.")
 	}
 	scan, err = NewScan(ctx, tableb, NumberOfRows(1))
-	if err != nil || !confirmScanAttributes(ctx, scan, tableb, nil, nil, nil, nil, 1) {
+	if err != nil || !confirmScanAttributes(ctx, scan, tableb, nil, nil, nil, nil, 1, 0, false) {
 		t.Errorf("Scan7 didn't set number of versions correctly")
+	}
+	scan, err = NewScan(ctx, tableb, RenewInterval(10*time.Second))
+	if err != nil || !confirmScanAttributes(ctx, scan, tableb, nil, nil, nil, nil,
+		DefaultNumberOfRows, 10*time.Second, false) {
+		t.Errorf("Scan8 didn't set renew correctly")
+	}
+	scan, err = NewScan(ctx, tableb, RenewalScan())
+	if err != nil || !confirmScanAttributes(ctx, scan, tableb, nil, nil, nil, nil,
+		DefaultNumberOfRows, 0, true) {
+		t.Errorf("Scan8 didn't set renew correctly")
 	}
 }
 
@@ -286,6 +296,7 @@ func TestScanToProto(t *testing.T) {
 					TimeRange:     &pb.TimeRange{},
 				},
 				TrackScanMetrics: proto.Bool(false),
+				Renew:            proto.Bool(false),
 			},
 		},
 		{ // explicitly set configurable attributes to default values
@@ -319,6 +330,7 @@ func TestScanToProto(t *testing.T) {
 					CacheBlocks:   nil,
 				},
 				TrackScanMetrics: proto.Bool(false),
+				Renew:            proto.Bool(false),
 			},
 		},
 		{ // set configurable attributes to non-default values
@@ -331,6 +343,8 @@ func TestScanToProto(t *testing.T) {
 					MaxVersions(89),
 					CacheBlocks(!DefaultCacheBlocks),
 					TimeRangeUint64(1024, 1738),
+					RenewInterval(10*time.Second),
+					RenewalScan(),
 				)
 				return s
 			}(),
@@ -353,6 +367,7 @@ func TestScanToProto(t *testing.T) {
 					CacheBlocks: proto.Bool(!DefaultCacheBlocks),
 				},
 				TrackScanMetrics: proto.Bool(false),
+				Renew:            proto.Bool(true),
 			},
 		},
 		{ // test that pb.ScanRequest.Scan is nil when scanner id is specificed
@@ -378,6 +393,7 @@ func TestScanToProto(t *testing.T) {
 				ClientHandlesHeartbeats: proto.Bool(true),
 				Scan:                    nil,
 				TrackScanMetrics:        proto.Bool(false),
+				Renew:                   proto.Bool(false),
 			},
 		},
 		{ // set reversed attribute
@@ -398,6 +414,7 @@ func TestScanToProto(t *testing.T) {
 					Reversed:      proto.Bool(true),
 				},
 				TrackScanMetrics: proto.Bool(false),
+				Renew:            proto.Bool(false),
 			},
 		},
 		{ // set scan attribute
@@ -424,6 +441,7 @@ func TestScanToProto(t *testing.T) {
 					},
 				},
 				TrackScanMetrics: proto.Bool(false),
+				Renew:            proto.Bool(false),
 			},
 		},
 		{ // scan key range
@@ -445,6 +463,7 @@ func TestScanToProto(t *testing.T) {
 					StopRow:       stopRow,
 				},
 				TrackScanMetrics: proto.Bool(false),
+				Renew:            proto.Bool(false),
 			},
 		},
 		{ // set filters and families
@@ -467,6 +486,7 @@ func TestScanToProto(t *testing.T) {
 						Filter:        pbFilter,
 					},
 					TrackScanMetrics: proto.Bool(false),
+					Renew:            proto.Bool(false),
 				}
 			}(),
 		},
@@ -487,6 +507,7 @@ func TestScanToProto(t *testing.T) {
 					TimeRange:     &pb.TimeRange{},
 				},
 				TrackScanMetrics: proto.Bool(false),
+				Renew:            proto.Bool(false),
 			},
 		},
 		// set TrackScanMetrics
@@ -507,6 +528,51 @@ func TestScanToProto(t *testing.T) {
 						TimeRange:     &pb.TimeRange{},
 					},
 					TrackScanMetrics: proto.Bool(true),
+					Renew:            proto.Bool(false),
+				}
+			}(),
+		},
+		// set RenewInterval, this shouldn't affect the protobuf
+		{
+			s: func() *Scan {
+				s, _ := NewScanStr(ctx, "", RenewInterval(10*time.Second))
+				return s
+			}(),
+			expProto: func() *pb.ScanRequest {
+				return &pb.ScanRequest{
+					Region:                  rs,
+					NumberOfRows:            proto.Uint32(DefaultNumberOfRows),
+					CloseScanner:            proto.Bool(false),
+					ClientHandlesPartials:   proto.Bool(true),
+					ClientHandlesHeartbeats: proto.Bool(true),
+					Scan: &pb.Scan{
+						MaxResultSize: proto.Uint64(DefaultMaxResultSize),
+						TimeRange:     &pb.TimeRange{},
+					},
+					TrackScanMetrics: proto.Bool(false),
+					Renew:            proto.Bool(false),
+				}
+			}(),
+		},
+		// set RenewalScan
+		{
+			s: func() *Scan {
+				s, _ := NewScanStr(ctx, "", RenewalScan())
+				return s
+			}(),
+			expProto: func() *pb.ScanRequest {
+				return &pb.ScanRequest{
+					Region:                  rs,
+					NumberOfRows:            proto.Uint32(DefaultNumberOfRows),
+					CloseScanner:            proto.Bool(false),
+					ClientHandlesPartials:   proto.Bool(true),
+					ClientHandlesHeartbeats: proto.Bool(true),
+					Scan: &pb.Scan{
+						MaxResultSize: proto.Uint64(DefaultMaxResultSize),
+						TimeRange:     &pb.TimeRange{},
+					},
+					TrackScanMetrics: proto.Bool(false),
+					Renew:            proto.Bool(true),
 				}
 			}(),
 		},
@@ -1573,7 +1639,8 @@ func TestDeserializeCellBlocksScan(t *testing.T) {
 }
 
 func confirmScanAttributes(ctx context.Context, s *Scan, table, start, stop []byte,
-	fam map[string][]string, fltr filter.Filter, numberOfRows uint32) bool {
+	fam map[string][]string, fltr filter.Filter, numberOfRows uint32,
+	renewInterval time.Duration, renewalScan bool) bool {
 	if fltr == nil && s.filter != nil {
 		return false
 	}
@@ -1582,7 +1649,9 @@ func confirmScanAttributes(ctx context.Context, s *Scan, table, start, stop []by
 		bytes.Equal(s.StartRow(), start) &&
 		bytes.Equal(s.StopRow(), stop) &&
 		reflect.DeepEqual(s.families, fam) &&
-		s.numberOfRows == numberOfRows
+		s.numberOfRows == numberOfRows &&
+		s.renewInterval == renewInterval &&
+		s.renewalScan == renewalScan
 }
 
 func BenchmarkMutateToProtoWithNestedMaps(b *testing.B) {
