@@ -42,3 +42,10 @@ jobs:
 
       - name: Upload to Codecov
         uses: codecov/codecov-action@v2.1.0
+
+      - name: Upload HBase logs
+        uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: hbase-logs
+          path: hbase/logs/
