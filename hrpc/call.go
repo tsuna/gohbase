@@ -238,6 +238,14 @@ func cellFromCellBlock(b []byte) (*pb.Cell, uint32, error) {
 
 	value := b[:valueLen]
 
+	// clone []byte values into new slice, so as not to retain any of
+	// the passed in memory.
+	c := make([]byte, len(key)+len(family)+len(qualifier)+len(value))
+	key, c = append(c[:0], key...), c[len(key):]
+	family, c = append(c[:0], family...), c[len(family):]
+	qualifier, c = append(c[:0], qualifier...), c[len(qualifier):]
+	value = append(c[:0], value...)
+
 	return &pb.Cell{
 		Row:       key,
 		Family:    family,

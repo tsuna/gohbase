@@ -7,6 +7,7 @@ package hrpc
 
 import (
 	"reflect"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -19,7 +20,9 @@ func TestCellFromCellBlock(t *testing.T) {
 		102, 97, 0, 0, 1, 92, 13, 97, 5, 32, 4, 72, 101, 108, 108, 111, 32, 109, 121, 32, 110,
 		97, 109, 101, 32, 105, 115, 32, 68, 111, 103, 46}
 
-	cell, n, err := cellFromCellBlock(cellblock)
+	clonedCellblock := slices.Clone(cellblock)
+
+	cell, n, err := cellFromCellBlock(clonedCellblock)
 	if err != nil {
 		t.Error(err)
 	}
@@ -39,6 +42,15 @@ func TestCellFromCellBlock(t *testing.T) {
 
 	if !proto.Equal(expectedCell, cell) {
 		t.Errorf("expected cell %v, got cell %v", expectedCell, cell)
+	}
+	for i := range clonedCellblock {
+		// Modify the values of clonedCellblock, it should not affect
+		// the value of cell.
+		clonedCellblock[i] = 0
+	}
+	if !proto.Equal(expectedCell, cell) {
+		t.Errorf("After modifying input, cell should not have changed. "+
+			"expected %v, got cell %v", expectedCell, cell)
 	}
 
 	// test error cases

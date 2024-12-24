@@ -1694,3 +1694,27 @@ func BenchmarkMutateToProtoWithNestedMaps(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkDeserializeCellBlocks(b *testing.B) {
+	b.Run("1", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			res, _, err := deserializeCellBlocks(cellblock, 1)
+			if len(res) != 1 || err != nil {
+				b.Fatalf("len(res): %d err: %v", len(res), err)
+			}
+		}
+	})
+
+	cellblock100 := bytes.Repeat(cellblock, 100)
+	b.Run("100", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			res, _, err := deserializeCellBlocks(cellblock100, 100)
+			if len(res) != 100 || err != nil {
+				b.Fatalf("len(res): %d err: %v", len(res), err)
+			}
+		}
+	})
+
+}
