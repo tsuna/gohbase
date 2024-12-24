@@ -92,7 +92,7 @@ func readUint32(b []byte) (uint32, []byte, error) {
 func (c *compressor) decompressCellblocks(b []byte) ([]byte, error) {
 	var (
 		err                  error
-		out                  []byte
+		out                  = newBuffer(0) // gets freed in receive
 		compressedChunk      []byte
 		compressedChunkLen   uint32
 		uncompressedBlockLen uint32

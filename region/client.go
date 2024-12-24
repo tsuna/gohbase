@@ -103,12 +103,8 @@ const (
 var bufferPool sync.Pool
 
 func newBuffer(size int) []byte {
-	v := bufferPool.Get()
-	var b []byte
-	if v != nil {
-		b = v.([]byte)
-	}
-	return append(b[:0], make([]byte, size)...)
+	b, _ := bufferPool.Get().([]byte)
+	return append(b, make([]byte, size)...)
 }
 
 func freeBuffer(b []byte) {
@@ -477,7 +473,8 @@ func (c *client) receive(r io.Reader) (err error) {
 	}
 
 	size := binary.BigEndian.Uint32(sz[:])
-	b := make([]byte, size)
+	b := newBuffer(int(size))
+	defer freeBuffer(b)
 
 	_, err = io.ReadFull(r, b)
 	if err != nil {
@@ -546,6 +543,7 @@ func (c *client) receive(r io.Reader) (err error) {
 		b := b[size-cellsLen:]
 		if c.compressor != nil {
 			b, err = c.compressor.decompressCellblocks(b)
+			defer freeBuffer(b)
 			if err != nil {
 				err = RetryableError{fmt.Errorf("failed to decompress the response: %s", err)}
 				return
