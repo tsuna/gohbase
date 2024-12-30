@@ -75,24 +75,35 @@ func (s *scanner) fetch() ([]*pb.Result, error) {
 }
 
 func (s *scanner) peek() (*pb.Result, error) {
-	if len(s.results) == 0 {
-		var (
-			err error
-			rs  []*pb.Result
-		)
-		if s.closed {
-			// done scanning
-			return nil, io.EOF
-		}
-
-		rs, err = s.fetch()
-		if err != nil {
-			return nil, err
-		}
-
-		// fetch cannot return zero results
-		s.results = rs
+	if len(s.results) > 0 {
+		return s.results[0], nil
 	}
+
+	if s.renewCancel != nil {
+		// About to send new Scan request to HBase, cancel our
+		// renewer.
+		s.renewCancel()
+		s.renewCancel = nil
+	}
+
+	if s.closed {
+		// done scanning
+		return nil, io.EOF
+	}
+
+	rs, err := s.fetch()
+	if err != nil {
+		return nil, err
+	}
+	if !s.closed && s.rpc.RenewInterval() > 0 {
+		// Start up a renewer
+		renewCtx, cancel := context.WithCancel(s.rpc.Context())
+		s.renewCancel = cancel
+		go s.renewLoop(renewCtx, s.startRow)
+	}
+
+	// fetch cannot return zero results
+	s.results = rs
 	return s.results[0], nil
 }
 
@@ -130,7 +141,7 @@ func (s *scanner) coalesce(result, partial *pb.Result) (*pb.Result, bool) {
 	return result, true
 }
 
-func newScanner(c RPCClient, rpc *hrpc.Scan) *scanner {
+func newScanner(c RPCClient, rpc *hrpc.Scan, logger *slog.Logger) *scanner {
 	var sm map[string]int64
 	if rpc.TrackScanMetrics() {
 		sm = make(map[string]int64)
@@ -141,7 +152,7 @@ func newScanner(c RPCClient, rpc *hrpc.Scan) *scanner {
 		startRow:           rpc.StartRow(),
 		curRegionScannerID: noScannerID,
 		scanMetrics:        sm,
-		logger:             slog.Default(),
+		logger:             logger,
 	}
 }
 
@@ -154,21 +165,6 @@ func toLocalResult(r *pb.Result) *hrpc.Result {
 }
 
 func (s *scanner) Next() (*hrpc.Result, error) {
-	if s.rpc.RenewInterval() > 0 && s.renewCancel != nil {
-		s.renewCancel()
-	}
-
-	res, err := s.nextInternal()
-
-	if err == nil && s.rpc.RenewInterval() > 0 {
-		renewCtx, cancel := context.WithCancel(s.rpc.Context())
-		s.renewCancel = cancel
-		go s.renewLoop(renewCtx, s.startRow)
-	}
-	return res, err
-}
-
-func (s *scanner) nextInternal() (*hrpc.Result, error) {
 	var (
 		result, partial *pb.Result
 		err             error
@@ -385,11 +381,11 @@ func (s *scanner) closeRegionScanner() {
 }
 
 // renews a scanner by resending scan request with renew = true
-func (s *scanner) renew(startRow []byte) error {
-	if err := s.rpc.Context().Err(); err != nil {
+func (s *scanner) renew(ctx context.Context, startRow []byte) error {
+	if err := ctx.Err(); err != nil {
 		return err
 	}
-	rpc, err := hrpc.NewScanRange(s.rpc.Context(),
+	rpc, err := hrpc.NewScanRange(ctx,
 		s.rpc.Table(),
 		startRow,
 		nil,
@@ -411,7 +407,7 @@ func (s *scanner) renewLoop(ctx context.Context, startRow []byte) {
 	for {
 		select {
 		case <-t.C:
-			if err := s.renew(startRow); err != nil {
+			if err := s.renew(ctx, startRow); err != nil {
 				s.logger.Error("error renewing scanner", "err", err)
 				return
 			}

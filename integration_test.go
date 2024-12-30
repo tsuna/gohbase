@@ -2681,16 +2681,17 @@ func TestScannerTimeout(t *testing.T) {
 	}
 
 	// force lease timeout
-	time.Sleep(scannerLease)
+	time.Sleep(scannerLease * 2)
 
 	_, err = scanner.Next()
 
 	// lease timeout should return an UnknownScannerException
 	if err != nil && strings.Contains(err.Error(),
 		"org.apache.hadoop.hbase.UnknownScannerException") {
-		fmt.Println("Error matches: UnknownScannerException")
+		t.Log("Error matches: UnknownScannerException")
 	} else {
-		t.Fatalf("Error does not match org.apache.hadoop.hbase.UnknownScannerException")
+		t.Fatalf("Error does not match org.apache.hadoop.hbase.UnknownScannerException, "+
+			"got: %v", err)
 	}
 }
 
@@ -2730,8 +2731,6 @@ func TestScannerRenewal(t *testing.T) {
 	defer scanner.Close()
 	for i := 0; i < numRows; i++ {
 		rsp, err := scanner.Next()
-		// Sleep to trigger renewal
-		time.Sleep(scannerLease)
 		if err != nil {
 			t.Fatalf("Scanner.Next() returned error: %v", err)
 		}
@@ -2742,6 +2741,8 @@ func TestScannerRenewal(t *testing.T) {
 		if !bytes.Equal(rsp.Cells[0].Value, expectedValue) {
 			t.Fatalf("Unexpected value. Got %v, want %v", rsp.Cells[0].Value, expectedValue)
 		}
+		// Sleep to trigger renewal
+		time.Sleep(scannerLease * 2)
 	}
 	// Ensure scanner is exhausted
 	rsp, err := scanner.Next()
