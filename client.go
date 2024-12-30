@@ -327,7 +327,7 @@ func (c *client) Close() {
 }
 
 func (c *client) Scan(s *hrpc.Scan) hrpc.Scanner {
-	return newScanner(c, s)
+	return newScanner(c, s, c.logger)
 }
 
 func (c *client) Get(g *hrpc.Get) (*hrpc.Result, error) {

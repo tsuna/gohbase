@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"reflect"
 	"sync"
 	"testing"
@@ -120,7 +121,7 @@ func TestScanner(t *testing.T) {
 	}
 
 	var scannerID uint64 = 42
-	scanner := newScanner(c, scan)
+	scanner := newScanner(c, scan, slog.Default())
 
 	s, err := hrpc.NewScanRange(scan.Context(), table, nil, nil,
 		hrpc.NumberOfRows(2))
@@ -412,7 +413,7 @@ func TestScanMetrics(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			sc := newScanner(c, scan)
+			sc := newScanner(c, scan, slog.Default())
 
 			c.EXPECT().SendRPC(&scanMatcher{scan: scan}).Return(&pb.ScanResponse{
 				Results:     tcase.results,
@@ -488,7 +489,7 @@ func TestErrorFirstFetchNoMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scanner := newScanner(c, scan)
+	scanner := newScanner(c, scan, slog.Default())
 
 	srange, err := hrpc.NewScanRange(context.Background(), table, nil, nil)
 	if err != nil {
@@ -528,7 +529,7 @@ func TestErrorFirstFetchWithMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scanner := newScanner(c, scan)
+	scanner := newScanner(c, scan, slog.Default())
 
 	srange, err := hrpc.NewScanRange(context.Background(), table, nil, nil,
 		hrpc.TrackScanMetrics())
@@ -570,7 +571,7 @@ func testErrorScanFromID(t *testing.T, scan *hrpc.Scan, out []*hrpc.Result) {
 	defer wg.Wait()
 
 	var scannerID uint64 = 42
-	scanner := newScanner(c, scan)
+	scanner := newScanner(c, scan, slog.Default())
 
 	srange, err := hrpc.NewScanRange(scan.Context(), table, nil, nil, scan.Options()...)
 	if err != nil {
@@ -679,7 +680,7 @@ func testPartialResults(t *testing.T, scan *hrpc.Scan, expected []*hrpc.Result) 
 	}
 
 	var scannerID uint64
-	scanner := newScanner(c, scan)
+	scanner := newScanner(c, scan, slog.Default())
 	ctx := scan.Context()
 	for _, partial := range tcase {
 		partial := partial
@@ -736,7 +737,7 @@ func TestReversedScanner(t *testing.T) {
 
 	var scannerID uint64 = 42
 
-	scanner := newScanner(c, scan)
+	scanner := newScanner(c, scan, slog.Default())
 	ctx = scan.Context()
 	s, err := hrpc.NewScanRange(ctx, table, nil, nil, hrpc.Reversed())
 	if err != nil {
@@ -819,7 +820,7 @@ func TestScannerWithContextCanceled(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scanner := newScanner(c, scan)
+	scanner := newScanner(c, scan, slog.Default())
 
 	cancel()
 
@@ -839,7 +840,7 @@ func TestScannerClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scanner := newScanner(c, scan)
+	scanner := newScanner(c, scan, slog.Default())
 	scanner.Close()
 
 	_, err = scanner.Next()
