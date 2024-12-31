@@ -401,8 +401,12 @@ func (s *scanner) renew(ctx context.Context, startRow []byte) error {
 }
 
 func (s *scanner) renewLoop(ctx context.Context, startRow []byte) {
+	scanRenewers.Inc()
 	t := time.NewTicker(s.rpc.RenewInterval())
-	defer t.Stop()
+	defer func() {
+		t.Stop()
+		scanRenewers.Dec()
+	}()
 
 	for {
 		select {

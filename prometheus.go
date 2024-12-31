@@ -53,4 +53,12 @@ var (
 			4.096, 8.192, 13.192, 18.192, 23.192, 28.192, 33.192,
 		},
 	})
+
+	scanRenewers = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gohbase",
+		Subsystem: "scanner",
+		Name:      "renewer_count",
+		Help: "Number of active scanner renewers. " +
+			"A continually increasing value indicates an Scanner leak.",
+	})
 )
