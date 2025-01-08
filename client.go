@@ -25,11 +25,12 @@ import (
 )
 
 const (
-	defaultRPCQueueSize  = 100
-	defaultFlushInterval = 20 * time.Millisecond
-	defaultZkRoot        = "/hbase"
-	defaultZkTimeout     = 30 * time.Second
-	defaultEffectiveUser = "root"
+	defaultRPCQueueSize         = 100
+	defaultFlushInterval        = 20 * time.Millisecond
+	defaultZkRoot               = "/hbase"
+	defaultZkTimeout            = 30 * time.Second
+	defaultEffectiveUser        = "root"
+	defaultRenewScannerPriority = 25
 )
 
 // Client a regular HBase client
