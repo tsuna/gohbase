@@ -631,7 +631,7 @@ func (c *client) findRegion(ctx context.Context, table, key []byte) (hrpc.Region
 	}
 
 	// We are the ones that looked up the region, so we need to
-	// mark in unavailable and find a client for it.
+	// mark it unavailable and find a client for it.
 	reg.MarkUnavailable()
 
 	if reg != c.metaRegionInfo && reg != c.adminRegionInfo {
@@ -735,12 +735,12 @@ func (c *client) metaLookup(ctx context.Context,
 	}
 	if !bytes.Equal(table, fullyQualifiedTable(reg)) {
 		// This would indicate a bug in HBase.
-		return nil, "", fmt.Errorf("wtf: meta returned an entry for the wrong table!"+
+		return nil, "", fmt.Errorf("meta returned an entry for the wrong table!"+
 			"  Looked up table=%q key=%q got region=%s", table, key, reg)
 	} else if len(reg.StopKey()) != 0 &&
 		bytes.Compare(key, reg.StopKey()) >= 0 {
 		// This would indicate a hole in the meta table.
-		return nil, "", fmt.Errorf("wtf: meta returned an entry for the wrong region!"+
+		return nil, "", fmt.Errorf("meta returned an entry for the wrong region!"+
 			"  Looked up table=%q key=%q got region=%s", table, key, reg)
 	}
 	return reg, addr, nil
