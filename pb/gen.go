@@ -5,7 +5,7 @@
 
 // To run this command you need protoc.
 //go:generate go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-//go:generate protoc --proto_path=. --go_out=. Cell.proto Client.proto ClusterId.proto ClusterStatus.proto Comparator.proto ErrorHandling.proto FS.proto Filter.proto HBase.proto Master.proto Procedure.proto Quota.proto RPC.proto Tracing.proto ZooKeeper.proto
+//go:generate protoc --proto_path=. --go_out=. Admin.proto Cell.proto Client.proto ClusterId.proto ClusterStatus.proto Comparator.proto ErrorHandling.proto FS.proto Filter.proto HBase.proto Master.proto Procedure.proto Quota.proto RPC.proto Tracing.proto ZooKeeper.proto
 // brew install protobuf
 
 package pb
