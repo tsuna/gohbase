@@ -67,17 +67,12 @@ func NewClient(addr string, ctype ClientType, opts *RegionClientOptions) hrpc.Re
 		flushInterval: DefaultFlushInterval,
 		effectiveUser: DefaultEffectiveUser,
 		readTimeout:   DefaultReadTimeout,
+		dialer:        defaultDialer.DialContext,
+		logger:        slog.Default(),
 		rpcs:          make(chan []hrpc.Call),
 		done:          make(chan struct{}),
 		sent:          make(map[uint32]hrpc.Call),
 	}
-
-	// Set default dialer
-	var d net.Dialer
-	c.dialer = d.DialContext
-
-	// Set default logger
-	c.logger = slog.Default()
 
 	// Apply options if provided
 	if opts != nil {

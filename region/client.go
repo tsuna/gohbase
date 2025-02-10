@@ -107,6 +107,20 @@ const (
 	MasterClient = ClientType("MasterService")
 )
 
+var (
+	defaultDialer = net.Dialer{
+		KeepAliveConfig: net.KeepAliveConfig{
+			Enable:   true,
+			Idle:     15 * time.Second,
+			Interval: 10 * time.Second,
+			Count:    3,
+		},
+		// tcpUserTimeout value should equal Idle + Interval*Count config.
+		// See https://blog.cloudflare.com/when-tcp-sockets-refuse-to-die/
+		ControlContext: tcpUserTimeoutControl(15*time.Second + 10*time.Second*3),
+	}
+)
+
 var bufferPool sync.Pool
 
 func newBuffer(size int) []byte {
