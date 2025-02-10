@@ -45,6 +45,12 @@ func NewClient(addr string, ctype ClientType, queueSize int, flushInterval time.
 		c.dialer = dialer
 	} else {
 		var d net.Dialer
+		d.KeepAliveConfig = net.KeepAliveConfig{
+			Enable:   true,
+			Idle:     15 * time.Second,
+			Interval: 10 * time.Second,
+			Count:    3,
+		}
 		c.dialer = d.DialContext
 	}
 
