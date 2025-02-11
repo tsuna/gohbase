@@ -196,10 +196,6 @@ type client struct {
 	sentM sync.Mutex // protects sent
 	sent  map[uint32]hrpc.Call
 
-	// inFlight is number of rpcs sent to regionserver awaiting response
-	inFlightM sync.Mutex // protects inFlight and SetReadDeadline
-	inFlight  uint32
-
 	id uint32
 
 	rpcQueueSize  int
@@ -279,33 +275,6 @@ func (c *client) Addr() string {
 // String returns a string represintation of the current region client
 func (c *client) String() string {
 	return fmt.Sprintf("RegionClient{Addr: %s}", c.addr)
-}
-
-func (c *client) inFlightUp() error {
-	c.inFlightM.Lock()
-	c.inFlight++
-	// we expect that at least the last request can be completed within readTimeout
-	if err := c.conn.SetReadDeadline(time.Now().Add(c.readTimeout)); err != nil {
-		c.inFlightM.Unlock()
-		return err
-	}
-	c.inFlightM.Unlock()
-	return nil
-}
-
-func (c *client) inFlightDown() error {
-	c.inFlightM.Lock()
-	c.inFlight--
-	// reset read timeout if we are not waiting for any responses
-	// in order to prevent from closing this client if there are no request
-	if c.inFlight == 0 {
-		if err := c.conn.SetReadDeadline(time.Time{}); err != nil {
-			c.inFlightM.Unlock()
-			return err
-		}
-	}
-	c.inFlightM.Unlock()
-	return nil
 }
 
 func (c *client) fail(err error) {
@@ -594,10 +563,6 @@ func (c *client) receive(r io.Reader) (err error) {
 		return ServerError{fmt.Errorf("got a response with an unexpected call ID: %d", callID)}
 	}
 
-	if err := c.inFlightDown(); err != nil {
-		return ServerError{err}
-	}
-
 	select {
 	case <-rpc.Context().Done():
 		// context has expired, don't bother deserializing
@@ -758,9 +723,6 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 		return id, ServerError{err}
 	}
 
-	if err := c.inFlightUp(); err != nil {
-		return id, ServerError{err}
-	}
 	return id, nil
 }
 
@@ -872,9 +834,9 @@ func (c *client) MarshalJSON() ([]byte, error) {
 		}
 	}
 
-	c.inFlightM.Lock()
-	inFlight := c.inFlight
-	c.inFlightM.Unlock()
+	c.sentM.Lock()
+	inFlight := len(c.sent)
+	c.sentM.Unlock()
 
 	// if conn is nil then we don't want to panic. So just get the addresses if conn is not nil
 	var localAddr, remoteAddr Address
@@ -893,7 +855,7 @@ func (c *client) MarshalJSON() ([]byte, error) {
 		ConnectionRemoteAddress Address
 		RegionServerAddress     string
 		ClientType              ClientType
-		InFlight                uint32
+		InFlight                int
 		Id                      uint32
 		Done_status             string
 	}{
