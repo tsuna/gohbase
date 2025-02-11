@@ -90,8 +90,6 @@ var (
 const (
 	//DefaultLookupTimeout is the default region lookup timeout
 	DefaultLookupTimeout = 30 * time.Second
-	//DefaultReadTimeout is the default region read timeout
-	DefaultReadTimeout = 30 * time.Second
 	// DefaultRPCQueueSize is the default size of the RPC queue
 	DefaultRPCQueueSize = 100
 	// DefaultFlushInterval is the default interval for flushing RPCs
@@ -201,9 +199,6 @@ type client struct {
 	rpcQueueSize  int
 	flushInterval time.Duration
 	effectiveUser string
-
-	// readTimeout is the maximum amount of time to wait for regionserver reply
-	readTimeout time.Duration
 
 	// compressor for cellblocks. if nil, then no compression
 	compressor *compressor

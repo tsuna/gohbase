@@ -26,8 +26,6 @@ type RegionClientOptions struct {
 	FlushInterval time.Duration
 	// EffectiveUser sets the effective user for the connection
 	EffectiveUser string
-	// ReadTimeout sets the read timeout for RPCs
-	ReadTimeout time.Duration
 	// Codec sets the compression codec for cellblocks
 	Codec compression.Codec
 	// Dialer sets a custom dialer for connecting to region servers
@@ -66,7 +64,6 @@ func NewClient(addr string, ctype ClientType, opts *RegionClientOptions) hrpc.Re
 		rpcQueueSize:  DefaultRPCQueueSize,
 		flushInterval: DefaultFlushInterval,
 		effectiveUser: DefaultEffectiveUser,
-		readTimeout:   DefaultReadTimeout,
 		dialer:        defaultDialer.DialContext,
 		logger:        slog.Default(),
 		rpcs:          make(chan []hrpc.Call),
@@ -84,9 +81,6 @@ func NewClient(addr string, ctype ClientType, opts *RegionClientOptions) hrpc.Re
 		}
 		if opts.EffectiveUser != "" {
 			c.effectiveUser = opts.EffectiveUser
-		}
-		if opts.ReadTimeout > 0 {
-			c.readTimeout = opts.ReadTimeout
 		}
 		if opts.Codec != nil {
 			c.compressor = &compressor{Codec: opts.Codec}

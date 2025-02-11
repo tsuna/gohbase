@@ -23,7 +23,6 @@ func TestDebugStateSanity(t *testing.T) {
 		QueueSize:     defaultRPCQueueSize,
 		FlushInterval: defaultFlushInterval,
 		EffectiveUser: defaultEffectiveUser,
-		ReadTimeout:   region.DefaultReadTimeout,
 		Codec:         client.compressionCodec,
 		Logger:        slog.Default(),
 	}
