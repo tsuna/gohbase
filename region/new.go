@@ -45,12 +45,17 @@ func NewClient(addr string, ctype ClientType, queueSize int, flushInterval time.
 		c.dialer = dialer
 	} else {
 		var d net.Dialer
-		d.KeepAliveConfig = net.KeepAliveConfig{
+		keepAliveConfig := net.KeepAliveConfig{
 			Enable:   true,
 			Idle:     15 * time.Second,
 			Interval: 10 * time.Second,
 			Count:    3,
 		}
+		d.KeepAliveConfig = keepAliveConfig
+		// see https://blog.cloudflare.com/when-tcp-sockets-refuse-to-die/
+		totalTimeout := keepAliveConfig.Idle +
+			keepAliveConfig.Interval*time.Duration(keepAliveConfig.Count)
+		setTCPUserTimeout(d, totalTimeout)
 		c.dialer = d.DialContext
 	}
 
