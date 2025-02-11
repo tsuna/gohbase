@@ -61,7 +61,6 @@ func newMockClient(zkClient zk.Client) *client {
 		zkTimeout:           defaultZkTimeout,
 		zkClient:            zkClient,
 		regionLookupTimeout: region.DefaultLookupTimeout,
-		regionReadTimeout:   region.DefaultReadTimeout,
 		newRegionClientFn:   newMockRegionClient,
 		logger:              slog.Default(),
 	}
