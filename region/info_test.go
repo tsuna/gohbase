@@ -178,7 +178,6 @@ func TestRegionInfoMarshalJson(t *testing.T) {
 		effectiveUser: "effectiveUser",
 		rpcQueueSize:  queueSize,
 		flushInterval: flushInterval,
-		readTimeout:   DefaultReadTimeout,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

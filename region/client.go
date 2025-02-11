@@ -181,9 +181,6 @@ type client struct {
 	flushInterval time.Duration
 	effectiveUser string
 
-	// readTimeout is the maximum amount of time to wait for regionserver reply
-	readTimeout time.Duration
-
 	// compressor for cellblocks. if nil, then no compression
 	compressor *compressor
 

@@ -30,7 +30,6 @@ func NewClient(addr string, ctype ClientType, queueSize int, flushInterval time.
 		rpcQueueSize:  queueSize,
 		flushInterval: flushInterval,
 		effectiveUser: effectiveUser,
-		readTimeout:   readTimeout,
 		rpcs:          make(chan []hrpc.Call),
 		done:          make(chan struct{}),
 		sent:          make(map[uint32]hrpc.Call),
