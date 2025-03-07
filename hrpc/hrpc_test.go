@@ -191,7 +191,7 @@ func TestGetToProto(t *testing.T) {
 
 	for i, tcase := range tests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			tcase.g.SetRegion(mockRegionInfo([]byte("region")))
+			tcase.g.SetRegion(mockRegionInfo("region"))
 			p := tcase.g.ToProto()
 			out, ok := p.(*pb.GetRequest)
 			if !ok {
@@ -514,7 +514,7 @@ func TestScanToProto(t *testing.T) {
 
 	for i, tcase := range tests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			tcase.s.SetRegion(mockRegionInfo([]byte("region")))
+			tcase.s.SetRegion(mockRegionInfo("region"))
 			p := tcase.s.ToProto()
 			out, ok := p.(*pb.ScanRequest)
 			if !ok {
@@ -531,7 +531,7 @@ func TestScanToProto(t *testing.T) {
 type mockRegionInfo []byte
 
 func (ri mockRegionInfo) Name() []byte {
-	return []byte(ri)
+	return ri
 }
 
 func (ri mockRegionInfo) IsUnavailable() bool               { return true }
@@ -687,7 +687,7 @@ func TestMutate(t *testing.T) {
 			out: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:        []byte(key),
+					Row:        key,
 					MutateType: pb.MutationProto_PUT.Enum(),
 					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
 					Attribute: []*pb.NameBytesPair{
@@ -701,7 +701,7 @@ func TestMutate(t *testing.T) {
 			cellblocksProto: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:        []byte(key),
+					Row:        key,
 					MutateType: pb.MutationProto_PUT.Enum(),
 					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
 					Attribute: []*pb.NameBytesPair{
@@ -732,7 +732,7 @@ func TestMutate(t *testing.T) {
 			out: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:        []byte(key),
+					Row:        key,
 					MutateType: pb.MutationProto_PUT.Enum(),
 					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
 					ColumnValue: []*pb.MutationProto_ColumnValue{
@@ -751,7 +751,7 @@ func TestMutate(t *testing.T) {
 			cellblocksProto: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:                 []byte(key),
+					Row:                 key,
 					MutateType:          pb.MutationProto_PUT.Enum(),
 					Durability:          pb.MutationProto_USE_DEFAULT.Enum(),
 					AssociatedCellCount: proto.Int32(1),
@@ -789,7 +789,7 @@ func TestMutate(t *testing.T) {
 			out: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:        []byte(key),
+					Row:        key,
 					MutateType: pb.MutationProto_PUT.Enum(),
 					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
 					ColumnValue: []*pb.MutationProto_ColumnValue{
@@ -821,7 +821,7 @@ func TestMutate(t *testing.T) {
 			cellblocksProto: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:                 []byte(key),
+					Row:                 key,
 					MutateType:          pb.MutationProto_PUT.Enum(),
 					Durability:          pb.MutationProto_USE_DEFAULT.Enum(),
 					AssociatedCellCount: proto.Int32(3),
@@ -857,7 +857,7 @@ func TestMutate(t *testing.T) {
 			out: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:        []byte(key),
+					Row:        key,
 					MutateType: pb.MutationProto_PUT.Enum(),
 					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
 					Timestamp:  proto.Uint64(42),
@@ -878,7 +878,7 @@ func TestMutate(t *testing.T) {
 			cellblocksProto: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:                 []byte(key),
+					Row:                 key,
 					MutateType:          pb.MutationProto_PUT.Enum(),
 					Durability:          pb.MutationProto_USE_DEFAULT.Enum(),
 					Timestamp:           proto.Uint64(42),
@@ -909,7 +909,7 @@ func TestMutate(t *testing.T) {
 			out: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:        []byte(key),
+					Row:        key,
 					MutateType: pb.MutationProto_PUT.Enum(),
 					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
 					Timestamp:  proto.Uint64(42),
@@ -931,7 +931,7 @@ func TestMutate(t *testing.T) {
 			cellblocksProto: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:                 []byte(key),
+					Row:                 key,
 					MutateType:          pb.MutationProto_PUT.Enum(),
 					Durability:          pb.MutationProto_USE_DEFAULT.Enum(),
 					Timestamp:           proto.Uint64(42),
@@ -954,7 +954,7 @@ func TestMutate(t *testing.T) {
 			out: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:        []byte(key),
+					Row:        key,
 					MutateType: pb.MutationProto_DELETE.Enum(),
 					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
 				},
@@ -962,7 +962,7 @@ func TestMutate(t *testing.T) {
 			cellblocksProto: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:                 []byte(key),
+					Row:                 key,
 					MutateType:          pb.MutationProto_DELETE.Enum(),
 					Durability:          pb.MutationProto_USE_DEFAULT.Enum(),
 					AssociatedCellCount: proto.Int32(0),
@@ -987,7 +987,7 @@ func TestMutate(t *testing.T) {
 			out: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:        []byte(key),
+					Row:        key,
 					MutateType: pb.MutationProto_DELETE.Enum(),
 					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
 					Timestamp:  proto.Uint64(42),
@@ -1009,7 +1009,7 @@ func TestMutate(t *testing.T) {
 			cellblocksProto: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:                 []byte(key),
+					Row:                 key,
 					MutateType:          pb.MutationProto_DELETE.Enum(),
 					Durability:          pb.MutationProto_USE_DEFAULT.Enum(),
 					Timestamp:           proto.Uint64(42),
@@ -1032,7 +1032,7 @@ func TestMutate(t *testing.T) {
 			out: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:        []byte(key),
+					Row:        key,
 					MutateType: pb.MutationProto_APPEND.Enum(),
 					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
 				},
@@ -1040,7 +1040,7 @@ func TestMutate(t *testing.T) {
 			cellblocksProto: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:                 []byte(key),
+					Row:                 key,
 					MutateType:          pb.MutationProto_APPEND.Enum(),
 					Durability:          pb.MutationProto_USE_DEFAULT.Enum(),
 					AssociatedCellCount: proto.Int32(0),
@@ -1057,7 +1057,7 @@ func TestMutate(t *testing.T) {
 			out: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:        []byte(key),
+					Row:        key,
 					MutateType: pb.MutationProto_INCREMENT.Enum(),
 					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
 				},
@@ -1065,7 +1065,7 @@ func TestMutate(t *testing.T) {
 			cellblocksProto: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:                 []byte(key),
+					Row:                 key,
 					MutateType:          pb.MutationProto_INCREMENT.Enum(),
 					Durability:          pb.MutationProto_USE_DEFAULT.Enum(),
 					AssociatedCellCount: proto.Int32(0),
@@ -1082,7 +1082,7 @@ func TestMutate(t *testing.T) {
 			out: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:        []byte(key),
+					Row:        key,
 					MutateType: pb.MutationProto_INCREMENT.Enum(),
 					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
 					ColumnValue: []*pb.MutationProto_ColumnValue{
@@ -1101,7 +1101,7 @@ func TestMutate(t *testing.T) {
 			cellblocksProto: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:                 []byte(key),
+					Row:                 key,
 					MutateType:          pb.MutationProto_INCREMENT.Enum(),
 					Durability:          pb.MutationProto_USE_DEFAULT.Enum(),
 					AssociatedCellCount: proto.Int32(1),
@@ -1128,7 +1128,7 @@ func TestMutate(t *testing.T) {
 			out: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:        []byte(key),
+					Row:        key,
 					MutateType: pb.MutationProto_DELETE.Enum(),
 					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
 					ColumnValue: []*pb.MutationProto_ColumnValue{
@@ -1147,7 +1147,7 @@ func TestMutate(t *testing.T) {
 			cellblocksProto: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:                 []byte(key),
+					Row:                 key,
 					MutateType:          pb.MutationProto_DELETE.Enum(),
 					Durability:          pb.MutationProto_USE_DEFAULT.Enum(),
 					AssociatedCellCount: proto.Int32(1),
@@ -1173,7 +1173,7 @@ func TestMutate(t *testing.T) {
 			out: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:        []byte(key),
+					Row:        key,
 					Timestamp:  proto.Uint64(42),
 					MutateType: pb.MutationProto_DELETE.Enum(),
 					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
@@ -1194,7 +1194,7 @@ func TestMutate(t *testing.T) {
 			cellblocksProto: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:                 []byte(key),
+					Row:                 key,
 					MutateType:          pb.MutationProto_DELETE.Enum(),
 					Durability:          pb.MutationProto_USE_DEFAULT.Enum(),
 					Timestamp:           proto.Uint64(42),
@@ -1221,7 +1221,7 @@ func TestMutate(t *testing.T) {
 			out: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:        []byte(key),
+					Row:        key,
 					Timestamp:  proto.Uint64(42),
 					MutateType: pb.MutationProto_DELETE.Enum(),
 					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
@@ -1242,7 +1242,7 @@ func TestMutate(t *testing.T) {
 			cellblocksProto: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:                 []byte(key),
+					Row:                 key,
 					MutateType:          pb.MutationProto_DELETE.Enum(),
 					Durability:          pb.MutationProto_USE_DEFAULT.Enum(),
 					Timestamp:           proto.Uint64(42),
@@ -1273,7 +1273,7 @@ func TestMutate(t *testing.T) {
 			out: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:        []byte(key),
+					Row:        key,
 					Timestamp:  proto.Uint64(42),
 					MutateType: pb.MutationProto_DELETE.Enum(),
 					Durability: pb.MutationProto_USE_DEFAULT.Enum(),
@@ -1294,7 +1294,7 @@ func TestMutate(t *testing.T) {
 			cellblocksProto: &pb.MutateRequest{
 				Region: rs,
 				Mutation: &pb.MutationProto{
-					Row:                 []byte(key),
+					Row:                 key,
 					MutateType:          pb.MutationProto_DELETE.Enum(),
 					Durability:          pb.MutationProto_USE_DEFAULT.Enum(),
 					Timestamp:           proto.Uint64(42),
@@ -1330,7 +1330,7 @@ func TestMutate(t *testing.T) {
 				m.NewResponse())
 		}
 
-		m.SetRegion(mockRegionInfo([]byte("region")))
+		m.SetRegion(mockRegionInfo("region"))
 
 		// test ToProto
 		p := m.ToProto()
@@ -1588,7 +1588,7 @@ func confirmScanAttributes(ctx context.Context, s *Scan, table, start, stop []by
 func BenchmarkMutateToProtoWithNestedMaps(b *testing.B) {
 	b.ReportAllocs()
 
-	regionInfo := mockRegionInfo([]byte("region"))
+	regionInfo := mockRegionInfo("region")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
