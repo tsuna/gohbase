@@ -181,7 +181,7 @@ func benchmarkDecompressCellblocks(b *testing.B, blockLen int, blocksCount int) 
 			b.FailNow()
 		}
 
-		cellblocks := c.compressCellblocks([][]byte{data}, uint32(blockLen))
+		cellblocks := c.compressCellblocks(net.Buffers{data}, uint32(blockLen))
 		compressedCellblocks = append(compressedCellblocks, cellblocks...)
 	}
 
