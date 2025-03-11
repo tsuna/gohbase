@@ -214,7 +214,7 @@ func cellFromCellBlock(b []byte) (*pb.Cell, uint32, error) {
 	key := b[:keyLen]
 	b = b[keyLen:]
 
-	familyLen := uint8(b[0])
+	familyLen := b[0]
 	b = b[1:]
 
 	family := b[:familyLen]
@@ -233,7 +233,7 @@ func cellFromCellBlock(b []byte) (*pb.Cell, uint32, error) {
 	timestamp := binary.BigEndian.Uint64(b[:8])
 	b = b[8:]
 
-	cellType := uint8(b[0])
+	cellType := b[0]
 	b = b[1:]
 
 	value := b[:valueLen]

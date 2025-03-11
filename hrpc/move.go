@@ -50,7 +50,7 @@ func WithDestinationRegionServer(serverName string) func(Call) error {
 		mr.req.DestServerName = &pb.ServerName{
 			HostName:  proto.String(out[0]),
 			Port:      proto.Uint32(uint32(port)),
-			StartCode: proto.Uint64(uint64(startCode)),
+			StartCode: proto.Uint64(startCode),
 		}
 		return nil
 	}
