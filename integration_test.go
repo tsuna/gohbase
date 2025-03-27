@@ -4,7 +4,6 @@
 // that can be found in the COPYING file.
 
 //go:build integration
-// +build integration
 
 package gohbase_test
 
