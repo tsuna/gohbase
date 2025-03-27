@@ -19,6 +19,7 @@ pkgs.mkShell {
     alias hbase-shell="$HBASE_HOME/bin/hbase shell"
     alias hbase-start="$HBASE_HOME/bin/start-hbase.sh"
     alias hbase-stop="$HBASE_HOME/bin/start-hbase.sh"
+    alias ports="sudo lsof -i -P -n | grep LISTEN"
   '';
 
   exitHook = ''
