@@ -15,6 +15,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"log/slog"
 	"math"
 	"os"
@@ -27,6 +28,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tsuna/gohbase"
 	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/hrpc"
@@ -1435,6 +1437,178 @@ func TestCheckAndPutParallel(t *testing.T) {
 	}
 
 	// make 10 pairs of CheckAndPut requests
+	for i := 0; i < 10; i++ {
+		ch := make(chan bool, 2)
+		putRequest1, err := hrpc.NewPutStr(
+			context.Background(), table, keyPrefix+fmt.Sprint(i), values)
+		if err != nil {
+			t.Fatalf("NewPutStr returned an error: %v", err)
+		}
+		putRequest2, err := hrpc.NewPutStr(
+			context.Background(), table, keyPrefix+fmt.Sprint(i), values)
+		if err != nil {
+			t.Fatalf("NewPutStr returned an error: %v", err)
+		}
+
+		go capTestFunc(putRequest1, ch)
+		go capTestFunc(putRequest2, ch)
+
+		first := <-ch
+		second := <-ch
+
+		if first && second {
+			t.Error("CheckAndPut: both requests cannot succeed")
+		}
+
+		if !first && !second {
+			t.Error("CheckAndPut: both requests cannot fail")
+		}
+	}
+}
+
+func makeValues(row, value string) map[string]map[string][]byte {
+	return map[string]map[string][]byte{"cf": {row: []byte(value)}}
+}
+
+func TestCheckAndMutate(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+
+	key := "row100"
+	ef := "cf"
+	eq := "a"
+
+	t.Run("Equals", func(t *testing.T) {
+		var castests = []struct {
+			inValues        map[string]map[string][]byte
+			inExpectedValue []byte
+			out             bool
+		}{
+			{map[string]map[string][]byte{"cf": {"b": []byte("2")}},
+				nil, true}, // nil instead of empty byte array
+			{map[string]map[string][]byte{"cf": {"a": []byte("1")}},
+				[]byte{}, true},
+			{map[string]map[string][]byte{"cf": {"a": []byte("1")}},
+				[]byte{}, false},
+			{map[string]map[string][]byte{"cf": {"a": []byte("2")}},
+				[]byte("1"), true},
+			{map[string]map[string][]byte{"cf": {"b": []byte("2")}},
+				[]byte("2"), true}, // put diff column
+			{map[string]map[string][]byte{"cf": {"b": []byte("2")}},
+				[]byte{}, false}, // diff column
+			{map[string]map[string][]byte{"cf": {
+				"b": []byte("100"),
+				"a": []byte("100"),
+			}}, []byte("2"), true}, // multiple values
+		}
+
+		for _, tt := range castests {
+			putRequest, err := hrpc.NewPutStr(context.Background(), table, key, tt.inValues)
+			if err != nil {
+				t.Fatalf("NewCheckAndMutate returned an error: %v", err)
+			}
+
+			casRes, err := c.CheckAndMutate(putRequest, ef, eq, tt.inExpectedValue, pb.CompareType_EQUAL)
+
+			if err != nil {
+				t.Fatalf("CheckAndMutate error: %s", err)
+			}
+
+			if casRes != tt.out {
+				t.Errorf("CheckAndMutate with put values=%q and expectedValue=%q returned %v, want %v",
+					tt.inValues, tt.inExpectedValue, casRes, tt.out)
+			}
+		}
+	})
+
+	t.Run("Not Equals", func(t *testing.T) {
+		ctx := context.Background()
+
+		// {}
+
+		p, err := hrpc.NewPut(ctx, []byte(table), []byte(key), makeValues("c", "1"))
+		if err != nil {
+			t.Fatalf("NewPut returned an error: %v", err)
+		}
+		_, err = c.Put(p)
+		if err != nil {
+			t.Fatalf("Put returned an error: %v", err)
+		}
+
+		g, err := hrpc.NewGetStr(ctx, table, key)
+		if err != nil {
+			t.Fatalf("NewGet returned an error: %v", err)
+		}
+		res, err := c.Get(g)
+		if err != nil {
+			t.Fatalf("Get returned an error: %v", err)
+		}
+		log.Println("Result:")
+		log.Println(res)
+
+		// TODO: Sanity Get here to make sure it wrote
+
+		// {"c": "1"}
+
+		putRequest, err := hrpc.NewPutStr(context.Background(), table, key, makeValues("c", "2"))
+		if err != nil {
+			t.Fatalf("NewCheckAndMutate returned an error: %v", err)
+		}
+		camRes, err := c.CheckAndMutate(putRequest, ef, eq, []byte("2"), pb.CompareType_NOT_EQUAL)
+		if err != nil {
+			t.Fatalf("CheckAndMutate error: %s", err)
+		}
+		require.Equal(t, true, camRes)
+
+		// {"c": "2"}
+
+		putRequest, err = hrpc.NewPutStr(context.Background(), table, key, makeValues("c", "3"))
+		if err != nil {
+			t.Fatalf("NewCheckAndMutate returned an error: %v", err)
+		}
+		camRes, err = c.CheckAndMutate(putRequest, ef, eq, []byte("2"), pb.CompareType_NOT_EQUAL)
+		if err != nil {
+			t.Fatalf("CheckAndMutate error: %s", err)
+		}
+		require.Equal(t, false, camRes)
+
+		// {"c": "2"}
+
+	})
+
+}
+
+func TestCheckAndMutateNotPut(t *testing.T) {
+	key := "row101"
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+	values := map[string]map[string][]byte{"cf": {"a": []byte("lol")}}
+
+	appRequest, err := hrpc.NewAppStr(context.Background(), table, key, values)
+	_, err = c.CheckAndMutate(appRequest, "cf", "a", []byte{}, pb.CompareType_EQUAL)
+	if err != nil {
+		t.Error("CheckAndMutate: should allow Mutate request")
+	}
+}
+
+func TestCheckAndMutateParallel(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+
+	keyPrefix := "row100.5"
+
+	values := map[string]map[string][]byte{"cf": {"a": []byte("1")}}
+	capTestFunc := func(p *hrpc.Mutate, ch chan bool) {
+		casRes, err := c.CheckAndMutate(p, "cf", "a", []byte{}, pb.CompareType_EQUAL)
+
+		if err != nil {
+			t.Errorf("CheckAndMutate error: %s", err)
+		}
+
+		ch <- casRes
+	}
+
+	// make 10 pairs of CheckAndMutate requests
 	for i := 0; i < 10; i++ {
 		ch := make(chan bool, 2)
 		putRequest1, err := hrpc.NewPutStr(
