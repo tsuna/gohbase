@@ -341,22 +341,22 @@ message IsCatalogJanitorEnabledResponse {
 }
 
 message SnapshotRequest {
-	required SnapshotDescription snapshot = 1;
+  required SnapshotDescription snapshot = 1;
 }
 
 message SnapshotResponse {
-	required int64 expected_timeout = 1;
+  required int64 expected_timeout = 1;
 }
 
 message GetCompletedSnapshotsRequest {
 }
 
 message GetCompletedSnapshotsResponse {
-	repeated SnapshotDescription snapshots = 1;
+  repeated SnapshotDescription snapshots = 1;
 }
 
 message DeleteSnapshotRequest {
-	required SnapshotDescription snapshot = 1;
+  required SnapshotDescription snapshot = 1;
 }
 
 message DeleteSnapshotResponse {
@@ -373,12 +373,12 @@ message RestoreSnapshotResponse {
  * in the response (if the snapshot is done) so you can check the snapshot
  */
 message IsSnapshotDoneRequest {
-	optional SnapshotDescription snapshot = 1;
+  optional SnapshotDescription snapshot = 1;
 }
 
 message IsSnapshotDoneResponse {
-	optional bool done = 1 [default = false];
-	optional SnapshotDescription snapshot = 2;
+  optional bool done = 1 [default = false];
+  optional SnapshotDescription snapshot = 2;
 }
 
 message IsRestoreSnapshotDoneRequest {
@@ -401,7 +401,7 @@ message GetSchemaAlterStatusResponse {
 message GetTableDescriptorsRequest {
   repeated TableName table_names = 1;
   optional string regex = 2;
-  optional bool include_sys_tables = 3 [default=false];
+  optional bool include_sys_tables = 3 [default = false];
   optional string namespace = 4;
 }
 
@@ -411,7 +411,7 @@ message GetTableDescriptorsResponse {
 
 message GetTableNamesRequest {
   optional string regex = 1;
-  optional bool include_sys_tables = 2 [default=false];
+  optional bool include_sys_tables = 2 [default = false];
   optional string namespace = 3;
 }
 
@@ -529,46 +529,46 @@ message SecurityCapabilitiesResponse {
 service MasterService {
   /** Used by the client to get the number of regions that have received the updated schema */
   rpc GetSchemaAlterStatus(GetSchemaAlterStatusRequest)
-    returns(GetSchemaAlterStatusResponse);
+      returns(GetSchemaAlterStatusResponse);
 
   /** Get list of TableDescriptors for requested tables. */
   rpc GetTableDescriptors(GetTableDescriptorsRequest)
-    returns(GetTableDescriptorsResponse);
+      returns(GetTableDescriptorsResponse);
 
   /** Get the list of table names. */
   rpc GetTableNames(GetTableNamesRequest)
-    returns(GetTableNamesResponse);
+      returns(GetTableNamesResponse);
 
   /** Return cluster status. */
   rpc GetClusterStatus(GetClusterStatusRequest)
-    returns(GetClusterStatusResponse);
+      returns(GetClusterStatusResponse);
 
   /** return true if master is available */
   rpc IsMasterRunning(IsMasterRunningRequest) returns(IsMasterRunningResponse);
 
   /** Adds a column to the specified table. */
   rpc AddColumn(AddColumnRequest)
-    returns(AddColumnResponse);
+      returns(AddColumnResponse);
 
   /** Deletes a column from the specified table. Table must be disabled. */
   rpc DeleteColumn(DeleteColumnRequest)
-    returns(DeleteColumnResponse);
+      returns(DeleteColumnResponse);
 
   /** Modifies an existing column on the specified table. */
   rpc ModifyColumn(ModifyColumnRequest)
-    returns(ModifyColumnResponse);
+      returns(ModifyColumnResponse);
 
   /** Move the region region to the destination server. */
   rpc MoveRegion(MoveRegionRequest)
-    returns(MoveRegionResponse);
+      returns(MoveRegionResponse);
 
- /** Master dispatch merging the regions */
+  /** Master dispatch merging the regions */
   rpc DispatchMergingRegions(DispatchMergingRegionsRequest)
-    returns(DispatchMergingRegionsResponse);
+      returns(DispatchMergingRegionsResponse);
 
   /** Assign a region to a server chosen at random. */
   rpc AssignRegion(AssignRegionRequest)
-    returns(AssignRegionResponse);
+      returns(AssignRegionResponse);
 
   /**
    * Unassign a region from current hosting regionserver.  Region will then be
@@ -577,7 +577,7 @@ service MasterService {
    * to control the region movement.
    */
   rpc UnassignRegion(UnassignRegionRequest)
-    returns(UnassignRegionResponse);
+      returns(UnassignRegionResponse);
 
   /**
    * Offline a region from the assignment manager's in-memory state.  The
@@ -586,39 +586,39 @@ service MasterService {
    * method, and should only be used by experts or hbck.
    */
   rpc OfflineRegion(OfflineRegionRequest)
-    returns(OfflineRegionResponse);
+      returns(OfflineRegionResponse);
 
   /** Deletes a table */
   rpc DeleteTable(DeleteTableRequest)
-    returns(DeleteTableResponse);
+      returns(DeleteTableResponse);
 
   /** Truncate a table */
   rpc truncateTable(TruncateTableRequest)
-    returns(TruncateTableResponse);
+      returns(TruncateTableResponse);
 
   /** Puts the table on-line (only needed if table has been previously taken offline) */
   rpc EnableTable(EnableTableRequest)
-    returns(EnableTableResponse);
+      returns(EnableTableResponse);
 
   /** Take table offline */
   rpc DisableTable(DisableTableRequest)
-    returns(DisableTableResponse);
+      returns(DisableTableResponse);
 
   /** Modify a table's metadata */
   rpc ModifyTable(ModifyTableRequest)
-    returns(ModifyTableResponse);
+      returns(ModifyTableResponse);
 
   /** Creates a new table asynchronously */
   rpc CreateTable(CreateTableRequest)
-    returns(CreateTableResponse);
+      returns(CreateTableResponse);
 
-    /** Shutdown an HBase cluster. */
+  /** Shutdown an HBase cluster. */
   rpc Shutdown(ShutdownRequest)
-    returns(ShutdownResponse);
+      returns(ShutdownResponse);
 
   /** Stop HBase Master only.  Does not shutdown the cluster. */
   rpc StopMaster(StopMasterRequest)
-    returns(StopMasterResponse);
+      returns(StopMasterResponse);
 
   /**
    * Run the balancer.  Will run the balancer and if regions to move, it will
@@ -626,73 +626,73 @@ service MasterService {
    * Check logs.
    */
   rpc Balance(BalanceRequest)
-    returns(BalanceResponse);
+      returns(BalanceResponse);
 
   /**
    * Turn the load balancer on or off.
    * If synchronous is true, it waits until current balance() call, if outstanding, to return.
    */
   rpc SetBalancerRunning(SetBalancerRunningRequest)
-    returns(SetBalancerRunningResponse);
+      returns(SetBalancerRunningResponse);
 
   /**
    * Query whether the Region Balancer is running.
    */
   rpc IsBalancerEnabled(IsBalancerEnabledRequest)
-    returns(IsBalancerEnabledResponse);
+      returns(IsBalancerEnabledResponse);
 
   /**
    * Turn the split or merge switch on or off.
    * If synchronous is true, it waits until current operation call, if outstanding, to return.
    */
   rpc SetSplitOrMergeEnabled(SetSplitOrMergeEnabledRequest)
-    returns(SetSplitOrMergeEnabledResponse);
+      returns(SetSplitOrMergeEnabledResponse);
 
   /**
    * Query whether the split or merge switch is on/off.
    */
   rpc IsSplitOrMergeEnabled(IsSplitOrMergeEnabledRequest)
-    returns(IsSplitOrMergeEnabledResponse);
+      returns(IsSplitOrMergeEnabledResponse);
 
   /**
    * Run region normalizer. Can NOT run for various reasons. Check logs.
    */
   rpc Normalize(NormalizeRequest)
-  returns(NormalizeResponse);
+      returns(NormalizeResponse);
 
   /**
    * Turn region normalizer on or off.
    */
   rpc SetNormalizerRunning(SetNormalizerRunningRequest)
-  returns(SetNormalizerRunningResponse);
+      returns(SetNormalizerRunningResponse);
 
   /**
    * Query whether region normalizer is enabled.
    */
   rpc IsNormalizerEnabled(IsNormalizerEnabledRequest)
-  returns(IsNormalizerEnabledResponse);
+      returns(IsNormalizerEnabledResponse);
 
   /** Get a run of the catalog janitor */
   rpc RunCatalogScan(RunCatalogScanRequest)
-     returns(RunCatalogScanResponse);
+      returns(RunCatalogScanResponse);
 
   /**
    * Enable the catalog janitor on or off.
    */
   rpc EnableCatalogJanitor(EnableCatalogJanitorRequest)
-     returns(EnableCatalogJanitorResponse);
+      returns(EnableCatalogJanitorResponse);
 
   /**
    * Query whether the catalog janitor is enabled.
    */
   rpc IsCatalogJanitorEnabled(IsCatalogJanitorEnabledRequest)
-     returns(IsCatalogJanitorEnabledResponse);
+      returns(IsCatalogJanitorEnabledResponse);
 
   /**
    * Call a master coprocessor endpoint
    */
   rpc ExecMasterService(CoprocessorServiceRequest)
-    returns(CoprocessorServiceResponse);
+      returns(CoprocessorServiceResponse);
 
   /**
    * Create a snapshot for the given table.
@@ -745,55 +745,55 @@ service MasterService {
 
   /** Modify a namespace's metadata */
   rpc ModifyNamespace(ModifyNamespaceRequest)
-    returns(ModifyNamespaceResponse);
+      returns(ModifyNamespaceResponse);
 
   /** Creates a new namespace synchronously */
   rpc CreateNamespace(CreateNamespaceRequest)
-    returns(CreateNamespaceResponse);
+      returns(CreateNamespaceResponse);
 
   /** Deletes namespace synchronously */
   rpc DeleteNamespace(DeleteNamespaceRequest)
-    returns(DeleteNamespaceResponse);
+      returns(DeleteNamespaceResponse);
 
   /** Get a namespace descriptor by name */
   rpc GetNamespaceDescriptor(GetNamespaceDescriptorRequest)
-    returns(GetNamespaceDescriptorResponse);
+      returns(GetNamespaceDescriptorResponse);
 
   /** returns a list of namespaces */
   rpc ListNamespaceDescriptors(ListNamespaceDescriptorsRequest)
-    returns(ListNamespaceDescriptorsResponse);
+      returns(ListNamespaceDescriptorsResponse);
 
   /** returns a list of tables for a given namespace*/
   rpc ListTableDescriptorsByNamespace(ListTableDescriptorsByNamespaceRequest)
-    returns(ListTableDescriptorsByNamespaceResponse);
+      returns(ListTableDescriptorsByNamespaceResponse);
 
   /** returns a list of tables for a given namespace*/
   rpc ListTableNamesByNamespace(ListTableNamesByNamespaceRequest)
-    returns(ListTableNamesByNamespaceResponse);
+      returns(ListTableNamesByNamespaceResponse);
 
   /** Apply the new quota settings */
   rpc SetQuota(SetQuotaRequest) returns(SetQuotaResponse);
 
   /** Returns the timestamp of the last major compaction */
   rpc getLastMajorCompactionTimestamp(MajorCompactionTimestampRequest)
-    returns(MajorCompactionTimestampResponse);
+      returns(MajorCompactionTimestampResponse);
 
   /** Returns the timestamp of the last major compaction */
   rpc getLastMajorCompactionTimestampForRegion(MajorCompactionTimestampForRegionRequest)
-    returns(MajorCompactionTimestampResponse);
+      returns(MajorCompactionTimestampResponse);
 
   rpc getProcedureResult(GetProcedureResultRequest)
-    returns(GetProcedureResultResponse);
+      returns(GetProcedureResultResponse);
 
   /** Returns the security capabilities in effect on the cluster */
   rpc getSecurityCapabilities(SecurityCapabilitiesRequest)
-    returns(SecurityCapabilitiesResponse);
+      returns(SecurityCapabilitiesResponse);
 
   /** Abort a procedure */
   rpc AbortProcedure(AbortProcedureRequest)
-    returns(AbortProcedureResponse);
+      returns(AbortProcedureResponse);
 
   /** returns a list of procedures */
   rpc ListProcedures(ListProceduresRequest)
-    returns(ListProceduresResponse);
+      returns(ListProceduresResponse);
 }

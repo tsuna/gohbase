@@ -59,7 +59,7 @@ message Column {
  * Consistency defines the expected consistency level for an operation.
  */
 enum Consistency {
-  STRONG   = 0;
+  STRONG = 0;
   TIMELINE = 1;
 }
 
@@ -174,11 +174,11 @@ message MutationProto {
   optional uint64 nonce = 9;
 
   enum Durability {
-    USE_DEFAULT  = 0;
-    SKIP_WAL     = 1;
-    ASYNC_WAL    = 2;
-    SYNC_WAL     = 3;
-    FSYNC_WAL    = 4;
+    USE_DEFAULT = 0;
+    SKIP_WAL = 1;
+    ASYNC_WAL = 2;
+    SYNC_WAL = 3;
+    FSYNC_WAL = 4;
   }
 
   enum MutationType {
@@ -337,7 +337,7 @@ message ScanResponse {
 }
 
 message ScanMetrics {
-    repeated NameInt64Pair metrics = 1;
+  repeated NameInt64Pair metrics = 1;
 }
 
 /**
@@ -432,7 +432,7 @@ message ResultOrException {
   // result if this was a coprocessor service call
   optional CoprocessorServiceResult service_result = 4;
   // current load on the region
-  optional RegionLoadStats loadStats = 5 [deprecated=true];
+  optional RegionLoadStats loadStats = 5 [deprecated = true];
 }
 
 /**
@@ -467,23 +467,23 @@ message MultiResponse {
 
 service ClientService {
   rpc Get(GetRequest)
-    returns(GetResponse);
+      returns(GetResponse);
 
   rpc Mutate(MutateRequest)
-    returns(MutateResponse);
+      returns(MutateResponse);
 
   rpc Scan(ScanRequest)
-    returns(ScanResponse);
+      returns(ScanResponse);
 
   rpc BulkLoadHFile(BulkLoadHFileRequest)
-    returns(BulkLoadHFileResponse);
+      returns(BulkLoadHFileResponse);
 
   rpc ExecService(CoprocessorServiceRequest)
-    returns(CoprocessorServiceResponse);
+      returns(CoprocessorServiceResponse);
 
   rpc ExecRegionServerService(CoprocessorServiceRequest)
-    returns(CoprocessorServiceResponse);
+      returns(CoprocessorServiceResponse);
 
   rpc Multi(MultiRequest)
-    returns(MultiResponse);
+      returns(MultiResponse);
 }

@@ -107,11 +107,11 @@ message ProcedureStoreTracker {
 
 message ProcedureWALEntry {
   enum Type {
-    PROCEDURE_WAL_EOF     = 1;
-    PROCEDURE_WAL_INIT    = 2;
-    PROCEDURE_WAL_INSERT  = 3;
-    PROCEDURE_WAL_UPDATE  = 4;
-    PROCEDURE_WAL_DELETE  = 5;
+    PROCEDURE_WAL_EOF = 1;
+    PROCEDURE_WAL_INIT = 2;
+    PROCEDURE_WAL_INSERT = 3;
+    PROCEDURE_WAL_UPDATE = 4;
+    PROCEDURE_WAL_DELETE = 5;
     PROCEDURE_WAL_COMPACT = 6;
   }
 

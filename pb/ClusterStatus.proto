@@ -49,11 +49,11 @@ message RegionState {
     MERGING = 11;      // server started merge a region
     MERGED = 12;       // server completed merge of a region
     SPLITTING_NEW = 13;  // new region to be created when RS splits a parent
-                       // region but hasn't be created yet, or master doesn't
-                       // know it's already created
+    // region but hasn't be created yet, or master doesn't
+    // know it's already created
     MERGING_NEW = 14;  // new region to be created when RS merges two
-                       // daughter regions but hasn't be created yet, or
-                       // master doesn't know it's already created
+    // daughter regions but hasn't be created yet, or
+    // master doesn't know it's already created
   }
 }
 
@@ -116,7 +116,7 @@ message RegionLoad {
   /** the completed count of key values in currently running compaction */
   optional uint64 current_compacted_KVs = 11;
 
-   /** The current total size of root-level indexes for the region, in KB. */
+  /** The current total size of root-level indexes for the region, in KB. */
   optional uint32 root_index_size_KB = 12;
 
   /** The total size of all index blocks, not just the root level, in KB. */

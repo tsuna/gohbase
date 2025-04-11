@@ -30,15 +30,15 @@ option go_package = "../pb";
  * The type of the key in a Cell
  */
 enum CellType {
-    MINIMUM = 0;
-    PUT = 4;
+  MINIMUM = 0;
+  PUT = 4;
 
-    DELETE = 8;
-    DELETE_COLUMN = 12;
-    DELETE_FAMILY = 14;
+  DELETE = 8;
+  DELETE_COLUMN = 12;
+  DELETE_FAMILY = 14;
 
-    // MAXIMUM is used when searching; you look from maximum on down.
-    MAXIMUM = 255;
+  // MAXIMUM is used when searching; you look from maximum on down.
+  MAXIMUM = 255;
 }
 
 /**
