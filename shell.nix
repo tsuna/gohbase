@@ -3,10 +3,14 @@
 pkgs.mkShell {
 
   packages = with pkgs; [
+    jdk8    
     hbase_2_4
-    jdk8
     hadoop
+
     go_1_24
+    protoc-gen-go
+    protobuf
+
     procps
   ];
 
