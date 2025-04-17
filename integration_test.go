@@ -36,9 +36,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-var host = flag.String("host", "localhost", "The location where HBase is running")
-
-var table string
+var (
+	host      = flag.String("host", "localhost", "The location where HBase is running")
+	keySplits = [][]byte{[]byte("REVTEST-100"), []byte("REVTEST-200"), []byte("REVTEST-300")}
+	table     string
+)
 
 func init() {
 	table = fmt.Sprintf("gohbase_test_%d", time.Now().UnixNano())
@@ -59,7 +61,6 @@ func CreateTable(client gohbase.AdminClient, table string, cFamilies []string) e
 	}
 
 	// pre-split table for reverse scan test of region changes
-	keySplits := [][]byte{[]byte("REVTEST-100"), []byte("REVTEST-200"), []byte("REVTEST-300")}
 	ct := hrpc.NewCreateTable(context.Background(), []byte(table), cf, hrpc.SplitKeys(keySplits))
 	if err := client.CreateTable(ct); err != nil {
 		return err
@@ -1585,8 +1586,14 @@ func performNPuts(keyPrefix string, num_ops int) error {
 // Helper function. Given a client, key, columnFamily, value inserts into the table under column 'a'
 func insertKeyValue(c gohbase.Client, key, columnFamily string, value []byte,
 	options ...func(hrpc.Call) error) error {
+	return insertKeyValueAtCol(c, key, "a", columnFamily, value, options...)
+}
+
+// insertKeyValueAtCol inserts a value into the table under column col at key.
+func insertKeyValueAtCol(c gohbase.Client, key, col, columnFamily string, value []byte,
+	options ...func(hrpc.Call) error) error {
 	values := map[string]map[string][]byte{columnFamily: map[string][]byte{}}
-	values[columnFamily]["a"] = value
+	values[columnFamily][col] = value
 	putRequest, err := hrpc.NewPutStr(context.Background(), table, key, values, options...)
 	if err != nil {
 		return err
@@ -2811,4 +2818,158 @@ func TestScannerRenewalCancellation(t *testing.T) {
 	if err != context.Canceled {
 		t.Fatalf("Expected context.Canceled error, got: %v", err)
 	}
+}
+
+func TestScanWithStatsHandler(t *testing.T) {
+	ctx := context.Background()
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+
+	// Prep data to scan over:
+	q1, q2, q3 := "scanStats1", "scanStats2", "scanStats3"
+	quals := []string{q1, q2, q3}
+	fams := map[string][]string{"cf": quals}
+	rows := 5
+	for i := 0; i < rows; i++ {
+		for _, q := range quals {
+			err := insertKeyValueAtCol(c, strconv.Itoa(i), q, "cf", []byte(strconv.Itoa(i)),
+				hrpc.Timestamp(time.UnixMilli(int64(i))))
+			if err != nil {
+				t.Fatalf("Failed to insert test data: %v", err)
+			}
+		}
+	}
+
+	t.Run("Basic scan test that calls handler", func(t *testing.T) {
+		ss := &hrpc.ScanStats{}
+		tn := []byte("handler table update")
+		h := func(stats *hrpc.ScanStats) {
+			ss.Table = tn
+			t.Logf("Handler called, ScanStats = %s", stats)
+		}
+
+		scan, err := hrpc.NewScanRange(ctx, []byte(table), []byte(""), []byte("REVTEST-100"),
+			hrpc.Families(fams),
+			hrpc.WithScanStatsHandler(h))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = consumeScanner(c, scan)
+		if err != nil {
+			t.Fatalf("Error consuming scanner: %v", err)
+		}
+
+		if !bytes.Equal(ss.Table, tn) {
+			t.Fatalf("expected table to be updated in ScanStats by handler to %v, got %v",
+				tn, ss.Table)
+		}
+
+		if ss.ScanMetrics != nil {
+			t.Fatalf("expected ScanMetrics to be nil, got %v", ss.ScanMetrics)
+		}
+	})
+
+	t.Run("ScanStats with ScanMetrics", func(t *testing.T) {
+		ss := &hrpc.ScanStats{}
+		h := func(stats *hrpc.ScanStats) {
+			ss = stats
+			t.Logf("Handler called, ScanStats = %s", ss)
+		}
+
+		scan, err := hrpc.NewScanRange(ctx, []byte(table),
+			// The table has been pre-split into multiple regions.
+			// For testability, the scan range is defined here to scan within one region, as an
+			// open scan across multiple regions will result in multiple calls to SendRPC, calling
+			// the handler each time and making it difficult to isolate
+			[]byte(""), []byte("REVTEST-100"),
+			hrpc.Families(fams),
+			hrpc.TimeRange(time.UnixMilli(0), time.UnixMilli(5)),
+			// Both WithStatsHandler and WithTrackScanMetrics need to be set to collect ScanMetrics
+			// in ScanStats
+			hrpc.WithScanStatsHandler(h),
+			hrpc.TrackScanMetrics())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var rs []*hrpc.Result
+		rs, err = consumeScanner(c, scan)
+		if err != nil {
+			t.Fatalf("Error consuming scanner: %v", err)
+		}
+
+		if ss.ScanMetrics == nil {
+			t.Fatal("expected ScanStats to have ScanMetrics set, but got nil")
+		}
+
+		if ss.ScanMetrics["ROWS_SCANNED"]-ss.ScanMetrics["ROWS_FILTERED"] != int64(len(rs)) {
+			t.Fatalf("Expected ScanMetrics to reflect %d rows returned to client.\n"+
+				"ScanMetrics: %v,\nscan results: %v",
+				len(rs), ss.ScanMetrics, rs)
+		}
+	})
+
+	t.Run("ScanStats with scan over multiple regions for ScanStatsID",
+		func(t *testing.T) {
+			statsRes := make([]*hrpc.ScanStats, 0)
+			h := func(stats *hrpc.ScanStats) {
+				t.Logf("Handler called, ScanStats = %s", stats)
+				statsRes = append(statsRes, stats)
+			}
+
+			// test table is pre-split to have multiple regions, so this scan will cover multiple
+			// regions
+			scan, err := hrpc.NewScan(ctx, []byte(table),
+				hrpc.Families(fams),
+				hrpc.WithScanStatsHandler(h))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			_, err = consumeScanner(c, scan)
+			if err != nil {
+				t.Fatalf("Error consuming scanner: %v", err)
+			}
+
+			// keySplits is used to split the table into pre-split regions. For this scan,
+			// the number of ScanStats results (and hrpc.Results, although not tested here) should
+			// equal the num regions in the table. The test is scanning a tiny amount of data
+			// it has written to specified qualifiers, so wouldn't be hitting max result size, ex.
+			if len(statsRes) != len(keySplits)+1 {
+				t.Fatalf("Expected handler to be called %d times, got %d calls",
+					len(keySplits)+1, len(statsRes))
+			}
+
+			scanStatsID := statsRes[0].ScanStatsID
+			for _, rs := range statsRes {
+				if rs.ScanStatsID != scanStatsID {
+					t.Fatalf("Expected ScanStatsID to be preserved in all sub-scans of"+
+						"scanner, but was not - initial value %v, got %v",
+						scanStatsID, rs.ScanStatsID)
+				}
+			}
+		})
+}
+
+// consumeScanner is a helper function to consume the scanner and return the result.
+func consumeScanner(c gohbase.Client, scan *hrpc.Scan) ([]*hrpc.Result, error) {
+	sc := c.Scan(scan)
+	defer sc.Close()
+
+	rs := []*hrpc.Result{}
+
+	for {
+		var r *hrpc.Result
+		r, err := sc.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return rs, err
+		}
+		rs = append(rs, r)
+	}
+
+	return rs, nil
 }

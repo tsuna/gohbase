@@ -218,13 +218,16 @@ func (s *scanner) request() (*pb.ScanResponse, hrpc.RegionInfo, error) {
 	)
 
 	if s.isRegionScannerClosed() {
+		// preserve ScanStatsID
+		opts := append(s.rpc.Options(), hrpc.ScanStatsID(s.rpc.ScanStatsID()))
+
 		// open a new region scan to scan on a new region
 		rpc, err = hrpc.NewScanRange(
 			s.rpc.Context(),
 			s.rpc.Table(),
 			s.startRow,
 			s.rpc.StopRow(),
-			s.rpc.Options()...)
+			opts...)
 	} else {
 		// continuing to scan current region
 		rpc, err = hrpc.NewScanRange(s.rpc.Context(),
@@ -235,6 +238,8 @@ func (s *scanner) request() (*pb.ScanResponse, hrpc.RegionInfo, error) {
 			hrpc.NumberOfRows(s.rpc.NumberOfRows()),
 			hrpc.Priority(s.rpc.Priority()),
 			hrpc.RenewInterval(s.rpc.RenewInterval()),
+			// preserve ScanStatsID
+			hrpc.ScanStatsID(s.rpc.ScanStatsID()),
 		)
 	}
 	if err != nil {
@@ -367,7 +372,8 @@ func (s *scanner) closeRegionScanner() {
 			s.rpc.Table(), s.startRow, nil,
 			hrpc.ScannerID(s.curRegionScannerID),
 			hrpc.CloseScanner(),
-			hrpc.NumberOfRows(0))
+			hrpc.NumberOfRows(0),
+			hrpc.ScanStatsID(s.rpc.ScanStatsID()))
 		if err != nil {
 			panic(fmt.Sprintf("should not happen: %s", err))
 		}
@@ -392,6 +398,7 @@ func (s *scanner) renew(ctx context.Context, startRow []byte) error {
 		hrpc.ScannerID(s.curRegionScannerID),
 		hrpc.Priority(s.rpc.Priority()),
 		hrpc.RenewalScan(),
+		hrpc.ScanStatsID(s.rpc.ScanStatsID()),
 	)
 	if err != nil {
 		return err
