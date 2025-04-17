@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/google/go-cmp/cmp"
 	"log/slog"
 	"math/rand"
 	"net"
@@ -1813,4 +1814,160 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestSendRPCStatsHandler tests control flow of the ScanStatsHandler being called when
+// SendRPC sends a ScanRequest
+func TestSendRPCStatsHandler(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+
+	establishRegionOverride = func(reg hrpc.RegionInfo, addr string) {}
+	handleResultErrorOverride = func(err error, reg hrpc.RegionInfo, rc hrpc.RegionClient) {}
+
+	defer func() {
+		establishRegionOverride = nil
+		handleResultErrorOverride = nil
+	}()
+
+	c := newMockClient(nil)
+	rc := c.clients.put("regionserver:0", c.metaRegionInfo,
+		newRegionClientFn("regionserver:0"))
+	c.metaRegionInfo.SetClient(rc)
+
+	// Set up a region & regionserver
+	expectedRegionID := uint64(1434573235910)
+	ri := region.NewInfo(expectedRegionID, nil, []byte("test"),
+		[]byte("test,a,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("a"), []byte("z"))
+	addr := "regionserver:0"
+	regC := c.clients.put(addr, ri, newRegionClientFn(addr))
+	ri.SetClient(regC)
+	overlaps, replaced := c.regions.put(ri)
+	if len(overlaps) > 0 {
+		t.Fatalf("overlaps: %v replaced: %t", overlaps, replaced)
+	}
+
+	ss := &hrpc.ScanStats{}
+	handlerCalledOnce := false
+	h := func(stats *hrpc.ScanStats) {
+		if !handlerCalledOnce {
+			ss = stats
+			t.Log(ss)
+			handlerCalledOnce = true
+			return
+		}
+		t.Log("Handler doing nothing, already called once for test case")
+	}
+
+	t.Run("no handler called when not a scan request", func(t *testing.T) {
+		get, err := hrpc.NewGet(context.Background(), []byte("test"), []byte("a"))
+		if err != nil {
+			t.Fatalf("Error creating get request: %v", err)
+		}
+
+		go func() {
+			res := hrpc.RPCResult{}
+			get.ResultChan() <- res
+		}()
+
+		_, err = c.SendRPC(get)
+		if err != nil {
+			t.Fatalf("Error sending RPC: %v", err)
+		}
+
+		if !cmp.Equal(ss, &hrpc.ScanStats{}) || handlerCalledOnce {
+			t.Fatalf("Scan stats should not have been updated for a non-scan request,"+
+				"ScanStats: %s", ss.String())
+		}
+	})
+
+	tcases := []struct {
+		name      string
+		rpcErr    error
+		retryable bool
+	}{
+		{
+			name:      "nil error",
+			rpcErr:    nil,
+			retryable: false,
+		},
+		{
+			name:      "RetryableError",
+			rpcErr:    region.RetryableError{},
+			retryable: true,
+		},
+		{
+			name:      "ServerError",
+			rpcErr:    region.ServerError{},
+			retryable: true,
+		},
+		{
+			name:      "NotServingRegionError",
+			rpcErr:    region.NotServingRegionError{},
+			retryable: true,
+		},
+		{
+			name:      "Other error",
+			rpcErr:    errors.New("random error"),
+			retryable: false,
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Run(tc.name, func(t *testing.T) {
+			handlerCalledOnce = false
+			ss = &hrpc.ScanStats{}
+
+			expectedTable := []byte("test")
+			expectedStartRow := []byte("a")
+			expectedEndRow := []byte("z")
+			scan, err := hrpc.NewScanRange(
+				context.Background(), expectedTable, expectedStartRow, expectedEndRow,
+				hrpc.WithScanStatsHandler(h))
+			if err != nil {
+				t.Fatalf("Failed to create scan req: %v", err)
+			}
+			expectedScanStatsID := scan.ScanStatsID()
+
+			go func() {
+				res := hrpc.RPCResult{
+					Error: tc.rpcErr,
+				}
+				scan.ResultChan() <- res
+				// Workaround to not retry forever: if it's retryable, send a non error result after
+				// to get out of retry loop. The ScanStats are only updated by the handler on the
+				// first iteration of the for loop in SendRPC and that is what is being tested
+				scan.ResultChan() <- hrpc.RPCResult{}
+			}()
+
+			_, err = c.SendRPC(scan)
+
+			if tc.rpcErr == nil && err != nil {
+				if ss.Error || ss.Retryable != tc.retryable {
+					t.Fatalf("ScanStats incorrectly set error fields in nil error case")
+				}
+			}
+			if tc.rpcErr != nil {
+				if !ss.Error {
+					t.Fatalf("ScanStats Error for %v not set as expected", tc.rpcErr)
+				}
+				if ss.Retryable != tc.retryable {
+					t.Fatalf("ScanStats Retryable was not set as expected to %t for err %v",
+						tc.retryable, tc.rpcErr)
+				}
+			}
+
+			if !bytes.Equal(ss.Table, expectedTable) ||
+				!bytes.Equal(ss.StartRow, expectedStartRow) ||
+				!bytes.Equal(ss.EndRow, expectedEndRow) ||
+				// The region & scanner info should remain constant since there is only one region
+				// that can be scanned over
+				ss.RegionID != expectedRegionID ||
+				ss.RegionServer != addr ||
+				ss.ScannerID != noScannerID ||
+				ss.ScanStatsID != expectedScanStatsID {
+				t.Fatalf("ScanStats not updated as expected, got: %v", ss)
+			}
+		})
+	}
 }
