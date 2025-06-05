@@ -396,7 +396,7 @@ func (s *scanner) renew(ctx context.Context, startRow []byte) error {
 		startRow,
 		nil,
 		hrpc.ScannerID(s.curRegionScannerID),
-		hrpc.Priority(s.rpc.Priority()),
+		hrpc.Priority(defaultRenewScannerPriority),
 		hrpc.RenewalScan(),
 		hrpc.ScanStatsID(s.rpc.ScanStatsID()),
 	)
