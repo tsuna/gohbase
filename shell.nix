@@ -7,7 +7,7 @@ pkgs.mkShell {
     hbase_2_4
     hadoop
 
-    go_1_24
+    go_1_23
     protoc-gen-go
     protobuf
 
