@@ -154,10 +154,10 @@ func (c *client) scanRpcScanStats(scan *hrpc.Scan, resp proto.Message, err error
 		// are collected per call to SendRPC and therefore may not be reflective of the entire
 		// result of the Scan request if the results are split across multiple calls to
 		// Scanner.Next().
-		if scan.TrackScanMetrics() {
+		if scan.TrackScanMetrics() && resp != nil {
 			scanres, ok := resp.(*pb.ScanResponse)
 			if !ok {
-				c.logger.Error("got non ScanResponse for ScanRequest")
+				c.logger.Debug("got non ScanResponse for ScanRequest, no ScanMetrics to add")
 			} else {
 				if scanres.ScanMetrics != nil {
 					stats.ScanMetrics = make(map[string]int64)
