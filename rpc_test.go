@@ -1971,3 +1971,94 @@ func TestSendRPCStatsHandler(t *testing.T) {
 		})
 	}
 }
+
+// TestScanRPCScanStatsScanMetricsNonScanResponse tests the helper that updates the ScanStats when
+// there's an unexpected response, either nil or a pb message that isn't the expected ScanResponse
+// type. This scenario could arise when sendBlocking returns an error, and along with it a nil rpc
+// result. In either case the handler can still update ScanStats, but when ScanMetrics is enabled,
+// it shouldn't be able to update it since there's no ScanResponse or ScanMetrics to do so.
+func TestScanRPCScanStatsScanMetricsNonScanResponse(t *testing.T) {
+	c := newMockClient(nil)
+
+	ss := &hrpc.ScanStats{}
+	h := func(stats *hrpc.ScanStats) {
+		ss = stats
+		t.Log(ss)
+	}
+	expectedTable := []byte("test")
+	expectedStartRow := []byte("a")
+	expectedEndRow := []byte("z")
+	expectedRegionID := uint64(1434573235910)
+
+	scan, err := hrpc.NewScanRange(
+		context.Background(), expectedTable, expectedStartRow, expectedEndRow,
+		hrpc.WithScanStatsHandler(h), hrpc.TrackScanMetrics())
+	if err != nil {
+		t.Fatalf("Failed to create scan req: %v", err)
+	}
+	ri := region.NewInfo(expectedRegionID, nil, []byte("test"),
+		[]byte("test,a,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("a"), []byte("z"))
+	addr := "regionserver:0"
+	rc := newMockRegionClient(addr, region.RegionClient,
+		0, 0, "root", region.DefaultReadTimeout, nil, nil, slog.Default())
+	ri.SetClient(rc)
+	scan.SetRegion(ri)
+	expectedScanStatsID := scan.ScanStatsID()
+	start := time.Unix(0, 11)
+	end := time.Unix(0, 77)
+
+	validateStats := func() {
+		if !bytes.Equal(ss.Table, expectedTable) ||
+			!bytes.Equal(ss.StartRow, expectedStartRow) ||
+			!bytes.Equal(ss.EndRow, expectedEndRow) ||
+			ss.RegionID != expectedRegionID ||
+			ss.RegionServer != addr ||
+			ss.ScannerID != noScannerID ||
+			ss.ScanStatsID != expectedScanStatsID ||
+			ss.Start != start || ss.End != end {
+			t.Fatalf("ScanStats not updated as expected, got: %v", ss)
+		}
+	}
+
+	tcases := []struct {
+		name string
+		err  error
+	}{
+		{
+			name: "nil response with error (sendBlocking error case)",
+			err:  errors.New("err"),
+		},
+		{
+			name: "nil response no error",
+		},
+		{
+			name: "non scan response with error",
+			err:  errors.New("err"),
+		},
+		{
+			name: "non scan response no error",
+		},
+	}
+	for _, tc := range tcases {
+		t.Run(tc.name, func(t *testing.T) {
+			ss = &hrpc.ScanStats{}
+			c.scanRpcScanStats(scan, nil, tc.err, false, start, end)
+			validateStats()
+			if ss.ScanMetrics != nil {
+				t.Fatal("ScanStats set scanMetrics unexpectedly")
+			}
+			if tc.err != nil {
+				if !ss.Error {
+					t.Fatal("ScanStats did not set error as expected")
+				}
+			} else {
+				if ss.Error {
+					t.Fatal("ScanStats set error unexpectedly")
+				}
+			}
+			if ss.Retryable {
+				t.Fatal("ScanStats set retry unexpectedly")
+			}
+		})
+	}
+}
