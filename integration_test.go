@@ -1508,14 +1508,16 @@ func TestCheckAndMutate(t *testing.T) {
 				t.Fatalf("NewCheckAndMutate returned an error: %v", err)
 			}
 
-			casRes, err := c.CheckAndMutate(putRequest, ef, eq, tt.inExpectedValue, pb.CompareType_EQUAL)
+			casRes, err := c.CheckAndMutate(putRequest, ef, eq,
+				tt.inExpectedValue, pb.CompareType_EQUAL)
 
 			if err != nil {
 				t.Fatalf("CheckAndMutate error: %s", err)
 			}
 
 			if casRes != tt.out {
-				t.Errorf("CheckAndMutate with put values=%q and expectedValue=%q returned %v, want %v",
+				t.Errorf(
+					"CheckAndMutate with put values=%q and expectedValue=%q returned %v, want %v",
 					tt.inValues, tt.inExpectedValue, casRes, tt.out)
 			}
 		}
