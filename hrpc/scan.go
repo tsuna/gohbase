@@ -22,8 +22,9 @@ const (
 	DefaultMaxVersions uint32 = 1
 	// MinTimestamp default value for minimum timestamp for scan queries
 	MinTimestamp uint64 = 0
-	// MaxTimestamp default value for maximum timestamp for scan queries
-	MaxTimestamp = math.MaxUint64
+	// MaxTimestamp default value for maximum timestamp for scan queries.
+	// This is Java's Long.MAX_VALUE
+	MaxTimestamp = math.MaxInt64
 	// DefaultMaxResultSize Maximum number of bytes fetched when calling a scanner's
 	// next method. The default value is 2MB, which is good for 1ge networks.
 	// With faster and/or high latency networks this value should be increased.
