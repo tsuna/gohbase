@@ -105,11 +105,12 @@ func (c *client) SendRPC(rpc hrpc.Call) (msg proto.Message, err error) {
 		if err != nil {
 			return nil, err
 		}
+		rpcStart := time.Now()
 		msg, err = c.sendRPCToRegionClient(ctx, rpc, rc)
 		switch err.(type) {
 		case region.RetryableError:
 			if scan, ok := rpc.(*hrpc.Scan); ok {
-				c.scanRpcScanStats(scan, msg, err, true, start, time.Now())
+				c.scanRpcScanStats(scan, msg, err, true, rpcStart, time.Now())
 			}
 			sp.AddEvent("retrySleep")
 			backoff, err = sleepAndIncreaseBackoff(ctx, backoff)
@@ -119,7 +120,7 @@ func (c *client) SendRPC(rpc hrpc.Call) (msg proto.Message, err error) {
 			continue // retry
 		case region.ServerError:
 			if scan, ok := rpc.(*hrpc.Scan); ok {
-				c.scanRpcScanStats(scan, msg, err, true, start, time.Now())
+				c.scanRpcScanStats(scan, msg, err, true, rpcStart, time.Now())
 			}
 			// Retry ServerError immediately, as we want failover fast to
 			// another server. But if HBase keep sending us ServerError, we
@@ -135,12 +136,12 @@ func (c *client) SendRPC(rpc hrpc.Call) (msg proto.Message, err error) {
 			continue // retry
 		case region.NotServingRegionError:
 			if scan, ok := rpc.(*hrpc.Scan); ok {
-				c.scanRpcScanStats(scan, msg, err, true, start, time.Now())
+				c.scanRpcScanStats(scan, msg, err, true, rpcStart, time.Now())
 			}
 			continue // retry
 		}
 		if scan, ok := rpc.(*hrpc.Scan); ok {
-			c.scanRpcScanStats(scan, msg, err, false, start, time.Now())
+			c.scanRpcScanStats(scan, msg, err, false, rpcStart, time.Now())
 		}
 		return msg, err
 	}
