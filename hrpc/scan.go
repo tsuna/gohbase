@@ -61,6 +61,23 @@ type Scanner interface {
 	GetScanMetrics() map[string]int64
 }
 
+// ScanResponseV2 contains the response from a single Next() from a
+// ScannerV2.
+type ScanResponseV2 struct {
+	// Results contains ResultV2s, each of which are the results for a
+	// single row.
+	Results []ResultV2
+}
+
+// ResultV2 contains the results for a single row.
+type ResultV2 struct {
+	// Cells contains the cells found in a row.
+	Cells []CellV2
+	// Partial is true if there are more results for this row that
+	// will come from further Next() calls on the ScannerV2.
+	Partial bool
+}
+
 // Scan represents a scanner on an HBase table.
 type Scan struct {
 	base
@@ -89,7 +106,12 @@ type Scan struct {
 	// ResponseSize contains the size of the response after the RPC is
 	// completed. It is the size of the uncompressed cellblocks in the
 	// response. This is only meant for use internal to gohbase.
+	// TODO: Move this inside ScanResponse
 	ResponseSize int
+
+	// Response contains the scan's response after the RPC is
+	// completed. This is only meant for use internal to gohbase.
+	Response *ScanResponseV2
 }
 
 type ScanStats struct {
@@ -323,10 +345,17 @@ func (s *Scan) NewResponse() proto.Message {
 // DeserializeCellBlocks deserializes scan results from cell blocks
 func (s *Scan) DeserializeCellBlocks(m proto.Message, b []byte) (uint32, error) {
 	scanResp := m.(*pb.ScanResponse)
+	cellsPerResult := scanResp.GetCellsPerResult()
 	partials := scanResp.GetPartialFlagPerResult()
+	if len(cellsPerResult) != len(partials) {
+		return 0, fmt.Errorf("invalid scan response: "+
+			"cells_per_result count %d doesn't match partial_flag_per_result count %d",
+			len(cellsPerResult), len(partials))
+	}
 	scanResp.Results = make([]*pb.Result, len(partials))
+	s.Response = &ScanResponseV2{Results: make([]ResultV2, len(cellsPerResult))}
 	var readLen uint32
-	for i, numCells := range scanResp.GetCellsPerResult() {
+	for i, numCells := range cellsPerResult {
 		cells, l, err := deserializeCellBlocks(b[readLen:], numCells)
 		if err != nil {
 			return 0, err
@@ -335,6 +364,19 @@ func (s *Scan) DeserializeCellBlocks(m proto.Message, b []byte) (uint32, error) 
 			Cell:    cells,
 			Partial: proto.Bool(partials[i]),
 		}
+
+		cellsV2, l2, err := deserializeCellBlocksV2(b[readLen:], numCells)
+		if err != nil {
+			return 0, err
+		}
+		s.Response.Results[i] = ResultV2{
+			Cells:   cellsV2,
+			Partial: partials[i],
+		}
+		if l != l2 {
+			panic(fmt.Errorf("deserializeCellBlocks v1 and v2 disagree on length"))
+		}
+
 		readLen += l
 	}
 	s.ResponseSize = int(readLen)
