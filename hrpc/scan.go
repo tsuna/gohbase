@@ -85,6 +85,11 @@ type Scan struct {
 
 	scanStatsHandler ScanStatsHandler
 	scanStatsID      int64
+
+	// ResponseSize contains the size of the response after the RPC is
+	// completed. It is the size of the uncompressed cellblocks in the
+	// response. This is only meant for use internal to gohbase.
+	ResponseSize int
 }
 
 type ScanStats struct {
@@ -97,11 +102,12 @@ type ScanStats struct {
 	ScanStatsID  int64
 	// ScanMetrics are only collected if the client requests to track the scan metrics, when
 	// TrackScanMetrics() is enabled.
-	ScanMetrics map[string]int64
-	Start       time.Time
-	End         time.Time
-	Error       bool // if the scan returned error
-	Retryable   bool // if the scan returned an error and it is retryable
+	ScanMetrics  map[string]int64
+	Start        time.Time
+	End          time.Time
+	ResponseSize int
+	Error        bool // if the scan returned error
+	Retryable    bool // if the scan returned an error and it is retryable
 }
 
 type ScanStatsHandler func(*ScanStats)
@@ -331,6 +337,7 @@ func (s *Scan) DeserializeCellBlocks(m proto.Message, b []byte) (uint32, error) 
 		}
 		readLen += l
 	}
+	s.ResponseSize = int(readLen)
 	return readLen, nil
 }
 

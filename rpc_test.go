@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/google/go-cmp/cmp"
 	"log/slog"
 	"math/rand"
 	"net"
@@ -20,6 +19,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/tsuna/gohbase/compression"
@@ -1928,6 +1929,8 @@ func TestSendRPCStatsHandler(t *testing.T) {
 				t.Fatalf("Failed to create scan req: %v", err)
 			}
 			expectedScanStatsID := scan.ScanStatsID()
+			scan.ResponseSize = 42
+			expectedResponseSize := scan.ResponseSize
 
 			go func() {
 				res := hrpc.RPCResult{
@@ -1965,7 +1968,8 @@ func TestSendRPCStatsHandler(t *testing.T) {
 				ss.RegionID != expectedRegionID ||
 				ss.RegionServer != addr ||
 				ss.ScannerID != noScannerID ||
-				ss.ScanStatsID != expectedScanStatsID {
+				ss.ScanStatsID != expectedScanStatsID ||
+				ss.ResponseSize != expectedResponseSize {
 				t.Fatalf("ScanStats not updated as expected, got: %v", ss)
 			}
 		})
