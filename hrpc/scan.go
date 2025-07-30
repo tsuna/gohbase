@@ -78,6 +78,31 @@ type ResultV2 struct {
 	Partial bool
 }
 
+// Scanner is used to read data sequentially from HBase.
+// Scanner will be automatically closed if there's no more data to read,
+// otherwise Close method should be called.
+type ScannerV2 interface {
+	// Next returns the next response from HBase, which may have
+	// results for 1 or more rows. Once all rows are returned,
+	// subsequent calls will return io.EOF error.
+	//
+	// In case of an error, only the first call to Next() will return partial
+	// result (could be not a complete row) and the actual error,
+	// the subsequent calls will return io.EOF error.
+	Next() (*ScanResponseV2, error)
+
+	// Close should be called if it is desired to stop scanning before getting all of results.
+	// If you call Next() after calling Close() you might still get buffered results.
+	// Otherwise, in case all results have been delivered or in case of an error, the Scanner
+	// will be closed automatically. It's okay to close an already closed scanner.
+	Close() error
+	// GetScanMetrics returns the scan metrics for the scanner.
+	// The scan metrics are non-nil only if the Scan has TrackScanMetrics() enabled.
+	// GetScanMetrics should only be called after the scanner has been closed with an io.EOF
+	// (ie there are no more rows left to be returned by calls to Next()).
+	GetScanMetrics() map[string]int64
+}
+
 // Scan represents a scanner on an HBase table.
 type Scan struct {
 	base
