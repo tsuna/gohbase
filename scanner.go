@@ -48,7 +48,11 @@ type scanner struct {
 	renewCancel context.CancelFunc
 }
 
-func (s *scanner) fetch() (*hrpc.ScanResponse, error) {
+type scannerV2 struct {
+	scanner
+}
+
+func (s *scanner) fetch() (*hrpc.ScanResponseV2, error) {
 	// keep looping until we have error, some non-empty result or until close
 	for {
 		response, pbresp, region, err := s.request()
@@ -157,6 +161,23 @@ func newScanner(c RPCClient, rpc *hrpc.Scan, logger *slog.Logger) *scanner {
 	}
 }
 
+func newScannerV2(c RPCClient, rpc *hrpc.Scan, logger *slog.Logger) *scannerV2 {
+	var sm map[string]int64
+	if rpc.TrackScanMetrics() {
+		sm = make(map[string]int64)
+	}
+	return &scannerV2{
+		scanner: scanner{
+			RPCClient:          c,
+			rpc:                rpc,
+			startRow:           rpc.StartRow(),
+			curRegionScannerID: noScannerID,
+			scanMetrics:        sm,
+			logger:             logger,
+		},
+	}
+}
+
 func (s *scanner) Next() (*hrpc.Result, error) {
 	if err := s.rpc.Context().Err(); err != nil {
 		return nil, err
@@ -201,7 +222,35 @@ func (s *scanner) Next() (*hrpc.Result, error) {
 	}
 }
 
-func (s *scanner) request() (*hrpc.ScanResponse, *pb.ScanResponse, hrpc.RegionInfo, error) {
+func (s *scannerV2) Next() (*hrpc.ScanResponseV2, error) {
+	if s.renewCancel != nil {
+		// About to send new Scan request to HBase, cancel our
+		// renewer.
+		s.renewCancel()
+		s.renewCancel = nil
+	}
+
+	if s.closed {
+		return nil, io.EOF
+	}
+
+	if err := s.rpc.Context().Err(); err != nil {
+		return nil, err
+	}
+	resp, err := s.fetch()
+	if err != nil {
+		return nil, err
+	}
+	if !s.closed && s.rpc.RenewInterval() > 0 {
+		// Start up a renewer
+		renewCtx, cancel := context.WithCancel(s.rpc.Context())
+		s.renewCancel = cancel
+		go s.renewLoop(renewCtx, s.startRow)
+	}
+	return resp, nil
+}
+
+func (s *scanner) request() (*hrpc.ScanResponseV2, *pb.ScanResponse, hrpc.RegionInfo, error) {
 	var (
 		rpc *hrpc.Scan
 		err error

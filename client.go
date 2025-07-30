@@ -35,6 +35,7 @@ const (
 // Client a regular HBase client
 type Client interface {
 	Scan(s *hrpc.Scan) hrpc.Scanner
+	ScanV2(s *hrpc.Scan) hrpc.ScannerV2
 	Get(g *hrpc.Get) (*hrpc.Result, error)
 	Put(p *hrpc.Mutate) (*hrpc.Result, error)
 	Delete(d *hrpc.Mutate) (*hrpc.Result, error)
@@ -341,6 +342,10 @@ func (c *client) Close() {
 
 func (c *client) Scan(s *hrpc.Scan) hrpc.Scanner {
 	return newScanner(c, s, c.logger)
+}
+
+func (c *client) ScanV2(s *hrpc.Scan) hrpc.ScannerV2 {
+	return newScannerV2(c, s, c.logger)
 }
 
 func (c *client) Get(g *hrpc.Get) (*hrpc.Result, error) {

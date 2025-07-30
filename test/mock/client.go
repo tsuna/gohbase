@@ -187,6 +187,20 @@ func (mr *MockClientMockRecorder) Scan(s any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scan", reflect.TypeOf((*MockClient)(nil).Scan), s)
 }
 
+// ScanV2 mocks base method.
+func (m *MockClient) ScanV2(s *hrpc.Scan) hrpc.ScannerV2 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ScanV2", s)
+	ret0, _ := ret[0].(hrpc.ScannerV2)
+	return ret0
+}
+
+// ScanV2 indicates an expected call of ScanV2.
+func (mr *MockClientMockRecorder) ScanV2(s any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ScanV2", reflect.TypeOf((*MockClient)(nil).ScanV2), s)
+}
+
 // SendBatch mocks base method.
 func (m *MockClient) SendBatch(ctx context.Context, batch []hrpc.Call) ([]hrpc.RPCResult, bool) {
 	m.ctrl.T.Helper()
