@@ -22,7 +22,7 @@ import (
 func NewClient(addr string, ctype ClientType, queueSize int, flushInterval time.Duration,
 	effectiveUser string, readTimeout time.Duration, codec compression.Codec,
 	dialer func(ctx context.Context, network, addr string) (net.Conn, error),
-	slogger *slog.Logger) hrpc.RegionClient {
+	slogger *slog.Logger, minWindowSize, maxWindowSize int) hrpc.RegionClient {
 	c := &client{
 		addr:          addr,
 		ctype:         ctype,
@@ -30,10 +30,13 @@ func NewClient(addr string, ctype ClientType, queueSize int, flushInterval time.
 		flushInterval: flushInterval,
 		effectiveUser: effectiveUser,
 		readTimeout:   readTimeout,
-		rpcs:          make(chan []hrpc.Call),
+		rpcBatches:    make(chan []hrpc.Call),
+		rpcs:          make(chan hrpc.Call),
 		done:          make(chan struct{}),
 		sent:          make(map[uint32]hrpc.Call),
 		logger:        slogger,
+		minWindowSize: minWindowSize,
+		maxWindowSize: maxWindowSize,
 	}
 
 	if codec != nil {
@@ -82,7 +85,14 @@ func (c *client) Dial(ctx context.Context) error {
 		if c.ctype == RegionClient {
 			go c.processRPCs() // Batching goroutine
 		}
-		go c.receiveRPCs() // Reader goroutine
+		if c.maxWindowSize > 0 {
+			cc := newCongestion(c, c.minWindowSize, c.maxWindowSize,
+				windowSize.WithLabelValues(c.Addr()),
+			)
+			go cc.run(c.rpcs, c.done)
+		} else {
+			go c.receiveRPCs() // Reader goroutine
+		}
 	})
 
 	select {

@@ -167,14 +167,16 @@ type client struct {
 	// failOnce used for concurrent calls to fail
 	failOnce sync.Once
 
-	rpcs chan []hrpc.Call
-	done chan struct{}
+	rpcBatches chan []hrpc.Call
+	rpcs       chan hrpc.Call
+	done       chan struct{}
 
 	// sent contains the mapping of sent call IDs to RPC calls, so that when
 	// a response is received it can be tied to the correct RPC
 	sentM sync.Mutex // protects sent
 	sent  map[uint32]hrpc.Call
 
+	// TODO: Delete this. inFlight can be replaced with len(sent)
 	// inFlight is number of rpcs sent to regionserver awaiting response
 	inFlightM sync.Mutex // protects inFlight and SetReadDeadline
 	inFlight  uint32
@@ -195,12 +197,28 @@ type client struct {
 	dialer func(ctx context.Context, network, addr string) (net.Conn, error)
 
 	logger *slog.Logger
+
+	minWindowSize int
+	maxWindowSize int
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine
 func (c *client) QueueRPC(rpc hrpc.Call) {
 	if c.rpcQueueSize > 1 && hrpc.CanBatch(rpc) {
 		c.QueueBatch(rpc.Context(), []hrpc.Call{rpc})
+	} else if c.maxWindowSize > 0 && hrpc.GetPriority(rpc) == 0 {
+		select {
+		case <-c.done:
+			// An unrecoverable error has occured,
+			// region client has been stopped,
+			// don't send rpcs
+			returnResult(rpc, nil, ErrClientClosed)
+		case <-rpc.Context().Done():
+			// If the deadline has been exceeded, don't bother sending the
+			// request. The function that placed the RPC in our queue should
+			// stop waiting for a result and return an error.
+		case c.rpcs <- rpc:
+		}
 	} else {
 		select {
 		case <-c.done:
@@ -231,7 +249,7 @@ func (c *client) QueueBatch(ctx context.Context, rpcs []hrpc.Call) {
 		for _, c := range rpcs {
 			c.ResultChan() <- res
 		}
-	case c.rpcs <- rpcs:
+	case c.rpcBatches <- rpcs:
 	}
 }
 
@@ -254,28 +272,26 @@ func (c *client) String() string {
 
 func (c *client) inFlightUp() error {
 	c.inFlightM.Lock()
+	defer c.inFlightM.Unlock()
 	c.inFlight++
 	// we expect that at least the last request can be completed within readTimeout
 	if err := c.conn.SetReadDeadline(time.Now().Add(c.readTimeout)); err != nil {
-		c.inFlightM.Unlock()
 		return err
 	}
-	c.inFlightM.Unlock()
 	return nil
 }
 
 func (c *client) inFlightDown() error {
 	c.inFlightM.Lock()
+	defer c.inFlightM.Unlock()
 	c.inFlight--
 	// reset read timeout if we are not waiting for any responses
 	// in order to prevent from closing this client if there are no request
 	if c.inFlight == 0 {
 		if err := c.conn.SetReadDeadline(time.Time{}); err != nil {
-			c.inFlightM.Unlock()
 			return err
 		}
 	}
-	c.inFlightM.Unlock()
 	return nil
 }
 
@@ -366,7 +382,7 @@ func (c *client) processRPCs() {
 			select {
 			case <-c.done:
 				return
-			case rpcs := <-c.rpcs:
+			case rpcs := <-c.rpcBatches:
 				// have things queued up, batch them
 				if !m.add(rpcs) {
 					// can still put more rpcs into batch
@@ -383,7 +399,7 @@ func (c *client) processRPCs() {
 			select {
 			case <-c.done:
 				return
-			case rpcs := <-c.rpcs:
+			case rpcs := <-c.rpcBatches:
 				m.add(rpcs)
 			}
 			continue
@@ -405,7 +421,7 @@ func (c *client) processRPCs() {
 			case <-timer.C:
 				reason = "timeout"
 				// time to flush
-			case rpcs := <-c.rpcs:
+			case rpcs := <-c.rpcBatches:
 				if !m.add(rpcs) {
 					// can still put more rpcs into batch
 					continue
@@ -423,6 +439,9 @@ func (c *client) processRPCs() {
 }
 
 func returnResult(c hrpc.Call, msg proto.Message, err error) {
+	if c == nil {
+		return
+	}
 	if m, ok := c.(*multi); ok {
 		m.returnResults(msg, err)
 	} else {
@@ -451,91 +470,79 @@ func (c *client) receiveRPCs() {
 		case <-c.done:
 			return
 		default:
-			if err := c.receive(reader); err != nil {
-				if _, ok := err.(ServerError); ok {
-					// fail the client and let the callers establish a new one
-					c.fail(err)
-					return
-				}
-				// in other cases we consider that the region client is healthy
-				// and return the error to caller to let them retry
+		}
+		rpc, resp, err := c.receive(reader)
+		returnResult(rpc, resp, err)
+		if err != nil {
+			if _, ok := err.(ServerError); ok {
+				// fail the client and let the callers establish a new one
+				c.fail(err)
+				return
 			}
+			// in other cases we consider that the region client is healthy
+			// and return the error to caller to let them retry
 		}
 	}
 }
 
-func (c *client) receive(r io.Reader) (err error) {
-	var (
-		sz       [4]byte
-		header   pb.ResponseHeader
-		response proto.Message
-	)
-
-	_, err = io.ReadFull(r, sz[:])
-	if err != nil {
-		return ServerError{err}
+func (c *client) receive(r io.Reader) (hrpc.Call, proto.Message, error) {
+	var sz [4]byte
+	if _, err := io.ReadFull(r, sz[:]); err != nil {
+		return nil, nil, ServerError{err}
 	}
 
 	size := binary.BigEndian.Uint32(sz[:])
 	b := make([]byte, size)
 
-	_, err = io.ReadFull(r, b)
-	if err != nil {
-		return ServerError{err}
+	if _, err := io.ReadFull(r, b); err != nil {
+		return nil, nil, ServerError{err}
 	}
 
 	// unmarshal header
+	var header pb.ResponseHeader
 	headerBytes, headerLen := protowire.ConsumeBytes(b)
 	if headerLen < 0 {
-		return ServerError{fmt.Errorf("failed to decode the response header: %v",
+		return nil, nil, ServerError{fmt.Errorf("failed to decode the response header: %v",
 			protowire.ParseError(headerLen))}
 	}
-	if err = proto.Unmarshal(headerBytes, &header); err != nil {
-		return ServerError{fmt.Errorf("failed to decode the response header: %v", err)}
+	if err := proto.Unmarshal(headerBytes, &header); err != nil {
+		return nil, nil, ServerError{fmt.Errorf("failed to decode the response header: %v", err)}
 	}
 
 	if header.CallId == nil {
-		return ErrMissingCallID
+		return nil, nil, ErrMissingCallID
 	}
 
 	callID := *header.CallId
 	rpc := c.unregisterRPC(callID)
 	if rpc == nil {
-		return ServerError{fmt.Errorf("got a response with an unexpected call ID: %d", callID)}
+		return nil, nil, ServerError{
+			fmt.Errorf("got a response with an unexpected call ID: %d", callID)}
 	}
 	if err := c.inFlightDown(); err != nil {
-		return ServerError{err}
+		return nil, nil, ServerError{err}
 	}
 
-	select {
-	case <-rpc.Context().Done():
+	if err := rpc.Context().Err(); err != nil {
 		// context has expired, don't bother deserializing
-		return
-	default:
+		return rpc, nil, err
 	}
-
-	// Here we know for sure that we got a response for rpc we asked.
-	// It's our responsibility to deliver the response or error to the
-	// caller as we unregistered the rpc.
-	defer func() { returnResult(rpc, response, err) }()
 
 	if header.Exception != nil {
-		err = exceptionToError(*header.Exception.ExceptionClassName, *header.Exception.StackTrace)
-		return
+		return rpc, nil, exceptionToError(
+			*header.Exception.ExceptionClassName, *header.Exception.StackTrace)
 	}
 
-	response = rpc.NewResponse()
+	response := rpc.NewResponse()
 
 	responseBytes, responseLen := protowire.ConsumeBytes(b[headerLen:])
 	if responseLen < 0 {
-		err = RetryableError{fmt.Errorf("failed to decode the response: %s",
+		return rpc, nil, RetryableError{fmt.Errorf("failed to decode the response: %s",
 			protowire.ParseError(responseLen))}
-		return
 	}
 
-	if err = proto.Unmarshal(responseBytes, response); err != nil {
-		err = RetryableError{fmt.Errorf("failed to decode the response: %s", err)}
-		return
+	if err := proto.Unmarshal(responseBytes, response); err != nil {
+		return rpc, nil, RetryableError{fmt.Errorf("failed to decode the response: %s", err)}
 	}
 
 	var cellsLen uint32
@@ -545,26 +552,25 @@ func (c *client) receive(r io.Reader) (err error) {
 	if d, ok := rpc.(canDeserializeCellBlocks); cellsLen > 0 && ok {
 		b := b[size-cellsLen:]
 		if c.compressor != nil {
+			var err error
 			b, err = c.compressor.decompressCellblocks(b)
 			if err != nil {
-				err = RetryableError{fmt.Errorf("failed to decompress the response: %s", err)}
-				return
+				return rpc, response, RetryableError{
+					fmt.Errorf("failed to decompress the response: %s", err)}
 			}
 		}
-		var nread uint32
-		nread, err = d.DeserializeCellBlocks(response, b)
+		nread, err := d.DeserializeCellBlocks(response, b)
 		if err != nil {
-			err = RetryableError{fmt.Errorf("failed to decode the response: %s", err)}
-			return
+			return rpc, response, RetryableError{
+				fmt.Errorf("failed to decode the response: %s", err)}
 		}
 
 		if int(nread) < len(b) {
-			err = RetryableError{
+			return rpc, response, RetryableError{
 				fmt.Errorf("short read: buffer length %d, read %d", len(b), nread)}
-			return
 		}
 	}
-	return
+	return rpc, response, nil
 }
 
 func exceptionToError(class, stack string) error {
