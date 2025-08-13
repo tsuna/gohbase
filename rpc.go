@@ -537,7 +537,7 @@ func sendBlocking(ctx context.Context, rc hrpc.RegionClient, rpc hrpc.Call) (
 	case res = <-rpc.ResultChan():
 		return res, nil
 	case <-ctx.Done():
-		return res, rpc.Context().Err()
+		return res, ctx.Err()
 	}
 }
 
