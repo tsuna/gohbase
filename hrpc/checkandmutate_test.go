@@ -289,7 +289,8 @@ func TestCheckAndMutateWithDifferentMutationTypes(t *testing.T) {
 				t.Fatalf("Failed to create %s mutate: %v", tc.name, err)
 			}
 
-			cam, err := NewCheckAndMutate(mutate, "cf", "col", []byte("expected"), pb.CompareType_EQUAL)
+			cam, err := NewCheckAndMutate(mutate, "cf", "col",
+				[]byte("expected"), pb.CompareType_EQUAL)
 			if err != nil {
 				t.Fatalf("NewCheckAndMutate failed for %s: %v", tc.name, err)
 			}
@@ -300,7 +301,8 @@ func TestCheckAndMutateWithDifferentMutationTypes(t *testing.T) {
 
 			// Verify that the underlying mutate type is preserved
 			if cam.Mutate.mutationType != mutate.mutationType {
-				t.Errorf("Expected mutation type %v, got %v", mutate.mutationType, cam.Mutate.mutationType)
+				t.Errorf("Expected mutation type %v, got %v",
+					mutate.mutationType, cam.Mutate.mutationType)
 			}
 		})
 	}

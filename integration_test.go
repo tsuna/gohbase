@@ -1600,7 +1600,8 @@ func TestCheckAndMutate(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CheckAndMutate error: %s", err)
 		}
-		require.Equal(t, true, camRes, "Expected mutation to execute when current value '5' > expected '3'")
+		require.Equal(t, true, camRes,
+			"Expected mutation to execute when current value '5' > expected '3'")
 
 		// Verify update to "10"
 		g, err := hrpc.NewGetStr(ctx, table, key)
@@ -1624,7 +1625,8 @@ func TestCheckAndMutate(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CheckAndMutate error: %s", err)
 		}
-		require.Equal(t, false, camRes, "Expected mutation to NOT execute when current value '10' < expected '15'")
+		require.Equal(t, false, camRes,
+			"Expected mutation to NOT execute when current value '10' < expected '15'")
 
 		// Verify unchanged
 		res, err = c.Get(g)
@@ -1644,7 +1646,8 @@ func TestCheckAndMutate(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CheckAndMutate error: %s", err)
 		}
-		require.Equal(t, false, camRes, "Expected mutation to NOT execute when current value '10' == expected '10'")
+		require.Equal(t, false, camRes,
+			"Expected mutation to NOT execute when current value '10' == expected '10'")
 	})
 
 }
