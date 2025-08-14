@@ -1524,11 +1524,11 @@ func TestCheckAndMutate(t *testing.T) {
 	})
 
 	t.Run("Not Equals", func(t *testing.T) {
+		k := "cam.ne.1"
+
 		ctx := context.Background()
 
-		// {}
-
-		p, err := hrpc.NewPut(ctx, []byte(table), []byte(key), makeValues("c", "1"))
+		p, err := hrpc.NewPut(ctx, []byte(table), []byte(k), makeValues(k, "1"))
 		if err != nil {
 			t.Fatalf("NewPut returned an error: %v", err)
 		}
@@ -1537,7 +1537,7 @@ func TestCheckAndMutate(t *testing.T) {
 			t.Fatalf("Put returned an error: %v", err)
 		}
 
-		g, err := hrpc.NewGetStr(ctx, table, key)
+		g, err := hrpc.NewGetStr(ctx, table, k)
 		if err != nil {
 			t.Fatalf("NewGet returned an error: %v", err)
 		}
@@ -1552,7 +1552,7 @@ func TestCheckAndMutate(t *testing.T) {
 
 		// {"c": "1"}
 
-		putRequest, err := hrpc.NewPutStr(context.Background(), table, key, makeValues("c", "2"))
+		putRequest, err := hrpc.NewPutStr(context.Background(), table, key, makeValues(k, "2"))
 		if err != nil {
 			t.Fatalf("NewCheckAndMutate returned an error: %v", err)
 		}
@@ -1564,7 +1564,7 @@ func TestCheckAndMutate(t *testing.T) {
 
 		// {"c": "2"}
 
-		putRequest, err = hrpc.NewPutStr(context.Background(), table, key, makeValues("c", "3"))
+		putRequest, err = hrpc.NewPutStr(context.Background(), table, key, makeValues(k, "3"))
 		if err != nil {
 			t.Fatalf("NewCheckAndMutate returned an error: %v", err)
 		}
@@ -1579,10 +1579,11 @@ func TestCheckAndMutate(t *testing.T) {
 	})
 
 	t.Run("Greater", func(t *testing.T) {
+		k := "cam.greater.1"
+
 		ctx := context.Background()
 
-		// {"a": "5"}
-		p, err := hrpc.NewPut(ctx, []byte(table), []byte(key), makeValues("a", "5"))
+		p, err := hrpc.NewPut(ctx, []byte(table), []byte(key), makeValues(key, "5"))
 		if err != nil {
 			t.Fatalf("NewPut returned an error: %v", err)
 		}
@@ -1592,7 +1593,7 @@ func TestCheckAndMutate(t *testing.T) {
 		}
 
 		// check "5" > expected "3", should mutate
-		putRequest, err := hrpc.NewPutStr(ctx, table, key, makeValues("a", "10"))
+		putRequest, err := hrpc.NewPutStr(ctx, table, key, makeValues(key, "10"))
 		if err != nil {
 			t.Fatalf("NewPutStr returned an error: %v", err)
 		}
@@ -1617,7 +1618,7 @@ func TestCheckAndMutate(t *testing.T) {
 		require.Equal(t, []byte("10"), res.Cells[0].Value, "Value should be updated to '10'")
 
 		// check "10" > expected "15", should not mutate
-		putRequest, err = hrpc.NewPutStr(ctx, table, key, makeValues("a", "20"))
+		putRequest, err = hrpc.NewPutStr(ctx, table, key, makeValues(key, "20"))
 		if err != nil {
 			t.Fatalf("NewPutStr returned an error: %v", err)
 		}
@@ -1638,7 +1639,7 @@ func TestCheckAndMutate(t *testing.T) {
 		require.Equal(t, []byte("10"), res.Cells[0].Value, "Value should remain '10'")
 
 		// check "10" > expected "10", should not mutate
-		putRequest, err = hrpc.NewPutStr(ctx, table, key, makeValues("a", "30"))
+		putRequest, err = hrpc.NewPutStr(ctx, table, key, makeValues(key, "30"))
 		if err != nil {
 			t.Fatalf("NewPutStr returned an error: %v", err)
 		}
