@@ -1444,7 +1444,7 @@ func TestCheckAndPutWithCompareType(t *testing.T) {
 		}
 
 		casRes, err := c.CheckAndPutWithCompareType(
-			putRequest, ef, eq, tt.inExpectedValue, pb.CompareType_GREATER)
+			putRequest, ef, eq, tt.cmpVal, pb.CompareType_GREATER)
 
 		if err != nil {
 			t.Fatalf("CheckAndPut error: %s", err)
@@ -1452,7 +1452,7 @@ func TestCheckAndPutWithCompareType(t *testing.T) {
 
 		if casRes != tt.out {
 			t.Errorf("CheckAndPut with put values=%q and expectedValue=%q returned %v, want %v",
-				tt.inValues, tt.inExpectedValue, casRes, tt.out)
+				tt.inValues, tt.cmpVal, casRes, tt.out)
 		}
 	}
 
