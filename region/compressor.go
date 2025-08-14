@@ -19,20 +19,13 @@ type compressor struct {
 	compression.Codec
 }
 
-func min(x, y uint32) int {
-	if x < y {
-		return int(x)
-	}
-	return int(y)
-}
-
 func (c *compressor) compressCellblocks(cbs net.Buffers, uncompressedLen uint32) []byte {
 	b := newBuffer(4)
 
 	// put uncompressed length
 	binary.BigEndian.PutUint32(b, uncompressedLen)
 
-	uncompressedBuffer := newBuffer(min(uncompressedLen, c.ChunkLen()))
+	uncompressedBuffer := newBuffer(int(min(uncompressedLen, c.ChunkLen())))
 	defer freeBuffer(uncompressedBuffer)
 
 	var chunkLen uint32
