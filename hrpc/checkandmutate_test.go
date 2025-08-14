@@ -111,6 +111,7 @@ func TestNewCheckAndMutate(t *testing.T) {
 			pb.CompareType_LESS_OR_EQUAL,
 			pb.CompareType_GREATER,
 			pb.CompareType_GREATER_OR_EQUAL,
+			pb.CompareType_NO_OP,
 		}
 
 		for _, ct := range compareTypes {
@@ -252,7 +253,7 @@ func TestCheckAndMutateWithDifferentMutationTypes(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name        string
+		name         string
 		createMutate func() (*Mutate, error)
 	}{
 		{

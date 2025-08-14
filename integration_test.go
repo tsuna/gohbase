@@ -1578,6 +1578,75 @@ func TestCheckAndMutate(t *testing.T) {
 
 	})
 
+	t.Run("Greater", func(t *testing.T) {
+		ctx := context.Background()
+
+		// {"a": "5"}
+		p, err := hrpc.NewPut(ctx, []byte(table), []byte(key), makeValues("a", "5"))
+		if err != nil {
+			t.Fatalf("NewPut returned an error: %v", err)
+		}
+		_, err = c.Put(p)
+		if err != nil {
+			t.Fatalf("Put returned an error: %v", err)
+		}
+
+		// check "5" > expected "3", should mutate
+		putRequest, err := hrpc.NewPutStr(ctx, table, key, makeValues("a", "10"))
+		if err != nil {
+			t.Fatalf("NewPutStr returned an error: %v", err)
+		}
+		camRes, err := c.CheckAndMutate(putRequest, ef, eq, []byte("3"), pb.CompareType_GREATER)
+		if err != nil {
+			t.Fatalf("CheckAndMutate error: %s", err)
+		}
+		require.Equal(t, true, camRes, "Expected mutation to execute when current value '5' > expected '3'")
+
+		// Verify update to "10"
+		g, err := hrpc.NewGetStr(ctx, table, key)
+		if err != nil {
+			t.Fatalf("NewGet returned an error: %v", err)
+		}
+		res, err := c.Get(g)
+		if err != nil {
+			t.Fatalf("Get returned an error: %v", err)
+		}
+		require.NotNil(t, res)
+		require.Len(t, res.Cells, 1)
+		require.Equal(t, []byte("10"), res.Cells[0].Value, "Value should be updated to '10'")
+
+		// check "10" > expected "15", should not mutate
+		putRequest, err = hrpc.NewPutStr(ctx, table, key, makeValues("a", "20"))
+		if err != nil {
+			t.Fatalf("NewPutStr returned an error: %v", err)
+		}
+		camRes, err = c.CheckAndMutate(putRequest, ef, eq, []byte("15"), pb.CompareType_GREATER)
+		if err != nil {
+			t.Fatalf("CheckAndMutate error: %s", err)
+		}
+		require.Equal(t, false, camRes, "Expected mutation to NOT execute when current value '10' < expected '15'")
+
+		// Verify unchanged
+		res, err = c.Get(g)
+		if err != nil {
+			t.Fatalf("Get returned an error: %v", err)
+		}
+		require.NotNil(t, res)
+		require.Len(t, res.Cells, 1)
+		require.Equal(t, []byte("10"), res.Cells[0].Value, "Value should remain '10'")
+
+		// check "10" > expected "10", should not mutate
+		putRequest, err = hrpc.NewPutStr(ctx, table, key, makeValues("a", "30"))
+		if err != nil {
+			t.Fatalf("NewPutStr returned an error: %v", err)
+		}
+		camRes, err = c.CheckAndMutate(putRequest, ef, eq, []byte("10"), pb.CompareType_GREATER)
+		if err != nil {
+			t.Fatalf("CheckAndMutate error: %s", err)
+		}
+		require.Equal(t, false, camRes, "Expected mutation to NOT execute when current value '10' == expected '10'")
+	})
+
 }
 
 func TestCheckAndMutateNotPut(t *testing.T) {

@@ -6,6 +6,8 @@
 package hrpc
 
 import (
+	"fmt"
+
 	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
 	"google.golang.org/protobuf/proto"
@@ -28,6 +30,18 @@ type CheckAndMutate struct {
 // and if the compare is, perform the provided mutate request on the row
 func NewCheckAndMutate(mutate *Mutate, family string,
 	qualifier string, expectedValue []byte, compareType pb.CompareType) (*CheckAndMutate, error) {
+
+	if mutate == nil {
+		return nil, fmt.Errorf("mutate cannot be nil")
+	}
+
+	if family == "" {
+		return nil, fmt.Errorf("family cannot be empty")
+	}
+
+	if qualifier == "" {
+		return nil, fmt.Errorf("qualifier cannot be empty")
+	}
 
 	// The condition that needs to match for the edit to be applied.
 	exp := filter.NewByteArrayComparable(expectedValue)
