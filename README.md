@@ -65,6 +65,13 @@ to send changes for review. Please sign the
 [Contributor License Agreement](https://docs.google.com/spreadsheet/viewform?formkey=dFNiOFROLXJBbFBmMkQtb1hNMWhUUnc6MQ)
 when you send your first change for review.  
 
+## Setup
+
+This repo includes a `shell.nix` file for development.
+To get started, install nix, cd into the root of the repo, and run `shell.nix`.
+You'll be provided with a shell that includes everything needed for development.
+Note that this will take some time on the first invocation.
+
 ## License
 
 Copyright © 2015 The GoHBase Authors. All rights reserved. Use of this source code is governed by the Apache License 2.0 that can be found in the [COPYING](COPYING) file.
