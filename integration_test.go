@@ -1404,6 +1404,61 @@ func TestCheckAndPut(t *testing.T) {
 	// TODO: check the resulting state by performing a Get request
 }
 
+func makeMap(cf, k, v string) map[string]map[string][]byte {
+	return map[string]map[string][]byte{cf: map[string][]byte{k: []byte(v)}}
+}
+
+func TestCheckAndPutWithCompareType(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+
+	key := "rowCAP"
+	ef := "cf"
+	eq := "a"
+
+	var castests = []struct {
+		inValues map[string]map[string][]byte
+		cmpVal   []byte
+		out      bool
+	}{
+		// { }
+		{makeMap("cf", "b", "2"), nil, true}, // nil instead of empty byte array
+		// {b: 2}
+		{makeMap("cf", "b", "2"), nil, false}, // has already been written
+		// {b: 2}
+		{makeMap("cf", "a", "1"), []byte{}, true},
+		// {a: 1, b: 2}
+		{makeMap("cf", "a", "1"), []byte{}, false}, // Strictly greater
+		// {a: 1, b: 2}
+		{makeMap("cf", "a", "3"), []byte("0"), true},
+		// {a: 3, b: 2}
+		{makeMap("cf", "b", "4"), []byte("1"), true},
+		// {a: 3, b: 4}
+		{makeMap("cf", "b", "1"), []byte{"99"}, false},
+	}
+
+	for _, tt := range castests {
+		putRequest, err := hrpc.NewPutStr(context.Background(), table, key, tt.inValues)
+		if err != nil {
+			t.Fatalf("NewPutStr returned an error: %v", err)
+		}
+
+		casRes, err := c.CheckAndPutWithCompareType(
+			putRequest, ef, eq, tt.inExpectedValue, pb.CompareType_GREATER)
+
+		if err != nil {
+			t.Fatalf("CheckAndPut error: %s", err)
+		}
+
+		if casRes != tt.out {
+			t.Errorf("CheckAndPut with put values=%q and expectedValue=%q returned %v, want %v",
+				tt.inValues, tt.inExpectedValue, casRes, tt.out)
+		}
+	}
+
+	// TODO: check the resulting state by performing a Get request
+}
+
 func TestCheckAndPutNotPut(t *testing.T) {
 	key := "row101"
 	c := gohbase.NewClient(*host)
