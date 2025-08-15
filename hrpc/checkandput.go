@@ -26,6 +26,8 @@ type CheckAndPut struct {
 }
 
 // NewCheckAndPut creates a CheckAndPut with only an EQUAL compare type.
+//
+// DEPRECATED: use NewCheckAndPutWithCompareType instead.
 func NewCheckAndPut(put *Mutate, family string,
 	qualifier string, expectedValue []byte) (*CheckAndPut, error) {
 	return NewCheckAndPutWithCompareType(
