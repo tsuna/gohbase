@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand"
-	"net"
 	"reflect"
 	"strconv"
 	"strings"
@@ -23,7 +22,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/tsuna/gohbase/compression"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
@@ -41,7 +39,8 @@ import (
 func newRegionClientFn(addr string) func() hrpc.RegionClient {
 	return func() hrpc.RegionClient {
 		return newMockRegionClient(addr, region.RegionClient,
-			0, 0, "root", region.DefaultReadTimeout, nil, nil, slog.Default())
+			region.WithQueueSize(0),
+			region.WithFlushInterval(0))
 	}
 }
 
@@ -309,10 +308,7 @@ func TestEstablishRegionDialFail(t *testing.T) {
 	rcDialCancel.EXPECT().String().Return("reginserver:1").AnyTimes()
 
 	newRegionClientFnCallCount := 0
-	c.newRegionClientFn = func(_ string, _ region.ClientType, _ int, _ time.Duration,
-		_ string, _ time.Duration, _ compression.Codec,
-		_ func(ctx context.Context, network, addr string) (net.Conn, error),
-		_ *slog.Logger) hrpc.RegionClient {
+	c.newRegionClientFn = func(_ string, _ region.ClientType, _ ...region.Option) hrpc.RegionClient {
 		var rc hrpc.RegionClient
 		if newRegionClientFnCallCount == 0 {
 			rc = rcFailDial
@@ -2004,7 +2000,8 @@ func TestScanRPCScanStatsScanMetricsNonScanResponse(t *testing.T) {
 		[]byte("test,a,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("a"), []byte("z"))
 	addr := "regionserver:0"
 	rc := newMockRegionClient(addr, region.RegionClient,
-		0, 0, "root", region.DefaultReadTimeout, nil, nil, slog.Default())
+		region.WithQueueSize(0),
+		region.WithFlushInterval(0))
 	ri.SetClient(rc)
 	scan.SetRegion(ri)
 	expectedScanStatsID := scan.ScanStatsID()

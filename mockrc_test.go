@@ -9,13 +9,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"log/slog"
-	"net"
 	"sync"
 	"sync/atomic"
-	"time"
 
-	"github.com/tsuna/gohbase/compression"
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
@@ -177,11 +173,7 @@ func init() {
 	clients = make(map[string]uint32)
 }
 
-func newMockRegionClient(addr string, ctype region.ClientType, queueSize int,
-	flushInterval time.Duration, effectiveUser string,
-	readTimeout time.Duration, codec compression.Codec,
-	dialer func(ctx context.Context, network, addr string) (net.Conn, error),
-	log *slog.Logger) hrpc.RegionClient {
+func newMockRegionClient(addr string, ctype region.ClientType, opts ...region.Option) hrpc.RegionClient {
 	m.Lock()
 	clients[addr]++
 	m.Unlock()

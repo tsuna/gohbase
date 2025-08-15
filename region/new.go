@@ -18,33 +18,83 @@ import (
 	"github.com/tsuna/gohbase/hrpc"
 )
 
-// NewClient creates a new RegionClient.
-func NewClient(addr string, ctype ClientType, queueSize int, flushInterval time.Duration,
-	effectiveUser string, readTimeout time.Duration, codec compression.Codec,
-	dialer func(ctx context.Context, network, addr string) (net.Conn, error),
-	slogger *slog.Logger) hrpc.RegionClient {
+// Option is a function that modifies a client
+type Option func(*client)
+
+// WithQueueSize sets the RPC queue size
+func WithQueueSize(size int) Option {
+	return func(c *client) {
+		c.rpcQueueSize = size
+	}
+}
+
+// WithFlushInterval sets the flush interval for batching RPCs
+func WithFlushInterval(interval time.Duration) Option {
+	return func(c *client) {
+		c.flushInterval = interval
+	}
+}
+
+// WithEffectiveUser sets the effective user for the connection
+func WithEffectiveUser(user string) Option {
+	return func(c *client) {
+		c.effectiveUser = user
+	}
+}
+
+// WithReadTimeout sets the read timeout for RPCs
+func WithReadTimeout(timeout time.Duration) Option {
+	return func(c *client) {
+		c.readTimeout = timeout
+	}
+}
+
+// WithCodec sets the compression codec for cellblocks
+func WithCodec(codec compression.Codec) Option {
+	return func(c *client) {
+		if codec != nil {
+			c.compressor = &compressor{Codec: codec}
+		}
+	}
+}
+
+// WithDialer sets a custom dialer for connecting to region servers
+func WithDialer(dialer func(ctx context.Context, network, addr string) (net.Conn, error)) Option {
+	return func(c *client) {
+		if dialer != nil {
+			c.dialer = dialer
+		}
+	}
+}
+
+// WithLogger sets a custom logger
+func WithLogger(logger *slog.Logger) Option {
+	return func(c *client) {
+		c.logger = logger
+	}
+}
+
+// NewClient creates a new RegionClient with options.
+func NewClient(addr string, ctype ClientType, opts ...Option) hrpc.RegionClient {
 	c := &client{
 		addr:          addr,
 		ctype:         ctype,
-		rpcQueueSize:  queueSize,
-		flushInterval: flushInterval,
-		effectiveUser: effectiveUser,
-		readTimeout:   readTimeout,
+		rpcQueueSize:  DefaultRPCQueueSize,
+		flushInterval: DefaultFlushInterval,
+		effectiveUser: DefaultEffectiveUser,
+		readTimeout:   DefaultReadTimeout,
 		rpcs:          make(chan []hrpc.Call),
 		done:          make(chan struct{}),
 		sent:          make(map[uint32]hrpc.Call),
-		logger:        slogger,
 	}
 
-	if codec != nil {
-		c.compressor = &compressor{Codec: codec}
-	}
+	// Set default dialer
+	var d net.Dialer
+	c.dialer = d.DialContext
 
-	if dialer != nil {
-		c.dialer = dialer
-	} else {
-		var d net.Dialer
-		c.dialer = d.DialContext
+	// Apply all options
+	for _, opt := range opts {
+		opt(c)
 	}
 
 	return c

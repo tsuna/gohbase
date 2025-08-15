@@ -92,6 +92,12 @@ const (
 	DefaultLookupTimeout = 30 * time.Second
 	//DefaultReadTimeout is the default region read timeout
 	DefaultReadTimeout = 30 * time.Second
+	// DefaultRPCQueueSize is the default size of the RPC queue
+	DefaultRPCQueueSize = 100
+	// DefaultFlushInterval is the default interval for flushing RPCs
+	DefaultFlushInterval = 20 * time.Millisecond
+	// DefaultEffectiveUser is the default effective user
+	DefaultEffectiveUser = "root"
 	// RegionClient is a ClientType that means this will be a normal client
 	RegionClient = ClientType("ClientService")
 
