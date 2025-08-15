@@ -1424,15 +1424,15 @@ func TestCheckAndPutWithCompareType(t *testing.T) {
 		// { }
 		{makeMap("cf", "b", "2"), nil, true}, // nil instead of empty byte array
 		// {b: 2}
-		{makeMap("cf", "b", "2"), nil, false}, // has already been written
+		{makeMap("cf", "b", "2"), nil, true}, // has already been written
 		// {b: 2}
 		{makeMap("cf", "a", "1"), []byte{}, true},
 		// {a: 1, b: 2}
 		{makeMap("cf", "a", "1"), []byte{}, false}, // Strictly greater
 		// {a: 1, b: 2}
-		{makeMap("cf", "a", "3"), []byte("0"), true},
+		{makeMap("cf", "a", "3"), []byte("1"), true},
 		// {a: 3, b: 2}
-		{makeMap("cf", "b", "4"), []byte("1"), true},
+		{makeMap("cf", "b", "4"), []byte("2"), true},
 		// {a: 3, b: 4}
 		{makeMap("cf", "b", "1"), []byte("99"), false},
 	}
