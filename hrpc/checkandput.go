@@ -28,9 +28,6 @@ type CheckAndPut struct {
 // NewCheckAndPut creates a CheckAndPut with only an EQUAL compare type.
 func NewCheckAndPut(put *Mutate, family string,
 	qualifier string, expectedValue []byte) (*CheckAndPut, error) {
-	if put.mutationType != pb.MutationProto_PUT {
-		return nil, fmt.Errorf("'CheckAndPut' only takes 'Put' request")
-	}
 	return NewCheckAndPutWithCompareType(
 		put, family, qualifier, expectedValue, pb.CompareType_EQUAL)
 }
@@ -40,6 +37,9 @@ func NewCheckAndPut(put *Mutate, family string,
 // and if they are equal, perform the provided put request on the row
 func NewCheckAndPutWithCompareType(put *Mutate, family string,
 	qualifier string, expectedValue []byte, compareType pb.CompareType) (*CheckAndPut, error) {
+	if put.mutationType != pb.MutationProto_PUT {
+		return nil, fmt.Errorf("'CheckAndPut' only takes 'Put' request")
+	}
 
 	// The condition that needs to match for the edit to be applied.
 	exp := filter.NewByteArrayComparable(expectedValue)
