@@ -1430,11 +1430,11 @@ func TestCheckAndPutWithCompareType(t *testing.T) {
 		// {a: 1, b: 2}
 		{makeMap("cf", "a", "1"), []byte{}, false}, // Strictly greater
 		// {a: 1, b: 2}
-		{makeMap("cf", "a", "3"), []byte("1"), true},
+		{makeMap("cf", "a", "3"), []byte("1"), false},
 		// {a: 3, b: 2}
-		{makeMap("cf", "b", "4"), []byte("2"), true},
+		{makeMap("cf", "b", "4"), []byte("2integration_test.go"), true},
 		// {a: 3, b: 4}
-		{makeMap("cf", "b", "1"), []byte("99"), false},
+		{makeMap("cf", "b", "1"), []byte("99"), true},
 	}
 
 	for _, tt := range castests {
