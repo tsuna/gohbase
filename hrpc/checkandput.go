@@ -6,6 +6,8 @@
 package hrpc
 
 import (
+	"fmt"
+
 	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/pb"
 	"google.golang.org/protobuf/proto"
@@ -26,6 +28,9 @@ type CheckAndPut struct {
 // NewCheckAndPut creates a CheckAndPut with only an EQUAL compare type.
 func NewCheckAndPut(put *Mutate, family string,
 	qualifier string, expectedValue []byte) (*CheckAndPut, error) {
+	if put.mutationType != pb.MutationProto_PUT {
+		return nil, fmt.Errorf("'CheckAndPut' only takes 'Put' request")
+	}
 	return NewCheckAndPutWithCompareType(
 		put, family, qualifier, expectedValue, pb.CompareType_EQUAL)
 }
