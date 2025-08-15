@@ -41,4 +41,14 @@ var (
 		},
 		[]string{"regionserver"},
 	)
+
+	pingLatency = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "gohbase",
+			Name:      "ping_latency_seconds",
+			Help:      "Ping scan latency in seconds",
+			Buckets:   prometheus.DefBuckets,
+		},
+		[]string{"regionserver"},
+	)
 )

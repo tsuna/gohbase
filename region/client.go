@@ -98,6 +98,10 @@ const (
 	DefaultFlushInterval = 20 * time.Millisecond
 	// DefaultEffectiveUser is the default effective user
 	DefaultEffectiveUser = "root"
+	// DefaultPingInterval is the default interval between ping scans
+	DefaultPingInterval = 10 * time.Second
+	// DefaultPingLatencyWindow is the default number of latest ping measurements to keep
+	DefaultPingLatencyWindow = 10
 	// RegionClient is a ClientType that means this will be a normal client
 	RegionClient = ClientType("ClientService")
 
@@ -201,6 +205,12 @@ type client struct {
 	dialer func(ctx context.Context, network, addr string) (net.Conn, error)
 
 	logger *slog.Logger
+
+	// ping related fields
+	pingInterval      time.Duration
+	pingLatencyWindow int
+	pingLatencies     []time.Duration
+	pingLatencyIndex  int
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine
@@ -812,4 +822,83 @@ func (c *client) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(state)
+}
+
+// pingLoop runs periodic ping scans to measure latency
+func (c *client) pingLoop() {
+	if c.logger != nil {
+		c.logger.Info("starting ping loop", "interval", c.pingInterval, "window", c.pingLatencyWindow)
+	}
+	
+	ticker := time.NewTicker(c.pingInterval)
+	defer ticker.Stop()
+
+	// Create a dummy region for ping scans - use hbase:meta which always exists
+	pingRegion := NewInfo(
+		1,                                           // region ID  
+		[]byte("hbase"),                            // namespace
+		[]byte("meta"),                             // table
+		[]byte("hbase:meta,,1.1588230740"),         // name (standard meta region name)
+		nil,                                        // startKey
+		nil,                                        // stopKey
+	)
+
+	// Create a reusable scan request - scan a small range in meta table
+	ctx := context.Background()
+	scan, err := hrpc.NewScanRange(ctx, []byte("hbase:meta"), []byte("ping"), []byte("ping\x00"),
+		hrpc.NumberOfRows(1),
+		hrpc.MaxResultSize(1),
+	)
+	if err != nil {
+		if c.logger != nil {
+			c.logger.Error("failed to create ping scan", "error", err)
+		}
+		return
+	}
+	scan.SetRegion(pingRegion)
+
+	for {
+		select {
+		case <-c.done:
+			return
+		case <-ticker.C:
+			start := time.Now()
+			
+			// Send the scan request
+			c.QueueRPC(scan)
+			
+			// Wait for the response
+			result := <-scan.ResultChan()
+			latency := time.Since(start)
+			
+			// Record latency regardless of success or error
+			c.recordPingLatency(latency)
+			pingLatency.WithLabelValues(c.addr).Observe(latency.Seconds())
+			
+			if result.Error == nil {
+				if c.logger != nil {
+					c.logger.Debug("ping scan success", "latency", latency)
+				}
+			} else if c.logger != nil {
+				c.logger.Debug("ping scan failed", "error", result.Error, "latency", latency)
+			}
+		}
+	}
+}
+
+// recordPingLatency records a ping latency measurement using ring buffer
+func (c *client) recordPingLatency(latency time.Duration) {
+	if c.pingLatencyWindow <= 0 {
+		return
+	}
+
+	// Use ring buffer approach
+	if len(c.pingLatencies) < c.pingLatencyWindow {
+		// Still filling the buffer
+		c.pingLatencies = append(c.pingLatencies, latency)
+	} else {
+		// Buffer is full, overwrite oldest entry
+		c.pingLatencies[c.pingLatencyIndex] = latency
+		c.pingLatencyIndex = (c.pingLatencyIndex + 1) % c.pingLatencyWindow
+	}
 }

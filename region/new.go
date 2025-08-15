@@ -74,23 +74,46 @@ func WithLogger(logger *slog.Logger) Option {
 	}
 }
 
+// WithPingInterval sets the interval between ping scans. Set to 0 to disable pinging.
+func WithPingInterval(interval time.Duration) Option {
+	return func(c *client) {
+		c.pingInterval = interval
+	}
+}
+
+// WithPingLatencyWindow sets the number of latest ping measurements to keep for calculating average
+func WithPingLatencyWindow(window int) Option {
+	return func(c *client) {
+		if window > 0 {
+			c.pingLatencyWindow = window
+			c.pingLatencies = make([]time.Duration, 0, window)
+		}
+	}
+}
+
 // NewClient creates a new RegionClient with options.
 func NewClient(addr string, ctype ClientType, opts ...Option) hrpc.RegionClient {
 	c := &client{
-		addr:          addr,
-		ctype:         ctype,
-		rpcQueueSize:  DefaultRPCQueueSize,
-		flushInterval: DefaultFlushInterval,
-		effectiveUser: DefaultEffectiveUser,
-		readTimeout:   DefaultReadTimeout,
-		rpcs:          make(chan []hrpc.Call),
-		done:          make(chan struct{}),
-		sent:          make(map[uint32]hrpc.Call),
+		addr:              addr,
+		ctype:             ctype,
+		rpcQueueSize:      DefaultRPCQueueSize,
+		flushInterval:     DefaultFlushInterval,
+		effectiveUser:     DefaultEffectiveUser,
+		readTimeout:       DefaultReadTimeout,
+		rpcs:              make(chan []hrpc.Call),
+		done:              make(chan struct{}),
+		sent:              make(map[uint32]hrpc.Call),
+		pingInterval:      0, // disabled by default
+		pingLatencyWindow: DefaultPingLatencyWindow,
+		pingLatencies:     make([]time.Duration, 0, DefaultPingLatencyWindow),
 	}
 
 	// Set default dialer
 	var d net.Dialer
 	c.dialer = d.DialContext
+
+	// Set default logger
+	c.logger = slog.Default()
 
 	// Apply all options
 	for _, opt := range opts {
@@ -131,6 +154,9 @@ func (c *client) Dial(ctx context.Context) error {
 
 		if c.ctype == RegionClient {
 			go c.processRPCs() // Batching goroutine
+			if c.pingInterval > 0 {
+				go c.pingLoop() // Ping goroutine
+			}
 		}
 		go c.receiveRPCs() // Reader goroutine
 	})
