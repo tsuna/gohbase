@@ -389,7 +389,27 @@ func (c *client) mutate(m *hrpc.Mutate) (*hrpc.Result, error) {
 
 func (c *client) CheckAndPut(p *hrpc.Mutate, family string,
 	qualifier string, expectedValue []byte) (bool, error) {
-	return c.CheckAndPutWithCompareType(p, family, qualifier, expectedValue, pb.CompareType_EQUAL)
+	cas, err := hrpc.NewCheckAndPut(p, family, qualifier, expectedValue)
+	if err != nil {
+		return false, err
+	}
+
+	pbmsg, err := c.SendRPC(cas)
+	if err != nil {
+		return false, err
+	}
+
+	r, ok := pbmsg.(*pb.MutateResponse)
+	if !ok {
+		return false, fmt.Errorf("sendRPC returned a %T instead of MutateResponse", pbmsg)
+	}
+
+	if r.Processed == nil {
+		return false, fmt.Errorf("protobuf in the response didn't contain the field "+
+			"indicating whether the CheckAndPut was successful or not: %s", r)
+	}
+
+	return r.GetProcessed(), nil
 }
 
 func (c *client) CheckAndPutWithCompareType(p *hrpc.Mutate, family string,
