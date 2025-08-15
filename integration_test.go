@@ -1434,7 +1434,7 @@ func TestCheckAndPutWithCompareType(t *testing.T) {
 		// {a: 3, b: 2}
 		{makeMap("cf", "b", "4"), []byte("1"), true},
 		// {a: 3, b: 4}
-		{makeMap("cf", "b", "1"), []byte{"99"}, false},
+		{makeMap("cf", "b", "1"), []byte("99"), false},
 	}
 
 	for _, tt := range castests {
