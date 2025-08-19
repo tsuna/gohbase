@@ -29,7 +29,6 @@ func NewClient(addr string, ctype ClientType, queueSize int, flushInterval time.
 		rpcQueueSize:  queueSize,
 		flushInterval: flushInterval,
 		effectiveUser: effectiveUser,
-		readTimeout:   readTimeout,
 		rpcs:          make(chan []hrpc.Call),
 		done:          make(chan struct{}),
 		sent:          make(map[uint32]hrpc.Call),
@@ -44,6 +43,17 @@ func NewClient(addr string, ctype ClientType, queueSize int, flushInterval time.
 		c.dialer = dialer
 	} else {
 		var d net.Dialer
+		keepAliveConfig := net.KeepAliveConfig{
+			Enable:   true,
+			Idle:     15 * time.Second,
+			Interval: 10 * time.Second,
+			Count:    3,
+		}
+		d.KeepAliveConfig = keepAliveConfig
+		// see https://blog.cloudflare.com/when-tcp-sockets-refuse-to-die/
+		totalTimeout := keepAliveConfig.Idle +
+			keepAliveConfig.Interval*time.Duration(keepAliveConfig.Count)
+		setTCPUserTimeout(d, totalTimeout)
 		c.dialer = d.DialContext
 	}
 

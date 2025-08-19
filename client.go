@@ -92,9 +92,6 @@ type client struct {
 	// session timeout.
 	regionLookupTimeout time.Duration
 
-	// regionReadTimeout is the maximum amount of time to wait for regionserver reply
-	regionReadTimeout time.Duration
-
 	done      chan struct{}
 	closeOnce sync.Once
 
@@ -135,7 +132,6 @@ func newClient(zkquorum string, options ...Option) *client {
 		zkTimeout:           defaultZkTimeout,
 		effectiveUser:       defaultEffectiveUser,
 		regionLookupTimeout: region.DefaultLookupTimeout,
-		regionReadTimeout:   region.DefaultReadTimeout,
 		done:                make(chan struct{}),
 		newRegionClientFn:   region.NewClient,
 		logger:              slog.Default(),
@@ -209,7 +205,6 @@ func (c *client) MarshalJSON() ([]byte, error) {
 		AdminRegionInfo     hrpc.RegionInfo
 		Done_Status         string
 		RegionLookupTimeout time.Duration
-		RegionReadTimeout   time.Duration
 	}{
 		ClientType:          c.clientType,
 		ClientRegionMap:     clientRegionsMap,
@@ -220,7 +215,6 @@ func (c *client) MarshalJSON() ([]byte, error) {
 		AdminRegionInfo:     c.adminRegionInfo,
 		Done_Status:         done,
 		RegionLookupTimeout: c.regionLookupTimeout,
-		RegionReadTimeout:   c.regionReadTimeout,
 	}
 
 	jsonVal, err := json.Marshal(state)
@@ -256,11 +250,14 @@ func RegionLookupTimeout(to time.Duration) Option {
 	}
 }
 
-// RegionReadTimeout will return an option that sets the region read timeout
+// RegionReadTimeout will return an option that sets the region read
+// timeout
+//
+// Depreacted: RegionReadTimeouts have been replaced with TCP
+// keepalives, which are configured by default. To use alternative
+// keepalive configuration use [RegionDialer].
 func RegionReadTimeout(to time.Duration) Option {
-	return func(c *client) {
-		c.regionReadTimeout = to
-	}
+	return func(c *client) {}
 }
 
 // EffectiveUser will return an option that will set the user used when accessing regions.
