@@ -826,21 +826,19 @@ func (c *client) MarshalJSON() ([]byte, error) {
 
 // pingLoop runs periodic ping scans to measure latency
 func (c *client) pingLoop() {
-	if c.logger != nil {
-		c.logger.Info("starting ping loop", "interval", c.pingInterval, "window", c.pingLatencyWindow)
-	}
-	
+	c.logger.Info("starting ping loop", "interval", c.pingInterval, "window", c.pingLatencyWindow)
+
 	ticker := time.NewTicker(c.pingInterval)
 	defer ticker.Stop()
 
 	// Create a dummy region for ping scans - use hbase:meta which always exists
 	pingRegion := NewInfo(
-		1,                                           // region ID  
-		[]byte("hbase"),                            // namespace
-		[]byte("meta"),                             // table
-		[]byte("hbase:meta,,1.1588230740"),         // name (standard meta region name)
-		nil,                                        // startKey
-		nil,                                        // stopKey
+		1,               // region ID
+		[]byte("hbase"), // namespace
+		[]byte("meta"),  // table
+		[]byte("dummy"), // dummy name
+		nil,             // startKey
+		nil,             // stopKey
 	)
 
 	// Create a reusable scan request - scan a small range in meta table
@@ -850,36 +848,43 @@ func (c *client) pingLoop() {
 		hrpc.MaxResultSize(1),
 	)
 	if err != nil {
-		if c.logger != nil {
-			c.logger.Error("failed to create ping scan", "error", err)
-		}
+		c.logger.Error("failed to create ping scan", "error", err)
 		return
 	}
 	scan.SetRegion(pingRegion)
 
+	// Closed loop, we are waiting for the response from the server before sending next ping
 	for {
 		select {
 		case <-c.done:
 			return
 		case <-ticker.C:
 			start := time.Now()
-			
+
 			// Send the scan request
-			c.QueueRPC(scan)
-			
+			err := c.trySend(scan)
+
+			if err != nil {
+				c.logger.Debug("ping send failure", err)
+				continue
+			}
+
 			// Wait for the response
 			result := <-scan.ResultChan()
+
+			if _, ok := result.Error.(ServerError); ok {
+				return
+			}
+
 			latency := time.Since(start)
-			
+
 			// Record latency regardless of success or error
 			c.recordPingLatency(latency)
 			pingLatency.WithLabelValues(c.addr).Observe(latency.Seconds())
-			
+
 			if result.Error == nil {
-				if c.logger != nil {
-					c.logger.Debug("ping scan success", "latency", latency)
-				}
-			} else if c.logger != nil {
+				c.logger.Debug("ping scan success", "latency", latency)
+			} else {
 				c.logger.Debug("ping scan failed", "error", result.Error, "latency", latency)
 			}
 		}

@@ -70,7 +70,9 @@ func WithDialer(dialer func(ctx context.Context, network, addr string) (net.Conn
 // WithLogger sets a custom logger
 func WithLogger(logger *slog.Logger) Option {
 	return func(c *client) {
-		c.logger = logger
+		if logger != nil {
+			c.logger = logger
+		}
 	}
 }
 
