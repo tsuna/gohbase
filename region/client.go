@@ -20,6 +20,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/mihkulemin/token"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/tsuna/gohbase/hrpc"
@@ -211,6 +212,9 @@ type client struct {
 	pingLatencyWindow int
 	pingLatencies     []time.Duration
 	pingLatencyIndex  int
+
+	// scan concurrency control
+	scanTokenBucket *token.Token
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine
@@ -519,6 +523,15 @@ func (c *client) receive(r io.Reader) (err error) {
 	if rpc == nil {
 		return ServerError{fmt.Errorf("got a response with an unexpected call ID: %d", callID)}
 	}
+
+	// Release scan token if this was a scan request
+	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil {
+		// Release token back to bucket (non-blocking)
+		go func() {
+			c.scanTokenBucket.Release(context.Background())
+		}()
+	}
+
 	if err := c.inFlightDown(); err != nil {
 		return ServerError{err}
 	}
@@ -631,6 +644,12 @@ func (c *client) sendHello() error {
 // send sends an RPC out to the wire.
 // Returns the response (for now, as the call is synchronous).
 func (c *client) send(rpc hrpc.Call) (uint32, error) {
+	// For scan requests, acquire a token from the bucket
+	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil {
+		if err := c.scanTokenBucket.Take(rpc.Context()); err != nil {
+			return 0, err
+		}
+	}
 	var request proto.Message
 	var cellblocks net.Buffers
 	var cellblocksLen uint32
