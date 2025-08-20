@@ -207,14 +207,10 @@ type client struct {
 
 	logger *slog.Logger
 
-	// ping related fields
-	pingInterval      time.Duration
-	pingLatencyWindow int
-	pingLatencies     []time.Duration
-	pingLatencyIndex  int
-
 	// scan concurrency control
+	pingInterval    time.Duration
 	scanTokenBucket *token.Token
+	scanController  *Controller
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine
@@ -840,9 +836,9 @@ func (c *client) MarshalJSON() ([]byte, error) {
 	return json.Marshal(state)
 }
 
-// pingLoop runs periodic ping scans to measure latency and implement a congestion control
-func (c *client) pingLoop() {
-	c.logger.Info("starting ping loop", "interval", c.pingInterval, "window", c.pingLatencyWindow)
+// controlLoop runs periodic ping scans to measure latency and implement a congestion control
+func (c *client) controlLoop() {
+	c.logger.Info("starting ping loop", "interval", c.pingInterval)
 
 	ticker := time.NewTicker(c.pingInterval)
 	defer ticker.Stop()
@@ -896,7 +892,6 @@ func (c *client) pingLoop() {
 			latency := time.Since(start)
 
 			// Record the latency
-			c.recordPingLatency(latency)
 			pingLatency.WithLabelValues(c.addr).Observe(latency.Seconds())
 
 			if result.Error == nil {
@@ -905,22 +900,5 @@ func (c *client) pingLoop() {
 				c.logger.Debug("ping scan failed", "error", result.Error, "latency", latency)
 			}
 		}
-	}
-}
-
-// recordPingLatency records a ping latency measurement using ring buffer
-func (c *client) recordPingLatency(latency time.Duration) {
-	if c.pingLatencyWindow <= 0 {
-		return
-	}
-
-	// Use ring buffer approach
-	if len(c.pingLatencies) < c.pingLatencyWindow {
-		// Still filling the buffer
-		c.pingLatencies = append(c.pingLatencies, latency)
-	} else {
-		// Buffer is full, overwrite oldest entry
-		c.pingLatencies[c.pingLatencyIndex] = latency
-		c.pingLatencyIndex = (c.pingLatencyIndex + 1) % c.pingLatencyWindow
 	}
 }

@@ -77,63 +77,48 @@ func WithLogger(logger *slog.Logger) Option {
 	}
 }
 
-// WithPingInterval sets the interval between ping scans. Set to 0 to disable pinging.
-func WithPingInterval(interval time.Duration) Option {
+// WithScanControl enables congestion control for scan request.
+// maxScans, minScans limits of scan concurrency
+// maxLat, minLat - thresholds for the ping latency
+// interval - interval between ping scans
+func WithScanControl(maxScans, minScans int, maxLat, minLat, interval time.Duration) Option {
 	return func(c *client) {
 		c.pingInterval = interval
-	}
-}
 
-// WithPingLatencyWindow sets the number of latest ping measurements to keep for calculating average
-func WithPingLatencyWindow(window int) Option {
-	return func(c *client) {
-		if window > 0 {
-			c.pingLatencyWindow = window
-			c.pingLatencies = make([]time.Duration, 0, window)
+		// Create context for token bucket that will be cancelled when client closes
+		ctx, cancel := context.WithCancelCause(context.Background())
+
+		// Create token bucket with given capacity
+		tb, err := token.NewToken(ctx, maxScans, minScans)
+		if err != nil {
+			c.logger.Error("failed to create scan token bucket", "error", err)
+			return
 		}
+
+		// Cancel context when client is done
+		go func() {
+			<-c.done
+			cancel(ErrClientClosed)
+		}()
+		c.scanTokenBucket = tb
+		tb.SetCapacity(context.Background(), minScans)
+		c.scanController = NewController(minScans, maxScans, minLat, maxLat)
 	}
-}
 
-// WithScanConcurrency sets the maximum number of concurrent scan requests.
-// If maxConcurrentScans is 0 or negative, scan concurrency limiting is disabled.
-func WithScanConcurrency(maxConcurrentScans int) Option {
-	return func(c *client) {
-		if maxConcurrentScans > 0 {
-			// Create context for token bucket that will be cancelled when client closes
-			ctx, cancel := context.WithCancelCause(context.Background())
-
-			// Create token bucket with given capacity
-			tb, err := token.NewToken(ctx, maxConcurrentScans, maxConcurrentScans)
-			if err != nil {
-				c.logger.Error("failed to create scan token bucket", "error", err)
-				return
-			}
-
-			// Cancel context when client is done
-			go func() {
-				<-c.done
-				cancel(ErrClientClosed)
-			}()
-			c.scanTokenBucket = tb
-		}
-	}
 }
 
 // NewClient creates a new RegionClient with options.
 func NewClient(addr string, ctype ClientType, opts ...Option) hrpc.RegionClient {
 	c := &client{
-		addr:              addr,
-		ctype:             ctype,
-		rpcQueueSize:      DefaultRPCQueueSize,
-		flushInterval:     DefaultFlushInterval,
-		effectiveUser:     DefaultEffectiveUser,
-		readTimeout:       DefaultReadTimeout,
-		rpcs:              make(chan []hrpc.Call),
-		done:              make(chan struct{}),
-		sent:              make(map[uint32]hrpc.Call),
-		pingInterval:      0, // disabled by default
-		pingLatencyWindow: DefaultPingLatencyWindow,
-		pingLatencies:     make([]time.Duration, 0, DefaultPingLatencyWindow),
+		addr:          addr,
+		ctype:         ctype,
+		rpcQueueSize:  DefaultRPCQueueSize,
+		flushInterval: DefaultFlushInterval,
+		effectiveUser: DefaultEffectiveUser,
+		readTimeout:   DefaultReadTimeout,
+		rpcs:          make(chan []hrpc.Call),
+		done:          make(chan struct{}),
+		sent:          make(map[uint32]hrpc.Call),
 	}
 
 	// Set default dialer
@@ -183,7 +168,7 @@ func (c *client) Dial(ctx context.Context) error {
 		if c.ctype == RegionClient {
 			go c.processRPCs() // Batching goroutine
 			if c.pingInterval > 0 {
-				go c.pingLoop() // Ping goroutine
+				go c.controlLoop() // Ping goroutine
 			}
 		}
 		go c.receiveRPCs() // Reader goroutine
