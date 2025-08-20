@@ -891,8 +891,13 @@ func (c *client) controlLoop() {
 
 			latency := time.Since(start)
 
-			// Record the latency
+			// Record the latency and update tokens if needed
 			pingLatency.WithLabelValues(c.addr).Observe(latency.Seconds())
+			maxScans, changed := c.scanController.Latency(latency)
+			if changed {
+				c.scanTokenBucket.SetCapacity(ctx, maxScans)
+				concurrentScans.WithLabelValues(c.addr).Set(float64(maxScans))
+			}
 
 			if result.Error == nil {
 				c.logger.Debug("ping scan success", "latency", latency)

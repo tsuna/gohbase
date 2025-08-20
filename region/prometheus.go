@@ -51,4 +51,13 @@ var (
 		},
 		[]string{"regionserver"},
 	)
+
+	concurrentScans = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "gohbase",
+			Name:      "concurrent_scans_limit",
+			Help:      "Max number of concurrent scans per region server",
+		},
+		[]string{"regionserver"},
+	)
 )

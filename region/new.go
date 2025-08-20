@@ -83,8 +83,6 @@ func WithLogger(logger *slog.Logger) Option {
 // interval - interval between ping scans
 func WithScanControl(maxScans, minScans int, maxLat, minLat, interval time.Duration) Option {
 	return func(c *client) {
-		c.pingInterval = interval
-
 		// Create context for token bucket that will be cancelled when client closes
 		ctx, cancel := context.WithCancelCause(context.Background())
 
@@ -101,8 +99,10 @@ func WithScanControl(maxScans, minScans int, maxLat, minLat, interval time.Durat
 			cancel(ErrClientClosed)
 		}()
 		c.scanTokenBucket = tb
-		tb.SetCapacity(context.Background(), minScans)
+		c.pingInterval = interval
+		c.scanTokenBucket.SetCapacity(context.Background(), minScans)
 		c.scanController = NewController(minScans, maxScans, minLat, maxLat)
+		concurrentScans.WithLabelValues(c.addr).Set(float64(minScans))
 	}
 
 }
