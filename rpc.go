@@ -450,10 +450,8 @@ loop:
 		select {
 		case res := <-rpc.ResultChan():
 			results[rpcToRes[rpc]] = res
-
 			description := rpc.Description()
 			duration := time.Since(rpcStartTime).Seconds()
-
 			if res.Error != nil {
 				c.handleResultError(res.Error, rpc.Region(), rc)
 				ok = false
