@@ -7,28 +7,35 @@ package region
 
 import (
 	"testing"
+	"time"
 )
 
 // TestConcurrencyIncreaseOnLowLatency tests that concurrency increases by 1
 // when latency is below the low threshold
 func TestConcurrencyIncreaseOnLowLatency(t *testing.T) {
-	controller := NewController(100, 200, 5, 50)
+	controller := NewController(5, 50, 100*time.Millisecond, 200*time.Millisecond)
 	
 	// First increase - from 5 to 6
-	newConcurrency := controller.Latency(50)
+	newConcurrency, changed := controller.Latency(50 * time.Millisecond)
 	if newConcurrency != 6 {
 		t.Errorf("Expected concurrency to increase to 6, got %d", newConcurrency)
 	}
+	if !changed {
+		t.Errorf("Expected value to change on first increase")
+	}
 	
 	// Second increase - from 6 to 7 (confirm linearity)
-	newConcurrency = controller.Latency(50)
+	newConcurrency, changed = controller.Latency(50 * time.Millisecond)
 	if newConcurrency != 7 {
 		t.Errorf("Expected concurrency to increase to 7, got %d", newConcurrency)
+	}
+	if !changed {
+		t.Errorf("Expected value to change on second increase")
 	}
 	
 	// Continue increasing until beyond maxConcurrency
 	for i := 0; i < 50; i++ {
-		controller.Latency(50) // Low latency (below threshold of 100)
+		controller.Latency(50 * time.Millisecond) // Low latency (below threshold of 100ms)
 	}
 	
 	// Should be at maxConcurrency now
@@ -40,11 +47,11 @@ func TestConcurrencyIncreaseOnLowLatency(t *testing.T) {
 // TestConcurrencyDecreaseOnHighLatency tests that concurrency decreases by decreaseDelta
 // when latency is above the high threshold
 func TestConcurrencyDecreaseOnHighLatency(t *testing.T) {
-	controller := NewController(100, 200, 5, 50)
+	controller := NewController(5, 50, 100*time.Millisecond, 200*time.Millisecond)
 	
 	// Start by increasing concurrency to a higher value
 	for i := 0; i < 20; i++ {
-		controller.Latency(50) // Low latency to increase concurrency
+		controller.Latency(50 * time.Millisecond) // Low latency to increase concurrency
 	}
 	
 	// Should be at 25 (5 + 20)
@@ -53,26 +60,35 @@ func TestConcurrencyDecreaseOnHighLatency(t *testing.T) {
 	}
 	
 	// First decrease - should decrease by 1 (initial delta)
-	newConcurrency := controller.Latency(250) // High latency (above threshold of 200)
+	newConcurrency, changed := controller.Latency(250 * time.Millisecond) // High latency (above threshold of 200ms)
 	if newConcurrency != 24 {
 		t.Errorf("Expected concurrency to decrease to 24, got %d", newConcurrency)
 	}
+	if !changed {
+		t.Errorf("Expected value to change on first decrease")
+	}
 	
 	// Second decrease - delta doubles to 2, so 24 -> 22
-	newConcurrency = controller.Latency(250)
+	newConcurrency, changed = controller.Latency(250 * time.Millisecond)
 	if newConcurrency != 22 {
 		t.Errorf("Expected concurrency to decrease to 22, got %d", newConcurrency)
 	}
+	if !changed {
+		t.Errorf("Expected value to change on second decrease")
+	}
 	
 	// Third decrease - delta doubles to 4, so 22 -> 18
-	newConcurrency = controller.Latency(250)
+	newConcurrency, changed = controller.Latency(250 * time.Millisecond)
 	if newConcurrency != 18 {
 		t.Errorf("Expected concurrency to decrease to 18, got %d", newConcurrency)
+	}
+	if !changed {
+		t.Errorf("Expected value to change on third decrease")
 	}
 	
 	// Continue decreasing until we hit minConcurrency
 	for i := 0; i < 30; i++ {
-		controller.Latency(250)
+		controller.Latency(250 * time.Millisecond)
 	}
 	
 	// Should be at minConcurrency now
@@ -84,11 +100,11 @@ func TestConcurrencyDecreaseOnHighLatency(t *testing.T) {
 // TestConcurrencyNoChangeInMiddle tests that concurrency doesn't change
 // when latency is between low and high thresholds
 func TestConcurrencyNoChangeInMiddle(t *testing.T) {
-	controller := NewController(100, 200, 5, 50)
+	controller := NewController(5, 50, 100*time.Millisecond, 200*time.Millisecond)
 	
 	// Increase concurrency to a middle value
 	for i := 0; i < 10; i++ {
-		controller.Latency(50) // Low latency
+		controller.Latency(50 * time.Millisecond) // Low latency
 	}
 	
 	// Should be at 15 (5 + 10)
@@ -98,7 +114,10 @@ func TestConcurrencyNoChangeInMiddle(t *testing.T) {
 	
 	// Multiple reports with latency between thresholds - should stay the same
 	for i := 0; i < 10; i++ {
-		controller.Latency(150) // Between 100 and 200
+		newConcurrency, changed := controller.Latency(150 * time.Millisecond) // Between 100ms and 200ms
+		if changed {
+			t.Errorf("Expected no change for middle latency, but value changed to %d", newConcurrency)
+		}
 	}
 	
 	if controller.Concurrency() != 15 {
@@ -109,11 +128,11 @@ func TestConcurrencyNoChangeInMiddle(t *testing.T) {
 // TestDecreaseDeltaDoublingAndHalving tests that decreaseDelta doubles when decreasing
 // and halves when increasing or stable
 func TestDecreaseDeltaDoublingAndHalving(t *testing.T) {
-	controller := NewController(100, 200, 5, 50)
+	controller := NewController(5, 50, 100*time.Millisecond, 200*time.Millisecond)
 	
 	// Start by increasing concurrency to 30
 	for i := 0; i < 25; i++ {
-		controller.Latency(50)
+		controller.Latency(50 * time.Millisecond)
 	}
 	
 	if controller.Concurrency() != 30 {
@@ -121,43 +140,46 @@ func TestDecreaseDeltaDoublingAndHalving(t *testing.T) {
 	}
 	
 	// High latency - decrease by 1 (initial delta)
-	newConcurrency := controller.Latency(250)
+	newConcurrency, _ := controller.Latency(250 * time.Millisecond)
 	if newConcurrency != 29 {
 		t.Errorf("Expected concurrency to decrease to 29, got %d", newConcurrency)
 	}
 	
 	// High latency again - delta doubles to 2
-	newConcurrency = controller.Latency(250)
+	newConcurrency, _ = controller.Latency(250 * time.Millisecond)
 	if newConcurrency != 27 {
 		t.Errorf("Expected concurrency to decrease to 27 (delta=2), got %d", newConcurrency)
 	}
 	
 	// High latency again - delta doubles to 4
-	newConcurrency = controller.Latency(250)
+	newConcurrency, _ = controller.Latency(250 * time.Millisecond)
 	if newConcurrency != 23 {
 		t.Errorf("Expected concurrency to decrease to 23 (delta=4), got %d", newConcurrency)
 	}
 	
 	// Now low latency - increase by 1, delta should halve from 8 to 4
-	newConcurrency = controller.Latency(50)
+	newConcurrency, _ = controller.Latency(50 * time.Millisecond)
 	if newConcurrency != 24 {
 		t.Errorf("Expected concurrency to increase to 24, got %d", newConcurrency)
 	}
 	
 	// High latency again - should decrease by 4 (halved delta from 8 to 4)
-	newConcurrency = controller.Latency(250)
+	newConcurrency, _ = controller.Latency(250 * time.Millisecond)
 	if newConcurrency != 20 {
 		t.Errorf("Expected concurrency to decrease to 20 (delta=4 after halving), got %d", newConcurrency)
 	}
 	
 	// Middle latency - no change, delta should halve from 8 to 4
-	newConcurrency = controller.Latency(150)
+	newConcurrency, changed := controller.Latency(150 * time.Millisecond)
 	if newConcurrency != 20 {
 		t.Errorf("Expected concurrency to remain at 20, got %d", newConcurrency)
 	}
+	if changed {
+		t.Errorf("Expected no change for middle latency")
+	}
 	
 	// High latency - should decrease by 4 (halved again)
-	newConcurrency = controller.Latency(250)
+	newConcurrency, _ = controller.Latency(250 * time.Millisecond)
 	if newConcurrency != 16 {
 		t.Errorf("Expected concurrency to decrease to 16 (delta=4 after halving), got %d", newConcurrency)
 	}

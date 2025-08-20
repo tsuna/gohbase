@@ -8,40 +8,44 @@
 
 package region
 
-type Controller struct {
-	lowThreshold   int
-	highThreshold  int
-	minConcurrency int
-	maxConcurrency int
+import "time"
 
-	currentConcurrency int
-	decreaseDelta      int
+type Controller struct {
+	lowThreshold  time.Duration
+	highThreshold time.Duration
+	minVal        int
+	maxVal        int
+
+	current       int
+	decreaseDelta int
 }
 
-// NewController creates a new concurrency controller with the specified thresholds and limits
-func NewController(lowThreshold, highThreshold, minConcurrency, maxConcurrency int) *Controller {
+// NewController creates a new controller with the specified thresholds and limits
+func NewController(minVal, maxVal int, low, high time.Duration) *Controller {
 	return &Controller{
-		lowThreshold:       lowThreshold,
-		highThreshold:      highThreshold,
-		minConcurrency:     minConcurrency,
-		maxConcurrency:     maxConcurrency,
-		currentConcurrency: minConcurrency,
-		decreaseDelta:      1,
+		lowThreshold:  low,
+		highThreshold: high,
+		minVal:        minVal,
+		maxVal:        maxVal,
+		current:       minVal, // starting from lowest value
+		decreaseDelta: 1,
 	}
 }
 
-// Latency notifies controller about latest "ping" latency value. Return concurrency value.
-func (cntr *Controller) Latency(val int) int {
+// Latency notifies controller about latest "ping" latency value. Return new value and
+// true if value changed.
+func (cntr *Controller) Latency(val time.Duration) (int, bool) {
+	old := cntr.current
 	if val < cntr.lowThreshold {
-		// Increase concurrency by 1
-		cntr.currentConcurrency = min(cntr.currentConcurrency+1, cntr.maxConcurrency)
+		// Increase by 1
+		cntr.current = min(cntr.current+1, cntr.maxVal)
 		// Halve decreaseDelta when increasing or stable
 		cntr.decreaseDelta = max(cntr.decreaseDelta/2, 1)
 	} else if val > cntr.highThreshold {
-		// Decrease concurrency by decreaseDelta
-		cntr.currentConcurrency = max(cntr.currentConcurrency-cntr.decreaseDelta, cntr.minConcurrency)
-		// Double decreaseDelta when decreasing (only if less than maxConcurrency)
-		if cntr.decreaseDelta < cntr.maxConcurrency {
+		// Decrease by decreaseDelta
+		cntr.current = max(cntr.current-cntr.decreaseDelta, cntr.minVal)
+		// Double decreaseDelta when decreasing (only if less than maxVal)
+		if cntr.decreaseDelta < cntr.maxVal {
 			cntr.decreaseDelta = cntr.decreaseDelta * 2
 		}
 	} else {
@@ -49,10 +53,10 @@ func (cntr *Controller) Latency(val int) int {
 		cntr.decreaseDelta = max(cntr.decreaseDelta/2, 1)
 	}
 
-	return cntr.currentConcurrency
+	return cntr.current, old != cntr.current
 }
 
 // Concurrency return desired number of concurrent scans
 func (cntr *Controller) Concurrency() int {
-	return cntr.currentConcurrency
+	return cntr.current
 }
