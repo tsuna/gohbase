@@ -6,6 +6,7 @@ require (
 	github.com/go-zookeeper/zk v1.0.4
 	github.com/golang/snappy v0.0.4
 	github.com/google/go-cmp v0.6.0
+	github.com/mihkulemin/token v0.1.0
 	github.com/prometheus/client_golang v1.20.5
 	github.com/stretchr/testify v1.10.0
 	go.opentelemetry.io/otel v1.34.0
@@ -22,7 +23,6 @@ require (
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
-	github.com/mihkulemin/token v0.0.0-20250813200309-094b8397d17b // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
