@@ -493,11 +493,9 @@ loop:
 			results[rpcToRes[rpc]] = res
 			if res.Error != nil {
 				c.handleResultError(res.Error, rpc.Region(), rc)
-				// Track failed operation due to cancellation or other error
 				o := operationDurationSeconds.WithLabelValues(description, "error")
 				observability.ObserveWithTrace(ctx, o, duration)
 			} else {
-				// Track successful operation that completed after cancellation
 				o := operationDurationSeconds.WithLabelValues(description, "ok")
 				observability.ObserveWithTrace(ctx, o, duration)
 			}
