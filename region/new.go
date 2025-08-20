@@ -100,21 +100,20 @@ func WithScanConcurrency(maxConcurrentScans int) Option {
 	return func(c *client) {
 		if maxConcurrentScans > 0 {
 			// Create context for token bucket that will be cancelled when client closes
-			ctx, cancel := context.WithCancel(context.Background())
-
-			// Cancel context when client is done
-			go func() {
-				<-c.done
-				cancel()
-			}()
+			ctx, cancel := context.WithCancelCause(context.Background())
 
 			// Create token bucket with given capacity
 			tb, err := token.NewToken(ctx, maxConcurrentScans, maxConcurrentScans)
 			if err != nil {
 				c.logger.Error("failed to create scan token bucket", "error", err)
-				cancel()
 				return
 			}
+
+			// Cancel context when client is done
+			go func() {
+				<-c.done
+				cancel(ErrClientClosed)
+			}()
 			c.scanTokenBucket = tb
 		}
 	}

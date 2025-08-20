@@ -526,10 +526,7 @@ func (c *client) receive(r io.Reader) (err error) {
 
 	// Release scan token if this was a scan request
 	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil {
-		// Release token back to bucket (non-blocking)
-		go func() {
-			c.scanTokenBucket.Release(context.Background())
-		}()
+		c.scanTokenBucket.Release(context.Background())
 	}
 
 	if err := c.inFlightDown(); err != nil {
@@ -843,7 +840,7 @@ func (c *client) MarshalJSON() ([]byte, error) {
 	return json.Marshal(state)
 }
 
-// pingLoop runs periodic ping scans to measure latency
+// pingLoop runs periodic ping scans to measure latency and implement a congestion control
 func (c *client) pingLoop() {
 	c.logger.Info("starting ping loop", "interval", c.pingInterval, "window", c.pingLatencyWindow)
 
@@ -864,7 +861,6 @@ func (c *client) pingLoop() {
 	ctx := context.Background()
 	scan, err := hrpc.NewScanRange(ctx, []byte("hbase:meta"), []byte("ping"), []byte("ping\x00"),
 		hrpc.NumberOfRows(1),
-		hrpc.MaxResultSize(1),
 	)
 	if err != nil {
 		c.logger.Error("failed to create ping scan", "error", err)
@@ -884,20 +880,22 @@ func (c *client) pingLoop() {
 			err := c.trySend(scan)
 
 			if err != nil {
-				c.logger.Debug("ping send failure", err)
+				c.logger.Debug("ping send failure", "err", err)
 				continue
 			}
 
 			// Wait for the response
 			result := <-scan.ResultChan()
 
+			// We expect that response will have an exception,
+			// but ServerError means client is failed and goroutine should exit.
 			if _, ok := result.Error.(ServerError); ok {
 				return
 			}
 
 			latency := time.Since(start)
 
-			// Record latency regardless of success or error
+			// Record the latency
 			c.recordPingLatency(latency)
 			pingLatency.WithLabelValues(c.addr).Observe(latency.Seconds())
 

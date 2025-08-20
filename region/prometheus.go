@@ -47,7 +47,7 @@ var (
 			Namespace: "gohbase",
 			Name:      "ping_latency_seconds",
 			Help:      "Ping scan latency in seconds",
-			Buckets:   prometheus.DefBuckets,
+			Buckets:   prometheus.ExponentialBuckets(0.0002, 2, 12),
 		},
 		[]string{"regionserver"},
 	)
