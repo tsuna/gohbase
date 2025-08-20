@@ -294,7 +294,7 @@ func (c *client) SendBatch(ctx context.Context, batch []hrpc.Call) (
 	table := batch[0].Table()
 	res = make([]hrpc.RPCResult, len(batch))
 	rpcToRes := make(map[hrpc.Call]int, len(batch))
-	rpcStartTime := time.Now() // Single start time for all RPCs in the batch
+	rpcStartTime := time.Now()
 	for i, rpc := range batch {
 		// map Call to index in res so that we can set the correct
 		// result as Calls complete
@@ -451,7 +451,6 @@ loop:
 		case res := <-rpc.ResultChan():
 			results[rpcToRes[rpc]] = res
 
-			// Calculate duration for this operation
 			description := rpc.Description()
 			duration := time.Since(rpcStartTime).Seconds()
 
@@ -471,7 +470,6 @@ loop:
 					unretryableError = true
 				}
 			} else {
-				// Success - track it now
 				o := operationDurationSeconds.WithLabelValues(description, "ok")
 				observability.ObserveWithTrace(ctx, o, duration)
 			}
@@ -505,10 +503,6 @@ loop:
 			}
 		default:
 			results[rpcToRes[rpc]].Error = ctx.Err()
-			// Track operation that was canceled
-			duration := time.Since(rpcStartTime).Seconds()
-			o := operationDurationSeconds.WithLabelValues(description, "error")
-			observability.ObserveWithTrace(ctx, o, duration)
 		}
 	}
 
