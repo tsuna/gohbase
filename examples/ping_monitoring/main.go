@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -29,9 +30,21 @@ func main() {
 		maxLatency   = flag.Duration("max-latency", 500*time.Millisecond, "Maximum acceptable latency")
 		minLatency   = flag.Duration("min-latency", 100*time.Millisecond, "Minimum acceptable latency")
 		httpPort     = flag.String("port", "2112", "HTTP port for Prometheus metrics")
+		debug        = flag.Bool("debug", false, "Enable debug logging")
 	)
 	
 	flag.Parse()
+	
+	// Set up logging
+	var logger *slog.Logger
+	if *debug {
+		logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+			Level: slog.LevelDebug,
+		}))
+		log.Println("Debug logging enabled")
+	} else {
+		logger = slog.Default()
+	}
 
 	// Start Prometheus metrics HTTP server
 	go func() {
@@ -48,6 +61,7 @@ func main() {
 		*regionServer,
 		region.RegionClient,
 		region.WithScanControl(*maxScans, *minScans, *maxLatency, *minLatency, *interval),
+		region.WithLogger(logger),
 	)
 
 	log.Println("RegionClient created with scan control and congestion monitoring enabled")
