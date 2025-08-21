@@ -27,3 +27,4 @@ go.work.sum
 # IDEs
 **/.idea/
 **/.vscode/
+**/.claude/
