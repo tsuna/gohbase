@@ -1026,15 +1026,30 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 				region.WithDialer(c.regionDialer),
 				region.WithLogger(c.logger))
 		} else {
+			// Build options for regular region client
+			opts := []region.Option{
+				region.WithQueueSize(c.rpcQueueSize),
+				region.WithFlushInterval(c.flushInterval),
+				region.WithEffectiveUser(c.effectiveUser),
+				region.WithReadTimeout(c.regionReadTimeout),
+				region.WithCodec(c.compressionCodec),
+				region.WithDialer(c.regionDialer),
+				region.WithLogger(c.logger),
+			}
+			
+			// Add congestion control if configured
+			if c.scanMaxConcurrency > 0 && c.scanMinConcurrency > 0 && c.scanPingInterval > 0 {
+				opts = append(opts, region.WithScanControl(
+					c.scanMaxConcurrency,
+					c.scanMinConcurrency,
+					c.scanMaxLatency,
+					c.scanMinLatency,
+					c.scanPingInterval,
+				))
+			}
+			
 			client = c.clients.put(addr, reg, func() hrpc.RegionClient {
-				return c.newRegionClientFn(addr, c.clientType,
-					region.WithQueueSize(c.rpcQueueSize),
-					region.WithFlushInterval(c.flushInterval),
-					region.WithEffectiveUser(c.effectiveUser),
-					region.WithReadTimeout(c.regionReadTimeout),
-					region.WithCodec(c.compressionCodec),
-					region.WithDialer(c.regionDialer),
-					region.WithLogger(c.logger))
+				return c.newRegionClientFn(addr, c.clientType, opts...)
 			})
 		}
 
