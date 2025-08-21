@@ -836,14 +836,14 @@ func (c *client) MarshalJSON() ([]byte, error) {
 	return json.Marshal(state)
 }
 
-// controlLoop runs periodic ping scans to measure latency and implement a congestion control
+// controlLoop runs periodic ping Get requests to measure latency and implement congestion control
 func (c *client) controlLoop() {
 	c.logger.Info("starting ping loop", "interval", c.pingInterval)
 
 	ticker := time.NewTicker(c.pingInterval)
 	defer ticker.Stop()
 
-	// Create a dummy region for ping scans - use hbase:meta which always exists
+	// Create a dummy region for ping requests - use hbase:meta which always exists
 	pingRegion := NewInfo(
 		1,               // region ID
 		[]byte("hbase"), // namespace
@@ -853,16 +853,7 @@ func (c *client) controlLoop() {
 		nil,             // stopKey
 	)
 
-	// Create a reusable scan request - scan a small range in meta table
 	ctx := context.Background()
-	scan, err := hrpc.NewScanRange(ctx, []byte("hbase:meta"), []byte("ping"), []byte("ping\x00"),
-		hrpc.NumberOfRows(1),
-	)
-	if err != nil {
-		c.logger.Error("failed to create ping scan", "error", err)
-		return
-	}
-	scan.SetRegion(pingRegion)
 
 	// Closed loop, we are waiting for the response from the server before sending next ping
 	for {
@@ -870,10 +861,19 @@ func (c *client) controlLoop() {
 		case <-c.done:
 			return
 		case <-ticker.C:
+			// Create a new Get request for each ping - use a non-existent row key
+			// This will return quickly with no data
+			get, err := hrpc.NewGet(ctx, []byte("hbase:meta"), []byte("ping"))
+			if err != nil {
+				c.logger.Error("failed to create ping get", "error", err)
+				continue
+			}
+			get.SetRegion(pingRegion)
+
 			start := time.Now()
 
-			// Send the scan request
-			err := c.trySend(scan)
+			// Send the get request
+			err = c.trySend(get)
 
 			if err != nil {
 				c.logger.Debug("ping send failure", "err", err)
@@ -881,7 +881,7 @@ func (c *client) controlLoop() {
 			}
 
 			// Wait for the response
-			result := <-scan.ResultChan()
+			result := <-get.ResultChan()
 
 			// We expect that response will have an exception,
 			// but ServerError means client is failed and goroutine should exit.
@@ -900,9 +900,9 @@ func (c *client) controlLoop() {
 			}
 
 			if result.Error == nil {
-				c.logger.Debug("ping scan success", "latency", latency)
+				c.logger.Debug("ping get success", "latency", latency)
 			} else {
-				c.logger.Debug("ping scan failed", "error", result.Error, "latency", latency)
+				c.logger.Debug("ping get failed", "error", result.Error, "latency", latency)
 			}
 		}
 	}
