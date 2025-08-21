@@ -1,6 +1,6 @@
-// Example of using the ping functionality with RegionClient
-// This example demonstrates how to enable ping monitoring for a RegionClient
-// and expose the metrics via HTTP endpoint for Prometheus scraping.
+// Example of using the scan control functionality with RegionClient
+// This example demonstrates how to enable scan control with congestion monitoring
+// for a RegionClient and expose the metrics via HTTP endpoint for Prometheus scraping.
 
 package main
 
@@ -23,8 +23,11 @@ func main() {
 	// Define command-line flags
 	var (
 		regionServer = flag.String("regionserver", "localhost:16020", "HBase region server address")
-		interval     = flag.Duration("interval", 10*time.Second, "Ping interval")
-		windowSize   = flag.Int("window", 10, "Number of latest ping measurements to keep")
+		interval     = flag.Duration("interval", 10*time.Second, "Ping interval for congestion control")
+		maxScans     = flag.Int("max-scans", 100, "Maximum concurrent scans")
+		minScans     = flag.Int("min-scans", 10, "Minimum concurrent scans")
+		maxLatency   = flag.Duration("max-latency", 500*time.Millisecond, "Maximum acceptable latency")
+		minLatency   = flag.Duration("min-latency", 100*time.Millisecond, "Minimum acceptable latency")
 		httpPort     = flag.String("port", "2112", "HTTP port for Prometheus metrics")
 	)
 	
@@ -40,22 +43,24 @@ func main() {
 		}
 	}()
 
-	// Create a RegionClient with ping enabled
+	// Create a RegionClient with scan control enabled
 	client := region.NewClient(
 		*regionServer,
 		region.RegionClient,
-		region.WithPingInterval(*interval),
-		region.WithPingLatencyWindow(*windowSize),
+		region.WithScanControl(*maxScans, *minScans, *maxLatency, *minLatency, *interval),
 	)
 
-	log.Println("RegionClient created with ping monitoring enabled")
+	log.Println("RegionClient created with scan control and congestion monitoring enabled")
 	log.Println("Configuration:")
 	log.Printf("  - Region Server: %s", *regionServer)
 	log.Printf("  - Ping interval: %v", *interval)
-	log.Printf("  - Latency window: %d measurements", *windowSize)
+	log.Printf("  - Max concurrent scans: %d", *maxScans)
+	log.Printf("  - Min concurrent scans: %d", *minScans)
+	log.Printf("  - Max latency threshold: %v", *maxLatency)
+	log.Printf("  - Min latency threshold: %v", *minLatency)
 	log.Println("")
 	log.Printf("Metrics available at: http://localhost:%s/metrics", *httpPort)
-	log.Println("Look for metric: gohbase_ping_latency_seconds")
+	log.Println("Look for metrics: gohbase_ping_latency_seconds, gohbase_concurrent_scans")
 	log.Println("")
 
 	// Dial to establish connection and start ping monitoring
@@ -66,7 +71,7 @@ func main() {
 		log.Println("Continuing anyway for demonstration purposes...")
 	} else {
 		log.Println("Successfully connected to region server")
-		log.Println("Ping monitoring started...")
+		log.Println("Scan control with congestion monitoring started...")
 	}
 
 	// Keep the program running
