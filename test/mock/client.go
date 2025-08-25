@@ -14,6 +14,7 @@ import (
 	reflect "reflect"
 
 	hrpc "github.com/tsuna/gohbase/hrpc"
+	pb "github.com/tsuna/gohbase/pb"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -21,6 +22,7 @@ import (
 type MockClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockClientMockRecorder
+	isgomock struct{}
 }
 
 // MockClientMockRecorder is the mock recorder for MockClient.
@@ -41,47 +43,62 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 }
 
 // Append mocks base method.
-func (m *MockClient) Append(arg0 *hrpc.Mutate) (*hrpc.Result, error) {
+func (m *MockClient) Append(a *hrpc.Mutate) (*hrpc.Result, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Append", arg0)
+	ret := m.ctrl.Call(m, "Append", a)
 	ret0, _ := ret[0].(*hrpc.Result)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Append indicates an expected call of Append.
-func (mr *MockClientMockRecorder) Append(arg0 any) *gomock.Call {
+func (mr *MockClientMockRecorder) Append(a any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Append", reflect.TypeOf((*MockClient)(nil).Append), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Append", reflect.TypeOf((*MockClient)(nil).Append), a)
 }
 
 // CacheRegions mocks base method.
-func (m *MockClient) CacheRegions(arg0 []byte) error {
+func (m *MockClient) CacheRegions(table []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CacheRegions", arg0)
+	ret := m.ctrl.Call(m, "CacheRegions", table)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CacheRegions indicates an expected call of CacheRegions.
-func (mr *MockClientMockRecorder) CacheRegions(arg0 any) *gomock.Call {
+func (mr *MockClientMockRecorder) CacheRegions(table any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CacheRegions", reflect.TypeOf((*MockClient)(nil).CacheRegions), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CacheRegions", reflect.TypeOf((*MockClient)(nil).CacheRegions), table)
 }
 
 // CheckAndPut mocks base method.
-func (m *MockClient) CheckAndPut(arg0 *hrpc.Mutate, arg1, arg2 string, arg3 []byte) (bool, error) {
+func (m *MockClient) CheckAndPut(p *hrpc.Mutate, family, qualifier string, expectedValue []byte) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CheckAndPut", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "CheckAndPut", p, family, qualifier, expectedValue)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CheckAndPut indicates an expected call of CheckAndPut.
-func (mr *MockClientMockRecorder) CheckAndPut(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockClientMockRecorder) CheckAndPut(p, family, qualifier, expectedValue any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckAndPut", reflect.TypeOf((*MockClient)(nil).CheckAndPut), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckAndPut", reflect.TypeOf((*MockClient)(nil).CheckAndPut), p, family, qualifier, expectedValue)
+}
+
+// CheckAndPutWithCompareType mocks base method.
+func (m *MockClient) CheckAndPutWithCompareType(p *hrpc.Mutate, family, qualifier string, expectedValue []byte, compareType pb.CompareType) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CheckAndPutWithCompareType", p, family, qualifier, expectedValue, compareType)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CheckAndPutWithCompareType indicates an expected call of CheckAndPutWithCompareType.
+func (mr *MockClientMockRecorder) CheckAndPutWithCompareType(p, family, qualifier, expectedValue, compareType any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckAndPutWithCompareType", reflect.TypeOf((*MockClient)(nil).CheckAndPutWithCompareType), p, family, qualifier, expectedValue, compareType)
 }
 
 // Close mocks base method.
@@ -97,90 +114,90 @@ func (mr *MockClientMockRecorder) Close() *gomock.Call {
 }
 
 // Delete mocks base method.
-func (m *MockClient) Delete(arg0 *hrpc.Mutate) (*hrpc.Result, error) {
+func (m *MockClient) Delete(d *hrpc.Mutate) (*hrpc.Result, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Delete", arg0)
+	ret := m.ctrl.Call(m, "Delete", d)
 	ret0, _ := ret[0].(*hrpc.Result)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Delete indicates an expected call of Delete.
-func (mr *MockClientMockRecorder) Delete(arg0 any) *gomock.Call {
+func (mr *MockClientMockRecorder) Delete(d any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockClient)(nil).Delete), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockClient)(nil).Delete), d)
 }
 
 // Get mocks base method.
-func (m *MockClient) Get(arg0 *hrpc.Get) (*hrpc.Result, error) {
+func (m *MockClient) Get(g *hrpc.Get) (*hrpc.Result, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", arg0)
+	ret := m.ctrl.Call(m, "Get", g)
 	ret0, _ := ret[0].(*hrpc.Result)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockClientMockRecorder) Get(arg0 any) *gomock.Call {
+func (mr *MockClientMockRecorder) Get(g any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockClient)(nil).Get), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockClient)(nil).Get), g)
 }
 
 // Increment mocks base method.
-func (m *MockClient) Increment(arg0 *hrpc.Mutate) (int64, error) {
+func (m *MockClient) Increment(i *hrpc.Mutate) (int64, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Increment", arg0)
+	ret := m.ctrl.Call(m, "Increment", i)
 	ret0, _ := ret[0].(int64)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Increment indicates an expected call of Increment.
-func (mr *MockClientMockRecorder) Increment(arg0 any) *gomock.Call {
+func (mr *MockClientMockRecorder) Increment(i any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Increment", reflect.TypeOf((*MockClient)(nil).Increment), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Increment", reflect.TypeOf((*MockClient)(nil).Increment), i)
 }
 
 // Put mocks base method.
-func (m *MockClient) Put(arg0 *hrpc.Mutate) (*hrpc.Result, error) {
+func (m *MockClient) Put(p *hrpc.Mutate) (*hrpc.Result, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Put", arg0)
+	ret := m.ctrl.Call(m, "Put", p)
 	ret0, _ := ret[0].(*hrpc.Result)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Put indicates an expected call of Put.
-func (mr *MockClientMockRecorder) Put(arg0 any) *gomock.Call {
+func (mr *MockClientMockRecorder) Put(p any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Put", reflect.TypeOf((*MockClient)(nil).Put), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Put", reflect.TypeOf((*MockClient)(nil).Put), p)
 }
 
 // Scan mocks base method.
-func (m *MockClient) Scan(arg0 *hrpc.Scan) hrpc.Scanner {
+func (m *MockClient) Scan(s *hrpc.Scan) hrpc.Scanner {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Scan", arg0)
+	ret := m.ctrl.Call(m, "Scan", s)
 	ret0, _ := ret[0].(hrpc.Scanner)
 	return ret0
 }
 
 // Scan indicates an expected call of Scan.
-func (mr *MockClientMockRecorder) Scan(arg0 any) *gomock.Call {
+func (mr *MockClientMockRecorder) Scan(s any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scan", reflect.TypeOf((*MockClient)(nil).Scan), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scan", reflect.TypeOf((*MockClient)(nil).Scan), s)
 }
 
 // SendBatch mocks base method.
-func (m *MockClient) SendBatch(arg0 context.Context, arg1 []hrpc.Call) ([]hrpc.RPCResult, bool) {
+func (m *MockClient) SendBatch(ctx context.Context, batch []hrpc.Call) ([]hrpc.RPCResult, bool) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendBatch", arg0, arg1)
+	ret := m.ctrl.Call(m, "SendBatch", ctx, batch)
 	ret0, _ := ret[0].([]hrpc.RPCResult)
 	ret1, _ := ret[1].(bool)
 	return ret0, ret1
 }
 
 // SendBatch indicates an expected call of SendBatch.
-func (mr *MockClientMockRecorder) SendBatch(arg0, arg1 any) *gomock.Call {
+func (mr *MockClientMockRecorder) SendBatch(ctx, batch any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendBatch", reflect.TypeOf((*MockClient)(nil).SendBatch), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendBatch", reflect.TypeOf((*MockClient)(nil).SendBatch), ctx, batch)
 }
