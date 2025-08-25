@@ -1427,7 +1427,7 @@ func TestCheckAndPutWithCompareType(t *testing.T) {
 		{makeMap("cf", "b", "1"), []byte{}, false}, // Strictly greater
 		{makeMap("cf", "b", "3"), []byte("1"), false},
 		{makeMap("cf", "a", "4"), []byte("2"), true},
-		{makeMap("cf", "a"g, "1"), []byte("99"), true},
+		{makeMap("cf", "a", "1"), []byte("99"), true},
 	}
 
 	for _, tc := range testcases {
