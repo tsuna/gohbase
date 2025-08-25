@@ -1414,29 +1414,20 @@ func TestCheckAndPutWithCompareType(t *testing.T) {
 
 	key := "rowCAP"
 	ef := "cf"
-	a := "a"
-	b := "b"
+	eq := "a"
 
 	var testcases = []struct {
-		inValues  map[string]map[string][]byte
-		qualifier string
-		cmpVal    []byte
-		out       bool
+		inValues map[string]map[string][]byte
+		cmpVal   []byte
+		out      bool
 	}{
-		// { }
-		{makeMap(ef, b, "2"), b, nil, true}, // anything is greater than nil
-		// {b: 2}
-		{makeMap(ef, b, "2"), b, nil, true},
-		// {b: 2}
-		{makeMap(ef, a, "1"), a, []byte{}, true}, // first time
-		// {a: 1, b: 2}
-		{makeMap(ef, a, "1"), a, []byte{}, false}, // Strictly greater
-		// {a: 1, b: 2}
-		{makeMap(ef, a, "3"), a, []byte("1"), false},
-		// {a: 3, b: 2}
-		{makeMap(ef, b, "4"), b, []byte("2"), true},
-		// {a: 3, b: 4}
-		{makeMap(ef, b, "1"), b, []byte("99"), true},
+		{makeMap("cf", "a", "2"), nil, true},
+		{makeMap("cf", "a", "2"), nil, true},
+		{makeMap("cf", "b", "1"), []byte{}, true},
+		{makeMap("cf", "b", "1"), []byte{}, false}, // Strictly greater
+		{makeMap("cf", "b", "3"), []byte("1"), false},
+		{makeMap("cf", "a", "4"), []byte("2"), true},
+		{makeMap("cf", "a"g, "1"), []byte("99"), true},
 	}
 
 	for _, tc := range testcases {
@@ -1446,14 +1437,14 @@ func TestCheckAndPutWithCompareType(t *testing.T) {
 		}
 
 		casRes, err := c.CheckAndPutWithCompareType(
-			putRequest, ef, tc.qualifier, tc.cmpVal, pb.CompareType_GREATER)
+			putRequest, ef, eq, tc.cmpVal, pb.CompareType_GREATER)
 
 		if err != nil {
 			t.Fatalf("CheckAndPut error: %s", err)
 		}
 
 		if casRes != tc.out {
-			t.Errorf("CheckAndPut with put values=%q and expectedValue=%q returned %v, want %v",
+			t.Errorf("CheckAndPut with put values=%q and cmpValue=%q returned %v, want %v",
 				tc.inValues, tc.cmpVal, casRes, tc.out)
 		}
 	}
