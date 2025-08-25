@@ -1414,27 +1414,29 @@ func TestCheckAndPutWithCompareType(t *testing.T) {
 
 	key := "rowCAP"
 	ef := "cf"
-	eq := "a"
+	a := "a"
+	b := "b"
 
 	var castests = []struct {
-		inValues map[string]map[string][]byte
-		cmpVal   []byte
-		out      bool
+		inValues  map[string]map[string][]byte
+		qualifier string
+		cmpVal    []byte
+		out       bool
 	}{
 		// { }
-		{makeMap("cf", "b", "2"), nil, true}, // nil instead of empty byte array
+		{makeMap(ef, b, "2"), b, nil, true}, // anything is greater than nil
 		// {b: 2}
-		{makeMap("cf", "b", "2"), nil, true}, // has already been written
+		{makeMap(ef, b, "2"), b, nil, true},
 		// {b: 2}
-		{makeMap("cf", "a", "1"), []byte{}, true},
+		{makeMap(ef, a, "1"), a, []byte{}, true}, // first time
 		// {a: 1, b: 2}
-		{makeMap("cf", "a", "1"), []byte{}, false}, // Strictly greater
+		{makeMap(ef, a, "1"), a, []byte{}, false}, // Strictly greater
 		// {a: 1, b: 2}
-		{makeMap("cf", "a", "3"), []byte("1"), false},
+		{makeMap(ef, a, "3"), a, []byte("1"), false},
 		// {a: 3, b: 2}
-		{makeMap("cf", "b", "4"), []byte("2integration_test.go"), true},
+		{makeMap(ef, b, "4"), b, []byte("2"), true},
 		// {a: 3, b: 4}
-		{makeMap("cf", "b", "1"), []byte("99"), true},
+		{makeMap(ef, b, "1"), b, []byte("99"), true},
 	}
 
 	for _, tt := range castests {
