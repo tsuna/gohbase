@@ -1417,7 +1417,7 @@ func TestCheckAndPutWithCompareType(t *testing.T) {
 	a := "a"
 	b := "b"
 
-	var castests = []struct {
+	var testcases = []struct {
 		inValues  map[string]map[string][]byte
 		qualifier string
 		cmpVal    []byte
@@ -1439,22 +1439,22 @@ func TestCheckAndPutWithCompareType(t *testing.T) {
 		{makeMap(ef, b, "1"), b, []byte("99"), true},
 	}
 
-	for _, tt := range castests {
-		putRequest, err := hrpc.NewPutStr(context.Background(), table, key, tt.inValues)
+	for _, tc := range testcases {
+		putRequest, err := hrpc.NewPutStr(context.Background(), table, key, tc.inValues)
 		if err != nil {
 			t.Fatalf("NewPutStr returned an error: %v", err)
 		}
 
 		casRes, err := c.CheckAndPutWithCompareType(
-			putRequest, ef, eq, tt.cmpVal, pb.CompareType_GREATER)
+			putRequest, ef, tc.qualifier, tc.cmpVal, pb.CompareType_GREATER)
 
 		if err != nil {
 			t.Fatalf("CheckAndPut error: %s", err)
 		}
 
-		if casRes != tt.out {
+		if casRes != tc.out {
 			t.Errorf("CheckAndPut with put values=%q and expectedValue=%q returned %v, want %v",
-				tt.inValues, tt.cmpVal, casRes, tt.out)
+				tc.inValues, tc.cmpVal, casRes, tc.out)
 		}
 	}
 
