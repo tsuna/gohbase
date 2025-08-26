@@ -439,7 +439,8 @@ func (c *client) findClients(ctx context.Context, batch []hrpc.Call, res []hrpc.
 //     retryable RPCs may eventually succeed we need to return !ok to
 //     the caller of SendBatch.
 func (c *client) waitForCompletion(ctx context.Context, rc hrpc.RegionClient,
-	rpcs []hrpc.Call, results []hrpc.RPCResult, rpcToRes map[hrpc.Call]int, rpcStartTime time.Time) (
+	rpcs []hrpc.Call, results []hrpc.RPCResult, rpcToRes map[hrpc.Call]int,
+	rpcStartTime time.Time) (
 	retryables []hrpc.Call, shouldBackoff, unretryableError, ok bool) {
 
 	ok = true
