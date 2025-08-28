@@ -295,8 +295,49 @@ func ToLocalResult(pbr *pb.Result) *Result {
 	}
 }
 
+func ResultV2ToResult(r ResultV2) *Result {
+	if len(r.Cells) == 0 && !r.Partial {
+		return nil
+	}
+	return &Result{
+		Cells:   cellsV2toCells(r.Cells),
+		Partial: r.Partial,
+	}
+}
+
 func toLocalCells(pbr *pb.Result) []*Cell {
 	return *(*[]*Cell)(unsafe.Pointer(&pbr.Cell))
+}
+
+func cellsV2toCells(v2 []CellV2) []*Cell {
+	if len(v2) == 0 {
+		return nil
+	}
+	// Allocate the memory for the v1 values in a single slice.
+	// Pointers to each of the values will fill in v1.
+	type cellFlat struct {
+		cell     Cell
+		ts       uint64
+		cellType pb.CellType
+	}
+	v1Flat := make([]cellFlat, len(v2))
+	v1 := make([]*Cell, len(v2))
+
+	for i, c := range v2 {
+		cellV1 := &v1Flat[i].cell
+		cellV1.Row = c.Row()
+		cellV1.Family = c.Family()
+		cellV1.Qualifier = c.Qualifier()
+		cellV1.Value = c.Value()
+		v1Flat[i].ts = c.Timestamp()
+		cellV1.Timestamp = &v1Flat[i].ts
+		v1Flat[i].cellType = c.CellType()
+		cellV1.CellType = &v1Flat[i].cellType
+
+		v1[i] = cellV1
+	}
+
+	return v1
 }
 
 // We can now define any helper functions on Result that we want.

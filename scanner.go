@@ -17,7 +17,6 @@ import (
 
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
-	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -37,8 +36,11 @@ type scanner struct {
 	// curRegionScannerID is the id of scanner on current region
 	curRegionScannerID uint64
 	// startRow is the start row in the current region
-	startRow    []byte
-	results     []*pb.Result
+	startRow []byte
+
+	response    *hrpc.ScanResponseV2
+	resultIndex int
+
 	closed      bool
 	scanMetrics map[string]int64
 
@@ -46,37 +48,37 @@ type scanner struct {
 	renewCancel context.CancelFunc
 }
 
-func (s *scanner) fetch() ([]*pb.Result, error) {
+func (s *scanner) fetch() (*hrpc.ScanResponse, error) {
 	// keep looping until we have error, some non-empty result or until close
 	for {
-		resp, region, err := s.request()
+		response, pbresp, region, err := s.request()
 		if err != nil {
 			s.Close()
 			return nil, err
 		}
-		if s.rpc.TrackScanMetrics() && resp.ScanMetrics != nil {
-			metrics := resp.ScanMetrics.GetMetrics()
+		if s.rpc.TrackScanMetrics() && pbresp.ScanMetrics != nil {
+			metrics := pbresp.ScanMetrics.GetMetrics()
 			for _, m := range metrics {
 				s.scanMetrics[m.GetName()] += m.GetValue()
 			}
 		}
 
-		s.update(resp, region)
-		if s.isDone(resp, region) {
+		s.update(pbresp, region)
+		if s.isDone(pbresp, region) {
 			s.Close()
 		}
 
-		if rs := resp.Results; len(rs) > 0 {
-			return rs, nil
+		if response != nil && len(response.Results) > 0 {
+			return response, nil
 		} else if s.closed {
 			return nil, io.EOF
 		}
 	}
 }
 
-func (s *scanner) peek() (*pb.Result, error) {
-	if len(s.results) > 0 {
-		return s.results[0], nil
+func (s *scanner) peek() (hrpc.ResultV2, error) {
+	if s.response != nil {
+		return s.response.Results[s.resultIndex], nil
 	}
 
 	if s.renewCancel != nil {
@@ -88,12 +90,12 @@ func (s *scanner) peek() (*pb.Result, error) {
 
 	if s.closed {
 		// done scanning
-		return nil, io.EOF
+		return hrpc.ResultV2{}, io.EOF
 	}
 
 	rs, err := s.fetch()
 	if err != nil {
-		return nil, err
+		return hrpc.ResultV2{}, err
 	}
 	if !s.closed && s.rpc.RenewInterval() > 0 {
 		// Start up a renewer
@@ -103,41 +105,40 @@ func (s *scanner) peek() (*pb.Result, error) {
 	}
 
 	// fetch cannot return zero results
-	s.results = rs
-	return s.results[0], nil
+	s.response = rs
+	return s.response.Results[0], nil
 }
 
 func (s *scanner) shift() {
-	if len(s.results) == 0 {
+	if s.response == nil {
 		return
 	}
-	// set to nil so that GC isn't blocked to clean up the result
-	s.results[0] = nil
-	s.results = s.results[1:]
+	s.resultIndex++
+	if s.resultIndex == len(s.response.Results) {
+		s.response = nil
+		s.resultIndex = 0
+	}
 }
 
 // coalesce combines result with partial if they belong to the same row
 // and returns the coalesced result and whether coalescing happened
-func (s *scanner) coalesce(result, partial *pb.Result) (*pb.Result, bool) {
-	if result == nil {
+func (s *scanner) coalesce(result, partial hrpc.ResultV2) (hrpc.ResultV2, bool) {
+	if len(result.Cells) == 0 {
 		return partial, true
 	}
-	if !result.GetPartial() {
+	if !result.Partial {
 		// results is not partial, shouldn't coalesce
 		return result, false
 	}
 
-	if len(partial.Cell) > 0 && !bytes.Equal(result.Cell[0].Row, partial.Cell[0].Row) {
+	if len(partial.Cells) > 0 && !bytes.Equal(result.Cells[0].Row(), partial.Cells[0].Row()) {
 		// new row
-		result.Partial = proto.Bool(false)
+		result.Partial = false
 		return result, false
 	}
 
 	// same row, add the partial
-	result.Cell = append(result.Cell, partial.Cell...)
-	if partial.GetStale() {
-		result.Stale = proto.Bool(partial.GetStale())
-	}
+	result.Cells = append(result.Cells, partial.Cells...)
 	return result, true
 }
 
@@ -156,47 +157,36 @@ func newScanner(c RPCClient, rpc *hrpc.Scan, logger *slog.Logger) *scanner {
 	}
 }
 
-func toLocalResult(r *pb.Result) *hrpc.Result {
-	if r == nil {
-		return nil
-	}
-	res := hrpc.ToLocalResult(r)
-	return res
-}
-
 func (s *scanner) Next() (*hrpc.Result, error) {
-	var (
-		result, partial *pb.Result
-		err             error
-	)
-
-	select {
-	case <-s.rpc.Context().Done():
-		s.Close()
-		return nil, s.rpc.Context().Err()
-	default:
+	if err := s.rpc.Context().Err(); err != nil {
+		return nil, err
 	}
 
 	if s.rpc.AllowPartialResults() {
 		// if client handles partials, just return it
-		result, err = s.peek()
+		result, err := s.peek()
 		if err != nil {
 			return nil, err
 		}
 		s.shift()
-		return toLocalResult(result), nil
+		return hrpc.ResultV2ToResult(result), nil
 	}
+
+	var (
+		result, partial hrpc.ResultV2
+		err             error
+	)
 
 	for {
 		partial, err = s.peek()
-		if err == io.EOF && result != nil {
+		if err == io.EOF && len(result.Cells) > 0 {
 			// no more results, return what we have. Next call to the Next() will get EOF
-			result.Partial = proto.Bool(false)
-			return toLocalResult(result), nil
+			result.Partial = false
+			return hrpc.ResultV2ToResult(result), nil
 		}
 		if err != nil {
 			// return whatever we have so far and the error
-			return toLocalResult(result), err
+			return hrpc.ResultV2ToResult(result), err
 		}
 
 		var done bool
@@ -204,14 +194,14 @@ func (s *scanner) Next() (*hrpc.Result, error) {
 		if done {
 			s.shift()
 		}
-		if !result.GetPartial() {
+		if !result.Partial {
 			// if not partial anymore, return it
-			return toLocalResult(result), nil
+			return hrpc.ResultV2ToResult(result), nil
 		}
 	}
 }
 
-func (s *scanner) request() (*pb.ScanResponse, hrpc.RegionInfo, error) {
+func (s *scanner) request() (*hrpc.ScanResponse, *pb.ScanResponse, hrpc.RegionInfo, error) {
 	var (
 		rpc *hrpc.Scan
 		err error
@@ -243,18 +233,18 @@ func (s *scanner) request() (*pb.ScanResponse, hrpc.RegionInfo, error) {
 		)
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	res, err := s.SendRPC(rpc)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	scanres, ok := res.(*pb.ScanResponse)
 	if !ok {
-		return nil, nil, errors.New("got non-ScanResponse for scan request")
+		return nil, nil, nil, errors.New("got non-ScanResponse for scan request")
 	}
-	return scanres, rpc.Region(), nil
+	return rpc.Response, scanres, rpc.Region(), nil
 }
 
 // update updates the scanner for the next scan request

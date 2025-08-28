@@ -51,32 +51,42 @@ func (c *scanMatcher) String() string {
 
 var resultsPB = []*pb.Result{
 	// region 1
-	&pb.Result{
+	{
 		Cell: []*pb.Cell{
-			&pb.Cell{Row: []byte("a"), Family: []byte("A"), Qualifier: []byte("1")},
-			&pb.Cell{Row: []byte("a"), Family: []byte("A"), Qualifier: []byte("2")},
-			&pb.Cell{Row: []byte("a"), Family: []byte("B"), Qualifier: []byte("1")},
+			{Row: []byte("a"), Family: []byte("A"), Qualifier: []byte("1"),
+				Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
+			{Row: []byte("a"), Family: []byte("A"), Qualifier: []byte("2"),
+				Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
+			{Row: []byte("a"), Family: []byte("B"), Qualifier: []byte("1"),
+				Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
 		},
 	},
-	&pb.Result{
+	{
 		Cell: []*pb.Cell{
-			&pb.Cell{Row: []byte("b"), Family: []byte("A"), Qualifier: []byte("1")},
-			&pb.Cell{Row: []byte("b"), Family: []byte("B"), Qualifier: []byte("2")},
+			{Row: []byte("b"), Family: []byte("A"), Qualifier: []byte("1"),
+				Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
+			{Row: []byte("b"), Family: []byte("B"), Qualifier: []byte("2"),
+				Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
 		},
 	},
 	// region 2
-	&pb.Result{
+	{
 		Cell: []*pb.Cell{
-			&pb.Cell{Row: []byte("bar"), Family: []byte("C"), Qualifier: []byte("1")},
-			&pb.Cell{Row: []byte("baz"), Family: []byte("C"), Qualifier: []byte("2")},
-			&pb.Cell{Row: []byte("baz"), Family: []byte("C"), Qualifier: []byte("2")},
+			{Row: []byte("bar"), Family: []byte("C"), Qualifier: []byte("1"),
+				Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
+			{Row: []byte("baz"), Family: []byte("C"), Qualifier: []byte("2"),
+				Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
+			{Row: []byte("baz"), Family: []byte("C"), Qualifier: []byte("2"),
+				Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
 		},
 	},
 	// region 3
-	&pb.Result{
+	{
 		Cell: []*pb.Cell{
-			&pb.Cell{Row: []byte("yolo"), Family: []byte("D"), Qualifier: []byte("1")},
-			&pb.Cell{Row: []byte("yolo"), Family: []byte("D"), Qualifier: []byte("2")},
+			{Row: []byte("yolo"), Family: []byte("D"), Qualifier: []byte("1"),
+				Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
+			{Row: []byte("yolo"), Family: []byte("D"), Qualifier: []byte("2"),
+				Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
 		},
 	},
 }
@@ -128,13 +138,17 @@ func TestScanner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.EXPECT().SendRPC(&scanMatcher{scan: s}).Do(func(rpc hrpc.Call) {
-		rpc.SetRegion(region1)
-	}).Return(&pb.ScanResponse{
+	resp1 := &pb.ScanResponse{
 		ScannerId:           cp(scannerID),
 		MoreResultsInRegion: proto.Bool(true),
 		Results:             dup(resultsPB[:1]),
-	}, nil).Times(1)
+	}
+	c.EXPECT().SendRPC(&scanMatcher{scan: s}).DoAndReturn(
+		func(rpc hrpc.Call) (msg proto.Message, err error) {
+			rpc.SetRegion(region1)
+			rpc.(*hrpc.Scan).Response = pbRespToRespV2(resp1)
+			return resp1, nil
+		}).Times(1)
 
 	s, err = hrpc.NewScanRange(scan.Context(), table, nil, nil,
 		hrpc.ScannerID(scannerID), hrpc.NumberOfRows(2))
@@ -142,13 +156,15 @@ func TestScanner(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c.EXPECT().SendRPC(&scanMatcher{
-		scan: s,
-	}).Do(func(rpc hrpc.Call) {
-		rpc.SetRegion(region1)
-	}).Return(&pb.ScanResponse{
+	resp2 := &pb.ScanResponse{
 		Results: dup(resultsPB[1:2]),
-	}, nil).Times(1)
+	}
+	c.EXPECT().SendRPC(&scanMatcher{scan: s}).DoAndReturn(
+		func(rpc hrpc.Call) (msg proto.Message, err error) {
+			rpc.SetRegion(region1)
+			rpc.(*hrpc.Scan).Response = pbRespToRespV2(resp2)
+			return resp2, nil
+		}).Times(1)
 
 	scannerID++
 
@@ -157,12 +173,16 @@ func TestScanner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.EXPECT().SendRPC(&scanMatcher{scan: s}).Do(func(rpc hrpc.Call) {
-		rpc.SetRegion(region2)
-	}).Return(&pb.ScanResponse{
+	resp3 := &pb.ScanResponse{
 		ScannerId: cp(scannerID),
 		Results:   dup(resultsPB[2:3]),
-	}, nil).Times(1)
+	}
+	c.EXPECT().SendRPC(&scanMatcher{scan: s}).DoAndReturn(
+		func(rpc hrpc.Call) (msg proto.Message, err error) {
+			rpc.SetRegion(region2)
+			rpc.(*hrpc.Scan).Response = pbRespToRespV2(resp3)
+			return resp3, nil
+		}).Times(1)
 
 	scannerID++
 
@@ -171,13 +191,18 @@ func TestScanner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.EXPECT().SendRPC(&scanMatcher{scan: s}).Do(func(rpc hrpc.Call) {
-		rpc.SetRegion(region3)
-	}).Return(&pb.ScanResponse{
+	resp4 := &pb.ScanResponse{
 		ScannerId:   cp(scannerID),
 		Results:     dup(resultsPB[3:4]),
 		MoreResults: proto.Bool(false),
-	}, nil).Times(1)
+	}
+	c.EXPECT().SendRPC(&scanMatcher{scan: s}).DoAndReturn(
+		func(rpc hrpc.Call) (msg proto.Message, err error) {
+			rpc.SetRegion(region3)
+
+			rpc.(*hrpc.Scan).Response = pbRespToRespV2(resp4)
+			return resp4, nil
+		}).Times(1)
 
 	var rs []*hrpc.Result
 	for {
@@ -197,21 +222,31 @@ func TestScanner(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(expected, rs) {
-		t.Fatalf("expected %v, got %v", expected, rs)
+		t.Fatalf("exp: %v\ngot: %v", expected, rs)
 	}
 }
 
 var cells = []*pb.Cell{
-	&pb.Cell{Row: []byte("a"), Family: []byte("A"), Qualifier: []byte("1")}, // 0
-	&pb.Cell{Row: []byte("a"), Family: []byte("A"), Qualifier: []byte("2")},
-	&pb.Cell{Row: []byte("a"), Family: []byte("A"), Qualifier: []byte("3")},
-	&pb.Cell{Row: []byte("b"), Family: []byte("B"), Qualifier: []byte("1")},   // 3
-	&pb.Cell{Row: []byte("b"), Family: []byte("B"), Qualifier: []byte("2")},   // 4
-	&pb.Cell{Row: []byte("bar"), Family: []byte("B"), Qualifier: []byte("1")}, // 5
-	&pb.Cell{Row: []byte("bar"), Family: []byte("B"), Qualifier: []byte("2")},
-	&pb.Cell{Row: []byte("bar"), Family: []byte("B"), Qualifier: []byte("3")}, // 7
-	&pb.Cell{Row: []byte("foo"), Family: []byte("F"), Qualifier: []byte("1")}, // 8
-	&pb.Cell{Row: []byte("foo"), Family: []byte("F"), Qualifier: []byte("2")}, // 9
+	{Row: []byte("a"), Family: []byte("A"), Qualifier: []byte("1"),
+		Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}}, // 0
+	{Row: []byte("a"), Family: []byte("A"), Qualifier: []byte("2"),
+		Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
+	{Row: []byte("a"), Family: []byte("A"), Qualifier: []byte("3"),
+		Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
+	{Row: []byte("b"), Family: []byte("B"), Qualifier: []byte("1"),
+		Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}}, // 3
+	{Row: []byte("b"), Family: []byte("B"), Qualifier: []byte("2"),
+		Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}}, // 4
+	{Row: []byte("bar"), Family: []byte("B"), Qualifier: []byte("1"),
+		Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}}, // 5
+	{Row: []byte("bar"), Family: []byte("B"), Qualifier: []byte("2"),
+		Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
+	{Row: []byte("bar"), Family: []byte("B"), Qualifier: []byte("3"),
+		Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}}, // 7
+	{Row: []byte("foo"), Family: []byte("F"), Qualifier: []byte("1"),
+		Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}}, // 8
+	{Row: []byte("foo"), Family: []byte("F"), Qualifier: []byte("2"),
+		Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}}, // 9
 }
 
 func TestPartialResults(t *testing.T) {
@@ -240,7 +275,7 @@ func TestAllowPartialResults(t *testing.T) {
 		hrpc.ToLocalResult(&pb.Result{Cell: cells[5:7], Partial: proto.Bool(true)}),
 		hrpc.ToLocalResult(&pb.Result{Cell: cells[7:8], Partial: proto.Bool(true)}),
 		// empty list
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[8:8], Partial: proto.Bool(true)}),
+		hrpc.ToLocalResult(&pb.Result{Cell: nil, Partial: proto.Bool(true)}),
 		hrpc.ToLocalResult(&pb.Result{Cell: cells[8:9], Partial: proto.Bool(true)}),
 		hrpc.ToLocalResult(&pb.Result{Cell: cells[9:], Partial: proto.Bool(true)}),
 	}
@@ -295,7 +330,7 @@ func TestScanMetrics(t *testing.T) {
 					},
 				},
 			},
-			expectedResults:      []*hrpc.Result{toLocalResult(&pb.Result{Cell: cells[:3]})},
+			expectedResults:      []*hrpc.Result{hrpc.ToLocalResult(&pb.Result{Cell: cells[:3]})},
 			expectedRowsScanned:  1,
 			expectedRowsFiltered: 0,
 		},
@@ -317,7 +352,7 @@ func TestScanMetrics(t *testing.T) {
 					},
 				},
 			},
-			expectedResults:      []*hrpc.Result{toLocalResult(&pb.Result{Cell: cells[:5]})},
+			expectedResults:      []*hrpc.Result{hrpc.ToLocalResult(&pb.Result{Cell: cells[:5]})},
 			expectedRowsScanned:  2,
 			expectedRowsFiltered: 0,
 		},
@@ -340,7 +375,7 @@ func TestScanMetrics(t *testing.T) {
 					},
 				},
 			},
-			expectedResults:      []*hrpc.Result{toLocalResult(&pb.Result{Cell: cells})},
+			expectedResults:      []*hrpc.Result{hrpc.ToLocalResult(&pb.Result{Cell: cells})},
 			expectedRowsScanned:  4,
 			expectedRowsFiltered: 2,
 		},
@@ -363,7 +398,7 @@ func TestScanMetrics(t *testing.T) {
 					},
 				},
 			},
-			expectedResults:      []*hrpc.Result{toLocalResult(&pb.Result{Cell: cells[:5]})},
+			expectedResults:      []*hrpc.Result{hrpc.ToLocalResult(&pb.Result{Cell: cells[:5]})},
 			expectedRowsScanned:  2,
 			expectedRowsFiltered: 1,
 		},
@@ -386,7 +421,7 @@ func TestScanMetrics(t *testing.T) {
 					},
 				},
 			},
-			expectedResults:      []*hrpc.Result{toLocalResult(&pb.Result{Cell: cells[:3]})},
+			expectedResults:      []*hrpc.Result{hrpc.ToLocalResult(&pb.Result{Cell: cells[:3]})},
 			expectedRowsScanned:  0,
 			expectedRowsFiltered: 1,
 		},
@@ -415,10 +450,15 @@ func TestScanMetrics(t *testing.T) {
 
 			sc := newScanner(c, scan, slog.Default())
 
-			c.EXPECT().SendRPC(&scanMatcher{scan: scan}).Return(&pb.ScanResponse{
-				Results:     tcase.results,
-				ScanMetrics: tcase.scanMetrics,
-			}, nil).Times(1)
+			c.EXPECT().SendRPC(&scanMatcher{scan: scan}).DoAndReturn(
+				func(rpc hrpc.Call) (msg proto.Message, err error) {
+					resp := &pb.ScanResponse{
+						Results:     tcase.results,
+						ScanMetrics: tcase.scanMetrics,
+					}
+					rpc.(*hrpc.Scan).Response = pbRespToRespV2(resp)
+					return resp, nil
+				}).Times(1)
 
 			var res []*hrpc.Result
 			for {
@@ -578,16 +618,20 @@ func testErrorScanFromID(t *testing.T, scan *hrpc.Scan, out []*hrpc.Result) {
 		t.Fatal(err)
 	}
 
-	c.EXPECT().SendRPC(&scanMatcher{scan: srange}).Do(func(rpc hrpc.Call) {
-		rpc.SetRegion(region1)
-	}).Return(&pb.ScanResponse{
+	resp := &pb.ScanResponse{
 		ScannerId:           cp(scannerID),
 		MoreResultsInRegion: proto.Bool(true),
 		Results: []*pb.Result{
 			&pb.Result{Cell: cells[:3]},
 			&pb.Result{Cell: cells[3:4]},
 		},
-	}, nil).Times(1)
+	}
+	c.EXPECT().SendRPC(&scanMatcher{scan: srange}).DoAndReturn(
+		func(rpc hrpc.Call) (msg proto.Message, err error) {
+			rpc.SetRegion(region1)
+			rpc.(*hrpc.Scan).Response = pbRespToRespV2(resp)
+			return resp, nil
+		}).Times(1)
 
 	outErr := errors.New("WTF")
 
@@ -624,7 +668,6 @@ func testErrorScanFromID(t *testing.T, scan *hrpc.Scan, out []*hrpc.Result) {
 }
 
 func testPartialResults(t *testing.T, scan *hrpc.Scan, expected []*hrpc.Result) {
-	t.Helper()
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	c := mock.NewMockRPCClient(ctrl)
@@ -698,13 +741,17 @@ func testPartialResults(t *testing.T, scan *hrpc.Scan, expected []*hrpc.Result) 
 			t.Fatal(err)
 		}
 
-		c.EXPECT().SendRPC(&scanMatcher{scan: s}).Do(func(rpc hrpc.Call) {
-			rpc.SetRegion(partial.region)
-		}).Return(&pb.ScanResponse{
+		resp := &pb.ScanResponse{
 			ScannerId:           cp(scannerID),
 			MoreResultsInRegion: &partial.moreResultsInRegion,
 			Results:             partial.results,
-		}, nil).Times(1)
+		}
+		c.EXPECT().SendRPC(&scanMatcher{scan: s}).DoAndReturn(
+			func(rpc hrpc.Call) (msg proto.Message, err error) {
+				rpc.SetRegion(partial.region)
+				rpc.(*hrpc.Scan).Response = pbRespToRespV2(resp)
+				return resp, nil
+			}).Times(1)
 	}
 
 	var rs []*hrpc.Result
@@ -743,49 +790,63 @@ func TestReversedScanner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.EXPECT().SendRPC(&scanMatcher{scan: s}).Do(func(rpc hrpc.Call) {
-		rpc.SetRegion(region3)
-	}).Return(&pb.ScanResponse{
+	resp1 := &pb.ScanResponse{
 		ScannerId: cp(scannerID),
 		Results:   dup(resultsPB[3:4]),
-	}, nil).Times(1)
+	}
+	c.EXPECT().SendRPC(&scanMatcher{scan: s}).DoAndReturn(
+		func(rpc hrpc.Call) (msg proto.Message, err error) {
+			rpc.SetRegion(region3)
+			rpc.(*hrpc.Scan).Response = pbRespToRespV2(resp1)
+			return resp1, nil
+		}).Times(1)
 
 	s, err = hrpc.NewScanRange(ctx, table,
 		append([]byte("fon"), rowPadding...), nil, hrpc.Reversed())
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.EXPECT().SendRPC(&scanMatcher{scan: s}).Do(func(rpc hrpc.Call) {
-		rpc.SetRegion(region2)
-	}).Return(&pb.ScanResponse{
+	resp2 := &pb.ScanResponse{
 		ScannerId: cp(scannerID),
 		Results:   dup(resultsPB[2:3]),
-	}, nil).Times(1)
+	}
+	c.EXPECT().SendRPC(&scanMatcher{scan: s}).DoAndReturn(
+		func(rpc hrpc.Call) (msg proto.Message, err error) {
+			rpc.SetRegion(region2)
+			rpc.(*hrpc.Scan).Response = pbRespToRespV2(resp2)
+			return resp2, nil
+		}).Times(1)
 
 	s, err = hrpc.NewScanRange(ctx, table,
 		append([]byte("baq"), rowPadding...), nil, hrpc.Reversed())
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.EXPECT().SendRPC(&scanMatcher{scan: s}).Do(func(rpc hrpc.Call) {
-		rpc.SetRegion(region1)
-	}).Return(&pb.ScanResponse{
+	resp3 := &pb.ScanResponse{
 		MoreResultsInRegion: proto.Bool(true),
 		ScannerId:           cp(scannerID),
 		Results:             dup(resultsPB[1:2]),
-	}, nil).Times(1)
+	}
+	c.EXPECT().SendRPC(&scanMatcher{scan: s}).DoAndReturn(
+		func(rpc hrpc.Call) (msg proto.Message, err error) {
+			rpc.SetRegion(region1)
+			rpc.(*hrpc.Scan).Response = pbRespToRespV2(resp3)
+			return resp3, nil
+		}).Times(1)
 
 	s, err = hrpc.NewScanRange(ctx, table, nil, nil, hrpc.ScannerID(scannerID))
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.EXPECT().SendRPC(&scanMatcher{
-		scan: s,
-	}).Do(func(rpc hrpc.Call) {
-		rpc.SetRegion(region1)
-	}).Return(&pb.ScanResponse{
+	resp4 := &pb.ScanResponse{
 		Results: dup(resultsPB[:1]),
-	}, nil).Times(1)
+	}
+	c.EXPECT().SendRPC(&scanMatcher{scan: s}).DoAndReturn(
+		func(rpc hrpc.Call) (msg proto.Message, err error) {
+			rpc.SetRegion(region1)
+			rpc.(*hrpc.Scan).Response = pbRespToRespV2(resp4)
+			return resp4, nil
+		}).Times(1)
 
 	var rs []*hrpc.Result
 	for {
