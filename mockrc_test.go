@@ -231,25 +231,28 @@ func (c *testClient) QueueRPC(call hrpc.Call) {
 			return
 		}
 	}
+
+	returnScanResponse := func(call hrpc.Call, resp *pb.ScanResponse) {
+		call.(*hrpc.Scan).Response = pbRespToRespV2(resp)
+		call.ResultChan() <- hrpc.RPCResult{Msg: resp}
+	}
+
 	if bytes.HasSuffix(call.Key(), bytes.Repeat([]byte{0}, 17)) {
 		// meta region probe, return empty to signify that region is online
 		call.ResultChan() <- hrpc.RPCResult{}
 	} else if bytes.HasPrefix(call.Key(), []byte("test,")) {
-		call.ResultChan() <- hrpc.RPCResult{Msg: &pb.ScanResponse{
-			Results: []*pb.Result{metaRow}}}
+		returnScanResponse(call, &pb.ScanResponse{Results: []*pb.Result{metaRow}})
 	} else if bytes.HasPrefix(call.Key(), []byte("test1,,")) {
-		call.ResultChan() <- hrpc.RPCResult{Msg: &pb.ScanResponse{
-			Results: []*pb.Result{test1SplitA}}}
+		returnScanResponse(call, &pb.ScanResponse{Results: []*pb.Result{test1SplitA}})
 	} else if bytes.HasPrefix(call.Key(), []byte("nsre,,")) {
-		call.ResultChan() <- hrpc.RPCResult{Msg: &pb.ScanResponse{
-			Results: []*pb.Result{nsreRegion}}}
+		returnScanResponse(call, &pb.ScanResponse{Results: []*pb.Result{nsreRegion}})
 	} else if bytes.HasPrefix(call.Key(), []byte("tablenotfound,")) {
-		call.ResultChan() <- hrpc.RPCResult{Msg: &pb.ScanResponse{
+		returnScanResponse(call, &pb.ScanResponse{
 			Results:     []*pb.Result{},
 			MoreResults: proto.Bool(false),
-		}}
+		})
 	} else {
-		call.ResultChan() <- hrpc.RPCResult{Msg: makeRegionResult(call.Key())}
+		returnScanResponse(call, makeRegionResult(call.Key()))
 	}
 }
 
@@ -258,3 +261,31 @@ func (c *testClient) QueueBatch(ctx context.Context, batch []hrpc.Call) {
 }
 
 func (c *testClient) Close() {}
+
+func pbRespToRespV2(resp *pb.ScanResponse) *hrpc.ScanResponseV2 {
+	respv2 := &hrpc.ScanResponseV2{
+		Results: make([]hrpc.ResultV2, len(resp.Results)),
+	}
+	for i, res := range resp.Results {
+		cellsV2 := make([]hrpc.CellV2, len(res.Cell))
+		for i, cell := range res.Cell {
+			var err error
+			cellsV2[i], err = hrpc.NewCellV2(
+				cell.Row,
+				cell.Family,
+				cell.Qualifier,
+				cell.GetTimestamp(),
+				cell.Value,
+				cell.GetCellType(),
+			)
+			if err != nil {
+				panic(err)
+			}
+		}
+		respv2.Results[i] = hrpc.ResultV2{
+			Cells:   cellsV2,
+			Partial: res.GetPartial(),
+		}
+	}
+	return respv2
+}
