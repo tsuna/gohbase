@@ -352,20 +352,10 @@ func (s *Scan) DeserializeCellBlocks(m proto.Message, b []byte) (uint32, error) 
 			"cells_per_result count %d doesn't match partial_flag_per_result count %d",
 			len(cellsPerResult), len(partials))
 	}
-	scanResp.Results = make([]*pb.Result, len(partials))
 	s.Response = &ScanResponseV2{Results: make([]ResultV2, len(cellsPerResult))}
 	var readLen uint32
 	for i, numCells := range cellsPerResult {
-		cells, l, err := deserializeCellBlocks(b[readLen:], numCells)
-		if err != nil {
-			return 0, err
-		}
-		scanResp.Results[i] = &pb.Result{
-			Cell:    cells,
-			Partial: proto.Bool(partials[i]),
-		}
-
-		cellsV2, l2, err := deserializeCellBlocksV2(b[readLen:], numCells)
+		cellsV2, l, err := deserializeCellBlocksV2(b[readLen:], numCells)
 		if err != nil {
 			return 0, err
 		}
@@ -373,10 +363,6 @@ func (s *Scan) DeserializeCellBlocks(m proto.Message, b []byte) (uint32, error) 
 			Cells:   cellsV2,
 			Partial: partials[i],
 		}
-		if l != l2 {
-			panic(fmt.Errorf("deserializeCellBlocks v1 and v2 disagree on length"))
-		}
-
 		readLen += l
 	}
 	s.ResponseSize = int(readLen)

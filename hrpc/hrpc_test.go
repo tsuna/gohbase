@@ -1620,12 +1620,6 @@ func TestDeserializeCellBlocksScan(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !slices.EqualFunc(expectedResults, scanResp.Results, func(a, b *pb.Result) bool {
-		return proto.Equal(a, b)
-	}) {
-		t.Errorf("expected %v, got %v", expectedResults, scanResp.Results)
-	}
-
 	equalResultsV1V2 := func(a *pb.Result, b ResultV2) bool {
 		cellsEqual := slices.EqualFunc(a.Cell, b.Cells, func(a *pb.Cell, b CellV2) bool {
 			return proto.Equal(a, b.ToPBCell())
