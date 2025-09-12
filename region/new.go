@@ -86,10 +86,12 @@ func WithScanControl(maxScans, minScans int, maxLat, minLat, interval time.Durat
 		// Create context for token bucket that will be cancelled when client closes
 		ctx, cancel := context.WithCancelCause(context.Background())
 
+
 		// Create token bucket with given capacity
 		tb, err := token.NewToken(ctx, maxScans, minScans)
 		if err != nil {
 			c.logger.Error("failed to create scan token bucket", "error", err)
+			cancel(nil) // cancel the context, as it is not needed in the case of error
 			return
 		}
 
@@ -98,6 +100,7 @@ func WithScanControl(maxScans, minScans int, maxLat, minLat, interval time.Durat
 			<-c.done
 			cancel(ErrClientClosed)
 		}()
+
 		c.scanTokenBucket = tb
 		c.pingInterval = interval
 		c.scanTokenBucket.SetCapacity(context.Background(), minScans)
