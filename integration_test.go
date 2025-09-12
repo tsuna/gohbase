@@ -1408,7 +1408,7 @@ func makeMap(cf, k, v string) map[string]map[string][]byte {
 	return map[string]map[string][]byte{cf: map[string][]byte{k: []byte(v)}}
 }
 
-func TestCheckAndPutWithCompareType(t *testing.T) {
+func TestCheckAndPutWithCompareTypeGreater(t *testing.T) {
 	c := gohbase.NewClient(*host)
 	defer c.Close()
 
@@ -1417,18 +1417,19 @@ func TestCheckAndPutWithCompareType(t *testing.T) {
 	eq := "a"
 
 	var testcases = []struct {
-		inValues map[string]map[string][]byte
-		cmpVal   []byte
-		out      bool
+		inValues    map[string]map[string][]byte
+		cmpVal      []byte
+		out         bool
+		expectedVal []byte
 	}{
-		{makeMap("cf", "a", "2"), nil, true},
-		{makeMap("cf", "a", "2"), nil, false},
-		{makeMap("cf", "b", "1"), []byte{}, false},
-		{makeMap("cf", "b", "1"), []byte{}, false}, // Strictly greater
-		{makeMap("cf", "b", "3"), []byte("1"), false},
-		{makeMap("cf", "a", "4"), []byte("2"), false},
-		{makeMap("cf", "a", "1"), []byte("99"), true},
-		{makeMap("cf", "b", "2"), []byte("98"), true},
+		{makeMap("cf", "a", "2"), nil, true, []byte("2")},
+		{makeMap("cf", "a", "2"), nil, false, []byte("2")},
+		{makeMap("cf", "b", "1"), []byte{}, false, nil},
+		{makeMap("cf", "b", "1"), []byte{}, false, nil}, // Strictly greater
+		{makeMap("cf", "b", "3"), []byte("1"), false, nil},
+		{makeMap("cf", "a", "4"), []byte("2"), false, []byte("2")},
+		{makeMap("cf", "a", "1"), []byte("99"), true, []byte("1")},
+		{makeMap("cf", "b", "2"), []byte("98"), true, []byte("2")},
 	}
 
 	for _, tc := range testcases {
@@ -1448,9 +1449,25 @@ func TestCheckAndPutWithCompareType(t *testing.T) {
 			t.Errorf("CheckAndPut with put values=%q and cmpValue=%q returned %v, want %v",
 				tc.inValues, tc.cmpVal, casRes, tc.out)
 		}
+
+		get, err := hrpc.NewGetStr(context.Background(), table, key,
+			hrpc.Families(map[string][]string{"cf": nil}))
+		rsp, err := c.Get(get)
+		if err != nil {
+			t.Fatalf("Get failed: %s", err)
+		}
+		if len(rsp.Cells) != 1 {
+			t.Errorf("Get expected 1 cell. Received: %d", len(rsp.Cells))
+		}
+		if !bytes.Equal(rsp.Cells[0].Value, tc.expectedVal) {
+			t.Errorf("Get expected value %q. Received: %q",
+				tc.expectedVal, rsp.Cells[0].Value)
+		}
+
 	}
 
 	// TODO: check the resulting state by performing a Get request
+
 }
 
 func TestCheckAndPutNotPut(t *testing.T) {

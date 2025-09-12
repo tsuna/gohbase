@@ -36,7 +36,8 @@ func NewCheckAndPut(put *Mutate, family string,
 
 // NewCheckAndPutWithCompareType creates a new CheckAndPut request that will compare provided
 // expectedValue with the on in HBase located at put's row and provided family:qualifier,
-// and if they are equal, perform the provided put request on the row
+// and depending on how they compare via the given compareType,
+// perform the provided put request on the row
 func NewCheckAndPutWithCompareType(put *Mutate, family string,
 	qualifier string, expectedValue []byte, compareType pb.CompareType) (*CheckAndPut, error) {
 	if put.mutationType != pb.MutationProto_PUT {
