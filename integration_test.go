@@ -1466,8 +1466,6 @@ func TestCheckAndPutWithCompareTypeGreater(t *testing.T) {
 
 	}
 
-	// TODO: check the resulting state by performing a Get request
-
 }
 
 func TestCheckAndPutNotPut(t *testing.T) {
