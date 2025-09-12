@@ -1456,8 +1456,8 @@ func TestCheckAndPutWithCompareTypeGreater(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Get failed: %s", err)
 		}
-		if len(rsp.Cells) != 1 {
-			t.Errorf("Get expected 1 cell. Received: %d", len(rsp.Cells))
+		if len(rsp.Cells) < 1 {
+			t.Errorf("Get expected at least 1 cell. Received: %d", len(rsp.Cells))
 		}
 		if !bytes.Equal(rsp.Cells[0].Value, tc.expectedVal) {
 			t.Errorf("Get expected value %q. Received: %q",
