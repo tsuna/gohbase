@@ -1424,9 +1424,9 @@ func TestCheckAndPutWithCompareTypeGreater(t *testing.T) {
 	}{
 		{makeMap("cf", "a", "2"), nil, true, []byte("2")},
 		{makeMap("cf", "a", "2"), nil, false, []byte("2")},
-		{makeMap("cf", "b", "1"), []byte{}, false, nil},
-		{makeMap("cf", "b", "1"), []byte{}, false, nil}, // Strictly greater
-		{makeMap("cf", "b", "3"), []byte("1"), false, nil},
+		{makeMap("cf", "b", "1"), []byte{}, false, []byte("2")},
+		{makeMap("cf", "b", "1"), []byte{}, false, []byte("2")}, // Strictly greater
+		{makeMap("cf", "b", "3"), []byte("1"), false, []byte("2")},
 		{makeMap("cf", "a", "4"), []byte("2"), false, []byte("2")},
 		{makeMap("cf", "a", "1"), []byte("99"), true, []byte("1")},
 		{makeMap("cf", "b", "2"), []byte("98"), true, []byte("2")},
