@@ -210,7 +210,9 @@ type client struct {
 	// scan concurrency control
 	pingInterval    time.Duration
 	scanTokenBucket *token.Token
-	scanController  *Controller
+	scanController  Controller
+	scanMinWindow   int
+	scanMaxWindow   int
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine

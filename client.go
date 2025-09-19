@@ -109,12 +109,8 @@ type client struct {
 	regionDialer func(ctx context.Context, network, addr string) (net.Conn, error)
 	// logger that could be defined by user
 	logger *slog.Logger
-	// congestion control parameters for scan control
-	scanMaxConcurrency int
-	scanMinConcurrency int
-	scanMaxLatency     time.Duration
-	scanMinLatency     time.Duration
-	scanPingInterval   time.Duration
+	// scan control options for congestion control
+	scanControlOptions *region.ScanControlOptions
 }
 
 // NewClient creates a new HBase client.
@@ -320,16 +316,11 @@ func Logger(logger *slog.Logger) Option {
 }
 
 // ScanControl will return an option that configures congestion control for scan requests.
-// maxScans and minScans set the limits of scan concurrency.
-// maxLat and minLat set the thresholds for ping latency.
-// interval sets the interval between ping scans.
-func ScanControl(maxScans, minScans int, maxLat, minLat, interval time.Duration) Option {
+// It takes a ScanControlOptions struct which contains the controller and window limits.
+func ScanControl(options *region.ScanControlOptions) Option {
 	return func(c *client) {
-		c.scanMaxConcurrency = maxScans
-		c.scanMinConcurrency = minScans
-		c.scanMaxLatency = maxLat
-		c.scanMinLatency = minLat
-		c.scanPingInterval = interval
+		// Store the scan control options to be used when creating region clients
+		c.scanControlOptions = options
 	}
 }
 

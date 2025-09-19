@@ -41,14 +41,12 @@ type RegionClientOptions struct {
 
 // ScanControlOptions holds scan congestion control configuration
 type ScanControlOptions struct {
-	// MaxScans sets the maximum number of concurrent scans
-	MaxScans int
-	// MinScans sets the minimum number of concurrent scans
-	MinScans int
-	// MaxLat sets the maximum ping latency threshold
-	MaxLat time.Duration
-	// MinLat sets the minimum ping latency threshold
-	MinLat time.Duration
+	// NewController is a factory function that creates controllers with min/max window bounds
+	NewController NewControllerFunc
+	// MinWindow sets the minimum window size (concurrency level)
+	MinWindow int
+	// MaxWindow sets the maximum window size (concurrency level)
+	MaxWindow int
 	// Interval sets the interval between ping scans
 	Interval time.Duration
 }
@@ -97,13 +95,22 @@ func NewClient(addr string, ctype ClientType, options *RegionClientOptions) hrpc
 		if options.Logger != nil {
 			c.logger = options.Logger
 		}
-		if options.ScanControl != nil {
+		if options.ScanControl != nil && options.ScanControl.NewController != nil {
 			// Create context for token bucket that will be cancelled when client closes
 			ctx, cancel := context.WithCancelCause(context.Background())
 
+			// Store min/max window values
+			c.scanMinWindow = options.ScanControl.MinWindow
+			c.scanMaxWindow = options.ScanControl.MaxWindow
+
+			// Create controller instance for this region client
+			c.scanController = options.ScanControl.NewController(c.scanMinWindow, c.scanMaxWindow)
+
+			// Always start with minimum window
+			initialWindow := c.scanMinWindow
+
 			// Create token bucket with given capacity
-			tb, err := token.NewToken(ctx, options.ScanControl.MaxScans,
-				options.ScanControl.MinScans)
+			tb, err := token.NewToken(ctx, c.scanMaxWindow, c.scanMinWindow)
 			if err != nil {
 				c.logger.Error("failed to create scan token bucket", "error", err)
 				cancel(nil) // cancel the context, as it is not needed in the case of error
@@ -116,12 +123,8 @@ func NewClient(addr string, ctype ClientType, options *RegionClientOptions) hrpc
 
 				c.scanTokenBucket = tb
 				c.pingInterval = options.ScanControl.Interval
-				c.scanTokenBucket.SetCapacity(context.Background(), options.ScanControl.MinScans)
-				c.scanController = NewController(options.ScanControl.MinScans,
-					options.ScanControl.MaxScans,
-					options.ScanControl.MinLat,
-					options.ScanControl.MaxLat)
-				concurrentScans.WithLabelValues(c.addr).Set(float64(options.ScanControl.MinScans))
+				c.scanTokenBucket.SetCapacity(context.Background(), initialWindow)
+				concurrentScans.WithLabelValues(c.addr).Set(float64(initialWindow))
 			}
 		}
 	}

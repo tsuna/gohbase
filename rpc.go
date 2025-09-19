@@ -1037,17 +1037,7 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 				Codec:         c.compressionCodec,
 				Dialer:        c.regionDialer,
 				Logger:        c.logger,
-			}
-
-			// Add congestion control if configured
-			if c.scanMaxConcurrency > 0 && c.scanMinConcurrency > 0 && c.scanPingInterval > 0 {
-				options.ScanControl = &region.ScanControlOptions{
-					MaxScans: c.scanMaxConcurrency,
-					MinScans: c.scanMinConcurrency,
-					MaxLat:   c.scanMaxLatency,
-					MinLat:   c.scanMinLatency,
-					Interval: c.scanPingInterval,
-				}
+				ScanControl:   c.scanControlOptions,
 			}
 
 			client = c.clients.put(addr, reg, func() hrpc.RegionClient {

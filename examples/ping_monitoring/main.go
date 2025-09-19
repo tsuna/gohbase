@@ -57,14 +57,14 @@ func main() {
 	}()
 
 	// Create a RegionClient with scan control enabled
+	newControllerFunc := region.NewAIMDController(*minLatency, *maxLatency)
 	options := &region.RegionClientOptions{
 		Logger: logger,
 		ScanControl: &region.ScanControlOptions{
-			MaxScans: *maxScans,
-			MinScans: *minScans,
-			MaxLat:   *maxLatency,
-			MinLat:   *minLatency,
-			Interval: *interval,
+			NewController: newControllerFunc,
+			MinWindow:     *minScans,
+			MaxWindow:     *maxScans,
+			Interval:      *interval,
 		},
 	}
 	client := region.NewClient(*regionServer, region.RegionClient, options)
