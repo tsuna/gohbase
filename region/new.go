@@ -19,99 +19,42 @@ import (
 	"github.com/tsuna/gohbase/hrpc"
 )
 
-// Option is a function that modifies a client
-type Option func(*client)
-
-// WithQueueSize sets the RPC queue size
-func WithQueueSize(size int) Option {
-	return func(c *client) {
-		c.rpcQueueSize = size
-	}
+// RegionClientOptions holds configuration options for RegionClient
+type RegionClientOptions struct {
+	// QueueSize sets the RPC queue size for batching requests
+	QueueSize int
+	// FlushInterval sets the flush interval for batching RPCs
+	FlushInterval time.Duration
+	// EffectiveUser sets the effective user for the connection
+	EffectiveUser string
+	// ReadTimeout sets the read timeout for RPCs
+	ReadTimeout time.Duration
+	// Codec sets the compression codec for cellblocks
+	Codec compression.Codec
+	// Dialer sets a custom dialer for connecting to region servers
+	Dialer func(ctx context.Context, network, addr string) (net.Conn, error)
+	// Logger sets a custom logger
+	Logger *slog.Logger
+	// ScanControl enables congestion control for scan requests
+	ScanControl *ScanControlOptions
 }
 
-// WithFlushInterval sets the flush interval for batching RPCs
-func WithFlushInterval(interval time.Duration) Option {
-	return func(c *client) {
-		c.flushInterval = interval
-	}
+// ScanControlOptions holds scan congestion control configuration
+type ScanControlOptions struct {
+	// MaxScans sets the maximum number of concurrent scans
+	MaxScans int
+	// MinScans sets the minimum number of concurrent scans
+	MinScans int
+	// MaxLat sets the maximum ping latency threshold
+	MaxLat time.Duration
+	// MinLat sets the minimum ping latency threshold
+	MinLat time.Duration
+	// Interval sets the interval between ping scans
+	Interval time.Duration
 }
 
-// WithEffectiveUser sets the effective user for the connection
-func WithEffectiveUser(user string) Option {
-	return func(c *client) {
-		c.effectiveUser = user
-	}
-}
-
-// WithReadTimeout sets the read timeout for RPCs
-func WithReadTimeout(timeout time.Duration) Option {
-	return func(c *client) {
-		c.readTimeout = timeout
-	}
-}
-
-// WithCodec sets the compression codec for cellblocks
-func WithCodec(codec compression.Codec) Option {
-	return func(c *client) {
-		if codec != nil {
-			c.compressor = &compressor{Codec: codec}
-		}
-	}
-}
-
-// WithDialer sets a custom dialer for connecting to region servers
-func WithDialer(dialer func(ctx context.Context, network, addr string) (net.Conn, error)) Option {
-	return func(c *client) {
-		if dialer != nil {
-			c.dialer = dialer
-		}
-	}
-}
-
-// WithLogger sets a custom logger
-func WithLogger(logger *slog.Logger) Option {
-	return func(c *client) {
-		if logger != nil {
-			c.logger = logger
-		}
-	}
-}
-
-// WithScanControl enables congestion control for scan request.
-// maxScans, minScans limits of scan concurrency
-// maxLat, minLat - thresholds for the ping latency
-// interval - interval between ping scans
-func WithScanControl(maxScans, minScans int, maxLat, minLat, interval time.Duration) Option {
-	return func(c *client) {
-		// Create context for token bucket that will be cancelled when client closes
-		ctx, cancel := context.WithCancelCause(context.Background())
-
-
-		// Create token bucket with given capacity
-		tb, err := token.NewToken(ctx, maxScans, minScans)
-		if err != nil {
-			c.logger.Error("failed to create scan token bucket", "error", err)
-			cancel(nil) // cancel the context, as it is not needed in the case of error
-			return
-		}
-
-		// Cancel context when client is done
-		go func() {
-			<-c.done
-			cancel(ErrClientClosed)
-		}()
-
-		c.scanTokenBucket = tb
-		c.pingInterval = interval
-		c.scanTokenBucket.SetCapacity(context.Background(), minScans)
-		c.scanController = NewController(minScans, maxScans, minLat, maxLat)
-		concurrentScans.WithLabelValues(c.addr).Set(float64(minScans))
-	}
-
-}
-
-// NewClient creates a new RegionClient with options.
-func NewClient(addr string, ctype ClientType, opts ...Option) hrpc.RegionClient {
+// NewClient creates a new RegionClient with RegionClientOptions.
+func NewClient(addr string, ctype ClientType, options *RegionClientOptions) hrpc.RegionClient {
 	c := &client{
 		addr:          addr,
 		ctype:         ctype,
@@ -131,9 +74,56 @@ func NewClient(addr string, ctype ClientType, opts ...Option) hrpc.RegionClient 
 	// Set default logger
 	c.logger = slog.Default()
 
-	// Apply all options
-	for _, opt := range opts {
-		opt(c)
+	// Apply options if provided
+	if options != nil {
+		if options.QueueSize > 0 {
+			c.rpcQueueSize = options.QueueSize
+		}
+		if options.FlushInterval > 0 {
+			c.flushInterval = options.FlushInterval
+		}
+		if options.EffectiveUser != "" {
+			c.effectiveUser = options.EffectiveUser
+		}
+		if options.ReadTimeout > 0 {
+			c.readTimeout = options.ReadTimeout
+		}
+		if options.Codec != nil {
+			c.compressor = &compressor{Codec: options.Codec}
+		}
+		if options.Dialer != nil {
+			c.dialer = options.Dialer
+		}
+		if options.Logger != nil {
+			c.logger = options.Logger
+		}
+		if options.ScanControl != nil {
+			// Create context for token bucket that will be cancelled when client closes
+			ctx, cancel := context.WithCancelCause(context.Background())
+
+			// Create token bucket with given capacity
+			tb, err := token.NewToken(ctx, options.ScanControl.MaxScans,
+				options.ScanControl.MinScans)
+			if err != nil {
+				c.logger.Error("failed to create scan token bucket", "error", err)
+				cancel(nil) // cancel the context, as it is not needed in the case of error
+			} else {
+				// Cancel context when client is done
+				go func() {
+					<-c.done
+					cancel(ErrClientClosed)
+				}()
+
+				c.scanTokenBucket = tb
+				c.pingInterval = options.ScanControl.Interval
+				c.scanTokenBucket.SetCapacity(context.Background(), options.ScanControl.MinScans)
+				c.scanController = NewController(options.ScanControl.MinScans,
+					options.ScanControl.MaxScans,
+					options.ScanControl.MinLat,
+					options.ScanControl.MaxLat)
+				concurrentScans.WithLabelValues(c.addr).Set(float64(options.ScanControl.MinScans))
+			}
+		}
 	}
 
 	return c

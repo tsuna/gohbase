@@ -57,12 +57,17 @@ func main() {
 	}()
 
 	// Create a RegionClient with scan control enabled
-	client := region.NewClient(
-		*regionServer,
-		region.RegionClient,
-		region.WithScanControl(*maxScans, *minScans, *maxLatency, *minLatency, *interval),
-		region.WithLogger(logger),
-	)
+	options := &region.RegionClientOptions{
+		Logger: logger,
+		ScanControl: &region.ScanControlOptions{
+			MaxScans: *maxScans,
+			MinScans: *minScans,
+			MaxLat:   *maxLatency,
+			MinLat:   *minLatency,
+			Interval: *interval,
+		},
+	}
+	client := region.NewClient(*regionServer, region.RegionClient, options)
 
 	log.Println("RegionClient created with scan control and congestion monitoring enabled")
 	log.Println("Configuration:")

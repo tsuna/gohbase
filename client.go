@@ -98,7 +98,7 @@ type client struct {
 	done      chan struct{}
 	closeOnce sync.Once
 
-	newRegionClientFn func(string, region.ClientType, ...region.Option) hrpc.RegionClient
+	newRegionClientFn func(string, region.ClientType, *region.RegionClientOptions) hrpc.RegionClient
 
 	compressionCodec compression.Codec
 
@@ -140,10 +140,11 @@ func newClient(zkquorum string, options ...Option) *client {
 		regionLookupTimeout: region.DefaultLookupTimeout,
 		regionReadTimeout:   region.DefaultReadTimeout,
 		done:                make(chan struct{}),
-		newRegionClientFn: func(addr string, ctype region.ClientType, opts ...region.Option) hrpc.RegionClient {
-			return region.NewClient(addr, ctype, opts...)
+		newRegionClientFn: func(addr string, ctype region.ClientType,
+			options *region.RegionClientOptions) hrpc.RegionClient {
+			return region.NewClient(addr, ctype, options)
 		},
-		logger:              slog.Default(),
+		logger: slog.Default(),
 	}
 	for _, option := range options {
 		option(c)

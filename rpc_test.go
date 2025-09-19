@@ -38,9 +38,11 @@ import (
 
 func newRegionClientFn(addr string) func() hrpc.RegionClient {
 	return func() hrpc.RegionClient {
-		return newMockRegionClient(addr, region.RegionClient,
-			region.WithQueueSize(0),
-			region.WithFlushInterval(0))
+		options := &region.RegionClientOptions{
+			QueueSize:     0,
+			FlushInterval: 0,
+		}
+		return newMockRegionClient(addr, region.RegionClient, options)
 	}
 }
 
@@ -308,7 +310,8 @@ func TestEstablishRegionDialFail(t *testing.T) {
 	rcDialCancel.EXPECT().String().Return("reginserver:1").AnyTimes()
 
 	newRegionClientFnCallCount := 0
-	c.newRegionClientFn = func(_ string, _ region.ClientType, _ ...region.Option) hrpc.RegionClient {
+	c.newRegionClientFn = func(_ string, _ region.ClientType,
+		_ *region.RegionClientOptions) hrpc.RegionClient {
 		var rc hrpc.RegionClient
 		if newRegionClientFnCallCount == 0 {
 			rc = rcFailDial
@@ -1999,9 +2002,11 @@ func TestScanRPCScanStatsScanMetricsNonScanResponse(t *testing.T) {
 	ri := region.NewInfo(expectedRegionID, nil, []byte("test"),
 		[]byte("test,a,1434573235910.56f833d5569a27c7a43fbf547b4924a4."), []byte("a"), []byte("z"))
 	addr := "regionserver:0"
-	rc := newMockRegionClient(addr, region.RegionClient,
-		region.WithQueueSize(0),
-		region.WithFlushInterval(0))
+	options := &region.RegionClientOptions{
+		QueueSize:     0,
+		FlushInterval: 0,
+	}
+	rc := newMockRegionClient(addr, region.RegionClient, options)
 	ri.SetClient(rc)
 	scan.SetRegion(ri)
 	expectedScanStatsID := scan.ScanStatsID()

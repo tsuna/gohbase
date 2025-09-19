@@ -1018,38 +1018,40 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 			// admin region is used for talking to master, so it only has one connection to
 			// master that we don't add to the cache
 			// TODO: consider combining this case with the regular regionserver path
-			client = c.newRegionClientFn(addr, c.clientType,
-				region.WithQueueSize(c.rpcQueueSize),
-				region.WithFlushInterval(c.flushInterval),
-				region.WithEffectiveUser(c.effectiveUser),
-				region.WithReadTimeout(c.regionReadTimeout),
-				region.WithDialer(c.regionDialer),
-				region.WithLogger(c.logger))
+			options := &region.RegionClientOptions{
+				QueueSize:     c.rpcQueueSize,
+				FlushInterval: c.flushInterval,
+				EffectiveUser: c.effectiveUser,
+				ReadTimeout:   c.regionReadTimeout,
+				Dialer:        c.regionDialer,
+				Logger:        c.logger,
+			}
+			client = c.newRegionClientFn(addr, c.clientType, options)
 		} else {
 			// Build options for regular region client
-			opts := []region.Option{
-				region.WithQueueSize(c.rpcQueueSize),
-				region.WithFlushInterval(c.flushInterval),
-				region.WithEffectiveUser(c.effectiveUser),
-				region.WithReadTimeout(c.regionReadTimeout),
-				region.WithCodec(c.compressionCodec),
-				region.WithDialer(c.regionDialer),
-				region.WithLogger(c.logger),
+			options := &region.RegionClientOptions{
+				QueueSize:     c.rpcQueueSize,
+				FlushInterval: c.flushInterval,
+				EffectiveUser: c.effectiveUser,
+				ReadTimeout:   c.regionReadTimeout,
+				Codec:         c.compressionCodec,
+				Dialer:        c.regionDialer,
+				Logger:        c.logger,
 			}
-			
+
 			// Add congestion control if configured
 			if c.scanMaxConcurrency > 0 && c.scanMinConcurrency > 0 && c.scanPingInterval > 0 {
-				opts = append(opts, region.WithScanControl(
-					c.scanMaxConcurrency,
-					c.scanMinConcurrency,
-					c.scanMaxLatency,
-					c.scanMinLatency,
-					c.scanPingInterval,
-				))
+				options.ScanControl = &region.ScanControlOptions{
+					MaxScans: c.scanMaxConcurrency,
+					MinScans: c.scanMinConcurrency,
+					MaxLat:   c.scanMaxLatency,
+					MinLat:   c.scanMinLatency,
+					Interval: c.scanPingInterval,
+				}
 			}
-			
+
 			client = c.clients.put(addr, reg, func() hrpc.RegionClient {
-				return c.newRegionClientFn(addr, c.clientType, opts...)
+				return c.newRegionClientFn(addr, c.clientType, options)
 			})
 		}
 
