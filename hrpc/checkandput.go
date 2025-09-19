@@ -21,14 +21,25 @@ type CheckAndPut struct {
 	family    []byte
 	qualifier []byte
 
-	comparator *pb.Comparator
+	compareType *pb.CompareType
+	comparator  *pb.Comparator
 }
 
-// NewCheckAndPut creates a new CheckAndPut request that will compare provided
-// expectedValue with the on in HBase located at put's row and provided family:qualifier,
-// and if they are equal, perform the provided put request on the row
+// NewCheckAndPut creates a CheckAndPut with only an EQUAL compare type.
+//
+// Deprecated: use NewCheckAndPutWithCompareType instead.
 func NewCheckAndPut(put *Mutate, family string,
 	qualifier string, expectedValue []byte) (*CheckAndPut, error) {
+	return NewCheckAndPutWithCompareType(
+		put, family, qualifier, expectedValue, pb.CompareType_EQUAL)
+}
+
+// NewCheckAndPutWithCompareType creates a new CheckAndPut request that will compare provided
+// expectedValue with the on in HBase located at put's row and provided family:qualifier,
+// and depending on how they compare via the given compareType,
+// perform the provided put request on the row
+func NewCheckAndPutWithCompareType(put *Mutate, family string,
+	qualifier string, expectedValue []byte, compareType pb.CompareType) (*CheckAndPut, error) {
 	if put.mutationType != pb.MutationProto_PUT {
 		return nil, fmt.Errorf("'CheckAndPut' only takes 'Put' request")
 	}
@@ -45,10 +56,11 @@ func NewCheckAndPut(put *Mutate, family string,
 	put.setSkipBatch(true)
 
 	return &CheckAndPut{
-		Mutate:     put,
-		family:     []byte(family),
-		qualifier:  []byte(qualifier),
-		comparator: cmp,
+		Mutate:      put,
+		family:      []byte(family),
+		qualifier:   []byte(qualifier),
+		compareType: &compareType,
+		comparator:  cmp,
 	}, nil
 }
 
@@ -59,7 +71,7 @@ func (cp *CheckAndPut) ToProto() proto.Message {
 		Row:         cp.key,
 		Family:      cp.family,
 		Qualifier:   cp.qualifier,
-		CompareType: pb.CompareType_EQUAL.Enum(),
+		CompareType: cp.compareType,
 		Comparator:  cp.comparator,
 	}
 	return mutateRequest
