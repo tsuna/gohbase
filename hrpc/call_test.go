@@ -6,6 +6,7 @@
 package hrpc
 
 import (
+	"bytes"
 	"reflect"
 	"strconv"
 	"testing"
@@ -125,4 +126,148 @@ func TestDeserializeCellblocks(t *testing.T) {
 	if int(read) != 54 {
 		t.Errorf("invalid number of bytes read: expected %d, got %d", 54, int(read))
 	}
+}
+
+// BenchmarkDeserializeCellblocks compares shows cost of deserializing
+// various sizes of cell blocks into
+//  1. pb.Cells (v1)
+//  2. CellV2s
+//  3. the combined cost of CellV2s + the conversion back to pb.Cells for backwards compatibility.
+//
+// 2. represents the work of users of client.ScanV2 and 3. represents
+// the work needed for users of client.Scan.
+func BenchmarkDeserializeCellblocks(b *testing.B) {
+	cell := appendCellblock(
+		bytes.Repeat([]byte("0123456789"), 5), // 50-byte key
+		"f",
+		string(bytes.Repeat([]byte("9876543210"), 2)), // 20-byte qualifier
+		bytes.Repeat([]byte("abcdefghij"), 20),        // 200-byte value
+		17356887651735688765,
+		byte(pb.CellType_PUT),
+		nil,
+	)
+
+	b.Run("oneCell", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			_, _, err := deserializeCellBlocks(cell, 1)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("oneCellV2", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			_, _, err := deserializeCellBlocksV2(cell, 1)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("oneCellV2ToV1", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			cellsV2, _, err := deserializeCellBlocksV2(cell, 1)
+			if err != nil {
+				b.Fatal(err)
+			}
+			cellsV2toCells(cellsV2)
+		}
+	})
+
+	cellsTen := bytes.Repeat(cell, 10)
+	b.Run("tenCells", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			_, _, err := deserializeCellBlocks(cellsTen, 10)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("tenCellsV2", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			_, _, err := deserializeCellBlocksV2(cellsTen, 10)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("tenCellsV2ToV1", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			cellsV2, _, err := deserializeCellBlocksV2(cellsTen, 10)
+			if err != nil {
+				b.Fatal(err)
+			}
+			cellsV2toCells(cellsV2)
+		}
+	})
+
+	const twoHunderedKiB = 200 * 1024
+	cellCount200KB := twoHunderedKiB / len(cell)
+	cells200KB := bytes.Repeat(cell, cellCount200KB)
+
+	b.Run("200KBCells", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			_, _, err := deserializeCellBlocks(cells200KB, uint32(cellCount200KB))
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("200KBCellsV2", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			_, _, err := deserializeCellBlocksV2(cells200KB, uint32(cellCount200KB))
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("200KBCellsV2ToV1", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			cellsV2, _, err := deserializeCellBlocksV2(cells200KB, uint32(cellCount200KB))
+			if err != nil {
+				b.Fatal(err)
+			}
+			cellsV2toCells(cellsV2)
+		}
+	})
+
+	const twoMiB = 2 * 1024 * 1024
+	cellCount2MB := twoMiB / len(cell)
+	cells2MB := bytes.Repeat(cell, cellCount2MB)
+	b.Run("2MBCells", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			_, _, err := deserializeCellBlocks(cells2MB, uint32(cellCount2MB))
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("2MBCellsV2", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			_, _, err := deserializeCellBlocksV2(cells2MB, uint32(cellCount2MB))
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("2MBCellsV2ToV1", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			cellsV2, _, err := deserializeCellBlocksV2(cells2MB, uint32(cellCount2MB))
+			if err != nil {
+				b.Fatal(err)
+			}
+			cellsV2toCells(cellsV2)
+		}
+	})
 }
