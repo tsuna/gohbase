@@ -103,7 +103,7 @@ type client struct {
 	newRegionClientFn func(string, region.ClientType, int, time.Duration,
 		string, time.Duration, compression.Codec,
 		func(ctx context.Context, network, addr string) (net.Conn, error),
-		*slog.Logger) hrpc.RegionClient
+		*slog.Logger, int, int) hrpc.RegionClient
 
 	compressionCodec compression.Codec
 
@@ -114,6 +114,9 @@ type client struct {
 	regionDialer func(ctx context.Context, network, addr string) (net.Conn, error)
 	// logger that could be defined by user
 	logger *slog.Logger
+
+	minWindowSize int
+	maxWindowSize int
 }
 
 // NewClient creates a new HBase client.
@@ -312,6 +315,26 @@ func RegionDialer(dialer func(
 func Logger(logger *slog.Logger) Option {
 	return func(c *client) {
 		c.logger = logger
+	}
+}
+
+// CongestionControl enables per-regionserver congestion control,
+// limiting the number of outstanding Get/Scan requests. The window
+// size will adjust larged when seeing successful results and adjust
+// smaller when seeing errors within the bounds of the minWindowSize
+// and maxWindowSize.
+func CongestionControl(minWindowSize, maxWindowSize int) Option {
+	return func(c *client) {
+		if minWindowSize > maxWindowSize {
+			panic(fmt.Errorf("minWindowSize is greater than maxMindowSize: %d and %d",
+				minWindowSize, maxWindowSize))
+		}
+		if minWindowSize < 0 || maxWindowSize < 0 {
+			panic(fmt.Errorf("minWindowSize or maxWindowSize are negative: %d and %d",
+				minWindowSize, maxWindowSize))
+		}
+		c.minWindowSize = minWindowSize
+		c.maxWindowSize = maxWindowSize
 	}
 }
 
