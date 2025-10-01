@@ -14,7 +14,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/mihkulemin/token"
 	"github.com/tsuna/gohbase/compression"
 	"github.com/tsuna/gohbase/hrpc"
 )
@@ -51,8 +50,35 @@ type ScanControlOptions struct {
 	Interval time.Duration
 }
 
+// CheckCorrectness validates the scan control configuration.
+// Returns nil if the configuration is valid, or an error describing what's wrong.
+func (s *ScanControlOptions) CheckCorrectness() error {
+	if s.NewController == nil {
+		return fmt.Errorf("controller factory function is nil")
+	}
+
+	if s.MinWindow <= 0 {
+		return fmt.Errorf("minimum window must be greater than 0, got %d", s.MinWindow)
+	}
+
+	if s.MaxWindow <= 0 {
+		return fmt.Errorf("maximum window must be greater than 0, got %d", s.MaxWindow)
+	}
+
+	if s.MaxWindow < s.MinWindow {
+		return fmt.Errorf("maximum window (%d) must be greater or equal to minimum window (%d)",
+			s.MaxWindow, s.MinWindow)
+	}
+
+	if s.Interval <= 0 {
+		return fmt.Errorf("interval must be greater than 0, got %v", s.Interval)
+	}
+
+	return nil
+}
+
 // NewClient creates a new RegionClient with RegionClientOptions.
-func NewClient(addr string, ctype ClientType, options *RegionClientOptions) hrpc.RegionClient {
+func NewClient(addr string, ctype ClientType, opts *RegionClientOptions) hrpc.RegionClient {
 	c := &client{
 		addr:          addr,
 		ctype:         ctype,
@@ -73,63 +99,66 @@ func NewClient(addr string, ctype ClientType, options *RegionClientOptions) hrpc
 	c.logger = slog.Default()
 
 	// Apply options if provided
-	if options != nil {
-		if options.QueueSize > 0 {
-			c.rpcQueueSize = options.QueueSize
+	if opts != nil {
+		if opts.QueueSize > 0 {
+			c.rpcQueueSize = opts.QueueSize
 		}
-		if options.FlushInterval > 0 {
-			c.flushInterval = options.FlushInterval
+		if opts.FlushInterval > 0 {
+			c.flushInterval = opts.FlushInterval
 		}
-		if options.EffectiveUser != "" {
-			c.effectiveUser = options.EffectiveUser
+		if opts.EffectiveUser != "" {
+			c.effectiveUser = opts.EffectiveUser
 		}
-		if options.ReadTimeout > 0 {
-			c.readTimeout = options.ReadTimeout
+		if opts.ReadTimeout > 0 {
+			c.readTimeout = opts.ReadTimeout
 		}
-		if options.Codec != nil {
-			c.compressor = &compressor{Codec: options.Codec}
+		if opts.Codec != nil {
+			c.compressor = &compressor{Codec: opts.Codec}
 		}
-		if options.Dialer != nil {
-			c.dialer = options.Dialer
+		if opts.Dialer != nil {
+			c.dialer = opts.Dialer
 		}
-		if options.Logger != nil {
-			c.logger = options.Logger
+		if opts.Logger != nil {
+			c.logger = opts.Logger
 		}
-		if options.ScanControl != nil && options.ScanControl.NewController != nil {
-			// Create context for token bucket that will be cancelled when client closes
-			ctx, cancel := context.WithCancelCause(context.Background())
 
-			// Store min/max window values
-			c.scanMinWindow = options.ScanControl.MinWindow
-			c.scanMaxWindow = options.ScanControl.MaxWindow
-
-			// Create controller instance for this region client
-			c.scanController = options.ScanControl.NewController(c.scanMinWindow, c.scanMaxWindow)
-
-			// Always start with minimum window
-			initialWindow := c.scanMinWindow
-
-			// Create token bucket with given capacity
-			tb, err := token.NewToken(ctx, c.scanMaxWindow, c.scanMinWindow)
-			if err != nil {
-				c.logger.Error("failed to create scan token bucket", "error", err)
-				cancel(nil) // cancel the context, as it is not needed in the case of error
-			} else {
-				// Cancel context when client is done
-				go func() {
-					<-c.done
-					cancel(ErrClientClosed)
-				}()
-
-				c.scanTokenBucket = tb
-				c.pingInterval = options.ScanControl.Interval
-				c.scanTokenBucket.SetCapacity(context.Background(), initialWindow)
-				concurrentScans.WithLabelValues(c.addr).Set(float64(initialWindow))
-			}
+		if err := c.configScanControl(opts.ScanControl); err != nil {
+			c.logger.Warn("scan control disabled due to invalid configuration", "error", err)
 		}
 	}
-
 	return c
+}
+
+func (c *client) configScanControl(opts *ScanControlOptions) error {
+	var err error
+
+	if opts == nil {
+		return nil
+	}
+
+	c.scanController, err = opts.NewController(opts.MinWindow, opts.MinWindow)
+	if err != nil {
+		return err
+	}
+
+	// Always start with minimum window
+	initialWindow := c.scanController.Window()
+
+	// Create token bucket with given capacity
+	tb, err := NewToken(opts.MaxWindow, opts.MinWindow, c.done)
+	if err != nil {
+		return err
+	}
+
+	if opts.Interval <= 0 {
+		return fmt.Errorf("interval must be greater than 0, got %v", opts.Interval)
+	}
+
+	c.pingInterval = opts.Interval
+	c.scanTokenBucket = tb
+	c.scanTokenBucket.SetCapacity(context.Background(), initialWindow)
+	concurrentScans.WithLabelValues(c.addr).Set(float64(initialWindow))
+	return nil
 }
 
 func (c *client) Dial(ctx context.Context) error {
@@ -164,7 +193,7 @@ func (c *client) Dial(ctx context.Context) error {
 		if c.ctype == RegionClient {
 			go c.processRPCs() // Batching goroutine
 			if c.pingInterval > 0 {
-				go c.controlLoop() // Ping goroutine
+				go c.controlLoop() // Ping goroutine for Scan concurrency control
 			}
 		}
 		go c.receiveRPCs() // Reader goroutine

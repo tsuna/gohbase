@@ -8,11 +8,14 @@
 
 package region
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // NewControllerFunc is a factory function that creates a new Controller instance
 // with the specified min and max window bounds.
-type NewControllerFunc func(minWindow, maxWindow int) Controller
+type NewControllerFunc func(minWindow, maxWindow int) (Controller, error)
 
 // Controller defines the interface for congestion control algorithms
 type Controller interface {
@@ -37,7 +40,20 @@ type AIMDController struct {
 // NewAIMDController creates a new AIMD controller with the specified thresholds.
 // This returns a factory function that creates controllers with specific window bounds.
 func NewAIMDController(low, high time.Duration) NewControllerFunc {
-	return func(minWindow, maxWindow int) Controller {
+	return func(minWindow, maxWindow int) (Controller, error) {
+		if minWindow <= 0 {
+			return nil, fmt.Errorf("minimum window must be greater than 0, got %d", minWindow)
+		}
+
+		if maxWindow <= 0 {
+			return nil, fmt.Errorf("maximum window must be greater than 0, got %d", maxWindow)
+		}
+
+		if maxWindow < minWindow {
+			return nil,
+				fmt.Errorf("maximum window (%d) must be greater or equal to minimum window (%d)",
+					maxWindow, minWindow)
+		}
 		return &AIMDController{
 			lowThreshold:  low,
 			highThreshold: high,
@@ -45,7 +61,7 @@ func NewAIMDController(low, high time.Duration) NewControllerFunc {
 			maxWindow:     maxWindow,
 			current:       minWindow, // start at minimum window
 			decreaseDelta: 1,
-		}
+		}, nil
 	}
 }
 

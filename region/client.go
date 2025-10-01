@@ -20,7 +20,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/mihkulemin/token"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/tsuna/gohbase/hrpc"
@@ -209,10 +208,8 @@ type client struct {
 
 	// scan concurrency control
 	pingInterval    time.Duration
-	scanTokenBucket *token.Token
 	scanController  Controller
-	scanMinWindow   int
-	scanMaxWindow   int
+	scanTokenBucket *Token
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine
@@ -336,12 +333,20 @@ func (c *client) failSentRPCs() {
 	}
 }
 
-func (c *client) registerRPC(rpc hrpc.Call) uint32 {
+func (c *client) registerRPC(rpc hrpc.Call) (uint32, error) {
+	// Limit number of concurrent Scans if congestion control is enabled
+	// If Take() returns an error the token is not taken
+	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil {
+		if err := c.scanTokenBucket.Take(rpc.Context()); err != nil {
+			return 0, err
+		}
+	}
+
 	currID := atomic.AddUint32(&c.id, 1)
 	c.sentM.Lock()
 	c.sent[currID] = rpc
 	c.sentM.Unlock()
-	return currID
+	return currID, nil
 }
 
 func (c *client) unregisterRPC(id uint32) hrpc.Call {
@@ -349,6 +354,16 @@ func (c *client) unregisterRPC(id uint32) hrpc.Call {
 	rpc := c.sent[id]
 	delete(c.sent, id)
 	c.sentM.Unlock()
+
+	if rpc == nil {
+		return nil
+	}
+
+	// Release scan token if this was a scan request
+	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil {
+		c.scanTokenBucket.Release(context.Background())
+	}
+
 	return rpc
 }
 
@@ -458,6 +473,12 @@ func (c *client) trySend(rpc hrpc.Call) (err error) {
 			// return err to notify client of it
 			return err
 		}
+
+		if id == 0 {
+			// Error should be return for RPC that failed on registration stage
+			// becaus of rpc context cancelation
+			return err
+		}
 	}
 	return nil
 }
@@ -520,11 +541,6 @@ func (c *client) receive(r io.Reader) (err error) {
 	rpc := c.unregisterRPC(callID)
 	if rpc == nil {
 		return ServerError{fmt.Errorf("got a response with an unexpected call ID: %d", callID)}
-	}
-
-	// Release scan token if this was a scan request
-	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil {
-		c.scanTokenBucket.Release(context.Background())
 	}
 
 	if err := c.inFlightDown(); err != nil {
@@ -639,12 +655,6 @@ func (c *client) sendHello() error {
 // send sends an RPC out to the wire.
 // Returns the response (for now, as the call is synchronous).
 func (c *client) send(rpc hrpc.Call) (uint32, error) {
-	// For scan requests, acquire a token from the bucket
-	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil {
-		if err := c.scanTokenBucket.Take(rpc.Context()); err != nil {
-			return 0, err
-		}
-	}
 	var request proto.Message
 	var cellblocks net.Buffers
 	var cellblocksLen uint32
@@ -669,7 +679,10 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 	// in all the cases where c.fail() is called.
 	// If that happens, client can retry sending the rpc
 	// again potentially changing it's contents.
-	id := c.registerRPC(rpc)
+	id, err := c.registerRPC(rpc)
+	if err != nil {
+		return 0, err
+	}
 
 	b, err := marshalProto(rpc, id, request, cellblocksLen)
 	if err != nil {
@@ -901,11 +914,7 @@ func (c *client) controlLoop() {
 				concurrentScans.WithLabelValues(c.addr).Set(float64(maxScans))
 			}
 
-			if result.Error == nil {
-				c.logger.Debug("ping get success", "latency", latency)
-			} else {
-				c.logger.Debug("ping get failed", "error", result.Error, "latency", latency)
-			}
+			c.logger.Debug("ping", "error", result.Error, "latency", latency)
 		}
 	}
 }
