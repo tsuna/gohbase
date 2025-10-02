@@ -173,7 +173,8 @@ func init() {
 	clients = make(map[string]uint32)
 }
 
-func newMockRegionClient(addr string, ctype region.ClientType, options *region.RegionClientOptions) hrpc.RegionClient {
+func newMockRegionClient(addr string, ctype region.ClientType,
+	options *region.RegionClientOptions) hrpc.RegionClient {
 	m.Lock()
 	clients[addr]++
 	m.Unlock()

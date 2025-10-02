@@ -24,17 +24,21 @@ func main() {
 	// Define command-line flags
 	var (
 		regionServer = flag.String("regionserver", "localhost:16020", "HBase region server address")
-		interval     = flag.Duration("interval", 10*time.Second, "Ping interval for congestion control")
-		maxScans     = flag.Int("max-scans", 100, "Maximum concurrent scans")
-		minScans     = flag.Int("min-scans", 10, "Minimum concurrent scans")
-		maxLatency   = flag.Duration("max-latency", 500*time.Millisecond, "Maximum acceptable latency")
-		minLatency   = flag.Duration("min-latency", 100*time.Millisecond, "Minimum acceptable latency")
-		httpPort     = flag.String("port", "2112", "HTTP port for Prometheus metrics")
-		debug        = flag.Bool("debug", false, "Enable debug logging")
+		interval     = flag.Duration("interval", 10*time.Second,
+			"Ping interval for congestion control")
+		maxScans   = flag.Int("max-scans", 100, "Maximum concurrent scans")
+		minScans   = flag.Int("min-scans", 10, "Minimum concurrent scans")
+		maxLatency = flag.Duration("max-latency", 500*time.Millisecond,
+			"Maximum acceptable latency")
+		minLatency = flag.Duration("min-latency", 100*time.Millisecond,
+			"Minimum acceptable latency")
+		httpPort = flag.String("port", "2112",
+			"HTTP port for Prometheus metrics")
+		debug = flag.Bool("debug", false, "Enable debug logging")
 	)
-	
+
 	flag.Parse()
-	
+
 	// Set up logging
 	var logger *slog.Logger
 	if *debug {
@@ -95,12 +99,12 @@ func main() {
 
 	// Keep the program running
 	fmt.Println("\nPress Ctrl+C to exit...")
-	
+
 	// Wait for interrupt signal
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	<-sigChan
-	
+
 	log.Println("\nShutting down...")
 	client.Close()
 }

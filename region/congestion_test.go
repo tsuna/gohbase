@@ -68,7 +68,8 @@ func TestConcurrencyDecreaseOnHighLatency(t *testing.T) {
 	}
 
 	// First decrease - should decrease by 1 (initial delta)
-	newConcurrency, changed := controller.Latency(250 * time.Millisecond) // High latency (above threshold of 200ms)
+	// High latency (above threshold of 200ms)
+	newConcurrency, changed := controller.Latency(250 * time.Millisecond)
 	if newConcurrency != 24 {
 		t.Errorf("Expected concurrency to decrease to 24, got %d", newConcurrency)
 	}
@@ -126,14 +127,17 @@ func TestConcurrencyNoChangeInMiddle(t *testing.T) {
 
 	// Multiple reports with latency between thresholds - should stay the same
 	for i := 0; i < 10; i++ {
-		newConcurrency, changed := controller.Latency(150 * time.Millisecond) // Between 100ms and 200ms
+		// Between 100ms and 200ms
+		newConcurrency, changed := controller.Latency(150 * time.Millisecond)
 		if changed {
-			t.Errorf("Expected no change for middle latency, but value changed to %d", newConcurrency)
+			t.Errorf("Expected no change for middle latency, but value changed to %d",
+				newConcurrency)
 		}
 	}
 
 	if controller.Window() != 15 {
-		t.Errorf("Expected concurrency to remain at 15 after multiple middle latencies, got %d", controller.Window())
+		t.Errorf("Expected concurrency to remain at 15 after multiple middle latencies, got %d",
+			controller.Window())
 	}
 }
 
@@ -182,7 +186,8 @@ func TestDecreaseDeltaDoublingAndHalving(t *testing.T) {
 	// High latency again - should decrease by 4 (halved delta from 8 to 4)
 	newConcurrency, _ = controller.Latency(250 * time.Millisecond)
 	if newConcurrency != 20 {
-		t.Errorf("Expected concurrency to decrease to 20 (delta=4 after halving), got %d", newConcurrency)
+		t.Errorf("Expected concurrency to decrease to 20 (delta=4 after halving), got %d",
+			newConcurrency)
 	}
 
 	// Middle latency - no change, delta should halve from 8 to 4
@@ -197,6 +202,7 @@ func TestDecreaseDeltaDoublingAndHalving(t *testing.T) {
 	// High latency - should decrease by 4 (halved again)
 	newConcurrency, _ = controller.Latency(250 * time.Millisecond)
 	if newConcurrency != 16 {
-		t.Errorf("Expected concurrency to decrease to 16 (delta=4 after halving), got %d", newConcurrency)
+		t.Errorf("Expected concurrency to decrease to 16 (delta=4 after halving), got %d",
+			newConcurrency)
 	}
 }
