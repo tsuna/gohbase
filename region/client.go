@@ -98,10 +98,7 @@ const (
 	DefaultFlushInterval = 20 * time.Millisecond
 	// DefaultEffectiveUser is the default effective user
 	DefaultEffectiveUser = "root"
-	// DefaultPingInterval is the default interval between ping scans
-	DefaultPingInterval = 10 * time.Second
-	// DefaultPingLatencyWindow is the default number of latest ping measurements to keep
-	DefaultPingLatencyWindow = 10
+
 	// RegionClient is a ClientType that means this will be a normal client
 	RegionClient = ClientType("ClientService")
 
