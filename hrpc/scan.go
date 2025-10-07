@@ -40,6 +40,9 @@ const (
 // Scanner is used to read data sequentially from HBase.
 // Scanner will be automatically closed if there's no more data to read,
 // otherwise Close method should be called.
+//
+// The Scanner interface is not safe for concurrent use. To cancel a
+// Next() call in progress cancel the context passed to the hrpc.Scan.
 type Scanner interface {
 	// Next returns a row at a time.
 	// Once all rows are returned, subsequent calls will return io.EOF error.
@@ -81,6 +84,9 @@ type ResultV2 struct {
 // Scanner is used to read data sequentially from HBase.
 // Scanner will be automatically closed if there's no more data to read,
 // otherwise Close method should be called.
+//
+// The Scanner interface is not safe for concurrent use. To cancel a
+// Next() call in progress cancel the context passed to the hrpc.Scan.
 type ScannerV2 interface {
 	// Next returns the next response from HBase, which may have
 	// results for 1 or more rows. Once all rows are returned,
