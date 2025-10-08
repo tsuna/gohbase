@@ -466,16 +466,21 @@ func (c *client) receiveRPCs() {
 }
 
 func (c *client) trackRPCResult(rpc hrpc.Call, status string) {
+	callsCount := make(map[string]int, 0)
 	if m, ok := rpc.(*multi); ok {
 		for _, call := range m.calls {
 			if call != nil {
-				rpcResultCount.WithLabelValues(
-					c.Addr(), call.Name(), status, "batch").Inc()
+				callsCount[call.Name()] += 1
 			}
 		}
 	} else {
 		rpcResultCount.WithLabelValues(
 			c.Addr(), rpc.Name(), status, "unary").Inc()
+	}
+
+	for callName, count := range callsCount {
+		rpcResultCount.WithLabelValues(
+			c.Addr(), callName, status, "batch").Add(float64(count))
 	}
 }
 
