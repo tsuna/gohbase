@@ -618,6 +618,7 @@ func TestReceiveDecodeProtobufError(t *testing.T) {
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
 	mockCall.EXPECT().NewResponse().Return(&pb.MutateResponse{}).Times(1)
 	mockCall.EXPECT().Context().Return(context.Background()).Times(1)
+	mockCall.EXPECT().Name().Return("Whatever").Times(1)
 
 	c.sent[1] = mockCall
 	c.inFlight = 1
@@ -666,6 +667,7 @@ func TestReceiveDeserializeCellblocksError(t *testing.T) {
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
 	mockCall.EXPECT().NewResponse().Return(&pb.MutateResponse{}).Times(1)
 	mockCall.EXPECT().Context().Return(context.Background()).Times(1)
+	mockCall.EXPECT().Name().Return("Get").Times(1)
 
 	c.sent[1] = callWithCellBlocksError{mockCall}
 	c.inFlight = 1
@@ -716,7 +718,7 @@ func TestUnexpectedSendError(t *testing.T) {
 	mockCall.EXPECT().Description().AnyTimes()
 	result := make(chan hrpc.RPCResult, 1)
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
-	mockCall.EXPECT().Name().Return("Whatever").Times(1)
+	mockCall.EXPECT().Name().Return("Whatever").Times(2)
 
 	c.QueueRPC(mockCall)
 	r := <-result
