@@ -182,7 +182,8 @@ func TestGet(t *testing.T) {
 		t.Error("Get claimed that our row didn't exist")
 	}
 
-	ctx, _ := context.WithTimeout(context.Background(), 0)
+	ctx, cancel := context.WithTimeout(context.Background(), 0)
+	defer cancel()
 	get, err = hrpc.NewGetStr(ctx, table, key, hrpc.Families(headers))
 	if err != nil {
 		t.Fatalf("Failed to create Get request: %s", err)
@@ -376,7 +377,8 @@ func TestPutWithTimeout(t *testing.T) {
 	c := gohbase.NewClient(*host)
 	defer c.Close()
 
-	ctx, _ := context.WithTimeout(context.Background(), 0)
+	ctx, cancel := context.WithTimeout(context.Background(), 0)
+	defer cancel()
 	putRequest, err := hrpc.NewPutStr(ctx, table, key, values)
 	_, err = c.Put(putRequest)
 	if err != context.DeadlineExceeded {
@@ -966,12 +968,12 @@ func TestScanTimeRangeVersions(t *testing.T) {
 	if uint32(len(rsp[0].Cells)) != maxVersions {
 		t.Fatalf("Expected versions: %d, Got versions: %d", maxVersions, len(rsp[0].Cells))
 	}
-	scan1 := *rsp[0].Cells[0]
+	scan1 := rsp[0].Cells[0]
 	if string(scan1.Row) != "TestScanTimeRangeVersions1" && *scan1.Timestamp != 51 {
 		t.Errorf("Timestamps are not the same. Expected Time: %v, Got Time: %v",
 			51, *scan1.Timestamp)
 	}
-	scan2 := *rsp[0].Cells[1]
+	scan2 := rsp[0].Cells[1]
 	if string(scan2.Row) != "TestScanTimeRangeVersions1" && *scan2.Timestamp != 50 {
 		t.Errorf("Timestamps are not the same. Expected Time: %v, Got Time: %v",
 			50, *scan2.Timestamp)
@@ -979,12 +981,12 @@ func TestScanTimeRangeVersions(t *testing.T) {
 	if uint32(len(rsp[1].Cells)) != maxVersions {
 		t.Fatalf("Expected versions: %d, Got versions: %d", maxVersions, len(rsp[1].Cells))
 	}
-	scan3 := *rsp[1].Cells[0]
+	scan3 := rsp[1].Cells[0]
 	if string(scan3.Row) != "TestScanTimeRangeVersions2" && *scan3.Timestamp != 52 {
 		t.Errorf("Timestamps are not the same. Expected Time: %v, Got Time: %v",
 			52, *scan3.Timestamp)
 	}
-	scan4 := *rsp[1].Cells[1]
+	scan4 := rsp[1].Cells[1]
 	if string(scan4.Row) != "TestScanTimeRangeVersions2" && *scan4.Timestamp != 51 {
 		t.Errorf("Timestamps are not the same. Expected Time: %v, Got Time: %v",
 			51, *scan4.Timestamp)
@@ -2117,7 +2119,7 @@ func TestReverseScan(t *testing.T) {
 	c := gohbase.NewClient(*host)
 	defer c.Close()
 
-	baseErr := "Reverse Scan error "
+	const baseErr = "Reverse Scan error "
 
 	values := make(map[string]map[string][]byte)
 	values["cf"] = map[string][]byte{}
@@ -2657,7 +2659,7 @@ func TestNewTableFromSnapshot(t *testing.T) {
 	// It may take some time for the new table with the restored data to be created,
 	// wait some time for this to complete.
 	var tn *hrpc.ListTableNames
-	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	tn, err = hrpc.NewListTableNames(ctx, hrpc.ListRegex(tableNew))
 	for {
 		var names []*pb.TableName
@@ -2670,6 +2672,7 @@ func TestNewTableFromSnapshot(t *testing.T) {
 		}
 		time.Sleep(1 * time.Second)
 	}
+	cancel()
 
 	// Now that this table has been created, clean up after test.
 	defer func() {
