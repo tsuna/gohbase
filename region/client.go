@@ -206,12 +206,12 @@ type client struct {
 	// scan concurrency control
 	pingInterval    time.Duration
 	scanController  Controller
-	scanTokenBucket *Token
+	scanTokenBucket *tokenBucket
 	// controlLoopOnce starts scan-control pings after the first controlled scan request.
 	controlLoopOnce sync.Once
 
 	// batch requests concurrency control
-	batchRequestsTokenBucket *Token
+	batchRequestsTokenBucket *tokenBucket
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine
@@ -338,7 +338,7 @@ func (c *client) failSentRPCs() {
 func (c *client) registerRPC(rpc hrpc.Call) (uint32, error) {
 	// Limit number of concurrent Scans if congestion control is enabled and the priority
 	// is not set
-	// If Take() returns an error the token is not taken
+	// If take() returns an error the token is not taken
 	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil &&
 		hrpc.GetPriority(rpc) == 0 {
 		c.controlLoopOnce.Do(func() {
@@ -354,7 +354,7 @@ func (c *client) registerRPC(rpc hrpc.Call) (uint32, error) {
 			o.SetQueueTime(t)
 		}
 
-		if err := c.scanTokenBucket.Take(rpc.Context()); err != nil {
+		if err := c.scanTokenBucket.take(rpc.Context()); err != nil {
 			if errors.Is(err, tokenClosedErr) {
 				return 0, ErrClientClosed
 			}
@@ -364,9 +364,9 @@ func (c *client) registerRPC(rpc hrpc.Call) (uint32, error) {
 	}
 
 	if _, isMulti := rpc.(*multi); isMulti && c.batchRequestsTokenBucket != nil {
-		// TryTake first to know if we have hit concurrency limit yet
-		if !c.batchRequestsTokenBucket.TryTake() {
-			if err := c.batchRequestsTokenBucket.Take(rpc.Context()); err != nil {
+		// Use tryTake first to detect whether the concurrency limit was reached.
+		if !c.batchRequestsTokenBucket.tryTake() {
+			if err := c.batchRequestsTokenBucket.take(rpc.Context()); err != nil {
 				if errors.Is(err, tokenClosedErr) {
 					return 0, ErrClientClosed
 				}
@@ -393,14 +393,14 @@ func (c *client) unregisterRPC(id uint32) hrpc.Call {
 		return nil
 	}
 
-	// Release scan token if this was a scan request
+	// Return the scan token if this was a scan request.
 	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil &&
 		hrpc.GetPriority(rpc) == 0 {
-		c.scanTokenBucket.Release()
+		c.scanTokenBucket.release()
 	}
 
 	if _, isMulti := rpc.(*multi); isMulti && c.batchRequestsTokenBucket != nil {
-		c.batchRequestsTokenBucket.Release()
+		c.batchRequestsTokenBucket.release()
 	}
 
 	return rpc
@@ -983,7 +983,7 @@ func (c *client) controlLoop() {
 			pingLatency.WithLabelValues(c.addr).Observe(latency.Seconds())
 			maxScans, changed := c.scanController.Latency(latency)
 			if changed {
-				c.scanTokenBucket.SetCapacity(ctx, maxScans)
+				c.scanTokenBucket.setCapacity(maxScans)
 				concurrentScans.WithLabelValues(c.addr).Set(float64(maxScans))
 			}
 
