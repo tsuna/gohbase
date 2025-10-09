@@ -436,6 +436,7 @@ func (c *client) trySend(rpc hrpc.Call) (err error) {
 			c.fail(err)
 		}
 		if r := c.unregisterRPC(id); r != nil {
+			c.trackRPCResult(r, "error")
 			// we are the ones to unregister the rpc,
 			// return err to notify client of it
 			return err
@@ -461,6 +462,25 @@ func (c *client) receiveRPCs() {
 				// and return the error to caller to let them retry
 			}
 		}
+	}
+}
+
+func (c *client) trackRPCResult(rpc hrpc.Call, status string) {
+	callsCount := make(map[string]int, 0)
+	if m, ok := rpc.(*multi); ok {
+		for _, call := range m.calls {
+			if call != nil {
+				callsCount[call.Name()] += 1
+			}
+		}
+	} else {
+		rpcResultCount.WithLabelValues(
+			c.Addr(), rpc.Name(), status, "unary").Inc()
+	}
+
+	for callName, count := range callsCount {
+		rpcResultCount.WithLabelValues(
+			c.Addr(), callName, status, "batch").Add(float64(count))
 	}
 }
 
@@ -517,7 +537,14 @@ func (c *client) receive(r io.Reader) (err error) {
 	// Here we know for sure that we got a response for rpc we asked.
 	// It's our responsibility to deliver the response or error to the
 	// caller as we unregistered the rpc.
-	defer func() { returnResult(rpc, response, err) }()
+	defer func() {
+		status := "ok"
+		if err != nil {
+			status = "error"
+		}
+		c.trackRPCResult(rpc, status)
+		returnResult(rpc, response, err)
+	}()
 
 	if header.Exception != nil {
 		err = exceptionToError(*header.Exception.ExceptionClassName, *header.Exception.StackTrace)
