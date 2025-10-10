@@ -21,6 +21,7 @@ import (
 type MockRegionClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockRegionClientMockRecorder
+	isgomock struct{}
 }
 
 // MockRegionClientMockRecorder is the mock recorder for MockRegionClient.

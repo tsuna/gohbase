@@ -21,6 +21,7 @@ import (
 type MockAdminClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockAdminClientMockRecorder
+	isgomock struct{}
 }
 
 // MockAdminClientMockRecorder is the mock recorder for MockAdminClient.
@@ -56,158 +57,158 @@ func (mr *MockAdminClientMockRecorder) ClusterStatus() *gomock.Call {
 }
 
 // CreateSnapshot mocks base method.
-func (m *MockAdminClient) CreateSnapshot(arg0 *hrpc.Snapshot) error {
+func (m *MockAdminClient) CreateSnapshot(t *hrpc.Snapshot) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateSnapshot", arg0)
+	ret := m.ctrl.Call(m, "CreateSnapshot", t)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateSnapshot indicates an expected call of CreateSnapshot.
-func (mr *MockAdminClientMockRecorder) CreateSnapshot(arg0 any) *gomock.Call {
+func (mr *MockAdminClientMockRecorder) CreateSnapshot(t any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSnapshot", reflect.TypeOf((*MockAdminClient)(nil).CreateSnapshot), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSnapshot", reflect.TypeOf((*MockAdminClient)(nil).CreateSnapshot), t)
 }
 
 // CreateTable mocks base method.
-func (m *MockAdminClient) CreateTable(arg0 *hrpc.CreateTable) error {
+func (m *MockAdminClient) CreateTable(t *hrpc.CreateTable) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateTable", arg0)
+	ret := m.ctrl.Call(m, "CreateTable", t)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateTable indicates an expected call of CreateTable.
-func (mr *MockAdminClientMockRecorder) CreateTable(arg0 any) *gomock.Call {
+func (mr *MockAdminClientMockRecorder) CreateTable(t any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTable", reflect.TypeOf((*MockAdminClient)(nil).CreateTable), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTable", reflect.TypeOf((*MockAdminClient)(nil).CreateTable), t)
 }
 
 // DeleteSnapshot mocks base method.
-func (m *MockAdminClient) DeleteSnapshot(arg0 *hrpc.Snapshot) error {
+func (m *MockAdminClient) DeleteSnapshot(t *hrpc.Snapshot) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteSnapshot", arg0)
+	ret := m.ctrl.Call(m, "DeleteSnapshot", t)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteSnapshot indicates an expected call of DeleteSnapshot.
-func (mr *MockAdminClientMockRecorder) DeleteSnapshot(arg0 any) *gomock.Call {
+func (mr *MockAdminClientMockRecorder) DeleteSnapshot(t any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSnapshot", reflect.TypeOf((*MockAdminClient)(nil).DeleteSnapshot), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSnapshot", reflect.TypeOf((*MockAdminClient)(nil).DeleteSnapshot), t)
 }
 
 // DeleteTable mocks base method.
-func (m *MockAdminClient) DeleteTable(arg0 *hrpc.DeleteTable) error {
+func (m *MockAdminClient) DeleteTable(t *hrpc.DeleteTable) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteTable", arg0)
+	ret := m.ctrl.Call(m, "DeleteTable", t)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteTable indicates an expected call of DeleteTable.
-func (mr *MockAdminClientMockRecorder) DeleteTable(arg0 any) *gomock.Call {
+func (mr *MockAdminClientMockRecorder) DeleteTable(t any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTable", reflect.TypeOf((*MockAdminClient)(nil).DeleteTable), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTable", reflect.TypeOf((*MockAdminClient)(nil).DeleteTable), t)
 }
 
 // DisableTable mocks base method.
-func (m *MockAdminClient) DisableTable(arg0 *hrpc.DisableTable) error {
+func (m *MockAdminClient) DisableTable(t *hrpc.DisableTable) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DisableTable", arg0)
+	ret := m.ctrl.Call(m, "DisableTable", t)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DisableTable indicates an expected call of DisableTable.
-func (mr *MockAdminClientMockRecorder) DisableTable(arg0 any) *gomock.Call {
+func (mr *MockAdminClientMockRecorder) DisableTable(t any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DisableTable", reflect.TypeOf((*MockAdminClient)(nil).DisableTable), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DisableTable", reflect.TypeOf((*MockAdminClient)(nil).DisableTable), t)
 }
 
 // EnableTable mocks base method.
-func (m *MockAdminClient) EnableTable(arg0 *hrpc.EnableTable) error {
+func (m *MockAdminClient) EnableTable(t *hrpc.EnableTable) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EnableTable", arg0)
+	ret := m.ctrl.Call(m, "EnableTable", t)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // EnableTable indicates an expected call of EnableTable.
-func (mr *MockAdminClientMockRecorder) EnableTable(arg0 any) *gomock.Call {
+func (mr *MockAdminClientMockRecorder) EnableTable(t any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableTable", reflect.TypeOf((*MockAdminClient)(nil).EnableTable), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableTable", reflect.TypeOf((*MockAdminClient)(nil).EnableTable), t)
 }
 
 // ListSnapshots mocks base method.
-func (m *MockAdminClient) ListSnapshots(arg0 *hrpc.ListSnapshots) ([]*pb.SnapshotDescription, error) {
+func (m *MockAdminClient) ListSnapshots(t *hrpc.ListSnapshots) ([]*pb.SnapshotDescription, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListSnapshots", arg0)
+	ret := m.ctrl.Call(m, "ListSnapshots", t)
 	ret0, _ := ret[0].([]*pb.SnapshotDescription)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ListSnapshots indicates an expected call of ListSnapshots.
-func (mr *MockAdminClientMockRecorder) ListSnapshots(arg0 any) *gomock.Call {
+func (mr *MockAdminClientMockRecorder) ListSnapshots(t any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSnapshots", reflect.TypeOf((*MockAdminClient)(nil).ListSnapshots), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSnapshots", reflect.TypeOf((*MockAdminClient)(nil).ListSnapshots), t)
 }
 
 // ListTableNames mocks base method.
-func (m *MockAdminClient) ListTableNames(arg0 *hrpc.ListTableNames) ([]*pb.TableName, error) {
+func (m *MockAdminClient) ListTableNames(t *hrpc.ListTableNames) ([]*pb.TableName, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListTableNames", arg0)
+	ret := m.ctrl.Call(m, "ListTableNames", t)
 	ret0, _ := ret[0].([]*pb.TableName)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ListTableNames indicates an expected call of ListTableNames.
-func (mr *MockAdminClientMockRecorder) ListTableNames(arg0 any) *gomock.Call {
+func (mr *MockAdminClientMockRecorder) ListTableNames(t any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTableNames", reflect.TypeOf((*MockAdminClient)(nil).ListTableNames), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTableNames", reflect.TypeOf((*MockAdminClient)(nil).ListTableNames), t)
 }
 
 // MoveRegion mocks base method.
-func (m *MockAdminClient) MoveRegion(arg0 *hrpc.MoveRegion) error {
+func (m *MockAdminClient) MoveRegion(mr *hrpc.MoveRegion) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MoveRegion", arg0)
+	ret := m.ctrl.Call(m, "MoveRegion", mr)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // MoveRegion indicates an expected call of MoveRegion.
-func (mr *MockAdminClientMockRecorder) MoveRegion(arg0 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MoveRegion", reflect.TypeOf((*MockAdminClient)(nil).MoveRegion), arg0)
+func (mr_2 *MockAdminClientMockRecorder) MoveRegion(mr any) *gomock.Call {
+	mr_2.mock.ctrl.T.Helper()
+	return mr_2.mock.ctrl.RecordCallWithMethodType(mr_2.mock, "MoveRegion", reflect.TypeOf((*MockAdminClient)(nil).MoveRegion), mr)
 }
 
 // RestoreSnapshot mocks base method.
-func (m *MockAdminClient) RestoreSnapshot(arg0 *hrpc.Snapshot) error {
+func (m *MockAdminClient) RestoreSnapshot(t *hrpc.Snapshot) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RestoreSnapshot", arg0)
+	ret := m.ctrl.Call(m, "RestoreSnapshot", t)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RestoreSnapshot indicates an expected call of RestoreSnapshot.
-func (mr *MockAdminClientMockRecorder) RestoreSnapshot(arg0 any) *gomock.Call {
+func (mr *MockAdminClientMockRecorder) RestoreSnapshot(t any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestoreSnapshot", reflect.TypeOf((*MockAdminClient)(nil).RestoreSnapshot), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestoreSnapshot", reflect.TypeOf((*MockAdminClient)(nil).RestoreSnapshot), t)
 }
 
 // SetBalancer mocks base method.
-func (m *MockAdminClient) SetBalancer(arg0 *hrpc.SetBalancer) (bool, error) {
+func (m *MockAdminClient) SetBalancer(sb *hrpc.SetBalancer) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetBalancer", arg0)
+	ret := m.ctrl.Call(m, "SetBalancer", sb)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // SetBalancer indicates an expected call of SetBalancer.
-func (mr *MockAdminClientMockRecorder) SetBalancer(arg0 any) *gomock.Call {
+func (mr *MockAdminClientMockRecorder) SetBalancer(sb any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetBalancer", reflect.TypeOf((*MockAdminClient)(nil).SetBalancer), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetBalancer", reflect.TypeOf((*MockAdminClient)(nil).SetBalancer), sb)
 }

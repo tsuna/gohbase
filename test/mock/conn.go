@@ -21,6 +21,7 @@ import (
 type MockConn struct {
 	ctrl     *gomock.Controller
 	recorder *MockConnMockRecorder
+	isgomock struct{}
 }
 
 // MockConnMockRecorder is the mock recorder for MockConn.
@@ -69,18 +70,18 @@ func (mr *MockConnMockRecorder) LocalAddr() *gomock.Call {
 }
 
 // Read mocks base method.
-func (m *MockConn) Read(arg0 []byte) (int, error) {
+func (m *MockConn) Read(b []byte) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Read", arg0)
+	ret := m.ctrl.Call(m, "Read", b)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Read indicates an expected call of Read.
-func (mr *MockConnMockRecorder) Read(arg0 any) *gomock.Call {
+func (mr *MockConnMockRecorder) Read(b any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Read", reflect.TypeOf((*MockConn)(nil).Read), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Read", reflect.TypeOf((*MockConn)(nil).Read), b)
 }
 
 // RemoteAddr mocks base method.
@@ -98,58 +99,58 @@ func (mr *MockConnMockRecorder) RemoteAddr() *gomock.Call {
 }
 
 // SetDeadline mocks base method.
-func (m *MockConn) SetDeadline(arg0 time.Time) error {
+func (m *MockConn) SetDeadline(t time.Time) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetDeadline", arg0)
+	ret := m.ctrl.Call(m, "SetDeadline", t)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetDeadline indicates an expected call of SetDeadline.
-func (mr *MockConnMockRecorder) SetDeadline(arg0 any) *gomock.Call {
+func (mr *MockConnMockRecorder) SetDeadline(t any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDeadline", reflect.TypeOf((*MockConn)(nil).SetDeadline), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDeadline", reflect.TypeOf((*MockConn)(nil).SetDeadline), t)
 }
 
 // SetReadDeadline mocks base method.
-func (m *MockConn) SetReadDeadline(arg0 time.Time) error {
+func (m *MockConn) SetReadDeadline(t time.Time) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetReadDeadline", arg0)
+	ret := m.ctrl.Call(m, "SetReadDeadline", t)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetReadDeadline indicates an expected call of SetReadDeadline.
-func (mr *MockConnMockRecorder) SetReadDeadline(arg0 any) *gomock.Call {
+func (mr *MockConnMockRecorder) SetReadDeadline(t any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetReadDeadline", reflect.TypeOf((*MockConn)(nil).SetReadDeadline), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetReadDeadline", reflect.TypeOf((*MockConn)(nil).SetReadDeadline), t)
 }
 
 // SetWriteDeadline mocks base method.
-func (m *MockConn) SetWriteDeadline(arg0 time.Time) error {
+func (m *MockConn) SetWriteDeadline(t time.Time) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetWriteDeadline", arg0)
+	ret := m.ctrl.Call(m, "SetWriteDeadline", t)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetWriteDeadline indicates an expected call of SetWriteDeadline.
-func (mr *MockConnMockRecorder) SetWriteDeadline(arg0 any) *gomock.Call {
+func (mr *MockConnMockRecorder) SetWriteDeadline(t any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetWriteDeadline", reflect.TypeOf((*MockConn)(nil).SetWriteDeadline), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetWriteDeadline", reflect.TypeOf((*MockConn)(nil).SetWriteDeadline), t)
 }
 
 // Write mocks base method.
-func (m *MockConn) Write(arg0 []byte) (int, error) {
+func (m *MockConn) Write(b []byte) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Write", arg0)
+	ret := m.ctrl.Call(m, "Write", b)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Write indicates an expected call of Write.
-func (mr *MockConnMockRecorder) Write(arg0 any) *gomock.Call {
+func (mr *MockConnMockRecorder) Write(b any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Write", reflect.TypeOf((*MockConn)(nil).Write), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Write", reflect.TypeOf((*MockConn)(nil).Write), b)
 }
