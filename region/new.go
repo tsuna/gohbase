@@ -50,33 +50,6 @@ type ScanControlOptions struct {
 	Interval time.Duration
 }
 
-// CheckCorrectness validates the scan control configuration.
-// Returns nil if the configuration is valid, or an error describing what's wrong.
-func (s *ScanControlOptions) CheckCorrectness() error {
-	if s.NewController == nil {
-		return fmt.Errorf("controller factory function is nil")
-	}
-
-	if s.MinWindow <= 0 {
-		return fmt.Errorf("minimum window must be greater than 0, got %d", s.MinWindow)
-	}
-
-	if s.MaxWindow <= 0 {
-		return fmt.Errorf("maximum window must be greater than 0, got %d", s.MaxWindow)
-	}
-
-	if s.MaxWindow < s.MinWindow {
-		return fmt.Errorf("maximum window (%d) must be greater or equal to minimum window (%d)",
-			s.MaxWindow, s.MinWindow)
-	}
-
-	if s.Interval <= 0 {
-		return fmt.Errorf("interval must be greater than 0, got %v", s.Interval)
-	}
-
-	return nil
-}
-
 // NewClient creates a new RegionClient with RegionClientOptions.
 func NewClient(addr string, ctype ClientType, opts *RegionClientOptions) hrpc.RegionClient {
 	c := &client{
