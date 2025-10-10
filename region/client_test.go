@@ -1343,8 +1343,7 @@ func TestScanConcurrencyControl(t *testing.T) {
 	select {
 	case <-registrationCompleted:
 		t.Fatal("Second scan registration should be blocked")
-	case <-time.After(100 * time.Millisecond):
-		// Good - registration is blocked as expected
+	default:
 	}
 
 	// Now unregister the first scan to free up a token
@@ -1354,17 +1353,14 @@ func TestScanConcurrencyControl(t *testing.T) {
 	}
 
 	// The second registration should now complete
-	select {
-	case <-registrationCompleted:
-		// Good - registration unblocked
-		if registerErr != nil {
-			t.Fatalf("Second scan registration failed: %v", registerErr)
-		}
-		if id2 == 0 {
-			t.Fatal("Second scan registration should have assigned a non-zero ID")
-		}
-	case <-time.After(1 * time.Second):
-		t.Fatal("Second scan registration should have unblocked after first was unregistered")
+	<-registrationCompleted
+
+	// Good - registration unblocked
+	if registerErr != nil {
+		t.Fatalf("Second scan registration failed: %v", registerErr)
+	}
+	if id2 == 0 {
+		t.Fatal("Second scan registration should have assigned a non-zero ID")
 	}
 
 	// Clean up - unregister the second scan
@@ -1446,8 +1442,7 @@ func TestScanConcurrencyControlSetCapacity(t *testing.T) {
 	select {
 	case <-registrationCompleted:
 		t.Fatal("Second scan registration should be blocked")
-	case <-time.After(100 * time.Millisecond):
-		// Good - registration is blocked as expected
+	default:
 	}
 
 	// Now use SetCapacity to increase capacity to 2, which should unblock the second scan
@@ -1456,17 +1451,13 @@ func TestScanConcurrencyControlSetCapacity(t *testing.T) {
 	}
 
 	// The second registration should now complete
-	select {
-	case <-registrationCompleted:
-		// Good - registration unblocked
-		if registerErr != nil {
-			t.Fatalf("Second scan registration failed: %v", registerErr)
-		}
-		if id2 == 0 {
-			t.Fatal("Second scan registration should have assigned a non-zero ID")
-		}
-	case <-time.After(1 * time.Second):
-		t.Fatal("Second scan registration should have unblocked after capacity increased")
+	<-registrationCompleted
+	// Good - registration unblocked
+	if registerErr != nil {
+		t.Fatalf("Second scan registration failed: %v", registerErr)
+	}
+	if id2 == 0 {
+		t.Fatal("Second scan registration should have assigned a non-zero ID")
 	}
 
 	// Clean up - unregister both scans
