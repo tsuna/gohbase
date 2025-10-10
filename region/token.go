@@ -61,17 +61,13 @@ func (t *Token) Take(ctx context.Context) error {
 	}
 }
 
-// Release returns a token to the bucket, blocking if the bucket is full
-// until space is available or the context is cancelled. If done is closed Take always returns nil.
-func (t *Token) Release(ctx context.Context) error {
+// Release returns a token to the bucket. It panics when called without previous succeful Take().
+func (t *Token) Release() {
 	select {
-	case <-ctx.Done():
-		return context.Cause(ctx)
 	case <-t.done:
-		return nil
 	case t.buf <- struct{}{}:
-		return nil
-
+	default:
+		panic("token: Release() without Take()")
 	}
 }
 

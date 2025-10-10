@@ -358,7 +358,7 @@ func (c *client) unregisterRPC(id uint32) hrpc.Call {
 
 	// Release scan token if this was a scan request
 	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil {
-		c.scanTokenBucket.Release(context.Background())
+		c.scanTokenBucket.Release()
 	}
 
 	return rpc
