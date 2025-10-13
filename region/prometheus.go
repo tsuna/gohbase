@@ -42,6 +42,15 @@ var (
 		[]string{"regionserver"},
 	)
 
+	rpcResultCount = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "gohbase",
+			Name:      "rpc_result_count",
+			Help:      "Number of RPC operations by result status and operation type",
+		},
+		[]string{"regionserver", "operation", "status", "type"},
+	)
+
 	pingLatency = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "gohbase",

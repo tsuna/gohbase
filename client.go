@@ -42,6 +42,8 @@ type Client interface {
 	Increment(i *hrpc.Mutate) (int64, error)
 	CheckAndPut(p *hrpc.Mutate, family string, qualifier string,
 		expectedValue []byte) (bool, error)
+	CheckAndPutWithCompareType(p *hrpc.Mutate, family string, qualifier string,
+		expectedValue []byte, compareType pb.CompareType) (bool, error)
 	SendBatch(ctx context.Context, batch []hrpc.Call) (res []hrpc.RPCResult, allOK bool)
 	CacheRegions(table []byte) error
 	Close()
@@ -398,7 +400,13 @@ func (c *client) mutate(m *hrpc.Mutate) (*hrpc.Result, error) {
 
 func (c *client) CheckAndPut(p *hrpc.Mutate, family string,
 	qualifier string, expectedValue []byte) (bool, error) {
-	cas, err := hrpc.NewCheckAndPut(p, family, qualifier, expectedValue)
+	return c.CheckAndPutWithCompareType(p, family, qualifier, expectedValue, pb.CompareType_EQUAL)
+}
+
+func (c *client) CheckAndPutWithCompareType(p *hrpc.Mutate, family string,
+	qualifier string, expectedValue []byte, compareType pb.CompareType) (bool, error) {
+	cas, err := hrpc.NewCheckAndPutWithCompareType(
+		p, family, qualifier, expectedValue, compareType)
 	if err != nil {
 		return false, err
 	}

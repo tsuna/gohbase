@@ -1404,6 +1404,70 @@ func TestCheckAndPut(t *testing.T) {
 	// TODO: check the resulting state by performing a Get request
 }
 
+func makeMap(cf, k, v string) map[string]map[string][]byte {
+	return map[string]map[string][]byte{cf: map[string][]byte{k: []byte(v)}}
+}
+
+func TestCheckAndPutWithCompareTypeGreater(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+
+	key := "rowCAP"
+	ef := "cf"
+	eq := "a"
+
+	var testcases = []struct {
+		inValues    map[string]map[string][]byte
+		cmpVal      []byte
+		out         bool
+		expectedVal []byte
+	}{
+		{makeMap("cf", "a", "2"), nil, true, []byte("2")},
+		{makeMap("cf", "a", "2"), nil, false, []byte("2")},
+		{makeMap("cf", "b", "1"), []byte{}, false, []byte("2")},
+		{makeMap("cf", "b", "1"), []byte{}, false, []byte("2")}, // Strictly greater
+		{makeMap("cf", "b", "3"), []byte("1"), false, []byte("2")},
+		{makeMap("cf", "a", "4"), []byte("2"), false, []byte("2")},
+		{makeMap("cf", "a", "1"), []byte("99"), true, []byte("1")},
+		{makeMap("cf", "b", "2"), []byte("98"), true, []byte("1")},
+	}
+
+	for _, tc := range testcases {
+		putRequest, err := hrpc.NewPutStr(context.Background(), table, key, tc.inValues)
+		if err != nil {
+			t.Fatalf("NewPutStr returned an error: %v", err)
+		}
+
+		casRes, err := c.CheckAndPutWithCompareType(
+			putRequest, ef, eq, tc.cmpVal, pb.CompareType_GREATER)
+
+		if err != nil {
+			t.Fatalf("CheckAndPut error: %s", err)
+		}
+
+		if casRes != tc.out {
+			t.Errorf("CheckAndPut with put values=%q and cmpValue=%q returned %v, want %v",
+				tc.inValues, tc.cmpVal, casRes, tc.out)
+		}
+
+		get, err := hrpc.NewGetStr(context.Background(), table, key,
+			hrpc.Families(map[string][]string{"cf": nil}))
+		rsp, err := c.Get(get)
+		if err != nil {
+			t.Fatalf("Get failed: %s", err)
+		}
+		if len(rsp.Cells) < 1 {
+			t.Errorf("Get expected at least 1 cell. Received: %d", len(rsp.Cells))
+		}
+		if !bytes.Equal(rsp.Cells[0].Value, tc.expectedVal) {
+			t.Errorf("Get expected value %q. Received: %q for inValues: %v",
+				tc.expectedVal, rsp.Cells[0].Value, tc.inValues)
+		}
+
+	}
+
+}
+
 func TestCheckAndPutNotPut(t *testing.T) {
 	key := "row101"
 	c := gohbase.NewClient(*host)
