@@ -2162,7 +2162,7 @@ func TestReverseScan(t *testing.T) {
 		i++
 		expected := fmt.Sprintf("%d", 500-i)
 		if string(r.Cells[0].Value) != expected {
-			t.Errorf(baseErr + "- unexpected rowkey returned")
+			t.Error(baseErr + "- unexpected rowkey returned")
 		}
 	}
 	if i != 500 {
@@ -2194,7 +2194,7 @@ func TestReverseScan(t *testing.T) {
 		i++
 		expected := fmt.Sprintf("%d", 251-i)
 		if string(r.Cells[0].Value) != expected {
-			t.Errorf(baseErr + "- unexpected rowkey returned when doing partial reverse scan")
+			t.Error(baseErr + "- unexpected rowkey returned when doing partial reverse scan")
 		}
 	}
 	if i != 100 {

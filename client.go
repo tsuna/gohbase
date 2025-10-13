@@ -100,10 +100,7 @@ type client struct {
 	done      chan struct{}
 	closeOnce sync.Once
 
-	newRegionClientFn func(string, region.ClientType, int, time.Duration,
-		string, time.Duration, compression.Codec,
-		func(ctx context.Context, network, addr string) (net.Conn, error),
-		*slog.Logger) hrpc.RegionClient
+	newRegionClientFn func(string, region.ClientType, *region.RegionClientOptions) hrpc.RegionClient
 
 	compressionCodec compression.Codec
 
@@ -114,6 +111,8 @@ type client struct {
 	regionDialer func(ctx context.Context, network, addr string) (net.Conn, error)
 	// logger that could be defined by user
 	logger *slog.Logger
+	// scan control options for congestion control
+	scanControlOptions *region.ScanControlOptions
 }
 
 // NewClient creates a new HBase client.
@@ -139,8 +138,11 @@ func newClient(zkquorum string, options ...Option) *client {
 		regionLookupTimeout: region.DefaultLookupTimeout,
 		regionReadTimeout:   region.DefaultReadTimeout,
 		done:                make(chan struct{}),
-		newRegionClientFn:   region.NewClient,
-		logger:              slog.Default(),
+		newRegionClientFn: func(addr string, ctype region.ClientType,
+			options *region.RegionClientOptions) hrpc.RegionClient {
+			return region.NewClient(addr, ctype, options)
+		},
+		logger: slog.Default(),
 	}
 	for _, option := range options {
 		option(c)
@@ -312,6 +314,15 @@ func RegionDialer(dialer func(
 func Logger(logger *slog.Logger) Option {
 	return func(c *client) {
 		c.logger = logger
+	}
+}
+
+// ScanControl will return an option that configures congestion control for scan requests.
+// It takes a ScanControlOptions struct which contains the controller and window limits.
+func ScanControl(options *region.ScanControlOptions) Option {
+	return func(c *client) {
+		// Store the scan control options to be used when creating region clients
+		c.scanControlOptions = options
 	}
 }
 

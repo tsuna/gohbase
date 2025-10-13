@@ -50,4 +50,23 @@ var (
 		},
 		[]string{"regionserver", "operation", "status", "type"},
 	)
+
+	pingLatency = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "gohbase",
+			Name:      "ping_latency_seconds",
+			Help:      "Ping scan latency in seconds",
+			Buckets:   prometheus.ExponentialBuckets(0.0002, 2, 12),
+		},
+		[]string{"regionserver"},
+	)
+
+	concurrentScans = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "gohbase",
+			Name:      "concurrent_scans_limit",
+			Help:      "Max number of concurrent scans per region server",
+		},
+		[]string{"regionserver"},
+	)
 )

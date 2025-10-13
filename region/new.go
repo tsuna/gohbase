@@ -18,36 +18,120 @@ import (
 	"github.com/tsuna/gohbase/hrpc"
 )
 
-// NewClient creates a new RegionClient.
-func NewClient(addr string, ctype ClientType, queueSize int, flushInterval time.Duration,
-	effectiveUser string, readTimeout time.Duration, codec compression.Codec,
-	dialer func(ctx context.Context, network, addr string) (net.Conn, error),
-	slogger *slog.Logger) hrpc.RegionClient {
+// RegionClientOptions holds configuration options for RegionClient
+type RegionClientOptions struct {
+	// QueueSize sets the RPC queue size for batching requests
+	QueueSize int
+	// FlushInterval sets the flush interval for batching RPCs
+	FlushInterval time.Duration
+	// EffectiveUser sets the effective user for the connection
+	EffectiveUser string
+	// ReadTimeout sets the read timeout for RPCs
+	ReadTimeout time.Duration
+	// Codec sets the compression codec for cellblocks
+	Codec compression.Codec
+	// Dialer sets a custom dialer for connecting to region servers
+	Dialer func(ctx context.Context, network, addr string) (net.Conn, error)
+	// Logger sets a custom logger
+	Logger *slog.Logger
+	// ScanControl enables congestion control for scan requests
+	ScanControl *ScanControlOptions
+}
+
+// ScanControlOptions holds scan congestion control configuration
+type ScanControlOptions struct {
+	// NewController is a factory function that creates controllers with min/max window bounds
+	NewController NewControllerFunc
+	// MinWindow sets the minimum window size (concurrency level)
+	MinWindow int
+	// MaxWindow sets the maximum window size (concurrency level)
+	MaxWindow int
+	// Interval sets the interval between ping scans
+	Interval time.Duration
+}
+
+// NewClient creates a new RegionClient with RegionClientOptions.
+func NewClient(addr string, ctype ClientType, opts *RegionClientOptions) hrpc.RegionClient {
 	c := &client{
 		addr:          addr,
 		ctype:         ctype,
-		rpcQueueSize:  queueSize,
-		flushInterval: flushInterval,
-		effectiveUser: effectiveUser,
-		readTimeout:   readTimeout,
+		rpcQueueSize:  DefaultRPCQueueSize,
+		flushInterval: DefaultFlushInterval,
+		effectiveUser: DefaultEffectiveUser,
+		readTimeout:   DefaultReadTimeout,
 		rpcs:          make(chan []hrpc.Call),
 		done:          make(chan struct{}),
 		sent:          make(map[uint32]hrpc.Call),
-		logger:        slogger,
 	}
 
-	if codec != nil {
-		c.compressor = &compressor{Codec: codec}
-	}
+	// Set default dialer
+	var d net.Dialer
+	c.dialer = d.DialContext
 
-	if dialer != nil {
-		c.dialer = dialer
-	} else {
-		var d net.Dialer
-		c.dialer = d.DialContext
-	}
+	// Set default logger
+	c.logger = slog.Default()
 
+	// Apply options if provided
+	if opts != nil {
+		if opts.QueueSize > 0 {
+			c.rpcQueueSize = opts.QueueSize
+		}
+		if opts.FlushInterval > 0 {
+			c.flushInterval = opts.FlushInterval
+		}
+		if opts.EffectiveUser != "" {
+			c.effectiveUser = opts.EffectiveUser
+		}
+		if opts.ReadTimeout > 0 {
+			c.readTimeout = opts.ReadTimeout
+		}
+		if opts.Codec != nil {
+			c.compressor = &compressor{Codec: opts.Codec}
+		}
+		if opts.Dialer != nil {
+			c.dialer = opts.Dialer
+		}
+		if opts.Logger != nil {
+			c.logger = opts.Logger
+		}
+
+		if err := c.configScanControl(opts.ScanControl); err != nil {
+			c.logger.Warn("scan control disabled due to invalid configuration", "error", err)
+		}
+	}
 	return c
+}
+
+func (c *client) configScanControl(opts *ScanControlOptions) error {
+	var err error
+
+	if opts == nil {
+		return nil
+	}
+
+	c.scanController, err = opts.NewController(opts.MinWindow, opts.MinWindow)
+	if err != nil {
+		return err
+	}
+
+	// Always start with minimum window
+	initialWindow := c.scanController.Window()
+
+	// Create token bucket with given capacity
+	tb, err := NewToken(opts.MaxWindow, opts.MinWindow, c.done)
+	if err != nil {
+		return err
+	}
+
+	if opts.Interval <= 0 {
+		return fmt.Errorf("interval must be greater than 0, got %v", opts.Interval)
+	}
+
+	c.pingInterval = opts.Interval
+	c.scanTokenBucket = tb
+	c.scanTokenBucket.SetCapacity(context.Background(), initialWindow)
+	concurrentScans.WithLabelValues(c.addr).Set(float64(initialWindow))
+	return nil
 }
 
 func (c *client) Dial(ctx context.Context) error {
@@ -81,6 +165,9 @@ func (c *client) Dial(ctx context.Context) error {
 
 		if c.ctype == RegionClient {
 			go c.processRPCs() // Batching goroutine
+			if c.pingInterval > 0 {
+				go c.controlLoop() // Ping goroutine for Scan concurrency control
+			}
 		}
 		go c.receiveRPCs() // Reader goroutine
 	})
