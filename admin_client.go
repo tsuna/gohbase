@@ -41,6 +41,7 @@ type AdminClient interface {
 	// MoveRegion moves a region to a different RegionServer
 	MoveRegion(mr *hrpc.MoveRegion) error
 	ListReplicationPeers(r *hrpc.ListReplicationPeers) ([]*pb.ReplicationPeerDescription, error)
+	AddReplicationPeer(r *hrpc.AddReplicationPeer) error
 }
 
 // NewAdminClient creates an admin HBase client.
@@ -308,4 +309,17 @@ func (c *client) ListReplicationPeers(r *hrpc.ListReplicationPeers) (
 		return nil, errors.New("sendPRC returned not a ListReplicationPeersResponse")
 	}
 	return res.GetPeerDesc(), nil
+}
+
+func (c *client) AddReplicationPeer(r *hrpc.AddReplicationPeer) error {
+	pbmsg, err := c.SendRPC(r)
+	if err != nil {
+		return err
+	}
+
+	res, ok := pbmsg.(*pb.AddReplicationPeerResponse)
+	if !ok {
+		return errors.New("sendPRC returned not a AddReplicationPeerResponse")
+	}
+	return c.checkProcedureWithBackoff(r.Context(), res.GetProcId())
 }

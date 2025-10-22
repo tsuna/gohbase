@@ -798,6 +798,10 @@ service MasterService {
   rpc ListProcedures(ListProceduresRequest)
     returns(ListProceduresResponse);
 
+  /** Add a replication peer */
+  rpc AddReplicationPeer(AddReplicationPeerRequest)
+    returns(AddReplicationPeerResponse);
+
   /** Returns a list of replication peers */
   rpc ListReplicationPeers(ListReplicationPeersRequest)
     returns(ListReplicationPeersResponse);
