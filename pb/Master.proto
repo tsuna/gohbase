@@ -34,6 +34,7 @@ import "ClusterStatus.proto";
 import "ErrorHandling.proto";
 import "Procedure.proto";
 import "Quota.proto";
+import "Replication.proto";
 
 /* Column-level protobufs */
 
@@ -796,4 +797,8 @@ service MasterService {
   /** returns a list of procedures */
   rpc ListProcedures(ListProceduresRequest)
     returns(ListProceduresResponse);
+
+  /** Returns a list of replication peers */
+  rpc ListReplicationPeers(ListReplicationPeersRequest)
+    returns(ListReplicationPeersResponse);
 }
