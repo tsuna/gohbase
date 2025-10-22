@@ -212,3 +212,126 @@ func (r *AddReplicationPeer) ToProto() proto.Message {
 func (r *AddReplicationPeer) NewResponse() proto.Message {
 	return &pb.AddReplicationPeerResponse{}
 }
+
+// RemoveReplicationPeer represents a RemoveReplicationPeer HBase call
+type RemoveReplicationPeer struct {
+	base
+	peerId string
+}
+
+// RemoveReplicationPeer creates a new RemoveReplicationPeer request that will delete the
+// given peer in HBase. For use by the admin client.
+func NewRemoveReplicationPeer(ctx context.Context, peerId string) *RemoveReplicationPeer {
+	return &RemoveReplicationPeer{
+		base: base{
+			ctx:      ctx,
+			resultch: make(chan RPCResult, 1),
+		},
+		peerId: peerId,
+	}
+}
+
+// Name returns the name of this RPC call.
+func (r *RemoveReplicationPeer) Name() string {
+	return "RemoveReplicationPeer"
+}
+
+// Description returns the description of this RPC call.
+func (r *RemoveReplicationPeer) Description() string {
+	return r.Name()
+}
+
+// ToProto converts the RPC into a protobuf message
+func (r *RemoveReplicationPeer) ToProto() proto.Message {
+	return &pb.RemoveReplicationPeerRequest{
+		PeerId: proto.String(r.peerId),
+	}
+}
+
+// NewResponse creates an empty protobuf message to read the response of this
+// RPC.
+func (r *RemoveReplicationPeer) NewResponse() proto.Message {
+	return &pb.RemoveReplicationPeerResponse{}
+}
+
+// EnableReplicationPeer represents a EnableReplicationPeer HBase call
+type EnableReplicationPeer struct {
+	base
+	peerId string
+}
+
+// EnableReplicationPeer creates a new EnableReplicationPeer request that will delete the
+// given peer in HBase. For use by the admin client.
+func NewEnableReplicationPeer(ctx context.Context, peerId string) *EnableReplicationPeer {
+	return &EnableReplicationPeer{
+		base: base{
+			ctx:      ctx,
+			resultch: make(chan RPCResult, 1),
+		},
+		peerId: peerId,
+	}
+}
+
+// Name returns the name of this RPC call.
+func (r *EnableReplicationPeer) Name() string {
+	return "EnableReplicationPeer"
+}
+
+// Description returns the description of this RPC call.
+func (r *EnableReplicationPeer) Description() string {
+	return r.Name()
+}
+
+// ToProto converts the RPC into a protobuf message
+func (r *EnableReplicationPeer) ToProto() proto.Message {
+	return &pb.EnableReplicationPeerRequest{
+		PeerId: proto.String(r.peerId),
+	}
+}
+
+// NewResponse creates an empty protobuf message to read the response of this
+// RPC.
+func (r *EnableReplicationPeer) NewResponse() proto.Message {
+	return &pb.EnableReplicationPeerResponse{}
+}
+
+// DisableReplicationPeer represents a DisableReplicationPeer HBase call
+type DisableReplicationPeer struct {
+	base
+	peerId string
+}
+
+// DisableReplicationPeer creates a new DisableReplicationPeer request that will delete the
+// given peer in HBase. For use by the admin client.
+func NewDisableReplicationPeer(ctx context.Context, peerId string) *DisableReplicationPeer {
+	return &DisableReplicationPeer{
+		base: base{
+			ctx:      ctx,
+			resultch: make(chan RPCResult, 1),
+		},
+		peerId: peerId,
+	}
+}
+
+// Name returns the name of this RPC call.
+func (r *DisableReplicationPeer) Name() string {
+	return "DisableReplicationPeer"
+}
+
+// Description returns the description of this RPC call.
+func (r *DisableReplicationPeer) Description() string {
+	return r.Name()
+}
+
+// ToProto converts the RPC into a protobuf message
+func (r *DisableReplicationPeer) ToProto() proto.Message {
+	return &pb.DisableReplicationPeerRequest{
+		PeerId: proto.String(r.peerId),
+	}
+}
+
+// NewResponse creates an empty protobuf message to read the response of this
+// RPC.
+func (r *DisableReplicationPeer) NewResponse() proto.Message {
+	return &pb.DisableReplicationPeerResponse{}
+}

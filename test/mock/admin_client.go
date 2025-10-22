@@ -125,6 +125,20 @@ func (mr *MockAdminClientMockRecorder) DeleteTable(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTable", reflect.TypeOf((*MockAdminClient)(nil).DeleteTable), arg0)
 }
 
+// DisableReplicationPeer mocks base method.
+func (m *MockAdminClient) DisableReplicationPeer(arg0 *hrpc.DisableReplicationPeer) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DisableReplicationPeer", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DisableReplicationPeer indicates an expected call of DisableReplicationPeer.
+func (mr *MockAdminClientMockRecorder) DisableReplicationPeer(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DisableReplicationPeer", reflect.TypeOf((*MockAdminClient)(nil).DisableReplicationPeer), arg0)
+}
+
 // DisableTable mocks base method.
 func (m *MockAdminClient) DisableTable(arg0 *hrpc.DisableTable) error {
 	m.ctrl.T.Helper()
@@ -137,6 +151,20 @@ func (m *MockAdminClient) DisableTable(arg0 *hrpc.DisableTable) error {
 func (mr *MockAdminClientMockRecorder) DisableTable(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DisableTable", reflect.TypeOf((*MockAdminClient)(nil).DisableTable), arg0)
+}
+
+// EnableReplicationPeer mocks base method.
+func (m *MockAdminClient) EnableReplicationPeer(arg0 *hrpc.EnableReplicationPeer) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnableReplicationPeer", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// EnableReplicationPeer indicates an expected call of EnableReplicationPeer.
+func (mr *MockAdminClientMockRecorder) EnableReplicationPeer(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableReplicationPeer", reflect.TypeOf((*MockAdminClient)(nil).EnableReplicationPeer), arg0)
 }
 
 // EnableTable mocks base method.
@@ -210,6 +238,20 @@ func (m *MockAdminClient) MoveRegion(arg0 *hrpc.MoveRegion) error {
 func (mr *MockAdminClientMockRecorder) MoveRegion(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MoveRegion", reflect.TypeOf((*MockAdminClient)(nil).MoveRegion), arg0)
+}
+
+// RemoveReplicationPeer mocks base method.
+func (m *MockAdminClient) RemoveReplicationPeer(arg0 *hrpc.RemoveReplicationPeer) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveReplicationPeer", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveReplicationPeer indicates an expected call of RemoveReplicationPeer.
+func (mr *MockAdminClientMockRecorder) RemoveReplicationPeer(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveReplicationPeer", reflect.TypeOf((*MockAdminClient)(nil).RemoveReplicationPeer), arg0)
 }
 
 // RestoreSnapshot mocks base method.

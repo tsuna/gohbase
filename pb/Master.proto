@@ -802,6 +802,18 @@ service MasterService {
   rpc AddReplicationPeer(AddReplicationPeerRequest)
     returns(AddReplicationPeerResponse);
 
+  /** Remove a replication peer */
+  rpc RemoveReplicationPeer(RemoveReplicationPeerRequest)
+    returns(RemoveReplicationPeerResponse);
+
+  /** Enable a replication peer */
+  rpc EnableReplicationPeer(EnableReplicationPeerRequest)
+    returns(EnableReplicationPeerResponse);
+
+  /** Disable a replication peer */
+  rpc DisableReplicationPeer(DisableReplicationPeerRequest)
+    returns(DisableReplicationPeerResponse);
+
   /** Returns a list of replication peers */
   rpc ListReplicationPeers(ListReplicationPeersRequest)
     returns(ListReplicationPeersResponse);
