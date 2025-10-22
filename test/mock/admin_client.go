@@ -40,6 +40,20 @@ func (m *MockAdminClient) EXPECT() *MockAdminClientMockRecorder {
 	return m.recorder
 }
 
+// AddReplicationPeer mocks base method.
+func (m *MockAdminClient) AddReplicationPeer(arg0 *hrpc.AddReplicationPeer) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddReplicationPeer", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddReplicationPeer indicates an expected call of AddReplicationPeer.
+func (mr *MockAdminClientMockRecorder) AddReplicationPeer(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddReplicationPeer", reflect.TypeOf((*MockAdminClient)(nil).AddReplicationPeer), arg0)
+}
+
 // ClusterStatus mocks base method.
 func (m *MockAdminClient) ClusterStatus() (*pb.ClusterStatus, error) {
 	m.ctrl.T.Helper()
