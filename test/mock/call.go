@@ -15,14 +15,13 @@ import (
 
 	hrpc "github.com/tsuna/gohbase/hrpc"
 	gomock "go.uber.org/mock/gomock"
-	proto "google.golang.org/protobuf/proto"
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // MockCall is a mock of Call interface.
 type MockCall struct {
 	ctrl     *gomock.Controller
 	recorder *MockCallMockRecorder
-	isgomock struct{}
 }
 
 // MockCallMockRecorder is the mock recorder for MockCall.
@@ -99,10 +98,10 @@ func (mr *MockCallMockRecorder) Name() *gomock.Call {
 }
 
 // NewResponse mocks base method.
-func (m *MockCall) NewResponse() proto.Message {
+func (m *MockCall) NewResponse() protoreflect.ProtoMessage {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NewResponse")
-	ret0, _ := ret[0].(proto.Message)
+	ret0, _ := ret[0].(protoreflect.ProtoMessage)
 	return ret0
 }
 
@@ -141,15 +140,15 @@ func (mr *MockCallMockRecorder) ResultChan() *gomock.Call {
 }
 
 // SetRegion mocks base method.
-func (m *MockCall) SetRegion(region hrpc.RegionInfo) {
+func (m *MockCall) SetRegion(arg0 hrpc.RegionInfo) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetRegion", region)
+	m.ctrl.Call(m, "SetRegion", arg0)
 }
 
 // SetRegion indicates an expected call of SetRegion.
-func (mr *MockCallMockRecorder) SetRegion(region any) *gomock.Call {
+func (mr *MockCallMockRecorder) SetRegion(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRegion", reflect.TypeOf((*MockCall)(nil).SetRegion), region)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRegion", reflect.TypeOf((*MockCall)(nil).SetRegion), arg0)
 }
 
 // Table mocks base method.
@@ -167,10 +166,10 @@ func (mr *MockCallMockRecorder) Table() *gomock.Call {
 }
 
 // ToProto mocks base method.
-func (m *MockCall) ToProto() proto.Message {
+func (m *MockCall) ToProto() protoreflect.ProtoMessage {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ToProto")
-	ret0, _ := ret[0].(proto.Message)
+	ret0, _ := ret[0].(protoreflect.ProtoMessage)
 	return ret0
 }
 
