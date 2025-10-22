@@ -13,7 +13,7 @@ jobs:
       matrix:
         go: [~1.24, ^1]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup | Download HBase
         run: |
@@ -38,7 +38,7 @@ jobs:
         run: hbase/bin/hbase-daemon.sh --config hbase/conf start master
 
       - name: Setup | Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go }}
 
@@ -52,7 +52,7 @@ jobs:
         run: make integration_cover HBASE_HOME=hbase
 
       - name: Upload to Codecov
-        uses: codecov/codecov-action@v2.1.0
+        uses: codecov/codecov-action@v5
 
       - name: Upload HBase logs
         uses: actions/upload-artifact@v4
