@@ -139,6 +139,21 @@ func (mr *MockAdminClientMockRecorder) EnableTable(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableTable", reflect.TypeOf((*MockAdminClient)(nil).EnableTable), arg0)
 }
 
+// ListReplicationPeers mocks base method.
+func (m *MockAdminClient) ListReplicationPeers(arg0 *hrpc.ListReplicationPeers) ([]*pb.ReplicationPeerDescription, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListReplicationPeers", arg0)
+	ret0, _ := ret[0].([]*pb.ReplicationPeerDescription)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListReplicationPeers indicates an expected call of ListReplicationPeers.
+func (mr *MockAdminClientMockRecorder) ListReplicationPeers(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListReplicationPeers", reflect.TypeOf((*MockAdminClient)(nil).ListReplicationPeers), arg0)
+}
+
 // ListSnapshots mocks base method.
 func (m *MockAdminClient) ListSnapshots(arg0 *hrpc.ListSnapshots) ([]*pb.SnapshotDescription, error) {
 	m.ctrl.T.Helper()
