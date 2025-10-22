@@ -5547,7 +5547,7 @@ const file_Master_proto_rawDesc = "" +
 	"\x0fCELL_VISIBILITY\x10\x04*(\n" +
 	"\x10MasterSwitchType\x12\t\n" +
 	"\x05SPLIT\x10\x00\x12\t\n" +
-	"\x05MERGE\x10\x012\x8f$\n" +
+	"\x05MERGE\x10\x012\xac&\n" +
 	"\rMasterService\x12Y\n" +
 	"\x14GetSchemaAlterStatus\x12\x1f.pb.GetSchemaAlterStatusRequest\x1a .pb.GetSchemaAlterStatusResponse\x12V\n" +
 	"\x13GetTableDescriptors\x12\x1e.pb.GetTableDescriptorsRequest\x1a\x1f.pb.GetTableDescriptorsResponse\x12D\n" +
@@ -5607,7 +5607,10 @@ const file_Master_proto_rawDesc = "" +
 	"\x17getSecurityCapabilities\x12\x1f.pb.SecurityCapabilitiesRequest\x1a .pb.SecurityCapabilitiesResponse\x12G\n" +
 	"\x0eAbortProcedure\x12\x19.pb.AbortProcedureRequest\x1a\x1a.pb.AbortProcedureResponse\x12G\n" +
 	"\x0eListProcedures\x12\x19.pb.ListProceduresRequest\x1a\x1a.pb.ListProceduresResponse\x12S\n" +
-	"\x12AddReplicationPeer\x12\x1d.pb.AddReplicationPeerRequest\x1a\x1e.pb.AddReplicationPeerResponse\x12Y\n" +
+	"\x12AddReplicationPeer\x12\x1d.pb.AddReplicationPeerRequest\x1a\x1e.pb.AddReplicationPeerResponse\x12\\\n" +
+	"\x15RemoveReplicationPeer\x12 .pb.RemoveReplicationPeerRequest\x1a!.pb.RemoveReplicationPeerResponse\x12\\\n" +
+	"\x15EnableReplicationPeer\x12 .pb.EnableReplicationPeerRequest\x1a!.pb.EnableReplicationPeerResponse\x12_\n" +
+	"\x16DisableReplicationPeer\x12!.pb.DisableReplicationPeerRequest\x1a\".pb.DisableReplicationPeerResponse\x12Y\n" +
 	"\x14ListReplicationPeers\x12\x1f.pb.ListReplicationPeersRequest\x1a .pb.ListReplicationPeersResponseBI\n" +
 	"*org.apache.hadoop.hbase.protobuf.generatedB\fMasterProtosH\x01Z\x05../pb\x88\x01\x01\xa0\x01\x01"
 
@@ -5750,10 +5753,16 @@ var file_Master_proto_goTypes = []any{
 	(*ThrottleRequest)(nil),                          // 121: pb.ThrottleRequest
 	(*CoprocessorServiceRequest)(nil),                // 122: pb.CoprocessorServiceRequest
 	(*AddReplicationPeerRequest)(nil),                // 123: pb.AddReplicationPeerRequest
-	(*ListReplicationPeersRequest)(nil),              // 124: pb.ListReplicationPeersRequest
-	(*CoprocessorServiceResponse)(nil),               // 125: pb.CoprocessorServiceResponse
-	(*AddReplicationPeerResponse)(nil),               // 126: pb.AddReplicationPeerResponse
-	(*ListReplicationPeersResponse)(nil),             // 127: pb.ListReplicationPeersResponse
+	(*RemoveReplicationPeerRequest)(nil),             // 124: pb.RemoveReplicationPeerRequest
+	(*EnableReplicationPeerRequest)(nil),             // 125: pb.EnableReplicationPeerRequest
+	(*DisableReplicationPeerRequest)(nil),            // 126: pb.DisableReplicationPeerRequest
+	(*ListReplicationPeersRequest)(nil),              // 127: pb.ListReplicationPeersRequest
+	(*CoprocessorServiceResponse)(nil),               // 128: pb.CoprocessorServiceResponse
+	(*AddReplicationPeerResponse)(nil),               // 129: pb.AddReplicationPeerResponse
+	(*RemoveReplicationPeerResponse)(nil),            // 130: pb.RemoveReplicationPeerResponse
+	(*EnableReplicationPeerResponse)(nil),            // 131: pb.EnableReplicationPeerResponse
+	(*DisableReplicationPeerResponse)(nil),           // 132: pb.DisableReplicationPeerResponse
+	(*ListReplicationPeersResponse)(nil),             // 133: pb.ListReplicationPeersResponse
 }
 var file_Master_proto_depIdxs = []int32{
 	110, // 0: pb.AddColumnRequest.table_name:type_name -> pb.TableName
@@ -5863,67 +5872,73 @@ var file_Master_proto_depIdxs = []int32{
 	99,  // 104: pb.MasterService.AbortProcedure:input_type -> pb.AbortProcedureRequest
 	101, // 105: pb.MasterService.ListProcedures:input_type -> pb.ListProceduresRequest
 	123, // 106: pb.MasterService.AddReplicationPeer:input_type -> pb.AddReplicationPeerRequest
-	124, // 107: pb.MasterService.ListReplicationPeers:input_type -> pb.ListReplicationPeersRequest
-	84,  // 108: pb.MasterService.GetSchemaAlterStatus:output_type -> pb.GetSchemaAlterStatusResponse
-	86,  // 109: pb.MasterService.GetTableDescriptors:output_type -> pb.GetTableDescriptorsResponse
-	88,  // 110: pb.MasterService.GetTableNames:output_type -> pb.GetTableNamesResponse
-	90,  // 111: pb.MasterService.GetClusterStatus:output_type -> pb.GetClusterStatusResponse
-	92,  // 112: pb.MasterService.IsMasterRunning:output_type -> pb.IsMasterRunningResponse
-	4,   // 113: pb.MasterService.AddColumn:output_type -> pb.AddColumnResponse
-	6,   // 114: pb.MasterService.DeleteColumn:output_type -> pb.DeleteColumnResponse
-	8,   // 115: pb.MasterService.ModifyColumn:output_type -> pb.ModifyColumnResponse
-	10,  // 116: pb.MasterService.MoveRegion:output_type -> pb.MoveRegionResponse
-	12,  // 117: pb.MasterService.DispatchMergingRegions:output_type -> pb.DispatchMergingRegionsResponse
-	14,  // 118: pb.MasterService.AssignRegion:output_type -> pb.AssignRegionResponse
-	16,  // 119: pb.MasterService.UnassignRegion:output_type -> pb.UnassignRegionResponse
-	18,  // 120: pb.MasterService.OfflineRegion:output_type -> pb.OfflineRegionResponse
-	22,  // 121: pb.MasterService.DeleteTable:output_type -> pb.DeleteTableResponse
-	24,  // 122: pb.MasterService.truncateTable:output_type -> pb.TruncateTableResponse
-	26,  // 123: pb.MasterService.EnableTable:output_type -> pb.EnableTableResponse
-	28,  // 124: pb.MasterService.DisableTable:output_type -> pb.DisableTableResponse
-	30,  // 125: pb.MasterService.ModifyTable:output_type -> pb.ModifyTableResponse
-	20,  // 126: pb.MasterService.CreateTable:output_type -> pb.CreateTableResponse
-	46,  // 127: pb.MasterService.Shutdown:output_type -> pb.ShutdownResponse
-	48,  // 128: pb.MasterService.StopMaster:output_type -> pb.StopMasterResponse
-	50,  // 129: pb.MasterService.Balance:output_type -> pb.BalanceResponse
-	52,  // 130: pb.MasterService.SetBalancerRunning:output_type -> pb.SetBalancerRunningResponse
-	54,  // 131: pb.MasterService.IsBalancerEnabled:output_type -> pb.IsBalancerEnabledResponse
-	56,  // 132: pb.MasterService.SetSplitOrMergeEnabled:output_type -> pb.SetSplitOrMergeEnabledResponse
-	58,  // 133: pb.MasterService.IsSplitOrMergeEnabled:output_type -> pb.IsSplitOrMergeEnabledResponse
-	60,  // 134: pb.MasterService.Normalize:output_type -> pb.NormalizeResponse
-	62,  // 135: pb.MasterService.SetNormalizerRunning:output_type -> pb.SetNormalizerRunningResponse
-	64,  // 136: pb.MasterService.IsNormalizerEnabled:output_type -> pb.IsNormalizerEnabledResponse
-	66,  // 137: pb.MasterService.RunCatalogScan:output_type -> pb.RunCatalogScanResponse
-	68,  // 138: pb.MasterService.EnableCatalogJanitor:output_type -> pb.EnableCatalogJanitorResponse
-	70,  // 139: pb.MasterService.IsCatalogJanitorEnabled:output_type -> pb.IsCatalogJanitorEnabledResponse
-	125, // 140: pb.MasterService.ExecMasterService:output_type -> pb.CoprocessorServiceResponse
-	72,  // 141: pb.MasterService.Snapshot:output_type -> pb.SnapshotResponse
-	74,  // 142: pb.MasterService.GetCompletedSnapshots:output_type -> pb.GetCompletedSnapshotsResponse
-	76,  // 143: pb.MasterService.DeleteSnapshot:output_type -> pb.DeleteSnapshotResponse
-	80,  // 144: pb.MasterService.IsSnapshotDone:output_type -> pb.IsSnapshotDoneResponse
-	78,  // 145: pb.MasterService.RestoreSnapshot:output_type -> pb.RestoreSnapshotResponse
-	82,  // 146: pb.MasterService.IsRestoreSnapshotDone:output_type -> pb.IsRestoreSnapshotDoneResponse
-	94,  // 147: pb.MasterService.ExecProcedure:output_type -> pb.ExecProcedureResponse
-	94,  // 148: pb.MasterService.ExecProcedureWithRet:output_type -> pb.ExecProcedureResponse
-	96,  // 149: pb.MasterService.IsProcedureDone:output_type -> pb.IsProcedureDoneResponse
-	36,  // 150: pb.MasterService.ModifyNamespace:output_type -> pb.ModifyNamespaceResponse
-	32,  // 151: pb.MasterService.CreateNamespace:output_type -> pb.CreateNamespaceResponse
-	34,  // 152: pb.MasterService.DeleteNamespace:output_type -> pb.DeleteNamespaceResponse
-	38,  // 153: pb.MasterService.GetNamespaceDescriptor:output_type -> pb.GetNamespaceDescriptorResponse
-	40,  // 154: pb.MasterService.ListNamespaceDescriptors:output_type -> pb.ListNamespaceDescriptorsResponse
-	42,  // 155: pb.MasterService.ListTableDescriptorsByNamespace:output_type -> pb.ListTableDescriptorsByNamespaceResponse
-	44,  // 156: pb.MasterService.ListTableNamesByNamespace:output_type -> pb.ListTableNamesByNamespaceResponse
-	104, // 157: pb.MasterService.SetQuota:output_type -> pb.SetQuotaResponse
-	107, // 158: pb.MasterService.getLastMajorCompactionTimestamp:output_type -> pb.MajorCompactionTimestampResponse
-	107, // 159: pb.MasterService.getLastMajorCompactionTimestampForRegion:output_type -> pb.MajorCompactionTimestampResponse
-	98,  // 160: pb.MasterService.getProcedureResult:output_type -> pb.GetProcedureResultResponse
-	109, // 161: pb.MasterService.getSecurityCapabilities:output_type -> pb.SecurityCapabilitiesResponse
-	100, // 162: pb.MasterService.AbortProcedure:output_type -> pb.AbortProcedureResponse
-	102, // 163: pb.MasterService.ListProcedures:output_type -> pb.ListProceduresResponse
-	126, // 164: pb.MasterService.AddReplicationPeer:output_type -> pb.AddReplicationPeerResponse
-	127, // 165: pb.MasterService.ListReplicationPeers:output_type -> pb.ListReplicationPeersResponse
-	108, // [108:166] is the sub-list for method output_type
-	50,  // [50:108] is the sub-list for method input_type
+	124, // 107: pb.MasterService.RemoveReplicationPeer:input_type -> pb.RemoveReplicationPeerRequest
+	125, // 108: pb.MasterService.EnableReplicationPeer:input_type -> pb.EnableReplicationPeerRequest
+	126, // 109: pb.MasterService.DisableReplicationPeer:input_type -> pb.DisableReplicationPeerRequest
+	127, // 110: pb.MasterService.ListReplicationPeers:input_type -> pb.ListReplicationPeersRequest
+	84,  // 111: pb.MasterService.GetSchemaAlterStatus:output_type -> pb.GetSchemaAlterStatusResponse
+	86,  // 112: pb.MasterService.GetTableDescriptors:output_type -> pb.GetTableDescriptorsResponse
+	88,  // 113: pb.MasterService.GetTableNames:output_type -> pb.GetTableNamesResponse
+	90,  // 114: pb.MasterService.GetClusterStatus:output_type -> pb.GetClusterStatusResponse
+	92,  // 115: pb.MasterService.IsMasterRunning:output_type -> pb.IsMasterRunningResponse
+	4,   // 116: pb.MasterService.AddColumn:output_type -> pb.AddColumnResponse
+	6,   // 117: pb.MasterService.DeleteColumn:output_type -> pb.DeleteColumnResponse
+	8,   // 118: pb.MasterService.ModifyColumn:output_type -> pb.ModifyColumnResponse
+	10,  // 119: pb.MasterService.MoveRegion:output_type -> pb.MoveRegionResponse
+	12,  // 120: pb.MasterService.DispatchMergingRegions:output_type -> pb.DispatchMergingRegionsResponse
+	14,  // 121: pb.MasterService.AssignRegion:output_type -> pb.AssignRegionResponse
+	16,  // 122: pb.MasterService.UnassignRegion:output_type -> pb.UnassignRegionResponse
+	18,  // 123: pb.MasterService.OfflineRegion:output_type -> pb.OfflineRegionResponse
+	22,  // 124: pb.MasterService.DeleteTable:output_type -> pb.DeleteTableResponse
+	24,  // 125: pb.MasterService.truncateTable:output_type -> pb.TruncateTableResponse
+	26,  // 126: pb.MasterService.EnableTable:output_type -> pb.EnableTableResponse
+	28,  // 127: pb.MasterService.DisableTable:output_type -> pb.DisableTableResponse
+	30,  // 128: pb.MasterService.ModifyTable:output_type -> pb.ModifyTableResponse
+	20,  // 129: pb.MasterService.CreateTable:output_type -> pb.CreateTableResponse
+	46,  // 130: pb.MasterService.Shutdown:output_type -> pb.ShutdownResponse
+	48,  // 131: pb.MasterService.StopMaster:output_type -> pb.StopMasterResponse
+	50,  // 132: pb.MasterService.Balance:output_type -> pb.BalanceResponse
+	52,  // 133: pb.MasterService.SetBalancerRunning:output_type -> pb.SetBalancerRunningResponse
+	54,  // 134: pb.MasterService.IsBalancerEnabled:output_type -> pb.IsBalancerEnabledResponse
+	56,  // 135: pb.MasterService.SetSplitOrMergeEnabled:output_type -> pb.SetSplitOrMergeEnabledResponse
+	58,  // 136: pb.MasterService.IsSplitOrMergeEnabled:output_type -> pb.IsSplitOrMergeEnabledResponse
+	60,  // 137: pb.MasterService.Normalize:output_type -> pb.NormalizeResponse
+	62,  // 138: pb.MasterService.SetNormalizerRunning:output_type -> pb.SetNormalizerRunningResponse
+	64,  // 139: pb.MasterService.IsNormalizerEnabled:output_type -> pb.IsNormalizerEnabledResponse
+	66,  // 140: pb.MasterService.RunCatalogScan:output_type -> pb.RunCatalogScanResponse
+	68,  // 141: pb.MasterService.EnableCatalogJanitor:output_type -> pb.EnableCatalogJanitorResponse
+	70,  // 142: pb.MasterService.IsCatalogJanitorEnabled:output_type -> pb.IsCatalogJanitorEnabledResponse
+	128, // 143: pb.MasterService.ExecMasterService:output_type -> pb.CoprocessorServiceResponse
+	72,  // 144: pb.MasterService.Snapshot:output_type -> pb.SnapshotResponse
+	74,  // 145: pb.MasterService.GetCompletedSnapshots:output_type -> pb.GetCompletedSnapshotsResponse
+	76,  // 146: pb.MasterService.DeleteSnapshot:output_type -> pb.DeleteSnapshotResponse
+	80,  // 147: pb.MasterService.IsSnapshotDone:output_type -> pb.IsSnapshotDoneResponse
+	78,  // 148: pb.MasterService.RestoreSnapshot:output_type -> pb.RestoreSnapshotResponse
+	82,  // 149: pb.MasterService.IsRestoreSnapshotDone:output_type -> pb.IsRestoreSnapshotDoneResponse
+	94,  // 150: pb.MasterService.ExecProcedure:output_type -> pb.ExecProcedureResponse
+	94,  // 151: pb.MasterService.ExecProcedureWithRet:output_type -> pb.ExecProcedureResponse
+	96,  // 152: pb.MasterService.IsProcedureDone:output_type -> pb.IsProcedureDoneResponse
+	36,  // 153: pb.MasterService.ModifyNamespace:output_type -> pb.ModifyNamespaceResponse
+	32,  // 154: pb.MasterService.CreateNamespace:output_type -> pb.CreateNamespaceResponse
+	34,  // 155: pb.MasterService.DeleteNamespace:output_type -> pb.DeleteNamespaceResponse
+	38,  // 156: pb.MasterService.GetNamespaceDescriptor:output_type -> pb.GetNamespaceDescriptorResponse
+	40,  // 157: pb.MasterService.ListNamespaceDescriptors:output_type -> pb.ListNamespaceDescriptorsResponse
+	42,  // 158: pb.MasterService.ListTableDescriptorsByNamespace:output_type -> pb.ListTableDescriptorsByNamespaceResponse
+	44,  // 159: pb.MasterService.ListTableNamesByNamespace:output_type -> pb.ListTableNamesByNamespaceResponse
+	104, // 160: pb.MasterService.SetQuota:output_type -> pb.SetQuotaResponse
+	107, // 161: pb.MasterService.getLastMajorCompactionTimestamp:output_type -> pb.MajorCompactionTimestampResponse
+	107, // 162: pb.MasterService.getLastMajorCompactionTimestampForRegion:output_type -> pb.MajorCompactionTimestampResponse
+	98,  // 163: pb.MasterService.getProcedureResult:output_type -> pb.GetProcedureResultResponse
+	109, // 164: pb.MasterService.getSecurityCapabilities:output_type -> pb.SecurityCapabilitiesResponse
+	100, // 165: pb.MasterService.AbortProcedure:output_type -> pb.AbortProcedureResponse
+	102, // 166: pb.MasterService.ListProcedures:output_type -> pb.ListProceduresResponse
+	129, // 167: pb.MasterService.AddReplicationPeer:output_type -> pb.AddReplicationPeerResponse
+	130, // 168: pb.MasterService.RemoveReplicationPeer:output_type -> pb.RemoveReplicationPeerResponse
+	131, // 169: pb.MasterService.EnableReplicationPeer:output_type -> pb.EnableReplicationPeerResponse
+	132, // 170: pb.MasterService.DisableReplicationPeer:output_type -> pb.DisableReplicationPeerResponse
+	133, // 171: pb.MasterService.ListReplicationPeers:output_type -> pb.ListReplicationPeersResponse
+	111, // [111:172] is the sub-list for method output_type
+	50,  // [50:111] is the sub-list for method input_type
 	50,  // [50:50] is the sub-list for extension type_name
 	50,  // [50:50] is the sub-list for extension extendee
 	0,   // [0:50] is the sub-list for field type_name
