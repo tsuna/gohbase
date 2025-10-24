@@ -195,10 +195,10 @@ func NewCellV2(row, family, qualifier []byte, timestamp uint64, value []byte,
 	if len(family) > math.MaxUint8 {
 		return CellV2{}, fmt.Errorf("family length cannot fit in a uint8: %d", len(family))
 	}
-	if len(qualifier) > math.MaxUint32 {
+	if uint64(len(qualifier)) > math.MaxUint32 {
 		return CellV2{}, fmt.Errorf("qualifier length cannot fit in a uint32: %d", len(qualifier))
 	}
-	if len(value) > math.MaxUint32 {
+	if uint64(len(value)) > math.MaxUint32 {
 		return CellV2{}, fmt.Errorf("value length cannot fit in a uint32: %d", len(value))
 	}
 
