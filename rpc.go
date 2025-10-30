@@ -186,7 +186,9 @@ func (c *client) scanRpcScanStats(scan *hrpc.Scan, resp proto.Message, err error
 			stats.Error = true
 		}
 		stats.Retryable = retry
-		stats.ResponseSize = scan.ResponseSize
+		if scan.Response != nil {
+			stats.ResponseSize = scan.Response.ResponseSize
+		}
 		scan.ScanStatsHandler()(stats)
 	}
 }
