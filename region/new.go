@@ -109,12 +109,12 @@ func (c *client) configScanControl(opts *ScanControlOptions) error {
 		return nil
 	}
 
-	c.scanController, err = opts.NewController(opts.MinWindow, opts.MinWindow)
+	c.scanController, err = opts.NewController(opts.MinWindow, opts.MaxWindow)
 	if err != nil {
 		return err
 	}
 
-	// Always start with minimum window
+	// Initial window depends on the particular controller
 	initialWindow := c.scanController.Window()
 
 	// Create token bucket with given capacity
