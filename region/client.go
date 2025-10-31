@@ -331,9 +331,11 @@ func (c *client) failSentRPCs() {
 }
 
 func (c *client) registerRPC(rpc hrpc.Call) (uint32, error) {
-	// Limit number of concurrent Scans if congestion control is enabled
+	// Limit number of concurrent Scans if congestion control is enabled and the priority
+	// is not set
 	// If Take() returns an error the token is not taken
-	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil {
+	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil &&
+		hrpc.GetPriority(rpc) == 0 {
 		if err := c.scanTokenBucket.Take(rpc.Context()); err != nil {
 			return 0, err
 		}
@@ -357,7 +359,8 @@ func (c *client) unregisterRPC(id uint32) hrpc.Call {
 	}
 
 	// Release scan token if this was a scan request
-	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil {
+	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil &&
+		hrpc.GetPriority(rpc) == 0 {
 		c.scanTokenBucket.Release()
 	}
 
