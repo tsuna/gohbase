@@ -511,12 +511,12 @@ func (c *client) trackRPCResult(rpc hrpc.Call, status string) {
 		}
 	} else {
 		rpcResultCount.WithLabelValues(
-			c.Addr(), rpc.Name(), status, "unary").Inc()
+			rpc.Name(), status, "unary").Inc()
 	}
 
 	for callName, count := range callsCount {
 		rpcResultCount.WithLabelValues(
-			c.Addr(), callName, status, "batch").Add(float64(count))
+			callName, status, "batch").Add(float64(count))
 	}
 }
 
