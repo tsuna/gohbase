@@ -3039,3 +3039,196 @@ func consumeScanner(c gohbase.Client, scan *hrpc.Scan) ([]*hrpc.Result, error) {
 
 	return rs, nil
 }
+
+func TestReplication(t *testing.T) {
+	ctx := context.Background()
+	ac := gohbase.NewAdminClient(*host)
+	peerIdPrefix := table
+	peerIdRegex := peerIdPrefix + ".*"
+
+	t.Run("check no pre-existing peers for test table",
+		func(t *testing.T) {
+			listPeers, err := hrpc.NewListReplicationPeers(ctx,
+				hrpc.ListReplicationPeersRegex(peerIdRegex))
+			if err != nil {
+				t.Fatal(err)
+			}
+			peers, err := ac.ListReplicationPeers(listPeers)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(peers) != 0 {
+				t.Fatalf("Expected 0 peers. Got %d", len(peers))
+			}
+		})
+
+	// Cleanup after test
+	defer func() {
+		listPeers, err := hrpc.NewListReplicationPeers(ctx,
+			hrpc.ListReplicationPeersRegex(peerIdRegex))
+		if err != nil {
+			t.Fatal(err)
+		}
+		peers, err := ac.ListReplicationPeers(listPeers)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, peer := range peers {
+			removePeer := hrpc.NewRemoveReplicationPeer(ctx, peer.GetId())
+			err := ac.RemoveReplicationPeer(removePeer)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}()
+
+	tcases := []struct {
+		serial  bool
+		enabled bool
+	}{
+		{
+			serial:  false,
+			enabled: true,
+		},
+		{
+			serial:  false,
+			enabled: false,
+		},
+		{
+			serial:  true,
+			enabled: true,
+		},
+		{
+			serial:  true,
+			enabled: false,
+		},
+	}
+	for i, tc := range tcases {
+		testNoStr := strconv.Itoa(i)
+		t.Run("create list and invert enabled state of peer test #"+testNoStr, func(t *testing.T) {
+			peerId := peerIdPrefix + "_" + testNoStr
+			clusterKey := strings.Join([]string{
+				*host, "2181",
+				"/hbase-" + testNoStr,
+			}, ":")
+			tableBytes := []byte(table + "_" + testNoStr)
+			columnFamilies := [][]byte{[]byte("cf"), []byte("cf" + testNoStr)}
+			addPeer, err := hrpc.NewAddReplicationPeer(ctx, peerId, clusterKey,
+				hrpc.AddReplicationPeerReplicateTableFamilies(tableBytes, columnFamilies...),
+				hrpc.AddReplicationPeerSerial(tc.serial),
+				hrpc.AddReplicationPeerEnabled(tc.enabled))
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = ac.AddReplicationPeer(addPeer)
+			if err != nil {
+				t.Fatal(err)
+			}
+			listPeers, err := hrpc.NewListReplicationPeers(ctx,
+				hrpc.ListReplicationPeersRegex(peerId))
+			if err != nil {
+				t.Fatal(err)
+			}
+			peers, err := ac.ListReplicationPeers(listPeers)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(peers) != 1 {
+				t.Fatalf("Expected 1 peers. Got %d", len(peers))
+			}
+			peer := peers[0]
+			if peerId != peer.GetId() {
+				t.Fatalf("Expected peerId %q. Got: %q", peerId, peer.GetId())
+			}
+			if clusterKey != peer.GetConfig().GetClusterkey() {
+				t.Fatalf("Expected clusterKey %q. Got: %q", clusterKey,
+					peer.GetConfig().GetClusterkey())
+			}
+			if (tc.enabled && peer.GetState().GetState() != pb.ReplicationState_ENABLED) ||
+				(!tc.enabled && peer.GetState().GetState() != pb.ReplicationState_DISABLED) {
+				t.Fatalf("Expected peer state %v. Got: %v", tc.enabled,
+					peer.GetState().GetState())
+			}
+			if tc.serial != peer.GetConfig().GetSerial() {
+				t.Fatalf("Expected peer serial state to be %v. Got: %v",
+					tc.serial, peer.GetConfig().GetSerial())
+			}
+			if peer.GetConfig().GetReplicateAll() {
+				t.Fatalf("Expected peer to set replicate_all=false. Got: %v",
+					peer.GetConfig().GetReplicateAll())
+			}
+			if len(peer.GetConfig().GetTableCfs()) != 1 {
+				t.Fatalf("Expected 1 table CF. Got: %d", len(peer.GetConfig().GetTableCfs()))
+			}
+			tableCf := peer.GetConfig().GetTableCfs()[0]
+			if !bytes.Equal(tableCf.GetTableName().GetNamespace(), []byte("default")) ||
+				!bytes.Equal(tableCf.GetTableName().GetQualifier(), tableBytes) {
+				t.Fatalf("Expected table CF to contain table name %s:%s. Got: %s:%s",
+					[]byte("default"), tableBytes, tableCf.GetTableName().GetNamespace(),
+					tableCf.GetTableName().GetQualifier())
+			}
+			if len(tableCf.GetFamilies()) != len(columnFamilies) {
+				t.Fatalf("Expected table CF to contain %d families. Got: %d",
+					len(columnFamilies), len(tableCf.GetFamilies()))
+			}
+			for j, tableCfFamily := range tableCf.GetFamilies() {
+				family := columnFamilies[j]
+				if !bytes.Equal(family, tableCfFamily) {
+					t.Fatalf("Expected table CF to contain family %v at position %d. Got: %v",
+						family, j, tableCfFamily)
+				}
+			}
+
+			if tc.enabled {
+				// disable enabled peer
+				disablePeer := hrpc.NewDisableReplicationPeer(ctx, peerId)
+				err := ac.DisableReplicationPeer(disablePeer)
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				// enable disabled peer
+				enablePeer := hrpc.NewEnableReplicationPeer(ctx, peerId)
+				err := ac.EnableReplicationPeer(enablePeer)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			listPeers, err = hrpc.NewListReplicationPeers(ctx,
+				hrpc.ListReplicationPeersRegex(peerId))
+			if err != nil {
+				t.Fatal(err)
+			}
+			peers, err = ac.ListReplicationPeers(listPeers)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(peers) != 1 {
+				t.Fatalf("Expected 1 peers. Got %d", len(peers))
+			}
+			peer = peers[0]
+			if (tc.enabled && peer.GetState().GetState() != pb.ReplicationState_DISABLED) ||
+				(!tc.enabled && peer.GetState().GetState() != pb.ReplicationState_ENABLED) {
+				t.Fatalf("Expected peer state %v. Got: %v", !tc.enabled,
+					peer.GetState().GetState())
+			}
+		})
+	}
+
+	t.Run("check regex peer listing",
+		func(t *testing.T) {
+			listPeers, err := hrpc.NewListReplicationPeers(ctx,
+				hrpc.ListReplicationPeersRegex(peerIdRegex))
+			if err != nil {
+				t.Fatal(err)
+			}
+			peers, err := ac.ListReplicationPeers(listPeers)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(peers) != len(tcases) {
+				t.Fatalf("Expected %d peers. Got %d", len(tcases), len(peers))
+			}
+		})
+}
