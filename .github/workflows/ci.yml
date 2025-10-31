@@ -13,13 +13,13 @@ jobs:
       matrix:
         go: [~1.24, ^1]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup | Download HBase
         run: |
-          ver=2.4.8 &&
+          ver=2.6.2 &&
           wget -nv https://archive.apache.org/dist/hbase/$ver/hbase-$ver-bin.tar.gz &&
-          echo "2CCB816619FA651E72BF7C110FC2455705654276CFEBE067A7B9D8B39641A8A8BB827BE6EBBB7CE9D6A8441B60B6836FF3A3CA2C394952D688621F8B22F9C310  hbase-$ver-bin.tar.gz" | sha512sum --strict --check - &&
+          echo "E07C077F5B3560D3A47A44268D593A0B5DE84CF8E633507C6ED58496FD87E1A4C17D76A7D906AC4ED95802ED7BB52AA7FC2A6160A37671F1ABC356DE602C90C7  hbase-$ver-bin.tar.gz" | sha512sum --strict --check - &&
           tar zxf hbase-$ver-bin.tar.gz --exclude=docs &&
           ln -s hbase-$ver hbase
 
@@ -38,7 +38,7 @@ jobs:
         run: hbase/bin/hbase-daemon.sh --config hbase/conf start master
 
       - name: Setup | Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go }}
 
@@ -52,7 +52,7 @@ jobs:
         run: make integration_cover HBASE_HOME=hbase
 
       - name: Upload to Codecov
-        uses: codecov/codecov-action@v2.1.0
+        uses: codecov/codecov-action@v5
 
       - name: Upload HBase logs
         uses: actions/upload-artifact@v4
