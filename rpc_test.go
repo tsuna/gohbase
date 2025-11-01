@@ -1928,8 +1928,8 @@ func TestSendRPCStatsHandler(t *testing.T) {
 				t.Fatalf("Failed to create scan req: %v", err)
 			}
 			expectedScanStatsID := scan.ScanStatsID()
-			scan.ResponseSize = 42
-			expectedResponseSize := scan.ResponseSize
+			scan.Response = &hrpc.ScanResponseV2{ResponseSize: 42}
+			expectedResponseSize := scan.Response.ResponseSize
 
 			go func() {
 				res := hrpc.RPCResult{

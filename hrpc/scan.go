@@ -70,6 +70,11 @@ type ScanResponseV2 struct {
 	// Results contains ResultV2s, each of which are the results for a
 	// single row.
 	Results []ResultV2
+
+	// ResponseSize contains the size of the response after the RPC is
+	// completed. It is the size of the uncompressed cellblocks in the
+	// response.
+	ResponseSize int
 }
 
 // ResultV2 contains the results for a single row.
@@ -133,12 +138,6 @@ type Scan struct {
 
 	scanStatsHandler ScanStatsHandler
 	scanStatsID      int64
-
-	// ResponseSize contains the size of the response after the RPC is
-	// completed. It is the size of the uncompressed cellblocks in the
-	// response. This is only meant for use internal to gohbase.
-	// TODO: Move this inside ScanResponse
-	ResponseSize int
 
 	// Response contains the scan's response after the RPC is
 	// completed. This is only meant for use internal to gohbase.
@@ -396,7 +395,7 @@ func (s *Scan) DeserializeCellBlocks(m proto.Message, b []byte) (uint32, error) 
 		}
 		readLen += l
 	}
-	s.ResponseSize = int(readLen)
+	s.Response.ResponseSize = int(readLen)
 	return readLen, nil
 }
 
