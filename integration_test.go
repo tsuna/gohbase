@@ -3077,7 +3077,7 @@ func TestReplication(t *testing.T) {
 			removePeer := hrpc.NewRemoveReplicationPeer(ctx, peer.GetId())
 			err := ac.RemoveReplicationPeer(removePeer)
 			if err != nil {
-				t.Fatal(err)
+				t.Error(err)
 			}
 		}
 	}()
@@ -3140,27 +3140,28 @@ func TestReplication(t *testing.T) {
 			if peerId != peer.GetId() {
 				t.Fatalf("Expected peerId %q. Got: %q", peerId, peer.GetId())
 			}
-			if clusterKey != peer.GetConfig().GetClusterkey() {
+			peerConfig := peer.GetConfig()
+			peerReplicationState := peer.GetState().GetState()
+			if clusterKey != peerConfig.GetClusterkey() {
 				t.Fatalf("Expected clusterKey %q. Got: %q", clusterKey,
-					peer.GetConfig().GetClusterkey())
+					peerConfig.GetClusterkey())
 			}
-			if (tc.enabled && peer.GetState().GetState() != pb.ReplicationState_ENABLED) ||
-				(!tc.enabled && peer.GetState().GetState() != pb.ReplicationState_DISABLED) {
-				t.Fatalf("Expected peer state %v. Got: %v", tc.enabled,
-					peer.GetState().GetState())
+			if (tc.enabled && peerReplicationState != pb.ReplicationState_ENABLED) ||
+				(!tc.enabled && peerReplicationState != pb.ReplicationState_DISABLED) {
+				t.Fatalf("Expected peer state %v. Got: %v", tc.enabled, peerReplicationState)
 			}
-			if tc.serial != peer.GetConfig().GetSerial() {
+			if tc.serial != peerConfig.GetSerial() {
 				t.Fatalf("Expected peer serial state to be %v. Got: %v",
-					tc.serial, peer.GetConfig().GetSerial())
+					tc.serial, peerConfig.GetSerial())
 			}
-			if peer.GetConfig().GetReplicateAll() {
+			if peerConfig.GetReplicateAll() {
 				t.Fatalf("Expected peer to set replicate_all=false. Got: %v",
-					peer.GetConfig().GetReplicateAll())
+					peerConfig.GetReplicateAll())
 			}
-			if len(peer.GetConfig().GetTableCfs()) != 1 {
-				t.Fatalf("Expected 1 table CF. Got: %d", len(peer.GetConfig().GetTableCfs()))
+			if len(peerConfig.GetTableCfs()) != 1 {
+				t.Fatalf("Expected 1 table CF. Got: %d", len(peerConfig.GetTableCfs()))
 			}
-			tableCf := peer.GetConfig().GetTableCfs()[0]
+			tableCf := peerConfig.GetTableCfs()[0]
 			if !bytes.Equal(tableCf.GetTableName().GetNamespace(), []byte("default")) ||
 				!bytes.Equal(tableCf.GetTableName().GetQualifier(), tableBytes) {
 				t.Fatalf("Expected table CF to contain table name %s:%s. Got: %s:%s",
@@ -3208,10 +3209,10 @@ func TestReplication(t *testing.T) {
 				t.Fatalf("Expected 1 peers. Got %d", len(peers))
 			}
 			peer = peers[0]
-			if (tc.enabled && peer.GetState().GetState() != pb.ReplicationState_DISABLED) ||
-				(!tc.enabled && peer.GetState().GetState() != pb.ReplicationState_ENABLED) {
-				t.Fatalf("Expected peer state %v. Got: %v", !tc.enabled,
-					peer.GetState().GetState())
+			peerReplicationState = peer.GetState().GetState()
+			if (tc.enabled && peerReplicationState != pb.ReplicationState_DISABLED) ||
+				(!tc.enabled && peerReplicationState != pb.ReplicationState_ENABLED) {
+				t.Fatalf("Expected peer state %v. Got: %v", !tc.enabled, peerReplicationState)
 			}
 		})
 	}
