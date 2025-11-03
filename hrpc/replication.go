@@ -3,6 +3,8 @@ package hrpc
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/tsuna/gohbase/pb"
 	"google.golang.org/protobuf/proto"
@@ -157,6 +159,16 @@ func AddReplicationPeerEnabled(enabled bool) func(Call) error {
 func NewAddReplicationPeer(ctx context.Context, peerId, clusterKey string,
 	opts ...func(Call) error) (
 	*AddReplicationPeer, error) {
+	if strings.Contains(peerId, "-") {
+		return nil, fmt.Errorf("Peer ID %q should not contain dashes", peerId)
+	}
+	// Basic cluster key validation. Defer to the server for more advanced validation
+	// as cluster key may contain 3 or more parts separated by :
+	if !strings.Contains(clusterKey, ":") {
+		return nil, fmt.Errorf("Expected cluster key %q to follow the format "+
+			"hbase.zookeeper.quorum:hbase.zookeeper.property.clientPort:zookeeper.znode.parent",
+			clusterKey)
+	}
 	r := &AddReplicationPeer{
 		base: base{
 			ctx:      ctx,
