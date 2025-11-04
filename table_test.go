@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/tsuna/gohbase"
-	"github.com/tsuna/gohbase/filter"
 	"github.com/tsuna/gohbase/hrpc"
 )
 
@@ -36,7 +35,7 @@ var cFamilies = map[string]map[string]string{
 }
 
 func TestCreateTable(t *testing.T) {
-	testTableName := "test1_" + getTimestampString()
+	testTableName := t.Name() + "_" + getTimestampString()
 	t.Log("testTableName=" + testTableName)
 
 	ac := gohbase.NewAdminClient(*host)
@@ -46,30 +45,47 @@ func TestCreateTable(t *testing.T) {
 		t.Errorf("CreateTable returned an error: %v", err)
 	}
 
-	// check in hbase:meta if there's a region for the table
-	c := gohbase.NewClient(*host)
-	metaKey := testTableName + ","
-	keyFilter := filter.NewPrefixFilter([]byte(metaKey))
-	scan, err := hrpc.NewScanStr(context.Background(), metaTableName, hrpc.Filters(keyFilter))
+	defer func() {
+		err := DeleteTable(ac, testTableName)
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	rsp, err := getTableRegions(testTableName)
 	if err != nil {
-		t.Fatalf("Failed to create Scan request: %s", err)
+		t.Fatal(err)
+	}
+	if len(rsp) != 1 {
+		t.Errorf("Meta returned %d rows for table '%s' , want 1", len(rsp), testTableName)
+	}
+}
+
+// getTableRegions is a helper to scan hbase:meta for all regions of a table, tableName
+func getTableRegions(tableName string) ([]*hrpc.Result, error) {
+	c := gohbase.NewClient(*host)
+	metaKeyStart := tableName + ",,"
+	metaKeyStop := tableName + ";"
+	scan, err := hrpc.NewScanRangeStr(context.Background(), metaTableName,
+		metaKeyStart, metaKeyStop)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Scan request: %w", err)
 	}
 
 	var rsp []*hrpc.Result
 	scanner := c.Scan(scan)
 	for {
-		res, err := scanner.Next()
+		var res *hrpc.Result
+		res, err = scanner.Next()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			t.Fatal(err)
+			return nil, fmt.Errorf("error consuming scanner: %w", err)
 		}
 		rsp = append(rsp, res)
 	}
-	if len(rsp) != 1 {
-		t.Errorf("Meta returned %d rows for prefix '%s' , want 1", len(rsp), metaKey)
-	}
+	return rsp, nil
 }
 
 func TestCreatePresplitTable(t *testing.T) {
@@ -77,6 +93,7 @@ func TestCreatePresplitTable(t *testing.T) {
 	t.Log("testTableName=" + testTableName)
 
 	ac := gohbase.NewAdminClient(*host)
+	// Keys are split points, so expect split keys + 1 regions
 	splitkeys := [][]byte{
 		[]byte{3},
 		[]byte("foo"),
@@ -89,29 +106,21 @@ func TestCreatePresplitTable(t *testing.T) {
 		t.Errorf("CreateTable returned an error: %v", err)
 	}
 
-	// check in hbase:meta if there's a region for the table
-	c := gohbase.NewClient(*host)
-	metaKey := testTableName + ","
-	keyFilter := filter.NewPrefixFilter([]byte(metaKey))
-	scan, err := hrpc.NewScanStr(context.Background(), metaTableName, hrpc.Filters(keyFilter))
+	defer func() {
+		err := DeleteTable(ac, testTableName)
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	rsp, err := getTableRegions(testTableName)
 	if err != nil {
-		t.Fatalf("Failed to create Scan request: %s", err)
+		t.Fatal(err)
 	}
 
-	var rsp []*hrpc.Result
-	scanner := c.Scan(scan)
-	for {
-		res, err := scanner.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			t.Fatal(err)
-		}
-		rsp = append(rsp, res)
-	}
-	if len(rsp) != 4 {
-		t.Errorf("Meta returned %d rows for prefix '%s' , want 2", len(rsp), metaKey)
+	if len(rsp) != len(splitkeys)+1 {
+		t.Errorf("Meta returned %d rows for table '%s' , want %d",
+			len(rsp), testTableName, len(splitkeys)+1)
 	}
 }
 
@@ -135,34 +144,25 @@ func TestCreateTableWithAttributes(t *testing.T) {
 		t.Errorf("CreateTable returned an error: %v", err)
 	}
 
-	// check in hbase:meta if there's a region for the table
-	c := gohbase.NewClient(*host)
-	metaKey := testTableName + ","
-	keyFilter := filter.NewPrefixFilter([]byte(metaKey))
-	scan, err := hrpc.NewScanStr(context.Background(), metaTableName, hrpc.Filters(keyFilter))
+	defer func() {
+		err := DeleteTable(ac, testTableName)
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	rsp, err := getTableRegions(testTableName)
 	if err != nil {
-		t.Fatalf("Failed to create Scan request: %s", err)
+		t.Fatal(err)
 	}
 
-	var rsp []*hrpc.Result
-	scanner := c.Scan(scan)
-	for {
-		res, err := scanner.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			t.Fatal(err)
-		}
-		rsp = append(rsp, res)
-	}
 	if len(rsp) != 1 {
-		t.Errorf("Meta returned %d rows for prefix '%s' , want 1", len(rsp), metaKey)
+		t.Errorf("Meta returned %d rows for table '%s' , want 1", len(rsp), testTableName)
 	}
 }
 
 func TestDisableDeleteTable(t *testing.T) {
-	testTableName := "test1_" + getTimestampString()
+	testTableName := t.Name() + "_" + getTimestampString()
 	t.Log("testTableName=" + testTableName)
 	ac := gohbase.NewAdminClient(*host)
 
@@ -185,34 +185,18 @@ func TestDisableDeleteTable(t *testing.T) {
 		t.Errorf("DeleteTable returned an error: %v", err)
 	}
 
-	// check in hbase:meta if there's a region for the table
-	c := gohbase.NewClient(*host)
-	metaKey := testTableName + ",,"
-	keyFilter := filter.NewPrefixFilter([]byte(metaKey))
-	scan, err := hrpc.NewScanStr(context.Background(), metaTableName, hrpc.Filters(keyFilter))
+	rsp, err := getTableRegions(testTableName)
 	if err != nil {
-		t.Fatalf("Failed to create Scan request: %s", err)
+		t.Fatal(err)
 	}
 
-	var rsp []*hrpc.Result
-	scanner := c.Scan(scan)
-	for {
-		res, err := scanner.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			t.Fatal(err)
-		}
-		rsp = append(rsp, res)
-	}
 	if len(rsp) != 0 {
-		t.Errorf("Meta returned %d rows for prefix '%s', want 0", len(rsp), metaKey)
+		t.Errorf("Meta returned %d rows for table '%s', want 0", len(rsp), testTableName)
 	}
 }
 
 func TestEnableTable(t *testing.T) {
-	testTableName := "test1_" + getTimestampString()
+	testTableName := t.Name() + "_" + getTimestampString()
 	t.Log("testTableName=" + testTableName)
 	ac := gohbase.NewAdminClient(*host)
 
@@ -220,6 +204,13 @@ func TestEnableTable(t *testing.T) {
 	if err := ac.CreateTable(crt); err != nil {
 		t.Errorf("CreateTable returned an error: %v", err)
 	}
+
+	defer func() {
+		err := DeleteTable(ac, testTableName)
+		if err != nil {
+			panic(err)
+		}
+	}()
 
 	// disable
 	dit := hrpc.NewDisableTable(context.Background(), []byte(testTableName))
