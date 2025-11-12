@@ -564,9 +564,6 @@ func WithScanStatsHandler(h ScanStatsHandler) func(Call) error {
 		if !ok {
 			return errors.New("'WithScanStatsHandler' option can only be used with Scan queries")
 		}
-		if h == nil {
-			return errors.New("'WithScanStatsHandler' must provide a handler function")
-		}
 		scan.scanStatsHandler = h
 		return nil
 	}

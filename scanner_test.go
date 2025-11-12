@@ -909,3 +909,74 @@ func TestScannerClosed(t *testing.T) {
 		t.Fatalf("unexpected error %v, expected %v", err, io.EOF)
 	}
 }
+
+func TestScanStatsHandlerContinueWithinRegion(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+	c := mock.NewMockRPCClient(ctrl)
+
+	var handlerCallCount int
+	statsHandler := func(stats *hrpc.ScanStats) {
+		handlerCallCount++
+	}
+
+	scan, err := hrpc.NewScan(context.Background(), table,
+		hrpc.NumberOfRows(2),
+		hrpc.WithScanStatsHandler(statsHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var scannerID uint64 = 42
+	scanner := newScanner(c, scan, slog.Default())
+
+	// First scan request - returns results with MoreResultsInRegion=true
+	resp1 := &pb.ScanResponse{
+		ScannerId:           cp(scannerID),
+		MoreResultsInRegion: proto.Bool(true),
+	}
+	c.EXPECT().SendRPC(gomock.Any()).DoAndReturn(
+		func(rpc hrpc.Call) (msg proto.Message, err error) {
+			s, ok := rpc.(*hrpc.Scan)
+			if !ok {
+				t.Fatal("expected Scan request")
+			}
+			s.ScanStatsHandler()(nil)
+			s.Response = &hrpc.ScanResponseV2{}
+			rpc.SetRegion(region1)
+			return resp1, nil
+		}).Times(1)
+
+	// Second scan request - continues within the same region using scannerID
+	// This is where the bug was: the ScanStatsHandler wasn't being passed
+	resp2 := &pb.ScanResponse{
+		MoreResults: proto.Bool(false), // Signal end of scan
+	}
+	c.EXPECT().SendRPC(gomock.Any()).DoAndReturn(
+		func(rpc hrpc.Call) (msg proto.Message, err error) {
+			s, ok := rpc.(*hrpc.Scan)
+			if !ok {
+				t.Fatal("expected Scan request")
+			}
+			s.ScanStatsHandler()(nil)
+			if s.ScannerId() != scannerID {
+				t.Fatalf("expected scannerID %d, got %d", scannerID, s.ScannerId())
+			}
+			s.Response = &hrpc.ScanResponseV2{}
+			rpc.SetRegion(region1)
+			return resp2, nil
+		}).Times(1)
+
+	for {
+		_, err := scanner.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if handlerCallCount != 2 {
+		t.Errorf("didn't get 2 handler calls: %d", handlerCallCount)
+	}
+}

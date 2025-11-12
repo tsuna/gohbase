@@ -34,11 +34,6 @@ func TestWithScanStatsHandler(t *testing.T) {
 		t.Fatal("ScanStatsHandler nil, want it to be set")
 	}
 
-	s, err = NewScan(ctx, table, WithScanStatsHandler(nil))
-	if err == nil {
-		t.Fatal("nil handler should have returned an error")
-	}
-
 	_, err = NewGet(ctx, table, []byte("random key"), WithScanStatsHandler(h))
 	if err == nil {
 		t.Fatal("Should not have been able to create non-Scan request without error")

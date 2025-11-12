@@ -279,6 +279,7 @@ func (s *scanner) request() (*hrpc.ScanResponseV2, *pb.ScanResponse, hrpc.Region
 			hrpc.RenewInterval(s.rpc.RenewInterval()),
 			// preserve ScanStatsID
 			hrpc.ScanStatsID(s.rpc.ScanStatsID()),
+			hrpc.WithScanStatsHandler(s.rpc.ScanStatsHandler()),
 		)
 	}
 	if err != nil {
