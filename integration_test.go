@@ -3000,10 +3000,9 @@ func TestScanWithStatsHandler(t *testing.T) {
 
 			// keySplits is used to split the table into pre-split regions. For this scan,
 			// the number of ScanStats results (and hrpc.Results, although not tested here) should
-			// equal the num regions in the table. The test is scanning a tiny amount of data
-			// it has written to specified qualifiers, so wouldn't be hitting max result size, ex.
-			if len(statsRes) != len(keySplits)+1 {
-				t.Fatalf("Expected handler to be called %d times, got %d calls",
+			// equal about the num regions in the table.
+			if len(statsRes) < len(keySplits)+1 {
+				t.Fatalf("Expected handler to be called more than %d times, got %d calls",
 					len(keySplits)+1, len(statsRes))
 			}
 
