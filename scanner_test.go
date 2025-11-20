@@ -922,7 +922,9 @@ func TestScanStatsHandlerContinueWithinRegion(t *testing.T) {
 
 	scan, err := hrpc.NewScan(context.Background(), table,
 		hrpc.NumberOfRows(2),
-		hrpc.WithScanStatsHandler(statsHandler))
+		hrpc.WithScanStatsHandler(statsHandler),
+		hrpc.TrackScanMetrics(),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -947,8 +949,6 @@ func TestScanStatsHandlerContinueWithinRegion(t *testing.T) {
 			return resp1, nil
 		}).Times(1)
 
-	// Second scan request - continues within the same region using scannerID
-	// This is where the bug was: the ScanStatsHandler wasn't being passed
 	resp2 := &pb.ScanResponse{
 		MoreResults: proto.Bool(false), // Signal end of scan
 	}
@@ -957,6 +957,9 @@ func TestScanStatsHandlerContinueWithinRegion(t *testing.T) {
 			s, ok := rpc.(*hrpc.Scan)
 			if !ok {
 				t.Fatal("expected Scan request")
+			}
+			if !s.TrackScanMetrics() {
+				t.Error("coninuation scan should also have track scan metrics set")
 			}
 			s.ScanStatsHandler()(nil)
 			if s.ScannerId() != scannerID {
