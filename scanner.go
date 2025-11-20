@@ -269,10 +269,7 @@ func (s *scanner) request() (*hrpc.ScanResponseV2, *pb.ScanResponse, hrpc.Region
 			opts...)
 	} else {
 		// continuing to scan current region
-		rpc, err = hrpc.NewScanRange(s.rpc.Context(),
-			s.rpc.Table(),
-			s.startRow,
-			nil,
+		opts := []func(hrpc.Call) error{
 			hrpc.ScannerID(s.curRegionScannerID),
 			hrpc.NumberOfRows(s.rpc.NumberOfRows()),
 			hrpc.Priority(s.rpc.Priority()),
@@ -280,6 +277,15 @@ func (s *scanner) request() (*hrpc.ScanResponseV2, *pb.ScanResponse, hrpc.Region
 			// preserve ScanStatsID
 			hrpc.ScanStatsID(s.rpc.ScanStatsID()),
 			hrpc.WithScanStatsHandler(s.rpc.ScanStatsHandler()),
+		}
+		if s.rpc.TrackScanMetrics() {
+			opts = append(opts, hrpc.TrackScanMetrics())
+		}
+		rpc, err = hrpc.NewScanRange(s.rpc.Context(),
+			s.rpc.Table(),
+			s.startRow,
+			nil,
+			opts...,
 		)
 	}
 	if err != nil {
