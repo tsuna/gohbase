@@ -89,8 +89,9 @@ func (s *scanner) peek() (hrpc.ResultV2, error) {
 	if err != nil {
 		return hrpc.ResultV2{}, err
 	}
-	if !s.closed && s.rpc.RenewInterval() > 0 {
-		// Start up a renewer
+	if !s.isRegionScannerClosed() && s.rpc.RenewInterval() > 0 {
+		// Start up a renewer if there is more to read within this
+		// region.
 		renewCtx, cancel := context.WithCancel(s.rpc.Context())
 		s.renewCancel = cancel
 		go s.renewLoop(renewCtx, s.startRow)
@@ -229,8 +230,9 @@ func (s *scannerV2) Next() (*hrpc.ScanResponseV2, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !s.closed && s.rpc.RenewInterval() > 0 {
-		// Start up a renewer
+	if !s.isRegionScannerClosed() && s.rpc.RenewInterval() > 0 {
+		// Start up a renewer if there is more to read within this
+		// region.
 		renewCtx, cancel := context.WithCancel(s.rpc.Context())
 		s.renewCancel = cancel
 		go s.renewLoop(renewCtx, s.startRow)
