@@ -94,7 +94,7 @@ func (s *scanner) peek() (hrpc.ResultV2, error) {
 		// region.
 		renewCtx, cancel := context.WithCancel(s.rpc.Context())
 		s.renewCancel = cancel
-		go s.renewLoop(renewCtx, s.startRow)
+		go s.renewLoop(renewCtx, s.curRegionScannerID)
 	}
 
 	// fetch cannot return zero results
@@ -235,7 +235,7 @@ func (s *scannerV2) Next() (*hrpc.ScanResponseV2, error) {
 		// region.
 		renewCtx, cancel := context.WithCancel(s.rpc.Context())
 		s.renewCancel = cancel
-		go s.renewLoop(renewCtx, s.startRow)
+		go s.renewLoop(renewCtx, s.curRegionScannerID)
 	}
 	return resp, nil
 }
@@ -425,15 +425,13 @@ func (s *scanner) closeRegionScanner() {
 }
 
 // renews a scanner by resending scan request with renew = true
-func (s *scanner) renew(ctx context.Context, startRow []byte) error {
+func (s *scanner) renew(ctx context.Context, scannerID uint64) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	rpc, err := hrpc.NewScanRange(ctx,
+	rpc, err := hrpc.NewScan(ctx,
 		s.rpc.Table(),
-		startRow,
-		nil,
-		hrpc.ScannerID(s.curRegionScannerID),
+		hrpc.ScannerID(scannerID),
 		hrpc.Priority(s.rpc.Priority()),
 		hrpc.RenewalScan(),
 		hrpc.ScanStatsID(s.rpc.ScanStatsID()),
@@ -445,7 +443,7 @@ func (s *scanner) renew(ctx context.Context, startRow []byte) error {
 	return err
 }
 
-func (s *scanner) renewLoop(ctx context.Context, startRow []byte) {
+func (s *scanner) renewLoop(ctx context.Context, scannerID uint64) {
 	scanRenewers.Inc()
 	t := time.NewTicker(s.rpc.RenewInterval())
 	defer func() {
@@ -456,7 +454,7 @@ func (s *scanner) renewLoop(ctx context.Context, startRow []byte) {
 	for {
 		select {
 		case <-t.C:
-			if err := s.renew(ctx, startRow); err != nil {
+			if err := s.renew(ctx, scannerID); err != nil {
 				s.logger.Error("error renewing scanner", "err", err)
 				return
 			}
