@@ -9,7 +9,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"math"
+	"fmt"
 	"time"
 
 	"github.com/tsuna/gohbase/pb"
@@ -99,6 +99,9 @@ func TimestampUint64(ts uint64) func(Call) error {
 		m, ok := o.(*Mutate)
 		if !ok {
 			return errors.New("'TimestampUint64' option can only be used with mutation queries")
+		}
+		if ts > MaxTimestamp {
+			return fmt.Errorf("timestamp is greater than max: (%d > %d)", ts, MaxTimestamp)
 		}
 		m.timestamp = ts
 		return nil
@@ -442,8 +445,8 @@ func (m *Mutate) valuesToCellblocks() ([]byte, int32, uint32) {
 	cbs := make([]byte, 0, cbsLen)
 
 	var ts uint64
-	if m.timestamp == MaxTimestamp {
-		ts = math.MaxInt64 // Java's Long.MAX_VALUE use for HBase's LATEST_TIMESTAMP
+	if m.timestamp > MaxTimestamp {
+		ts = MaxTimestamp
 	} else {
 		ts = m.timestamp
 	}
@@ -494,7 +497,8 @@ var durabilities = []*pb.MutationProto_Durability{
 
 func (m *Mutate) toProto(isCellblocks bool, cbs [][]byte) (*pb.MutateRequest, [][]byte, uint32) {
 	var ts *uint64
-	if m.timestamp != MaxTimestamp {
+
+	if m.timestamp < MaxTimestamp {
 		ts = &m.timestamp
 	}
 

@@ -1646,6 +1646,51 @@ func TestDeserializeCellBlocksScan(t *testing.T) {
 	}
 }
 
+// TestMutateTimestampBounds tests the valid timestamp bounds for Mutate requests
+func TestMutateTimestampBounds(t *testing.T) {
+	ctx := context.Background()
+	tn := []byte("table_name")
+	key := []byte("key_name")
+	tcases := []struct {
+		name   string
+		expErr bool
+		ts     uint64
+	}{
+		{
+			name:   "Valid zero timestamp",
+			expErr: false,
+			ts:     0,
+		},
+		{
+			name:   "Valid max timestamp",
+			expErr: false,
+			ts:     MaxTimestamp,
+		},
+		{
+			name:   "Invalid MaxUint64 timestamp",
+			expErr: true,
+			ts:     math.MaxUint64,
+		},
+		{
+			name:   "Invalid timestamp MaxInt64 < ts < MaxUint64",
+			expErr: true,
+			ts:     math.MaxInt64 + 57,
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := baseMutate(ctx, tn, key, nil, TimestampUint64(tc.ts))
+			if tc.expErr && err == nil {
+				t.Fatalf("Expected error creating Mutate with ts %d, but didn't get one", tc.ts)
+			}
+			if !tc.expErr && err != nil {
+				t.Fatalf("Expected no error creating Mutate with ts %d, but got: %v", tc.ts, err)
+			}
+		})
+	}
+}
+
 func confirmScanAttributes(ctx context.Context, s *Scan, table, start, stop []byte,
 	fam map[string][]string, fltr filter.Filter, numberOfRows uint32,
 	renewInterval time.Duration, renewalScan bool) bool {

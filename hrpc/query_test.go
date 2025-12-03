@@ -245,3 +245,92 @@ func TestPriority(t *testing.T) {
 		t.Errorf("expected error when creating Put with Priority, but got none")
 	}
 }
+
+func TestTimeRangeUint64(t *testing.T) {
+	tcases := []struct {
+		name string
+		from uint64
+		to   uint64
+		// the error for this invalid timerange comes from creating Scan or Get, want the timestamp
+		// validation to happen here instead of getting Exceptions from HBase
+		expErr bool
+	}{
+		{
+			name: "valid scan range",
+			from: 1,
+			to:   123456789,
+		},
+		{
+			name: "valid scan range, at MaxTimestamp",
+			from: MaxTimestamp - 1,
+			to:   MaxTimestamp,
+		},
+		{
+			name: "valid scan range, 0 to MaxTimestamp",
+			from: 0,
+			to:   MaxTimestamp,
+		},
+		{
+			name:   "end before start",
+			from:   125,
+			to:     100,
+			expErr: true,
+		},
+		{
+			name:   "end == start",
+			from:   MaxTimestamp,
+			to:     MaxTimestamp,
+			expErr: true,
+		},
+		{
+			name:   "end beyond Long.MAX_VALUE",
+			from:   0,
+			to:     math.MaxInt64 + 11,
+			expErr: true,
+		},
+		{
+			name:   "invalid scan range, at MaxTimestamp",
+			from:   MaxTimestamp,
+			to:     MaxTimestamp + 1,
+			expErr: true,
+		},
+		{
+			name:   "start and end beyond Long.MAX_VALUE",
+			from:   math.MaxInt64 + 11,
+			to:     math.MaxInt64 + 12,
+			expErr: true,
+		},
+		{
+			name:   "MaxUint64",
+			from:   0,
+			to:     math.MaxUint64,
+			expErr: true,
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Run(tc.name, func(t *testing.T) {
+			validateErr := func(t *testing.T, err error) {
+				if tc.expErr {
+					if err == nil {
+						t.Fatal("Did not get error creating request as expected")
+					}
+					t.Logf("Got error as expected creating request: %v", err)
+				} else {
+					if err != nil {
+						t.Fatalf("Unexpected error creating request: %v", err)
+					}
+				}
+			}
+			ctx := context.Background()
+			table := []byte("tablename")
+
+			// Both Scans and Gets use the TimeRange
+			_, err := NewScan(ctx, table, TimeRangeUint64(tc.from, tc.to))
+			validateErr(t, err)
+
+			_, err = NewGet(ctx, table, []byte("key"), TimeRangeUint64(tc.from, tc.to))
+			validateErr(t, err)
+		})
+	}
+}
