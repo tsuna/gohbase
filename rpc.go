@@ -1055,6 +1055,7 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 				Dialer:        c.regionDialer,
 				Logger:        c.logger,
 				ScanControl:   c.scanControlOptions,
+				PutControl:    c.putControlOptions,
 			}
 
 			client = c.clients.put(addr, reg, func() hrpc.RegionClient {

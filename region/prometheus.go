@@ -69,4 +69,13 @@ var (
 		},
 		[]string{"regionserver"},
 	)
+
+	concurrentPuts = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "gohbase",
+			Name:      "concurrent_puts_limit",
+			Help:      "Max number of concurrent puts per region server",
+		},
+		[]string{"regionserver"},
+	)
 )

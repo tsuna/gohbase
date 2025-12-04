@@ -207,6 +207,9 @@ type client struct {
 	pingInterval    time.Duration
 	scanController  Controller
 	scanTokenBucket *Token
+
+	// put concurrency control
+	putTokenBucket *Token
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine
@@ -341,6 +344,12 @@ func (c *client) registerRPC(rpc hrpc.Call) (uint32, error) {
 		}
 	}
 
+	if _, isPut := rpc.(*hrpc.Mutate); isPut && c.putTokenBucket != nil {
+		if err := c.putTokenBucket.Take(rpc.Context()); err != nil {
+			return 0, err
+		}
+	}
+
 	currID := atomic.AddUint32(&c.id, 1)
 	c.sentM.Lock()
 	c.sent[currID] = rpc
@@ -362,6 +371,10 @@ func (c *client) unregisterRPC(id uint32) hrpc.Call {
 	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil &&
 		hrpc.GetPriority(rpc) == 0 {
 		c.scanTokenBucket.Release()
+	}
+
+	if _, isPut := rpc.(*hrpc.Mutate); isPut && c.putTokenBucket != nil {
+		c.putTokenBucket.Release()
 	}
 
 	return rpc
