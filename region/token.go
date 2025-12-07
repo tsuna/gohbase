@@ -48,6 +48,18 @@ func NewToken(cap, num int, done chan struct{}) (*Token, error) {
 	return t, nil
 }
 
+// TryTake attempts to acquire a token without blocking.
+func (t *Token) TryTake() bool {
+	select {
+	case <-t.buf:
+		return true
+	case <-t.done:
+		return false
+	default:
+		return false
+	}
+}
+
 // Take acquires a token from the bucket, blocking until one is available
 // or the context is cancelled. If done is closed Take always returns nil.
 func (t *Token) Take(ctx context.Context) error {

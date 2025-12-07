@@ -78,4 +78,14 @@ var (
 		},
 		[]string{"regionserver"},
 	)
+
+	// Counter for # of times concurrent puts limit was hit
+	concurrentPutsLimitHit = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "gohbase",
+			Name:      "concurrent_puts_limit_hit",
+			Help:      "Number of times concurrent puts limit was hit",
+		},
+		[]string{"regionserver"},
+	)
 )
