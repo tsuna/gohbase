@@ -344,7 +344,7 @@ func (c *client) registerRPC(rpc hrpc.Call) (uint32, error) {
 		}
 	}
 
-	if _, isPut := rpc.(*hrpc.Mutate); isPut && c.putTokenBucket != nil {
+	if _, isPut := rpc.(*multi); isPut && c.putTokenBucket != nil {
 		// TryTake first to know if we have hit concurrency limit yet
 		if !c.putTokenBucket.TryTake() {
 			concurrentPutsLimitHit.WithLabelValues(c.addr).Inc()
@@ -377,7 +377,7 @@ func (c *client) unregisterRPC(id uint32) hrpc.Call {
 		c.scanTokenBucket.Release()
 	}
 
-	if _, isPut := rpc.(*hrpc.Mutate); isPut && c.putTokenBucket != nil {
+	if _, isPut := rpc.(*multi); isPut && c.putTokenBucket != nil {
 		c.putTokenBucket.Release()
 	}
 
