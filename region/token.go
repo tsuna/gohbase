@@ -54,7 +54,7 @@ func (t *Token) TryTake() bool {
 	case <-t.buf:
 		return true
 	case <-t.done:
-		return false
+		return true
 	default:
 		return false
 	}
