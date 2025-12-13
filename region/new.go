@@ -36,8 +36,8 @@ type RegionClientOptions struct {
 	Logger *slog.Logger
 	// ScanControl enables congestion control for scan requests
 	ScanControl *ScanControlOptions
-	// PutControl enables concurrency control for put requests
-	PutControl *PutControlOptions
+	// MultiControl enables concurrency control for multi requests
+	MultiControl *MultiControlOptions
 }
 
 // ScanControlOptions holds scan congestion control configuration
@@ -52,10 +52,10 @@ type ScanControlOptions struct {
 	Interval time.Duration
 }
 
-// PutControlOptions holds put concurrency control configuration, will just have a static max
+// MultiControlOptions holds multi concurrency control configuration, will just have a static max
 // which is also its initial length, can add dynamic adjustment in the future if this helps
-type PutControlOptions struct {
-	// MaxConcurrency sets the maximum number of concurrent puts
+type MultiControlOptions struct {
+	// MaxConcurrency sets the maximum number of concurrent multi requests
 	MaxConcurrency int
 }
 
@@ -108,8 +108,8 @@ func NewClient(addr string, ctype ClientType, opts *RegionClientOptions) hrpc.Re
 			c.logger.Warn("scan control disabled due to invalid configuration", "error", err)
 		}
 
-		if err := c.configPutControl(opts.PutControl); err != nil {
-			c.logger.Warn("put control disabled due to invalid configuration", "error", err)
+		if err := c.configMultiControl(opts.MultiControl); err != nil {
+			c.logger.Warn("multi control disabled due to invalid configuration", "error", err)
 		}
 	}
 	return c
@@ -147,7 +147,7 @@ func (c *client) configScanControl(opts *ScanControlOptions) error {
 	return nil
 }
 
-func (c *client) configPutControl(opts *PutControlOptions) error {
+func (c *client) configMultiControl(opts *MultiControlOptions) error {
 	if opts == nil {
 		return nil
 	}
@@ -161,8 +161,8 @@ func (c *client) configPutControl(opts *PutControlOptions) error {
 		return err
 	}
 
-	c.putTokenBucket = tb
-	concurrentPuts.WithLabelValues(c.addr).Set(float64(opts.MaxConcurrency))
+	c.multiTokenBucket = tb
+	concurrentMulti.WithLabelValues(c.addr).Set(float64(opts.MaxConcurrency))
 	return nil
 }
 

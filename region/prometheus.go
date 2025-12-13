@@ -70,21 +70,21 @@ var (
 		[]string{"regionserver"},
 	)
 
-	concurrentPuts = promauto.NewGaugeVec(
+	concurrentMulti = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "gohbase",
-			Name:      "concurrent_puts_limit",
-			Help:      "Max number of concurrent puts per region server",
+			Name:      "concurrent_multi_limit",
+			Help:      "Max number of concurrent multi requests per region server",
 		},
 		[]string{"regionserver"},
 	)
 
-	// Counter for # of times concurrent puts limit was hit
-	concurrentPutsLimitHit = promauto.NewCounterVec(
+	// Counter for # of times concurrent multi limit was hit
+	concurrentMultiLimitHit = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "gohbase",
-			Name:      "concurrent_puts_limit_hit",
-			Help:      "Number of times concurrent puts limit was hit",
+			Name:      "concurrent_multi_limit_hit",
+			Help:      "Number of times concurrent multi limit was hit",
 		},
 		[]string{"regionserver"},
 	)
