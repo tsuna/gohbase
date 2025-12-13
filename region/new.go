@@ -36,6 +36,8 @@ type RegionClientOptions struct {
 	Logger *slog.Logger
 	// ScanControl enables congestion control for scan requests
 	ScanControl *ScanControlOptions
+	// MultiControl enables concurrency control for multi requests
+	MultiControl *MultiControlOptions
 }
 
 // ScanControlOptions holds scan congestion control configuration
@@ -48,6 +50,13 @@ type ScanControlOptions struct {
 	MaxWindow int
 	// Interval sets the interval between ping scans
 	Interval time.Duration
+}
+
+// MultiControlOptions holds multi concurrency control configuration, will just have a static max
+// which is also its initial length, can add dynamic adjustment in the future if this helps
+type MultiControlOptions struct {
+	// MaxConcurrency sets the maximum number of concurrent multi requests
+	MaxConcurrency int
 }
 
 // NewClient creates a new RegionClient with RegionClientOptions.
@@ -98,6 +107,10 @@ func NewClient(addr string, ctype ClientType, opts *RegionClientOptions) hrpc.Re
 		if err := c.configScanControl(opts.ScanControl); err != nil {
 			c.logger.Warn("scan control disabled due to invalid configuration", "error", err)
 		}
+
+		if err := c.configMultiControl(opts.MultiControl); err != nil {
+			c.logger.Warn("multi control disabled due to invalid configuration", "error", err)
+		}
 	}
 	return c
 }
@@ -131,6 +144,25 @@ func (c *client) configScanControl(opts *ScanControlOptions) error {
 	c.scanTokenBucket = tb
 	c.scanTokenBucket.SetCapacity(context.Background(), initialWindow)
 	concurrentScans.WithLabelValues(c.addr).Set(float64(initialWindow))
+	return nil
+}
+
+func (c *client) configMultiControl(opts *MultiControlOptions) error {
+	if opts == nil {
+		return nil
+	}
+
+	if opts.MaxConcurrency <= 0 {
+		return fmt.Errorf("max concurrency must be greater than 0, got %d", opts.MaxConcurrency)
+	}
+
+	tb, err := NewToken(opts.MaxConcurrency, opts.MaxConcurrency, c.done)
+	if err != nil {
+		return err
+	}
+
+	c.multiTokenBucket = tb
+	concurrentMulti.WithLabelValues(c.addr).Set(float64(opts.MaxConcurrency))
 	return nil
 }
 
