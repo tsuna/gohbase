@@ -36,6 +36,8 @@ type RegionClientOptions struct {
 	Logger *slog.Logger
 	// ScanControl enables congestion control for scan requests
 	ScanControl *ScanControlOptions
+	// BatchRequestsControl enables concurrency control for batch requests
+	BatchRequestsControl *BatchRequestsControlOptions
 }
 
 // ScanControlOptions holds scan congestion control configuration
@@ -48,6 +50,12 @@ type ScanControlOptions struct {
 	MaxWindow int
 	// Interval sets the interval between ping scans
 	Interval time.Duration
+}
+
+// BatchRequestsControlOptions holds batch requests concurrency control configuration.
+type BatchRequestsControlOptions struct {
+	// MaxConcurrency sets the maximum number of concurrent batch requests
+	MaxConcurrency int
 }
 
 // NewClient creates a new RegionClient with RegionClientOptions.
@@ -98,6 +106,11 @@ func NewClient(addr string, ctype ClientType, opts *RegionClientOptions) hrpc.Re
 		if err := c.configScanControl(opts.ScanControl); err != nil {
 			c.logger.Warn("scan control disabled due to invalid configuration", "error", err)
 		}
+
+		if err := c.configBatchRequestsControl(opts.BatchRequestsControl); err != nil {
+			c.logger.Warn("batch requests control disabled due to invalid configuration",
+				"error", err)
+		}
 	}
 	return c
 }
@@ -131,6 +144,25 @@ func (c *client) configScanControl(opts *ScanControlOptions) error {
 	c.scanTokenBucket = tb
 	c.scanTokenBucket.SetCapacity(context.Background(), initialWindow)
 	concurrentScans.WithLabelValues(c.addr).Set(float64(initialWindow))
+	return nil
+}
+
+func (c *client) configBatchRequestsControl(opts *BatchRequestsControlOptions) error {
+	if opts == nil {
+		return nil
+	}
+
+	if opts.MaxConcurrency <= 0 {
+		return fmt.Errorf("max concurrency must be greater than 0, got %d", opts.MaxConcurrency)
+	}
+
+	tb, err := NewToken(opts.MaxConcurrency, opts.MaxConcurrency, c.done)
+	if err != nil {
+		return err
+	}
+
+	c.batchRequestsTokenBucket = tb
+	concurrentBatchRequests.WithLabelValues(c.addr).Set(float64(opts.MaxConcurrency))
 	return nil
 }
 

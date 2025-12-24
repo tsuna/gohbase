@@ -69,4 +69,23 @@ var (
 		},
 		[]string{"regionserver"},
 	)
+
+	concurrentBatchRequests = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "gohbase",
+			Name:      "concurrent_batch_requests_limit",
+			Help:      "Max number of concurrent batch requests per region server",
+		},
+		[]string{"regionserver"},
+	)
+
+	// Counter for # of times concurrent batch requests limit was hit
+	concurrentBatchRequestsLimitHit = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "gohbase",
+			Name:      "concurrent_batch_requests_limit_hit",
+			Help:      "Number of times concurrent batch requests limit was hit",
+		},
+		[]string{"regionserver"},
+	)
 )

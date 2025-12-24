@@ -207,6 +207,9 @@ type client struct {
 	pingInterval    time.Duration
 	scanController  Controller
 	scanTokenBucket *Token
+
+	// batch requests concurrency control
+	batchRequestsTokenBucket *Token
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine
@@ -341,6 +344,16 @@ func (c *client) registerRPC(rpc hrpc.Call) (uint32, error) {
 		}
 	}
 
+	if _, isMulti := rpc.(*multi); isMulti && c.batchRequestsTokenBucket != nil {
+		// TryTake first to know if we have hit concurrency limit yet
+		if !c.batchRequestsTokenBucket.TryTake() {
+			if err := c.batchRequestsTokenBucket.Take(rpc.Context()); err != nil {
+				return 0, err
+			}
+			concurrentBatchRequestsLimitHit.WithLabelValues(c.addr).Inc()
+		}
+	}
+
 	currID := atomic.AddUint32(&c.id, 1)
 	c.sentM.Lock()
 	c.sent[currID] = rpc
@@ -362,6 +375,10 @@ func (c *client) unregisterRPC(id uint32) hrpc.Call {
 	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil &&
 		hrpc.GetPriority(rpc) == 0 {
 		c.scanTokenBucket.Release()
+	}
+
+	if _, isMulti := rpc.(*multi); isMulti && c.batchRequestsTokenBucket != nil {
+		c.batchRequestsTokenBucket.Release()
 	}
 
 	return rpc
