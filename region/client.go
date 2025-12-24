@@ -347,10 +347,10 @@ func (c *client) registerRPC(rpc hrpc.Call) (uint32, error) {
 	if _, isMulti := rpc.(*multi); isMulti && c.multiTokenBucket != nil {
 		// TryTake first to know if we have hit concurrency limit yet
 		if !c.multiTokenBucket.TryTake() {
-			concurrentMultiLimitHit.WithLabelValues(c.addr).Inc()
 			if err := c.multiTokenBucket.Take(rpc.Context()); err != nil {
 				return 0, err
 			}
+			concurrentMultiLimitHit.WithLabelValues(c.addr).Inc()
 		}
 	}
 
