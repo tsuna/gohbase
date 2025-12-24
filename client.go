@@ -329,7 +329,8 @@ func ScanControl(options *region.ScanControlOptions) Option {
 	}
 }
 
-// BatchRequestsControl will return an option that configures concurrency control for multi requests.
+// BatchRequestsControl will return an option that configures concurrency control for multi
+// requests.
 func BatchRequestsControl(options *region.BatchRequestsControlOptions) Option {
 	return func(c *client) {
 		c.batchRequestsControlOptions = options

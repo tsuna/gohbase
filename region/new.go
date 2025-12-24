@@ -108,7 +108,8 @@ func NewClient(addr string, ctype ClientType, opts *RegionClientOptions) hrpc.Re
 		}
 
 		if err := c.configBatchRequestsControl(opts.BatchRequestsControl); err != nil {
-			c.logger.Warn("batch requests control disabled due to invalid configuration", "error", err)
+			c.logger.Warn("batch requests control disabled due to invalid configuration",
+				"error", err)
 		}
 	}
 	return c
