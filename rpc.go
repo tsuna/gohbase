@@ -1047,15 +1047,15 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 		} else {
 			// Build options for regular region client
 			options := &region.RegionClientOptions{
-				QueueSize:     c.rpcQueueSize,
-				FlushInterval: c.flushInterval,
-				EffectiveUser: c.effectiveUser,
-				ReadTimeout:   c.regionReadTimeout,
-				Codec:         c.compressionCodec,
-				Dialer:        c.regionDialer,
-				Logger:        c.logger,
-				ScanControl:   c.scanControlOptions,
-				MultiControl:  c.multiControlOptions,
+				QueueSize:            c.rpcQueueSize,
+				FlushInterval:        c.flushInterval,
+				EffectiveUser:        c.effectiveUser,
+				ReadTimeout:          c.regionReadTimeout,
+				Codec:                c.compressionCodec,
+				Dialer:               c.regionDialer,
+				Logger:               c.logger,
+				ScanControl:          c.scanControlOptions,
+				BatchRequestsControl: c.batchRequestsControlOptions,
 			}
 
 			client = c.clients.put(addr, reg, func() hrpc.RegionClient {

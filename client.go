@@ -114,8 +114,8 @@ type client struct {
 	logger *slog.Logger
 	// scan control options for congestion control
 	scanControlOptions *region.ScanControlOptions
-	// multi control options for concurrency control
-	multiControlOptions *region.MultiControlOptions
+	// batch requests control options for concurrency control
+	batchRequestsControlOptions *region.BatchRequestsControlOptions
 }
 
 // NewClient creates a new HBase client.
@@ -329,10 +329,10 @@ func ScanControl(options *region.ScanControlOptions) Option {
 	}
 }
 
-// MultiControl will return an option that configures concurrency control for multi requests.
-func MultiControl(options *region.MultiControlOptions) Option {
+// BatchRequestsControl will return an option that configures concurrency control for multi requests.
+func BatchRequestsControl(options *region.BatchRequestsControlOptions) Option {
 	return func(c *client) {
-		c.multiControlOptions = options
+		c.batchRequestsControlOptions = options
 	}
 }
 

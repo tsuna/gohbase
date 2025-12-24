@@ -208,8 +208,8 @@ type client struct {
 	scanController  Controller
 	scanTokenBucket *Token
 
-	// multi concurrency control
-	multiTokenBucket *Token
+	// batch requests concurrency control
+	batchRequestsTokenBucket *Token
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine
@@ -344,13 +344,13 @@ func (c *client) registerRPC(rpc hrpc.Call) (uint32, error) {
 		}
 	}
 
-	if _, isMulti := rpc.(*multi); isMulti && c.multiTokenBucket != nil {
+	if _, isMulti := rpc.(*multi); isMulti && c.batchRequestsTokenBucket != nil {
 		// TryTake first to know if we have hit concurrency limit yet
-		if !c.multiTokenBucket.TryTake() {
-			if err := c.multiTokenBucket.Take(rpc.Context()); err != nil {
+		if !c.batchRequestsTokenBucket.TryTake() {
+			if err := c.batchRequestsTokenBucket.Take(rpc.Context()); err != nil {
 				return 0, err
 			}
-			concurrentMultiLimitHit.WithLabelValues(c.addr).Inc()
+			concurrentBatchRequestsLimitHit.WithLabelValues(c.addr).Inc()
 		}
 	}
 
@@ -377,8 +377,8 @@ func (c *client) unregisterRPC(id uint32) hrpc.Call {
 		c.scanTokenBucket.Release()
 	}
 
-	if _, isMulti := rpc.(*multi); isMulti && c.multiTokenBucket != nil {
-		c.multiTokenBucket.Release()
+	if _, isMulti := rpc.(*multi); isMulti && c.batchRequestsTokenBucket != nil {
+		c.batchRequestsTokenBucket.Release()
 	}
 
 	return rpc
