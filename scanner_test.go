@@ -983,3 +983,62 @@ func TestScanStatsHandlerContinueWithinRegion(t *testing.T) {
 		t.Errorf("didn't get 2 handler calls: %d", handlerCallCount)
 	}
 }
+
+func TestMakeScanRequestRows(t *testing.T) {
+	must := func(s *hrpc.Scan, err error) *hrpc.Scan {
+		if err != nil {
+			// Using panic instead of t.Fatal because including a
+			// `*testing.T` argument in must makes calling this func
+			// more awkward.
+			panic(fmt.Errorf("this shouldn't happen: %s", err))
+		}
+		return s
+	}
+
+	tcs := []struct {
+		name string
+		s    *hrpc.Scan
+		exp  uint32
+	}{
+		{
+			name: "default",
+			s:    must(hrpc.NewScan(context.Background(), []byte("table"))),
+			exp:  hrpc.DefaultNumberOfRows,
+		},
+		{
+			name: "non-default",
+			s:    must(hrpc.NewScan(context.Background(), []byte("table"), hrpc.NumberOfRows(5))),
+			exp:  5,
+		},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			if n := tc.s.NumberOfRows(); n != tc.exp {
+				t.Errorf("expected number of rows: %d got: %d", tc.exp, n)
+			}
+
+			// Check behavior when doing a request on a new region
+			sc := scanner{rpc: tc.s, curRegionScannerID: noScannerID}
+			s := must(sc.makeScanRequest(0))
+			if n := s.NumberOfRows(); n != tc.exp {
+				t.Errorf("expected number of rows: %d got: %d", tc.exp, n)
+			}
+			s = must(sc.makeScanRequest(1))
+			if n := s.NumberOfRows(); n != 1 {
+				t.Errorf("expected number of rows: %d got: %d", 1, n)
+			}
+
+			// Check behavior when doing a continuation inside a region
+			sc.curRegionScannerID = 1
+			s = must(sc.makeScanRequest(0))
+			if n := s.NumberOfRows(); n != tc.exp {
+				t.Errorf("expected number of rows: %d got: %d", tc.exp, n)
+			}
+			s = must(sc.makeScanRequest(1))
+			if n := s.NumberOfRows(); n != 1 {
+				t.Errorf("expected number of rows: %d got: %d", 1, n)
+			}
+		})
+	}
+}

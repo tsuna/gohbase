@@ -102,6 +102,14 @@ type ScannerV2 interface {
 	// the subsequent calls will return io.EOF error.
 	Next() (*ScanResponseV2, error)
 
+	// Scan is a lower-level version of Next. Unlike Next, Scan may
+	// return a Response with 0 results and a nil error. One reason
+	// this can occur is if HBase exceeds the configured scanner
+	// timeout without finding any results. Scan allows modifying the
+	// number of rows to be read. Use a value of 0 rows to defer to
+	// the configuration in the hrpc.Scan.
+	Scan(rows uint32) (*ScanResponseV2, error)
+
 	// Close should be called if it is desired to stop scanning before getting all of results.
 	// If you call Next() after calling Close() you might still get buffered results.
 	// Otherwise, in case all results have been delivered or in case of an error, the Scanner

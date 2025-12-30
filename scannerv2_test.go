@@ -628,3 +628,147 @@ func TestScannerV2Closed(t *testing.T) {
 		t.Fatalf("unexpected error %v, expected %v", err, io.EOF)
 	}
 }
+
+func TestScannerV2Scan(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+	c := mock.NewMockRPCClient(ctrl)
+	var expected []*hrpc.ScanResponseV2
+
+	scan, err := hrpc.NewScan(context.Background(), table, hrpc.NumberOfRows(2))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var scannerID uint64 = 42
+	scanner := newScannerV2(c, scan, slog.Default())
+
+	// First scan request - returns results with MoreResultsInRegion=true
+	s, err := hrpc.NewScanRange(scan.Context(), table, nil, nil,
+		hrpc.NumberOfRows(3))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp1 := &pb.ScanResponse{
+		ScannerId:           cp(scannerID),
+		MoreResultsInRegion: proto.Bool(true),
+		Results:             dup(resultsPB[:1]),
+	}
+	expected = append(expected, pbRespToRespV2(resp1))
+	c.EXPECT().SendRPC(&scanMatcher{scan: s}).DoAndReturn(
+		func(rpc hrpc.Call) (msg proto.Message, err error) {
+			rpc.SetRegion(region1)
+			rpc.(*hrpc.Scan).Response = pbRespToRespV2(resp1)
+			return resp1, nil
+		}).Times(1)
+
+	// Second scan with scanner ID - returns empty result (scanner timeout case)
+	s, err = hrpc.NewScanRange(scan.Context(), table, nil, nil,
+		hrpc.ScannerID(scannerID), hrpc.NumberOfRows(3))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp2 := &pb.ScanResponse{
+		MoreResultsInRegion: proto.Bool(true),
+	}
+	expected = append(expected, pbRespToRespV2(resp2))
+	c.EXPECT().SendRPC(&scanMatcher{scan: s}).DoAndReturn(
+		func(rpc hrpc.Call) (msg proto.Message, err error) {
+			rpc.SetRegion(region1)
+			rpc.(*hrpc.Scan).Response = pbRespToRespV2(resp2)
+			return resp2, nil
+		}).Times(1)
+
+	// Third scan with scanner ID - returns results
+	s, err = hrpc.NewScanRange(scan.Context(), table, nil, nil,
+		hrpc.ScannerID(scannerID), hrpc.NumberOfRows(3))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp3 := &pb.ScanResponse{
+		Results: dup(resultsPB[1:2]),
+	}
+	expected = append(expected, pbRespToRespV2(resp3))
+	c.EXPECT().SendRPC(&scanMatcher{scan: s}).DoAndReturn(
+		func(rpc hrpc.Call) (msg proto.Message, err error) {
+			rpc.SetRegion(region1)
+			rpc.(*hrpc.Scan).Response = pbRespToRespV2(resp3)
+			return resp3, nil
+		}).Times(1)
+
+	scannerID++
+
+	// Fourth scan - new region with empty result
+	s, err = hrpc.NewScanRange(scan.Context(), table,
+		[]byte("bar"), nil, hrpc.NumberOfRows(3))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp4 := &pb.ScanResponse{
+		ScannerId:           cp(scannerID),
+		MoreResultsInRegion: proto.Bool(true),
+		Results:             nil,
+	}
+	expected = append(expected, pbRespToRespV2(resp4))
+	c.EXPECT().SendRPC(&scanMatcher{scan: s}).DoAndReturn(
+		func(rpc hrpc.Call) (msg proto.Message, err error) {
+			rpc.SetRegion(region2)
+			rpc.(*hrpc.Scan).Response = pbRespToRespV2(resp4)
+			return resp4, nil
+		}).Times(1)
+
+	// Fifth scan - returns actual results
+	s, err = hrpc.NewScanRange(scan.Context(), table,
+		[]byte("bar"), nil, hrpc.ScannerID(scannerID), hrpc.NumberOfRows(3))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp5 := &pb.ScanResponse{
+		ScannerId: cp(scannerID),
+		Results:   dup(resultsPB[2:3]),
+	}
+	expected = append(expected, pbRespToRespV2(resp5))
+	c.EXPECT().SendRPC(&scanMatcher{scan: s}).DoAndReturn(
+		func(rpc hrpc.Call) (msg proto.Message, err error) {
+			rpc.SetRegion(region2)
+			rpc.(*hrpc.Scan).Response = pbRespToRespV2(resp5)
+			return resp5, nil
+		}).Times(1)
+
+	scannerID++
+
+	// Sixth scan - final region
+	s, err = hrpc.NewScanRange(scan.Context(), table, []byte("foo"), nil,
+		hrpc.NumberOfRows(3))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp6 := &pb.ScanResponse{
+		ScannerId:   cp(scannerID),
+		Results:     dup(resultsPB[3:4]),
+		MoreResults: proto.Bool(false),
+	}
+	expected = append(expected, pbRespToRespV2(resp6))
+	c.EXPECT().SendRPC(&scanMatcher{scan: s}).DoAndReturn(
+		func(rpc hrpc.Call) (msg proto.Message, err error) {
+			rpc.SetRegion(region3)
+			rpc.(*hrpc.Scan).Response = pbRespToRespV2(resp6)
+			return resp6, nil
+		}).Times(1)
+
+	var rs []*hrpc.ScanResponseV2
+	for {
+		r, err := scanner.Scan(3)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		rs = append(rs, r)
+	}
+
+	if !cmp.Equal(expected, rs) {
+		t.Fatalf("exp: %v\ngot: %v", expected, rs)
+	}
+}
