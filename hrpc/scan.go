@@ -102,6 +102,13 @@ type ScannerV2 interface {
 	// the subsequent calls will return io.EOF error.
 	Next() (*ScanResponseV2, error)
 
+	// Scan is a lower-level version of Next(). Unlike Next() it
+	// doesn't retry until getting a non-empty result (or error) as it
+	// only sends one request to HBase and returns whatever that
+	// returns. Scan allows modifying the number of rows to be read.
+	// Use a value of 0 to defer the configuration on the hrpc.Scan.
+	Scan(rows uint32) (*ScanResponseV2, error)
+
 	// Close should be called if it is desired to stop scanning before getting all of results.
 	// If you call Next() after calling Close() you might still get buffered results.
 	// Otherwise, in case all results have been delivered or in case of an error, the Scanner

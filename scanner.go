@@ -55,7 +55,13 @@ type scannerV2 struct {
 func (s *scanner) fetch() (*hrpc.ScanResponseV2, error) {
 	// keep looping until we have error, some non-empty result or until close
 	for {
-		response, err := s.request()
+		rpc, err := s.makeScanRequest(0)
+		if err != nil {
+			s.Close()
+			return nil, err
+		}
+
+		response, err := s.request(rpc)
 		if err != nil {
 			return nil, err
 		}
@@ -240,10 +246,51 @@ func (s *scannerV2) Next() (*hrpc.ScanResponseV2, error) {
 	return resp, nil
 }
 
-func (s *scanner) makeScanRequest() (*hrpc.Scan, error) {
+// Scan is a lower-level version of Next(). Unlike Next() it doesn't
+// guarantee a non-empty result or error as it only sends one request
+// to HBase and returns whatever that returns. Scan allows modifying
+// the number of rows to be read. Use a value of 0 to defer the
+// configuration on the hrpc.Scan.
+func (s *scannerV2) Scan(rows uint32) (*hrpc.ScanResponseV2, error) {
+	if s.renewCancel != nil {
+		// About to send new Scan request to HBase, cancel our
+		// renewer.
+		s.renewCancel()
+		s.renewCancel = nil
+	}
+
+	if s.closed {
+		return nil, io.EOF
+	}
+
+	if err := s.rpc.Context().Err(); err != nil {
+		return nil, err
+	}
+
+	rpc, err := s.makeScanRequest(rows)
+	if err != nil {
+		s.Close()
+		return nil, err
+	}
+
+	response, err := s.request(rpc)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
+// makeScanRequest creates the next scan request. If rows is non-zero,
+// then the number of rows to be read is overridden from the original
+// Scan.
+func (s *scanner) makeScanRequest(rows uint32) (*hrpc.Scan, error) {
 	if s.isRegionScannerClosed() {
 		// preserve ScanStatsID
 		opts := append(s.rpc.Options(), hrpc.ScanStatsID(s.rpc.ScanStatsID()))
+		if rows > 0 {
+			opts = append(opts, hrpc.NumberOfRows(rows))
+		}
 
 		// open a new region scan to scan on a new region
 		return hrpc.NewScanRange(
@@ -254,10 +301,15 @@ func (s *scanner) makeScanRequest() (*hrpc.Scan, error) {
 			opts...)
 	}
 
+	numberOfRows := rows
+	if numberOfRows == 0 {
+		numberOfRows = s.rpc.NumberOfRows()
+	}
+
 	// continuing to scan current region
 	opts := []func(hrpc.Call) error{
 		hrpc.ScannerID(s.curRegionScannerID),
-		hrpc.NumberOfRows(s.rpc.NumberOfRows()),
+		hrpc.NumberOfRows(numberOfRows),
 		hrpc.Priority(s.rpc.Priority()),
 		hrpc.RenewInterval(s.rpc.RenewInterval()),
 		// preserve ScanStatsID
@@ -278,12 +330,7 @@ func (s *scanner) makeScanRequest() (*hrpc.Scan, error) {
 
 // request sends the next scan request to HBase and calls update() to
 // prepare for the next request.
-func (s *scanner) request() (*hrpc.ScanResponseV2, error) {
-	rpc, err := s.makeScanRequest()
-	if err != nil {
-		s.Close()
-		return nil, err
-	}
+func (s *scanner) request(rpc *hrpc.Scan) (*hrpc.ScanResponseV2, error) {
 	res, err := s.SendRPC(rpc)
 	if err != nil {
 		s.Close()
