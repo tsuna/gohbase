@@ -339,5 +339,3 @@ func cellsV2toCells(v2 []CellV2) []*Cell {
 
 	return v1
 }
-
-// We can now define any helper functions on Result that we want.
