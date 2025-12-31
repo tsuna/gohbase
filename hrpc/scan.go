@@ -75,6 +75,16 @@ type ScanResponseV2 struct {
 	// completed. It is the size of the uncompressed cellblocks in the
 	// response.
 	ResponseSize int
+
+	// Region is the region that was scanned for this response.
+	Region RegionInfo
+
+	// MoreResultsInRegion is true when more results from this scan
+	// are expected from the region that was just read. If this is
+	// false and the Scan is not complete then [Region.StopKey()] will
+	// tell how far the scan has processed (or [Region.StartKey()] in
+	// a reverse scan).
+	MoreResultsInRegion bool
 }
 
 // ResultV2 contains the results for a single row.
@@ -390,20 +400,25 @@ func (s *Scan) DeserializeCellBlocks(m proto.Message, b []byte) (uint32, error) 
 			"cells_per_result count %d doesn't match partial_flag_per_result count %d",
 			len(cellsPerResult), len(partials))
 	}
-	s.Response = &ScanResponseV2{Results: make([]ResultV2, len(cellsPerResult))}
+	results := make([]ResultV2, len(cellsPerResult))
 	var readLen uint32
 	for i, numCells := range cellsPerResult {
 		cellsV2, l, err := deserializeCellBlocksV2(b[readLen:], numCells)
 		if err != nil {
 			return 0, err
 		}
-		s.Response.Results[i] = ResultV2{
+		results[i] = ResultV2{
 			Cells:   cellsV2,
 			Partial: partials[i],
 		}
 		readLen += l
 	}
-	s.Response.ResponseSize = int(readLen)
+	s.Response = &ScanResponseV2{
+		Results:             results,
+		ResponseSize:        int(readLen),
+		Region:              s.Region(),
+		MoreResultsInRegion: scanResp.GetMoreResultsInRegion(),
+	}
 	return readLen, nil
 }
 
