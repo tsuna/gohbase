@@ -175,11 +175,9 @@ func TestRegionInfoMarshalJson(t *testing.T) {
 		rpcs:          make(chan []hrpc.Call),
 		done:          make(chan struct{}),
 		sent:          make(map[uint32]hrpc.Call),
-		inFlight:      20,
 		effectiveUser: "effectiveUser",
 		rpcQueueSize:  queueSize,
 		flushInterval: flushInterval,
-		readTimeout:   DefaultReadTimeout,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

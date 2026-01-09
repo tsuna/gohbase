@@ -1041,7 +1041,6 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 				QueueSize:     c.rpcQueueSize,
 				FlushInterval: c.flushInterval,
 				EffectiveUser: c.effectiveUser,
-				ReadTimeout:   c.regionReadTimeout,
 				Dialer:        c.regionDialer,
 				Logger:        c.logger,
 			}
@@ -1052,7 +1051,6 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 				QueueSize:            c.rpcQueueSize,
 				FlushInterval:        c.flushInterval,
 				EffectiveUser:        c.effectiveUser,
-				ReadTimeout:          c.regionReadTimeout,
 				Codec:                c.compressionCodec,
 				Dialer:               c.regionDialer,
 				Logger:               c.logger,
