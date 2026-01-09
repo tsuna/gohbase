@@ -89,12 +89,11 @@ func (s *scanner) peek() (hrpc.ResultV2, error) {
 	if err != nil {
 		return hrpc.ResultV2{}, err
 	}
-	if !s.isRegionScannerClosed() && s.rpc.RenewInterval() > 0 {
-		// Start up a renewer if there is more to read within this
-		// region.
+	if !s.closed && s.rpc.RenewInterval() > 0 {
+		// Start up a renewer
 		renewCtx, cancel := context.WithCancel(s.rpc.Context())
 		s.renewCancel = cancel
-		go s.renewLoop(renewCtx, s.curRegionScannerID)
+		go s.renewLoop(renewCtx, s.startRow)
 	}
 
 	// fetch cannot return zero results
@@ -230,12 +229,11 @@ func (s *scannerV2) Next() (*hrpc.ScanResponseV2, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !s.isRegionScannerClosed() && s.rpc.RenewInterval() > 0 {
-		// Start up a renewer if there is more to read within this
-		// region.
+	if !s.closed && s.rpc.RenewInterval() > 0 {
+		// Start up a renewer
 		renewCtx, cancel := context.WithCancel(s.rpc.Context())
 		s.renewCancel = cancel
-		go s.renewLoop(renewCtx, s.curRegionScannerID)
+		go s.renewLoop(renewCtx, s.startRow)
 	}
 	return resp, nil
 }
@@ -425,13 +423,15 @@ func (s *scanner) closeRegionScanner() {
 }
 
 // renews a scanner by resending scan request with renew = true
-func (s *scanner) renew(ctx context.Context, scannerID uint64) error {
+func (s *scanner) renew(ctx context.Context, startRow []byte) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	rpc, err := hrpc.NewScan(ctx,
+	rpc, err := hrpc.NewScanRange(ctx,
 		s.rpc.Table(),
-		hrpc.ScannerID(scannerID),
+		startRow,
+		nil,
+		hrpc.ScannerID(s.curRegionScannerID),
 		hrpc.Priority(s.rpc.Priority()),
 		hrpc.RenewalScan(),
 		hrpc.ScanStatsID(s.rpc.ScanStatsID()),
@@ -443,7 +443,7 @@ func (s *scanner) renew(ctx context.Context, scannerID uint64) error {
 	return err
 }
 
-func (s *scanner) renewLoop(ctx context.Context, scannerID uint64) {
+func (s *scanner) renewLoop(ctx context.Context, startRow []byte) {
 	scanRenewers.Inc()
 	t := time.NewTicker(s.rpc.RenewInterval())
 	defer func() {
@@ -454,7 +454,7 @@ func (s *scanner) renewLoop(ctx context.Context, scannerID uint64) {
 	for {
 		select {
 		case <-t.C:
-			if err := s.renew(ctx, scannerID); err != nil {
+			if err := s.renew(ctx, startRow); err != nil {
 				s.logger.Error("error renewing scanner", "err", err)
 				return
 			}
