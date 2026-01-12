@@ -87,6 +87,10 @@ func DeleteTable(client gohbase.AdminClient, table string) error {
 	return nil
 }
 
+// LocalRegionServersCmd can be used to start or stop new local regionservers on the cluster
+// (run in pseudo-distributed mode). If starting up new regionservers, the test caller is
+// responsible for stopping those regionservers in the test cleanup.
+// Do not use t.Parallel() if using this.
 func LocalRegionServersCmd(t *testing.T, action string, servers []string) {
 	hh := os.Getenv("HBASE_HOME")
 	args := append([]string{action}, servers...)
@@ -2464,11 +2468,8 @@ func TestSetBalancer(t *testing.T) {
 	}
 }
 
-func TestMoveRegion(t *testing.T) {
-	c := gohbase.NewClient(*host)
-	ac := gohbase.NewAdminClient(*host)
-
-	// scan meta to get a region to move
+// getRegionNames scans meta to get the region names
+func getRegionNames(t *testing.T, c gohbase.Client) []*hrpc.Result {
 	scan, err := hrpc.NewScan(context.Background(),
 		[]byte("hbase:meta"),
 		hrpc.Families(map[string][]string{"info": []string{"regioninfo"}}))
@@ -2479,7 +2480,8 @@ func TestMoveRegion(t *testing.T) {
 	var rsp []*hrpc.Result
 	scanner := c.Scan(scan)
 	for {
-		res, err := scanner.Next()
+		var res *hrpc.Result
+		res, err = scanner.Next()
 		if err == io.EOF {
 			break
 		}
@@ -2489,22 +2491,37 @@ func TestMoveRegion(t *testing.T) {
 		rsp = append(rsp, res)
 	}
 
-	// use the first region
+	return rsp
+}
+
+func getFirstRegionName(t *testing.T, c gohbase.Client) []byte {
+	rsp := getRegionNames(t, c)
+
 	if len(rsp) == 0 {
 		t.Fatal("got 0 results")
 	}
+
+	// use the first region
 	if len(rsp[0].Cells) == 0 {
 		t.Fatal("got 0 cells")
 	}
 
 	regionName := rsp[0].Cells[0].Row
 	regionName = regionName[len(regionName)-33 : len(regionName)-1]
+	return regionName
+}
+
+func TestMoveRegion(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	ac := gohbase.NewAdminClient(*host)
+
+	regionName := getFirstRegionName(t, c)
 	mr, err := hrpc.NewMoveRegion(context.Background(), regionName)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := ac.MoveRegion(mr); err != nil {
+	if err = ac.MoveRegion(mr); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -2768,15 +2785,165 @@ func TestScannerTimeout(t *testing.T) {
 	}
 }
 
+// getEncodedRegionServerNames returns a slice of string encoded regionserver names of all live
+// regionservers in the cluster
+func getEncodedRegionServerNames(t *testing.T, ac gohbase.AdminClient) []string {
+	cs, err := ac.ClusterStatus()
+	if err != nil {
+		t.Fatalf("Failed to get cluster status: %v", err)
+	}
+
+	var serverNames []string
+	for _, server := range cs.LiveServers {
+		en := fmt.Sprintf("%s,%d,%d",
+			server.GetServer().GetHostName(),
+			server.GetServer().GetPort(),
+			server.GetServer().GetStartCode())
+		serverNames = append(serverNames, en)
+	}
+
+	return serverNames
+}
+
+// getRsForRegion returns the encoded regionserver name that is hosting the given region.
+// Empty if the region isn't found on any of the current live regionservers.
+func getRsForRegion(t *testing.T, ac gohbase.AdminClient, regionName []byte) string {
+	cs, err := ac.ClusterStatus()
+	if err != nil {
+		t.Fatalf("Failed to get cluster status: %v", err)
+	}
+
+	for _, server := range cs.LiveServers {
+		en := fmt.Sprintf("%s,%d,%d",
+			server.GetServer().GetHostName(),
+			server.GetServer().GetPort(),
+			server.GetServer().GetStartCode())
+		for _, rl := range server.GetServerLoad().GetRegionLoads() {
+			if encodedRegionNameFromRegionSpecifier(rl.GetRegionSpecifier()) == string(regionName) {
+				t.Logf("Found region %s on server %s", regionName, en)
+				return en
+			}
+		}
+	}
+	return ""
+}
+
+// encodedRegionNameFromRegionSpecifier returns the encoded region name from a RegionSpecifier
+func encodedRegionNameFromRegionSpecifier(rs *pb.RegionSpecifier) string {
+	if rs == nil {
+		return ""
+	}
+
+	full := string(rs.GetValue())
+
+	switch rs.GetType() {
+	case pb.RegionSpecifier_ENCODED_REGION_NAME:
+		return full
+	case pb.RegionSpecifier_REGION_NAME:
+		full = strings.TrimSuffix(full, ".")
+		i := strings.LastIndex(full, ".")
+		if i >= 0 && i+1 < len(full) {
+			return full[i+1:]
+		}
+		return full
+	default:
+		return ""
+	}
+}
+
 // TestScannerRenewal tests for the renewal process of scanners
-// if the renew flag is enabled for a scan requset. If there is a long
+// if the renew flag is enabled for a scan request. If there is a long
 // period of waiting between Next calls, the latter Next call should
 // still succeed because we are renewing every lease timeout / 2 seconds
+// The test uses multiple regionservers to validate the scanner renewal request is sent to the
+// correct regionserver when in a multinode set up.
 func TestScannerRenewal(t *testing.T) {
 	c := gohbase.NewClient(*host)
 	defer c.Close()
-	// Insert test data
+	ctx := context.Background()
+	ac := gohbase.NewAdminClient(*host)
+
+	// Start another regionserver
+	LocalRegionServersCmd(t, "start", []string{"2"})
+	t.Cleanup(func() {
+		// Must cleanup regionserver to return to default single regionserver state.
+		LocalRegionServersCmd(t, "stop", []string{"2"})
+	})
+
+	timeout := time.Minute * 1
+	start := time.Now()
+	var serverNames []string
+	for {
+		serverNames = getEncodedRegionServerNames(t, ac)
+		t.Logf("Live regionserver names: %v", serverNames)
+		if len(serverNames) == 2 {
+			t.Logf("2nd regionserver up, wait 10 seconds to initalize")
+			// Otherwise if there's no wait at all, the MoveRegion request will fail and timeout
+			time.Sleep(time.Second * 10)
+			break
+		} else if time.Since(start) > timeout {
+			t.Fatalf("Timeout waiting for 2nd region server to come up")
+		}
+		t.Log("Waiting 5 seconds for 2nd region server to come up...")
+		time.Sleep(time.Second * 5)
+	}
+
+	// Loadbalancing is disabled on this cluster. So when a new regionserver is started,
+	// the regions will not automatically balance to the new regionserver.
+	// For this test scenario, let's move only the region the scan goes to to the new regionserver.
+	// Test uses data from 4th region (See keySplits)
 	keyPrefix := "scanner_renewal_test_"
+	rns := getRegionNames(t, c)
+
+	if len(rns) == 0 {
+		t.Fatal("got 0 results")
+	}
+
+	ri := 3
+	if len(rns[ri].Cells) == 0 {
+		t.Fatal("got 0 cells in meta for expected 4th region")
+	}
+
+	rn := rns[ri].Cells[0].Row
+	rn = rn[len(rn)-33 : len(rn)-1]
+	t.Log("Moving region", string(rn))
+
+	oldRs := getRsForRegion(t, ac, rn)
+	t.Logf("Region %s is starting on server %s", rn, oldRs)
+	newRs := ""
+	for _, sn := range serverNames {
+		if sn != oldRs {
+			newRs = sn
+			break
+		}
+	}
+
+	t.Logf("Moving region %s to server %s", rn, newRs)
+	mr, err := hrpc.NewMoveRegion(ctx, rn, hrpc.WithDestinationRegionServer(newRs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = ac.MoveRegion(mr); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for region move to complete before proceeding:
+	start = time.Now()
+	for {
+		currRs := getRsForRegion(t, ac, rn)
+		t.Logf("Region %s is currently on server %s", rn, currRs)
+		// When region is in transit, there will be a time during which it will not report being
+		// on any server
+		if currRs != "" && currRs != oldRs {
+			break
+		} else if time.Since(start) > timeout {
+			t.Fatalf("Timeout waiting for region move to complete")
+		}
+		t.Log("Waiting 5 seconds for region move to complete...")
+		time.Sleep(time.Second * 5)
+	}
+
+	// Insert test data
 	numRows := 2
 	for i := 0; i < numRows; i++ {
 		key := fmt.Sprintf("%s%d", keyPrefix, i)
@@ -2790,7 +2957,7 @@ func TestScannerRenewal(t *testing.T) {
 	// Create a scan request
 	// Turn on renewal
 	// We set result size to 1 to force a lease timeout between Next calls
-	scan, err := hrpc.NewScanStr(context.Background(), table,
+	scan, err := hrpc.NewScanStr(ctx, table,
 		hrpc.Families(map[string][]string{"cf": nil}),
 		hrpc.Filters(filter.NewPrefixFilter([]byte(keyPrefix))),
 		hrpc.NumberOfRows(1),
@@ -2803,7 +2970,8 @@ func TestScannerRenewal(t *testing.T) {
 	scanner := c.Scan(scan)
 	defer scanner.Close()
 	for i := 0; i < numRows; i++ {
-		rsp, err := scanner.Next()
+		var rsp *hrpc.Result
+		rsp, err = scanner.Next()
 		if err != nil {
 			t.Fatalf("Scanner.Next() returned error: %v", err)
 		}
