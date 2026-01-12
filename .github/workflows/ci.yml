@@ -29,13 +29,30 @@ jobs:
         #
         # Set scanner timeout to 5s from default of 60s, to make tests
         # for scanner expiration faster.
+        #
+        # Effectively disable the balancer by setting period to very large number. Tests need to move regions
+        # to new regionservers themselves when running in multi-regionserver set up.
+        #
+        # Run the cluster in pseudo-distributed mode. Allows for adding more than 1 regionserver for tests
+        # that require running on a multi-regionserver set up.
         run: |
           sed -i '/<\/configuration>/i \
-          <property><name>hbase.client.scanner.timeout.period</name><value>5000</value></property>
+          <property><name>hbase.client.scanner.timeout.period</name><value>5000</value></property>\
+          <property><name>hbase.balancer.period</name><value>2147483647</value></property>
+          ' hbase/conf/hbase-site.xml
+
+          sed -i '
+          /<name>hbase.cluster.distributed<\/name>/{
+          n
+          s/<value>false<\/value>/<value>true<\/value>/
+          }
           ' hbase/conf/hbase-site.xml
 
       - name: Setup | Start HBase
-        run: hbase/bin/hbase-daemon.sh --config hbase/conf start master
+        run: |
+          hbase/bin/hbase-daemon.sh --config ./hbase/conf start zookeeper
+          hbase/bin/hbase-daemon.sh --config hbase/conf start master
+          hbase/bin/local-regionservers.sh start 1
 
       - name: Setup | Go
         uses: actions/setup-go@v6
