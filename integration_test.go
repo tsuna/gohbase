@@ -1591,10 +1591,16 @@ func TestChangingRegionServers(t *testing.T) {
 	// RegionServer 1 hosts all the current regions.
 	// Now launch servers 2,3
 	LocalRegionServersCmd(t, "start", []string{"2", "3"})
+	t.Cleanup(func() {
+		LocalRegionServersCmd(t, "stop", []string{"2", "3"})
+	})
 
 	// Now (gracefully) stop servers 1,2.
 	// All regions should now be on server 3.
 	LocalRegionServersCmd(t, "stop", []string{"1", "2"})
+	t.Cleanup(func() {
+		LocalRegionServersCmd(t, "start", []string{"1"})
+	})
 	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
 	rsp, err := c.Get(get)
 	if err != nil {
@@ -1605,10 +1611,6 @@ func TestChangingRegionServers(t *testing.T) {
 		t.Errorf("Get returned an incorrect result. Expected: %v, Received: %v",
 			val, rsp_value)
 	}
-
-	// Clean up by re-launching RS1 and closing RS3
-	LocalRegionServersCmd(t, "start", []string{"1"})
-	LocalRegionServersCmd(t, "stop", []string{"3"})
 }
 
 func BenchmarkPut(b *testing.B) {
