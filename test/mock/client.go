@@ -69,6 +69,21 @@ func (mr *MockClientMockRecorder) CacheRegions(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CacheRegions", reflect.TypeOf((*MockClient)(nil).CacheRegions), arg0)
 }
 
+// CheckAndMutate mocks base method.
+func (m *MockClient) CheckAndMutate(arg0 *hrpc.CheckAndMutate) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CheckAndMutate", arg0)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CheckAndMutate indicates an expected call of CheckAndMutate.
+func (mr *MockClientMockRecorder) CheckAndMutate(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckAndMutate", reflect.TypeOf((*MockClient)(nil).CheckAndMutate), arg0)
+}
+
 // CheckAndPut mocks base method.
 func (m *MockClient) CheckAndPut(arg0 *hrpc.Mutate, arg1, arg2 string, arg3 []byte) (bool, error) {
 	m.ctrl.T.Helper()
