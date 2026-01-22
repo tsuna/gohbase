@@ -1731,7 +1731,8 @@ func TestCheckAndMutate(t *testing.T) {
 			family:      "cf",
 			qualifier:   "q",
 			compareType: pb.CompareType_EQUAL,
-			comparator:  filter.NewBinaryComparator(filter.NewByteArrayComparable([]byte("expected"))),
+			comparator: filter.NewBinaryComparator(
+				filter.NewByteArrayComparable([]byte("expected"))),
 		},
 		{
 			name: "delete with not equal",
