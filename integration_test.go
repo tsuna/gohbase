@@ -1556,35 +1556,35 @@ func TestCheckAndMutate(t *testing.T) {
 	tests := []struct {
 		name        string
 		values      map[string]map[string][]byte
-		compareType hrpc.CompareType
+		compareType pb.CompareType
 		compareVal  []byte
 		want        bool
 	}{
 		{
 			name:        "equal match",
 			values:      map[string]map[string][]byte{cf: {qualifier: []byte("200")}},
-			compareType: hrpc.CompareEqual,
+			compareType: pb.CompareType_EQUAL,
 			compareVal:  []byte("100"),
 			want:        true,
 		},
 		{
 			name:        "equal no match",
 			values:      map[string]map[string][]byte{cf: {qualifier: []byte("300")}},
-			compareType: hrpc.CompareEqual,
+			compareType: pb.CompareType_EQUAL,
 			compareVal:  []byte("100"),
 			want:        false,
 		},
 		{
 			name:        "not equal match",
 			values:      map[string]map[string][]byte{cf: {qualifier: []byte("300")}},
-			compareType: hrpc.CompareNotEqual,
+			compareType: pb.CompareType_NOT_EQUAL,
 			compareVal:  []byte("100"),
 			want:        true,
 		},
 		{
 			name:        "greater match",
 			values:      map[string]map[string][]byte{cf: {qualifier: []byte("400")}},
-			compareType: hrpc.CompareGreater,
+			compareType: pb.CompareType_GREATER,
 			// Condition: comparatorValue > currentValue ("300")
 			// "400" > "300" is true, so mutation should be applied
 			compareVal: []byte("400"),
@@ -1593,7 +1593,7 @@ func TestCheckAndMutate(t *testing.T) {
 		{
 			name:        "less match not applied",
 			values:      map[string]map[string][]byte{cf: {qualifier: []byte("500")}},
-			compareType: hrpc.CompareLess,
+			compareType: pb.CompareType_LESS,
 			// Condition: comparatorValue < currentValue ("400")
 			// "600" < "400" is false, so mutation should not be applied
 			compareVal: []byte("600"),
@@ -1602,7 +1602,7 @@ func TestCheckAndMutate(t *testing.T) {
 		{
 			name:        "less match applied",
 			values:      map[string]map[string][]byte{cf: {qualifier: []byte("500")}},
-			compareType: hrpc.CompareLess,
+			compareType: pb.CompareType_LESS,
 			// Condition: comparatorValue < currentValue ("400")
 			// "300" < "400" is true, so mutation should be applied
 			compareVal: []byte("300"),
@@ -1660,7 +1660,7 @@ func TestCheckAndMutateDelete(t *testing.T) {
 	}
 
 	cmp := filter.NewBinaryComparator(filter.NewByteArrayComparable([]byte("delete_me")))
-	cam, err := hrpc.NewCheckAndMutate(delReq, cf, qualifier, hrpc.CompareEqual, cmp)
+	cam, err := hrpc.NewCheckAndMutate(delReq, cf, qualifier, pb.CompareType_EQUAL, cmp)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -23,19 +23,6 @@ type CheckAndMutate struct {
 	comparator  *pb.Comparator
 }
 
-// CompareType represents the comparison operator for CheckAndMutate.
-type CompareType pb.CompareType
-
-// Comparison operators for CheckAndMutate.
-const (
-	CompareLess           = CompareType(pb.CompareType_LESS)
-	CompareLessOrEqual    = CompareType(pb.CompareType_LESS_OR_EQUAL)
-	CompareEqual          = CompareType(pb.CompareType_EQUAL)
-	CompareNotEqual       = CompareType(pb.CompareType_NOT_EQUAL)
-	CompareGreaterOrEqual = CompareType(pb.CompareType_GREATER_OR_EQUAL)
-	CompareGreater        = CompareType(pb.CompareType_GREATER)
-)
-
 // NewCheckAndMutate creates a new CheckAndMutate request that will compare the value
 // at the specified family:qualifier using the given comparator and comparison operator.
 // If the condition is met, the provided mutation will be applied.
@@ -43,7 +30,7 @@ func NewCheckAndMutate(
 	mutation *Mutate,
 	family string,
 	qualifier string,
-	compareType CompareType,
+	compareType pb.CompareType,
 	comparator filter.Comparator,
 ) (*CheckAndMutate, error) {
 	cmp, err := comparator.ConstructPBComparator()
@@ -59,7 +46,7 @@ func NewCheckAndMutate(
 		Mutate:      mutation,
 		family:      []byte(family),
 		qualifier:   []byte(qualifier),
-		compareType: pb.CompareType(compareType),
+		compareType: compareType,
 		comparator:  cmp,
 	}, nil
 }
