@@ -1534,6 +1534,177 @@ func TestCheckAndPutParallel(t *testing.T) {
 	}
 }
 
+func TestCheckAndMutate(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+
+	key := "row_cam_1"
+	cf := "cf"
+	qualifier := "a"
+
+	// First, put an initial value
+	err := insertKeyValueAtCol(c, key, qualifier, cf, []byte("100"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name        string
+		values      map[string]map[string][]byte
+		compareType pb.CompareType
+		compareVal  []byte
+		want        bool
+	}{
+		{
+			name:        "equal match",
+			values:      map[string]map[string][]byte{cf: {qualifier: []byte("200")}},
+			compareType: pb.CompareType_EQUAL,
+			compareVal:  []byte("100"),
+			want:        true,
+		},
+		{
+			name:        "equal no match",
+			values:      map[string]map[string][]byte{cf: {qualifier: []byte("300")}},
+			compareType: pb.CompareType_EQUAL,
+			compareVal:  []byte("100"),
+			want:        false,
+		},
+		{
+			name:        "not equal match",
+			values:      map[string]map[string][]byte{cf: {qualifier: []byte("300")}},
+			compareType: pb.CompareType_NOT_EQUAL,
+			compareVal:  []byte("100"),
+			want:        true,
+		},
+		{
+			name:        "greater match",
+			values:      map[string]map[string][]byte{cf: {qualifier: []byte("400")}},
+			compareType: pb.CompareType_GREATER,
+			// Condition: comparatorValue > currentValue ("300")
+			// "400" > "300" is true, so mutation should be applied
+			compareVal: []byte("400"),
+			want:       true,
+		},
+		{
+			name:        "less match not applied",
+			values:      map[string]map[string][]byte{cf: {qualifier: []byte("500")}},
+			compareType: pb.CompareType_LESS,
+			// Condition: comparatorValue < currentValue ("400")
+			// "600" < "400" is false, so mutation should not be applied
+			compareVal: []byte("600"),
+			want:       false,
+		},
+		{
+			name:        "less match applied",
+			values:      map[string]map[string][]byte{cf: {qualifier: []byte("500")}},
+			compareType: pb.CompareType_LESS,
+			// Condition: comparatorValue < currentValue ("400")
+			// "300" < "400" is true, so mutation should be applied
+			compareVal: []byte("300"),
+			want:       true,
+		},
+	}
+
+	// Note that these cases were meant to be run sequentially, not in parallel
+	for _, tt := range tests {
+		putReq, err := hrpc.NewPutStr(context.Background(), table, key, tt.values)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmp := filter.NewBinaryComparator(filter.NewByteArrayComparable(tt.compareVal))
+		cam, err := hrpc.NewCheckAndMutate(putReq, cf, qualifier, tt.compareType, cmp)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := c.CheckAndMutate(cam)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if result != tt.want {
+			t.Errorf("got %v, want %v", result, tt.want)
+		}
+	}
+}
+
+func TestCheckAndMutateDelete(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+
+	key := "row_cam_del"
+	cf := "cf"
+	qualifier := "a"
+
+	tests := []struct {
+		name           string
+		compareType    pb.CompareType
+		compareVal     []byte
+		wantProcessed  bool
+		wantCellsAfter int
+	}{
+		{
+			name:           "not equal no match",
+			compareType:    pb.CompareType_NOT_EQUAL,
+			compareVal:     []byte("delete_me"),
+			wantCellsAfter: 1,
+		},
+		{
+			name:           "equal match deletes",
+			compareType:    pb.CompareType_EQUAL,
+			compareVal:     []byte("delete_me"),
+			wantProcessed:  true,
+			wantCellsAfter: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		// Put initial value before each test case
+		initVals := map[string]map[string][]byte{cf: {qualifier: []byte("delete_me")}}
+		putReq, err := hrpc.NewPutStr(context.Background(), table, key, initVals)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		if _, err = c.Put(putReq); err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+
+		// Attempt conditional delete
+		delReq, err := hrpc.NewDelStr(context.Background(), table, key, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+
+		cmp := filter.NewBinaryComparator(filter.NewByteArrayComparable(tt.compareVal))
+		cam, err := hrpc.NewCheckAndMutate(delReq, cf, qualifier, tt.compareType, cmp)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+
+		result, err := c.CheckAndMutate(cam)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		if result != tt.wantProcessed {
+			t.Errorf("%s: got processed=%v, want %v", tt.name, result, tt.wantProcessed)
+		}
+
+		// Verify cell count
+		getReq, err := hrpc.NewGetStr(context.Background(), table, key)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		getRes, err := c.Get(getReq)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		if len(getRes.Cells) != tt.wantCellsAfter {
+			t.Errorf("%s: got %d cells, want %d", tt.name, len(getRes.Cells), tt.wantCellsAfter)
+		}
+	}
+}
+
 func TestClose(t *testing.T) {
 	c := gohbase.NewClient(*host)
 
