@@ -1702,3 +1702,155 @@ func BenchmarkMutateToProtoWithNestedMaps(b *testing.B) {
 		}
 	}
 }
+
+func TestCheckAndMutate(t *testing.T) {
+	ctx := context.Background()
+	table := []byte("table")
+	key := []byte("key")
+	rs := &pb.RegionSpecifier{
+		Type:  pb.RegionSpecifier_REGION_NAME.Enum(),
+		Value: []byte("region"),
+	}
+
+	tests := []struct {
+		name        string
+		mutation    func() (*Mutate, error)
+		family      string
+		qualifier   string
+		compareType pb.CompareType
+		comparator  filter.Comparator
+		wantErr     bool
+	}{
+		{
+			name: "put with equal",
+			mutation: func() (*Mutate, error) {
+				return NewPut(ctx, table, key, map[string]map[string][]byte{
+					"cf": {"q": []byte("value")},
+				})
+			},
+			family:      "cf",
+			qualifier:   "q",
+			compareType: pb.CompareType_EQUAL,
+			comparator:  filter.NewBinaryComparator(filter.NewByteArrayComparable([]byte("expected"))),
+		},
+		{
+			name: "delete with not equal",
+			mutation: func() (*Mutate, error) {
+				return NewDel(ctx, table, key, map[string]map[string][]byte{
+					"cf": {"q": nil},
+				})
+			},
+			family:      "cf",
+			qualifier:   "q",
+			compareType: pb.CompareType_NOT_EQUAL,
+			comparator:  filter.NewBinaryComparator(filter.NewByteArrayComparable([]byte("other"))),
+		},
+		{
+			name: "put with greater",
+			mutation: func() (*Mutate, error) {
+				return NewPut(ctx, table, key, map[string]map[string][]byte{
+					"cf": {"q": []byte("newval")},
+				})
+			},
+			family:      "cf",
+			qualifier:   "q",
+			compareType: pb.CompareType_GREATER,
+			comparator:  filter.NewBinaryComparator(filter.NewByteArrayComparable([]byte("100"))),
+		},
+		{
+			name: "put with less",
+			mutation: func() (*Mutate, error) {
+				return NewPut(ctx, table, key, map[string]map[string][]byte{
+					"cf": {"q": []byte("newval")},
+				})
+			},
+			family:      "cf",
+			qualifier:   "q",
+			compareType: pb.CompareType_LESS,
+			comparator:  filter.NewBinaryComparator(filter.NewByteArrayComparable([]byte("100"))),
+		},
+		{
+			name: "increment with greater or equal",
+			mutation: func() (*Mutate, error) {
+				return NewIncSingle(ctx, table, key, "cf", "q", 1)
+			},
+			family:      "cf",
+			qualifier:   "q",
+			compareType: pb.CompareType_GREATER_OR_EQUAL,
+			comparator:  filter.NewBinaryComparator(filter.NewByteArrayComparable([]byte("0"))),
+		},
+		{
+			name: "append with less or equal",
+			mutation: func() (*Mutate, error) {
+				return NewApp(ctx, table, key, map[string]map[string][]byte{
+					"cf": {"q": []byte("suffix")},
+				})
+			},
+			family:      "cf",
+			qualifier:   "q",
+			compareType: pb.CompareType_LESS_OR_EQUAL,
+			comparator:  filter.NewBinaryComparator(filter.NewByteArrayComparable([]byte("max"))),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mutation, err := tt.mutation()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			cam, err := NewCheckAndMutate(mutation, tt.family, tt.qualifier,
+				tt.compareType, tt.comparator)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if cam.Name() != "Mutate" {
+				t.Errorf("expected name 'Mutate', got %q", cam.Name())
+			}
+
+			if !cam.SkipBatch() {
+				t.Error("expected SkipBatch to be true")
+			}
+
+			if cam.CellBlocksEnabled() {
+				t.Error("expected CellBlocksEnabled to be false")
+			}
+
+			cam.SetRegion(mockRegionInfo("region"))
+			req := cam.ToProto().(*pb.MutateRequest)
+
+			if req.Condition == nil {
+				t.Fatal("expected Condition to be set")
+			}
+
+			if !bytes.Equal(req.Condition.Row, key) {
+				t.Errorf("expected row %q, got %q", key, req.Condition.Row)
+			}
+			if !bytes.Equal(req.Condition.Family, []byte(tt.family)) {
+				t.Errorf("expected family %q, got %q", tt.family, req.Condition.Family)
+			}
+			if !bytes.Equal(req.Condition.Qualifier, []byte(tt.qualifier)) {
+				t.Errorf("expected qualifier %q, got %q",
+					tt.qualifier, req.Condition.Qualifier)
+			}
+			if req.Condition.GetCompareType() != tt.compareType {
+				t.Errorf("expected compare type %v, got %v",
+					tt.compareType, req.Condition.GetCompareType())
+			}
+			if req.Condition.Comparator == nil {
+				t.Error("expected Comparator to be set")
+			}
+			if !proto.Equal(req.Region, rs) {
+				t.Errorf("expected region %v, got %v", rs, req.Region)
+			}
+		})
+	}
+}
