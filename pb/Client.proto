@@ -131,17 +131,19 @@ message GetResponse {
 }
 
 /**
- * Condition to check if the value of a given cell (row,
- * family, qualifier) matches a value via a given comparator.
+ * Condition to check if the value of a given cell (row, family, qualifier) matches a value via a
+ * given comparator or the value of a given cell matches a given filter.
  *
  * Condition is used in check and mutate operations.
  */
 message Condition {
   required bytes row = 1;
-  required bytes family = 2;
-  required bytes qualifier = 3;
-  required CompareType compare_type = 4;
-  required Comparator comparator = 5;
+  optional bytes family = 2;
+  optional bytes qualifier = 3;
+  optional CompareType compare_type = 4;
+  optional Comparator comparator = 5;
+  optional TimeRange time_range = 6;
+  optional Filter filter = 7;
 }
 
 
