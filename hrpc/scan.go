@@ -40,6 +40,9 @@ const (
 // Scanner is used to read data sequentially from HBase.
 // Scanner will be automatically closed if there's no more data to read,
 // otherwise Close method should be called.
+//
+// The Scanner interface is not safe for concurrent use. To cancel a
+// Next() call in progress cancel the context passed to the hrpc.Scan.
 type Scanner interface {
 	// Next returns a row at a time.
 	// Once all rows are returned, subsequent calls will return io.EOF error.
@@ -48,6 +51,56 @@ type Scanner interface {
 	// result (could be not a complete row) and the actual error,
 	// the subsequent calls will return io.EOF error.
 	Next() (*Result, error)
+
+	// Close should be called if it is desired to stop scanning before getting all of results.
+	// If you call Next() after calling Close() you might still get buffered results.
+	// Otherwise, in case all results have been delivered or in case of an error, the Scanner
+	// will be closed automatically. It's okay to close an already closed scanner.
+	Close() error
+	// GetScanMetrics returns the scan metrics for the scanner.
+	// The scan metrics are non-nil only if the Scan has TrackScanMetrics() enabled.
+	// GetScanMetrics should only be called after the scanner has been closed with an io.EOF
+	// (ie there are no more rows left to be returned by calls to Next()).
+	GetScanMetrics() map[string]int64
+}
+
+// ScanResponseV2 contains the response from a single Next() from a
+// ScannerV2.
+type ScanResponseV2 struct {
+	// Results contains ResultV2s, each of which are the results for a
+	// single row.
+	Results []ResultV2
+
+	// ResponseSize contains the size of the response after the RPC is
+	// completed. It is the size of the uncompressed cellblocks in the
+	// response.
+	ResponseSize int
+}
+
+// ResultV2 contains the results for a single row.
+type ResultV2 struct {
+	// Cells contains the cells found in a row.
+	Cells []CellV2
+	// Partial is true if there are more results for this row that
+	// will come from further Next() calls on the ScannerV2.
+	Partial bool
+}
+
+// Scanner is used to read data sequentially from HBase.
+// Scanner will be automatically closed if there's no more data to read,
+// otherwise Close method should be called.
+//
+// The Scanner interface is not safe for concurrent use. To cancel a
+// Next() call in progress cancel the context passed to the hrpc.Scan.
+type ScannerV2 interface {
+	// Next returns the next response from HBase, which may have
+	// results for 1 or more rows. Once all rows are returned,
+	// subsequent calls will return io.EOF error.
+	//
+	// In case of an error, only the first call to Next() will return partial
+	// result (could be not a complete row) and the actual error,
+	// the subsequent calls will return io.EOF error.
+	Next() (*ScanResponseV2, error)
 
 	// Close should be called if it is desired to stop scanning before getting all of results.
 	// If you call Next() after calling Close() you might still get buffered results.
@@ -86,10 +139,9 @@ type Scan struct {
 	scanStatsHandler ScanStatsHandler
 	scanStatsID      int64
 
-	// ResponseSize contains the size of the response after the RPC is
-	// completed. It is the size of the uncompressed cellblocks in the
-	// response. This is only meant for use internal to gohbase.
-	ResponseSize int
+	// Response contains the scan's response after the RPC is
+	// completed. This is only meant for use internal to gohbase.
+	Response *ScanResponseV2
 }
 
 type ScanStats struct {
@@ -323,21 +375,27 @@ func (s *Scan) NewResponse() proto.Message {
 // DeserializeCellBlocks deserializes scan results from cell blocks
 func (s *Scan) DeserializeCellBlocks(m proto.Message, b []byte) (uint32, error) {
 	scanResp := m.(*pb.ScanResponse)
+	cellsPerResult := scanResp.GetCellsPerResult()
 	partials := scanResp.GetPartialFlagPerResult()
-	scanResp.Results = make([]*pb.Result, len(partials))
+	if len(cellsPerResult) != len(partials) {
+		return 0, fmt.Errorf("invalid scan response: "+
+			"cells_per_result count %d doesn't match partial_flag_per_result count %d",
+			len(cellsPerResult), len(partials))
+	}
+	s.Response = &ScanResponseV2{Results: make([]ResultV2, len(cellsPerResult))}
 	var readLen uint32
-	for i, numCells := range scanResp.GetCellsPerResult() {
-		cells, l, err := deserializeCellBlocks(b[readLen:], numCells)
+	for i, numCells := range cellsPerResult {
+		cellsV2, l, err := deserializeCellBlocksV2(b[readLen:], numCells)
 		if err != nil {
 			return 0, err
 		}
-		scanResp.Results[i] = &pb.Result{
-			Cell:    cells,
-			Partial: proto.Bool(partials[i]),
+		s.Response.Results[i] = ResultV2{
+			Cells:   cellsV2,
+			Partial: partials[i],
 		}
 		readLen += l
 	}
-	s.ResponseSize = int(readLen)
+	s.Response.ResponseSize = int(readLen)
 	return readLen, nil
 }
 
@@ -504,9 +562,6 @@ func WithScanStatsHandler(h ScanStatsHandler) func(Call) error {
 		scan, ok := g.(*Scan)
 		if !ok {
 			return errors.New("'WithScanStatsHandler' option can only be used with Scan queries")
-		}
-		if h == nil {
-			return errors.New("'WithScanStatsHandler' must provide a handler function")
 		}
 		scan.scanStatsHandler = h
 		return nil

@@ -40,6 +40,11 @@ type AdminClient interface {
 	SetBalancer(sb *hrpc.SetBalancer) (bool, error)
 	// MoveRegion moves a region to a different RegionServer
 	MoveRegion(mr *hrpc.MoveRegion) error
+	ListReplicationPeers(r *hrpc.ListReplicationPeers) ([]*pb.ReplicationPeerDescription, error)
+	AddReplicationPeer(r *hrpc.AddReplicationPeer) error
+	RemoveReplicationPeer(r *hrpc.RemoveReplicationPeer) error
+	EnableReplicationPeer(r *hrpc.EnableReplicationPeer) error
+	DisableReplicationPeer(r *hrpc.DisableReplicationPeer) error
 }
 
 // NewAdminClient creates an admin HBase client.
@@ -268,7 +273,6 @@ func (c *client) ListTableNames(t *hrpc.ListTableNames) ([]*pb.TableName, error)
 	if !ok {
 		return nil, errors.New("sendPRC returned not a GetTableNamesResponse")
 	}
-
 	return res.GetTableNames(), nil
 }
 
@@ -294,4 +298,74 @@ func (c *client) MoveRegion(mr *hrpc.MoveRegion) error {
 		return errors.New("SendPRC returned not a MoveRegionResponse")
 	}
 	return nil
+}
+
+func (c *client) ListReplicationPeers(r *hrpc.ListReplicationPeers) (
+	[]*pb.ReplicationPeerDescription, error) {
+	pbmsg, err := c.SendRPC(r)
+	if err != nil {
+		return nil, err
+	}
+
+	res, ok := pbmsg.(*pb.ListReplicationPeersResponse)
+	if !ok {
+		return nil, errors.New("sendPRC returned not a ListReplicationPeersResponse")
+	}
+	return res.GetPeerDesc(), nil
+}
+
+func (c *client) AddReplicationPeer(r *hrpc.AddReplicationPeer) error {
+	pbmsg, err := c.SendRPC(r)
+	if err != nil {
+		return err
+	}
+
+	res, ok := pbmsg.(*pb.AddReplicationPeerResponse)
+	if !ok {
+		return errors.New("sendPRC returned not a AddReplicationPeerResponse")
+	}
+	return c.checkProcedureWithBackoff(r.Context(), res.GetProcId())
+}
+
+func (c *client) RemoveReplicationPeer(r *hrpc.RemoveReplicationPeer) error {
+	pbmsg, err := c.SendRPC(r)
+	if err != nil {
+		return err
+	}
+
+	res, ok := pbmsg.(*pb.RemoveReplicationPeerResponse)
+	if !ok {
+		return errors.New("sendPRC returned not a RemoveReplicationPeerResponse")
+	}
+	return c.checkProcedureWithBackoff(r.Context(), res.GetProcId())
+}
+
+// EnableReplicationPeer enables a replication peer.
+// If peer is already enabled, an error is returned.
+func (c *client) EnableReplicationPeer(r *hrpc.EnableReplicationPeer) error {
+	pbmsg, err := c.SendRPC(r)
+	if err != nil {
+		return err
+	}
+
+	res, ok := pbmsg.(*pb.EnableReplicationPeerResponse)
+	if !ok {
+		return errors.New("sendPRC returned not a EnableReplicationPeerResponse")
+	}
+	return c.checkProcedureWithBackoff(r.Context(), res.GetProcId())
+}
+
+// DisableReplicationPeer disable a replication peer.
+// If peer is already disabled, an error is returned.
+func (c *client) DisableReplicationPeer(r *hrpc.DisableReplicationPeer) error {
+	pbmsg, err := c.SendRPC(r)
+	if err != nil {
+		return err
+	}
+
+	res, ok := pbmsg.(*pb.DisableReplicationPeerResponse)
+	if !ok {
+		return errors.New("sendPRC returned not a DisableReplicationPeerResponse")
+	}
+	return c.checkProcedureWithBackoff(r.Context(), res.GetProcId())
 }

@@ -11,15 +11,15 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        go: [~1.23, ^1]
+        go: [~1.24, ^1]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup | Download HBase
         run: |
-          ver=2.4.8 &&
+          ver=2.6.2 &&
           wget -nv https://archive.apache.org/dist/hbase/$ver/hbase-$ver-bin.tar.gz &&
-          echo "2CCB816619FA651E72BF7C110FC2455705654276CFEBE067A7B9D8B39641A8A8BB827BE6EBBB7CE9D6A8441B60B6836FF3A3CA2C394952D688621F8B22F9C310  hbase-$ver-bin.tar.gz" | sha512sum --strict --check - &&
+          echo "FAF5F0F1BEC804E8C54D74E7EB9DDD7AFD22047DA086DD6ED1709DB3ADCF034F8E69208A94655575AB322BEABCDB7C8F85D9B8FCA07902F0BE34B68FED1EA331  hbase-$ver-bin.tar.gz" | sha512sum --strict --check - &&
           tar zxf hbase-$ver-bin.tar.gz --exclude=docs &&
           ln -s hbase-$ver hbase
 
@@ -29,16 +29,33 @@ jobs:
         #
         # Set scanner timeout to 5s from default of 60s, to make tests
         # for scanner expiration faster.
+        #
+        # Effectively disable the balancer by setting period to very large number. Tests need to move regions
+        # to new regionservers themselves when running in multi-regionserver set up.
+        #
+        # Run the cluster in pseudo-distributed mode. Allows for adding more than 1 regionserver for tests
+        # that require running on a multi-regionserver set up.
         run: |
           sed -i '/<\/configuration>/i \
-          <property><name>hbase.client.scanner.timeout.period</name><value>5000</value></property>
+          <property><name>hbase.client.scanner.timeout.period</name><value>5000</value></property>\
+          <property><name>hbase.balancer.period</name><value>2147483647</value></property>
+          ' hbase/conf/hbase-site.xml
+
+          sed -i '
+          /<name>hbase.cluster.distributed<\/name>/{
+          n
+          s/<value>false<\/value>/<value>true<\/value>/
+          }
           ' hbase/conf/hbase-site.xml
 
       - name: Setup | Start HBase
-        run: hbase/bin/hbase-daemon.sh --config hbase/conf start master
+        run: |
+          hbase/bin/hbase-daemon.sh --config ./hbase/conf start zookeeper
+          hbase/bin/hbase-daemon.sh --config hbase/conf start master
+          hbase/bin/local-regionservers.sh start 1
 
       - name: Setup | Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go }}
 
@@ -52,7 +69,7 @@ jobs:
         run: make integration_cover HBASE_HOME=hbase
 
       - name: Upload to Codecov
-        uses: codecov/codecov-action@v2.1.0
+        uses: codecov/codecov-action@v5
 
       - name: Upload HBase logs
         uses: actions/upload-artifact@v4

@@ -17,7 +17,6 @@ import (
 
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
-	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -37,8 +36,11 @@ type scanner struct {
 	// curRegionScannerID is the id of scanner on current region
 	curRegionScannerID uint64
 	// startRow is the start row in the current region
-	startRow    []byte
-	results     []*pb.Result
+	startRow []byte
+
+	response    *hrpc.ScanResponseV2
+	resultIndex int
+
 	closed      bool
 	scanMetrics map[string]int64
 
@@ -46,37 +48,29 @@ type scanner struct {
 	renewCancel context.CancelFunc
 }
 
-func (s *scanner) fetch() ([]*pb.Result, error) {
+type scannerV2 struct {
+	scanner
+}
+
+func (s *scanner) fetch() (*hrpc.ScanResponseV2, error) {
 	// keep looping until we have error, some non-empty result or until close
 	for {
-		resp, region, err := s.request()
+		response, err := s.request()
 		if err != nil {
-			s.Close()
 			return nil, err
 		}
-		if s.rpc.TrackScanMetrics() && resp.ScanMetrics != nil {
-			metrics := resp.ScanMetrics.GetMetrics()
-			for _, m := range metrics {
-				s.scanMetrics[m.GetName()] += m.GetValue()
-			}
-		}
 
-		s.update(resp, region)
-		if s.isDone(resp, region) {
-			s.Close()
-		}
-
-		if rs := resp.Results; len(rs) > 0 {
-			return rs, nil
+		if response != nil && len(response.Results) > 0 {
+			return response, nil
 		} else if s.closed {
 			return nil, io.EOF
 		}
 	}
 }
 
-func (s *scanner) peek() (*pb.Result, error) {
-	if len(s.results) > 0 {
-		return s.results[0], nil
+func (s *scanner) peek() (hrpc.ResultV2, error) {
+	if s.response != nil {
+		return s.response.Results[s.resultIndex], nil
 	}
 
 	if s.renewCancel != nil {
@@ -88,56 +82,56 @@ func (s *scanner) peek() (*pb.Result, error) {
 
 	if s.closed {
 		// done scanning
-		return nil, io.EOF
+		return hrpc.ResultV2{}, io.EOF
 	}
 
 	rs, err := s.fetch()
 	if err != nil {
-		return nil, err
+		return hrpc.ResultV2{}, err
 	}
-	if !s.closed && s.rpc.RenewInterval() > 0 {
-		// Start up a renewer
+	if !s.isRegionScannerClosed() && s.rpc.RenewInterval() > 0 {
+		// Start up a renewer if there is more to read within this
+		// region.
 		renewCtx, cancel := context.WithCancel(s.rpc.Context())
 		s.renewCancel = cancel
-		go s.renewLoop(renewCtx, s.startRow)
+		go s.renewLoop(renewCtx, s.curRegionScannerID, s.startRow)
 	}
 
 	// fetch cannot return zero results
-	s.results = rs
-	return s.results[0], nil
+	s.response = rs
+	return s.response.Results[0], nil
 }
 
 func (s *scanner) shift() {
-	if len(s.results) == 0 {
+	if s.response == nil {
 		return
 	}
-	// set to nil so that GC isn't blocked to clean up the result
-	s.results[0] = nil
-	s.results = s.results[1:]
+	s.resultIndex++
+	if s.resultIndex == len(s.response.Results) {
+		s.response = nil
+		s.resultIndex = 0
+	}
 }
 
 // coalesce combines result with partial if they belong to the same row
 // and returns the coalesced result and whether coalescing happened
-func (s *scanner) coalesce(result, partial *pb.Result) (*pb.Result, bool) {
-	if result == nil {
+func (s *scanner) coalesce(result, partial hrpc.ResultV2) (hrpc.ResultV2, bool) {
+	if len(result.Cells) == 0 {
 		return partial, true
 	}
-	if !result.GetPartial() {
+	if !result.Partial {
 		// results is not partial, shouldn't coalesce
 		return result, false
 	}
 
-	if len(partial.Cell) > 0 && !bytes.Equal(result.Cell[0].Row, partial.Cell[0].Row) {
+	if len(partial.Cells) > 0 && !bytes.Equal(result.Cells[0].Row(), partial.Cells[0].Row()) {
 		// new row
-		result.Partial = proto.Bool(false)
+		result.Partial = false
 		return result, false
 	}
 
 	// same row, add the partial
-	result.Cell = append(result.Cell, partial.Cell...)
-	if partial.GetStale() {
-		result.Stale = proto.Bool(partial.GetStale())
-	}
+	result.Cells = append(result.Cells, partial.Cells...)
 	return result, true
 }
 
@@ -156,47 +150,53 @@ func newScanner(c RPCClient, rpc *hrpc.Scan, logger *slog.Logger) *scanner {
 	}
 }
 
-func toLocalResult(r *pb.Result) *hrpc.Result {
-	if r == nil {
-		return nil
+func newScannerV2(c RPCClient, rpc *hrpc.Scan, logger *slog.Logger) *scannerV2 {
+	var sm map[string]int64
+	if rpc.TrackScanMetrics() {
+		sm = make(map[string]int64)
 	}
-	res := hrpc.ToLocalResult(r)
-	return res
+	return &scannerV2{
+		scanner: scanner{
+			RPCClient:          c,
+			rpc:                rpc,
+			startRow:           rpc.StartRow(),
+			curRegionScannerID: noScannerID,
+			scanMetrics:        sm,
+			logger:             logger,
+		},
+	}
 }
 
 func (s *scanner) Next() (*hrpc.Result, error) {
-	var (
-		result, partial *pb.Result
-		err             error
-	)
-
-	select {
-	case <-s.rpc.Context().Done():
-		s.Close()
-		return nil, s.rpc.Context().Err()
-	default:
+	if err := s.rpc.Context().Err(); err != nil {
+		return nil, err
 	}
 
 	if s.rpc.AllowPartialResults() {
 		// if client handles partials, just return it
-		result, err = s.peek()
+		result, err := s.peek()
 		if err != nil {
 			return nil, err
 		}
 		s.shift()
-		return toLocalResult(result), nil
+		return hrpc.ResultV2ToResult(result), nil
 	}
+
+	var (
+		result, partial hrpc.ResultV2
+		err             error
+	)
 
 	for {
 		partial, err = s.peek()
-		if err == io.EOF && result != nil {
+		if err == io.EOF && len(result.Cells) > 0 {
 			// no more results, return what we have. Next call to the Next() will get EOF
-			result.Partial = proto.Bool(false)
-			return toLocalResult(result), nil
+			result.Partial = false
+			return hrpc.ResultV2ToResult(result), nil
 		}
 		if err != nil {
 			// return whatever we have so far and the error
-			return toLocalResult(result), err
+			return hrpc.ResultV2ToResult(result), err
 		}
 
 		var done bool
@@ -204,95 +204,172 @@ func (s *scanner) Next() (*hrpc.Result, error) {
 		if done {
 			s.shift()
 		}
-		if !result.GetPartial() {
+		if !result.Partial {
 			// if not partial anymore, return it
-			return toLocalResult(result), nil
+			return hrpc.ResultV2ToResult(result), nil
 		}
 	}
 }
 
-func (s *scanner) request() (*pb.ScanResponse, hrpc.RegionInfo, error) {
-	var (
-		rpc *hrpc.Scan
-		err error
-	)
+func (s *scannerV2) Next() (*hrpc.ScanResponseV2, error) {
+	if s.renewCancel != nil {
+		// About to send new Scan request to HBase, cancel our
+		// renewer.
+		s.renewCancel()
+		s.renewCancel = nil
+	}
 
+	if s.closed {
+		return nil, io.EOF
+	}
+
+	if err := s.rpc.Context().Err(); err != nil {
+		return nil, err
+	}
+	resp, err := s.fetch()
+	if err != nil {
+		return nil, err
+	}
+	if !s.isRegionScannerClosed() && s.rpc.RenewInterval() > 0 {
+		// Start up a renewer if there is more to read within this
+		// region.
+		renewCtx, cancel := context.WithCancel(s.rpc.Context())
+		s.renewCancel = cancel
+		go s.renewLoop(renewCtx, s.curRegionScannerID, s.startRow)
+	}
+	return resp, nil
+}
+
+func (s *scanner) makeScanRequest() (*hrpc.Scan, error) {
 	if s.isRegionScannerClosed() {
 		// preserve ScanStatsID
 		opts := append(s.rpc.Options(), hrpc.ScanStatsID(s.rpc.ScanStatsID()))
 
 		// open a new region scan to scan on a new region
-		rpc, err = hrpc.NewScanRange(
+		return hrpc.NewScanRange(
 			s.rpc.Context(),
 			s.rpc.Table(),
 			s.startRow,
 			s.rpc.StopRow(),
 			opts...)
-	} else {
-		// continuing to scan current region
-		rpc, err = hrpc.NewScanRange(s.rpc.Context(),
-			s.rpc.Table(),
-			s.startRow,
-			nil,
-			hrpc.ScannerID(s.curRegionScannerID),
-			hrpc.NumberOfRows(s.rpc.NumberOfRows()),
-			hrpc.Priority(s.rpc.Priority()),
-			hrpc.RenewInterval(s.rpc.RenewInterval()),
-			// preserve ScanStatsID
-			hrpc.ScanStatsID(s.rpc.ScanStatsID()),
-		)
-	}
-	if err != nil {
-		return nil, nil, err
 	}
 
+	// continuing to scan current region
+	opts := []func(hrpc.Call) error{
+		hrpc.ScannerID(s.curRegionScannerID),
+		hrpc.NumberOfRows(s.rpc.NumberOfRows()),
+		hrpc.Priority(s.rpc.Priority()),
+		hrpc.RenewInterval(s.rpc.RenewInterval()),
+		// preserve ScanStatsID
+		hrpc.ScanStatsID(s.rpc.ScanStatsID()),
+		hrpc.WithScanStatsHandler(s.rpc.ScanStatsHandler()),
+	}
+	if s.rpc.TrackScanMetrics() {
+		opts = append(opts, hrpc.TrackScanMetrics())
+	}
+
+	return hrpc.NewScanRange(s.rpc.Context(),
+		s.rpc.Table(),
+		s.startRow,
+		nil,
+		opts...,
+	)
+}
+
+// request sends the next scan request to HBase and calls update() to
+// prepare for the next request.
+func (s *scanner) request() (*hrpc.ScanResponseV2, error) {
+	rpc, err := s.makeScanRequest()
+	if err != nil {
+		s.Close()
+		return nil, err
+	}
 	res, err := s.SendRPC(rpc)
 	if err != nil {
-		return nil, nil, err
+		s.Close()
+		return nil, err
 	}
 	scanres, ok := res.(*pb.ScanResponse)
 	if !ok {
-		return nil, nil, errors.New("got non-ScanResponse for scan request")
+		s.Close()
+		return nil, errors.New("got non-ScanResponse for scan request")
 	}
-	return scanres, rpc.Region(), nil
+
+	if s.rpc.TrackScanMetrics() && scanres.ScanMetrics != nil {
+		metrics := scanres.ScanMetrics.GetMetrics()
+		for _, m := range metrics {
+			s.scanMetrics[m.GetName()] += m.GetValue()
+		}
+	}
+
+	s.update(scanres, rpc.Region())
+
+	return rpc.Response, nil
 }
 
-// update updates the scanner for the next scan request
+// update updates the scanner for the next scan request or closes it.
 func (s *scanner) update(resp *pb.ScanResponse, region hrpc.RegionInfo) {
-	if s.isRegionScannerClosed() && resp.ScannerId != nil {
-		s.openRegionScanner(resp.GetScannerId())
+	// Either there are more results in this region, more results in
+	// other regions, or no more results.
+	if resp.GetMoreResultsInRegion() {
+		if resp.ScannerId != nil { // ScannerId should be set, but check just in case.
+			s.curRegionScannerID = resp.GetScannerId()
+		}
+		return
 	}
-	if !resp.GetMoreResultsInRegion() {
-		// we are done with this region, prepare scan for next region
-		s.curRegionScannerID = noScannerID
 
-		// Normal Scan
-		if !s.rpc.Reversed() {
-			s.startRow = region.StopKey()
-			return
-		}
+	// we are done with this region, prepare scan for next region
+	s.curRegionScannerID = noScannerID
 
-		// Reversed Scan
-		// return if we are at the end
-		if len(region.StartKey()) == 0 {
-			s.startRow = region.StartKey()
-			return
-		}
-
-		// create the nearest value lower than the current region startKey
-		rsk := region.StartKey()
-		// if last element is 0x0, just shorten the slice
-		if rsk[len(rsk)-1] == 0x0 {
-			s.startRow = rsk[:len(rsk)-1]
-			return
-		}
-
-		// otherwise lower the last element byte value by 1 and pad with 0xffs
-		tmp := make([]byte, len(rsk), len(rsk)+len(rowPadding))
-		copy(tmp, rsk)
-		tmp[len(tmp)-1] = tmp[len(tmp)-1] - 1
-		s.startRow = append(tmp, rowPadding...)
+	// nil MoreResults means more results
+	if resp.MoreResults == nil || *resp.MoreResults {
+		s.updateForNextRegion(region)
+		return
 	}
+
+	// no more results
+	s.Close()
+}
+
+func (s *scanner) updateForNextRegion(region hrpc.RegionInfo) {
+	// Normal Scan
+	if !s.rpc.Reversed() {
+		stopKey := region.StopKey()
+		if len(stopKey) == 0 {
+			// StopKey is empty, so it's the last region and the scan is done.
+			s.Close()
+		} else if len(s.rpc.StopRow()) != 0 && bytes.Compare(s.rpc.StopRow(), stopKey) <= 0 {
+			// The request's StopRow has been passed.
+			s.Close()
+		}
+		s.startRow = stopKey
+		return
+	}
+
+	// Reversed Scan
+	startKey := region.StartKey()
+	if len(startKey) == 0 {
+		// StartKey is empty, so it's the first region and the scan is done.
+		s.Close()
+		return
+	} else if len(s.rpc.StopRow()) != 0 && bytes.Compare(s.rpc.StopRow(), startKey) >= 0 {
+		// The request's StopRow has been passed in the reverse direction.
+		s.Close()
+		return
+	}
+
+	// create the nearest value lower than the current region startKey
+	// if last element is 0x0, just shorten the slice
+	if startKey[len(startKey)-1] == 0x0 {
+		s.startRow = startKey[:len(startKey)-1]
+		return
+	}
+
+	// otherwise lower the last element byte value by 1 and pad with 0xffs
+	tmp := make([]byte, len(startKey), len(startKey)+len(rowPadding))
+	copy(tmp, startKey)
+	tmp[len(tmp)-1]--
+	s.startRow = append(tmp, rowPadding...)
 }
 
 func (s *scanner) Close() error {
@@ -316,47 +393,8 @@ func (s *scanner) GetScanMetrics() map[string]int64 {
 	return s.scanMetrics
 }
 
-// isDone check if this scanner is done fetching new results
-func (s *scanner) isDone(resp *pb.ScanResponse, region hrpc.RegionInfo) bool {
-	if resp.MoreResults != nil && !*resp.MoreResults {
-		// or the filter for the whole scan has been exhausted, close the scanner
-		return true
-	}
-
-	if !s.isRegionScannerClosed() {
-		// not done with this region yet
-		return false
-	}
-
-	// Check to see if this region is the last we should scan because:
-	// (1) it's the last region
-	if len(region.StopKey()) == 0 && !s.rpc.Reversed() {
-		return true
-	}
-	if s.rpc.Reversed() && len(region.StartKey()) == 0 {
-		return true
-	}
-	// (3) because its stop_key is greater than or equal to the stop_key of this scanner,
-	// provided that (2) we're not trying to scan until the end of the table.
-	if !s.rpc.Reversed() {
-		return len(s.rpc.StopRow()) != 0 && // (2)
-			bytes.Compare(s.rpc.StopRow(), region.StopKey()) <= 0 // (3)
-	}
-
-	//  Reversed Scanner
-	return len(s.rpc.StopRow()) != 0 && // (2)
-		bytes.Compare(s.rpc.StopRow(), region.StartKey()) >= 0 // (3)
-}
-
 func (s *scanner) isRegionScannerClosed() bool {
 	return s.curRegionScannerID == noScannerID
-}
-
-func (s *scanner) openRegionScanner(scannerId uint64) {
-	if !s.isRegionScannerClosed() {
-		panic(fmt.Sprintf("should not happen: previous region scanner was not closed"))
-	}
-	s.curRegionScannerID = scannerId
 }
 
 func (s *scanner) closeRegionScanner() {
@@ -387,7 +425,7 @@ func (s *scanner) closeRegionScanner() {
 }
 
 // renews a scanner by resending scan request with renew = true
-func (s *scanner) renew(ctx context.Context, startRow []byte) error {
+func (s *scanner) renew(ctx context.Context, scannerID uint64, startRow []byte) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -395,7 +433,7 @@ func (s *scanner) renew(ctx context.Context, startRow []byte) error {
 		s.rpc.Table(),
 		startRow,
 		nil,
-		hrpc.ScannerID(s.curRegionScannerID),
+		hrpc.ScannerID(scannerID),
 		hrpc.Priority(s.rpc.Priority()),
 		hrpc.RenewalScan(),
 		hrpc.ScanStatsID(s.rpc.ScanStatsID()),
@@ -407,7 +445,7 @@ func (s *scanner) renew(ctx context.Context, startRow []byte) error {
 	return err
 }
 
-func (s *scanner) renewLoop(ctx context.Context, startRow []byte) {
+func (s *scanner) renewLoop(ctx context.Context, scannerID uint64, startRow []byte) {
 	scanRenewers.Inc()
 	t := time.NewTicker(s.rpc.RenewInterval())
 	defer func() {
@@ -418,7 +456,7 @@ func (s *scanner) renewLoop(ctx context.Context, startRow []byte) {
 	for {
 		select {
 		case <-t.C:
-			if err := s.renew(ctx, startRow); err != nil {
+			if err := s.renew(ctx, scannerID, startRow); err != nil {
 				s.logger.Error("error renewing scanner", "err", err)
 				return
 			}

@@ -41,4 +41,51 @@ var (
 		},
 		[]string{"regionserver"},
 	)
+
+	rpcResultCount = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "gohbase",
+			Name:      "rpc_result_count",
+			Help:      "Number of RPC operations by result status and operation type",
+		},
+		[]string{"operation", "status", "type"},
+	)
+
+	pingLatency = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "gohbase",
+			Name:      "ping_latency_seconds",
+			Help:      "Ping scan latency in seconds",
+			Buckets:   prometheus.ExponentialBuckets(0.0002, 2, 12),
+		},
+		[]string{"regionserver"},
+	)
+
+	concurrentScans = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "gohbase",
+			Name:      "concurrent_scans_limit",
+			Help:      "Max number of concurrent scans per region server",
+		},
+		[]string{"regionserver"},
+	)
+
+	concurrentBatchRequests = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "gohbase",
+			Name:      "concurrent_batch_requests_limit",
+			Help:      "Max number of concurrent batch requests per region server",
+		},
+		[]string{"regionserver"},
+	)
+
+	// Counter for # of times concurrent batch requests limit was hit
+	concurrentBatchRequestsLimitHit = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "gohbase",
+			Name:      "concurrent_batch_requests_limit_hit",
+			Help:      "Number of times concurrent batch requests limit was hit",
+		},
+		[]string{"regionserver"},
+	)
 )

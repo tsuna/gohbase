@@ -228,7 +228,11 @@ func TestQueueRPCMultiWithClose(t *testing.T) {
 		go c.QueueRPC(call)
 	}
 
+	t.Log("Closing")
+
 	c.Close()
+
+	t.Log("Closed")
 
 	// check that all calls are not stuck and get an error
 	for _, call := range calls {
@@ -238,6 +242,7 @@ func TestQueueRPCMultiWithClose(t *testing.T) {
 		}
 	}
 
+	t.Log("Wait")
 	wgProcessRPCs.Wait()
 }
 
@@ -618,6 +623,7 @@ func TestReceiveDecodeProtobufError(t *testing.T) {
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
 	mockCall.EXPECT().NewResponse().Return(&pb.MutateResponse{}).Times(1)
 	mockCall.EXPECT().Context().Return(context.Background()).Times(1)
+	mockCall.EXPECT().Name().Return("Whatever").Times(1)
 
 	c.sent[1] = mockCall
 	c.inFlight = 1
@@ -666,6 +672,7 @@ func TestReceiveDeserializeCellblocksError(t *testing.T) {
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
 	mockCall.EXPECT().NewResponse().Return(&pb.MutateResponse{}).Times(1)
 	mockCall.EXPECT().Context().Return(context.Background()).Times(1)
+	mockCall.EXPECT().Name().Return("Get").Times(1)
 
 	c.sent[1] = callWithCellBlocksError{mockCall}
 	c.inFlight = 1
@@ -716,7 +723,7 @@ func TestUnexpectedSendError(t *testing.T) {
 	mockCall.EXPECT().Description().AnyTimes()
 	result := make(chan hrpc.RPCResult, 1)
 	mockCall.EXPECT().ResultChan().Return(result).Times(1)
-	mockCall.EXPECT().Name().Return("Whatever").Times(1)
+	mockCall.EXPECT().Name().Return("Whatever").Times(2)
 
 	c.QueueRPC(mockCall)
 	r := <-result
@@ -1277,6 +1284,193 @@ func TestMarshalJSONNilValues(t *testing.T) {
 	_, err := c.MarshalJSON()
 	if err != nil {
 		t.Fatalf("Did not expect Error to be thrown: %v", err)
+	}
+}
+
+func TestScanConcurrencyControl(t *testing.T) {
+	// Create a client with scan concurrency control enabled
+	done := make(chan struct{})
+	defer close(done)
+
+	// Create token bucket with capacity of 1 and initially 1 token
+	tokenBucket, err := NewToken(1, 1, done)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c := &client{
+		sent:            make(map[uint32]hrpc.Call),
+		scanTokenBucket: tokenBucket,
+		logger:          slog.Default(),
+	}
+
+	ctx := context.Background()
+
+	// Create first scan request
+	scan1, err := hrpc.NewScanRange(ctx, []byte("table"), []byte("start"), []byte("stop"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create second scan request
+	scan2, err := hrpc.NewScanRange(ctx, []byte("table"), []byte("start"), []byte("stop"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register first scan - should succeed immediately since we have 1 token
+	id1, err := c.registerRPC(scan1)
+	if err != nil {
+		t.Fatalf("First scan registration should succeed, got error: %v", err)
+	}
+
+	// Channel to track when the second registration starts and completes
+	registrationStarted := make(chan struct{})
+	registrationCompleted := make(chan struct{})
+
+	var id2 uint32
+	var registerErr error
+
+	// Start goroutine to register second scan
+	go func() {
+		close(registrationStarted)
+		id2, registerErr = c.registerRPC(scan2)
+		close(registrationCompleted)
+	}()
+
+	// Wait for the registration to start
+	<-registrationStarted
+
+	// Give the registration some time to potentially complete if it wasn't blocking
+	select {
+	case <-registrationCompleted:
+		t.Fatal("Second scan registration should be blocked")
+	default:
+	}
+
+	// Now unregister the first scan to free up a token
+	rpc := c.unregisterRPC(id1)
+	if rpc != scan1 {
+		t.Fatalf("Expected to get back scan1, got %v", rpc)
+	}
+
+	// The second registration should now complete
+	<-registrationCompleted
+
+	// Good - registration unblocked
+	if registerErr != nil {
+		t.Fatalf("Second scan registration failed: %v", registerErr)
+	}
+	if id2 == 0 {
+		t.Fatal("Second scan registration should have assigned a non-zero ID")
+	}
+
+	// Clean up - unregister the second scan
+	rpc2 := c.unregisterRPC(id2)
+	if rpc2 != scan2 {
+		t.Fatalf("Expected to get back scan2, got %v", rpc2)
+	}
+
+	// Verify that we can register a new scan again (token should be available)
+	scan3, err := hrpc.NewScanRange(ctx, []byte("table"), []byte("start"), []byte("stop"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	id3, err := c.registerRPC(scan3)
+	if err != nil {
+		t.Fatalf("Third scan registration should succeed after cleanup, got error: %v", err)
+	}
+
+	// Clean up
+	c.unregisterRPC(id3)
+}
+
+func TestScanConcurrencyControlSetCapacity(t *testing.T) {
+	// Create a client with scan concurrency control enabled
+	done := make(chan struct{})
+	defer close(done)
+
+	// Create token bucket with capacity of 2 but initially only 1 token
+	tokenBucket, err := NewToken(2, 1, done)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c := &client{
+		sent:            make(map[uint32]hrpc.Call),
+		scanTokenBucket: tokenBucket,
+		logger:          slog.Default(),
+	}
+
+	ctx := context.Background()
+
+	// Create first scan request
+	scan1, err := hrpc.NewScanRange(ctx, []byte("table"), []byte("start"), []byte("stop"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create second scan request
+	scan2, err := hrpc.NewScanRange(ctx, []byte("table"), []byte("start"), []byte("stop"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register first scan - should succeed immediately since we have 1 token
+	id1, err := c.registerRPC(scan1)
+	if err != nil {
+		t.Fatalf("First scan registration should succeed, got error: %v", err)
+	}
+
+	// Channel to track when the second registration starts and completes
+	registrationStarted := make(chan struct{})
+	registrationCompleted := make(chan struct{})
+
+	var id2 uint32
+	var registerErr error
+
+	// Start goroutine to register second scan
+	go func() {
+		close(registrationStarted)
+		id2, registerErr = c.registerRPC(scan2)
+		close(registrationCompleted)
+	}()
+
+	// Wait for the registration to start
+	<-registrationStarted
+
+	// Give the registration some time to potentially complete if it wasn't blocking
+	select {
+	case <-registrationCompleted:
+		t.Fatal("Second scan registration should be blocked")
+	default:
+	}
+
+	// Now use SetCapacity to increase capacity to 2, which should unblock the second scan
+	if err := tokenBucket.SetCapacity(ctx, 2); err != nil {
+		t.Fatalf("Failed to set capacity: %v", err)
+	}
+
+	// The second registration should now complete
+	<-registrationCompleted
+	// Good - registration unblocked
+	if registerErr != nil {
+		t.Fatalf("Second scan registration failed: %v", registerErr)
+	}
+	if id2 == 0 {
+		t.Fatal("Second scan registration should have assigned a non-zero ID")
+	}
+
+	// Clean up - unregister both scans
+	rpc1 := c.unregisterRPC(id1)
+	if rpc1 != scan1 {
+		t.Fatalf("Expected to get back scan1, got %v", rpc1)
+	}
+
+	rpc2 := c.unregisterRPC(id2)
+	if rpc2 != scan2 {
+		t.Fatalf("Expected to get back scan2, got %v", rpc2)
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"math"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"testing"
@@ -1619,8 +1620,15 @@ func TestDeserializeCellBlocksScan(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(expectedResults, scanResp.Results) {
-		t.Errorf("expected %v, got %v", expectedResults, scanResp.Results)
+	equalResultsV1V2 := func(a *pb.Result, b ResultV2) bool {
+		cellsEqual := slices.EqualFunc(a.Cell, b.Cells, func(a *pb.Cell, b CellV2) bool {
+			return proto.Equal(a, b.ToPBCell())
+		})
+		return cellsEqual && *a.Partial == b.Partial
+	}
+
+	if !slices.EqualFunc(expectedResults, s.Response.Results, equalResultsV1V2) {
+		t.Errorf("unexpected ResultV2:\nexp: %v\ngot: %v", expectedResults, s.Response.Results)
 	}
 
 	if int(n) != len(cellblocks) {

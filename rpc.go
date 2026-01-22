@@ -186,7 +186,9 @@ func (c *client) scanRpcScanStats(scan *hrpc.Scan, resp proto.Message, err error
 			stats.Error = true
 		}
 		stats.Retryable = retry
-		stats.ResponseSize = scan.ResponseSize
+		if scan.Response != nil {
+			stats.ResponseSize = scan.Response.ResponseSize
+		}
 		scan.ScanStatsHandler()(stats)
 	}
 }
@@ -294,6 +296,7 @@ func (c *client) SendBatch(ctx context.Context, batch []hrpc.Call) (
 	table := batch[0].Table()
 	res = make([]hrpc.RPCResult, len(batch))
 	rpcToRes := make(map[hrpc.Call]int, len(batch))
+	rpcStartTime := time.Now()
 	for i, rpc := range batch {
 		// map Call to index in res so that we can set the correct
 		// result as Calls complete
@@ -365,7 +368,7 @@ func (c *client) SendBatch(ctx context.Context, batch []hrpc.Call) (
 			defer sp.End()
 			for _, cAndR := range cAndRs {
 				shouldRetry, shouldBackoff, unretryableError, ok := c.waitForCompletion(
-					ctx, cAndR.client, cAndR.rpcs, res, rpcToRes)
+					ctx, cAndR.client, cAndR.rpcs, res, rpcToRes, rpcStartTime)
 				if !ok {
 					allOK = false
 					retries = append(retries, shouldRetry...)
@@ -438,7 +441,8 @@ func (c *client) findClients(ctx context.Context, batch []hrpc.Call, res []hrpc.
 //     retryable RPCs may eventually succeed we need to return !ok to
 //     the caller of SendBatch.
 func (c *client) waitForCompletion(ctx context.Context, rc hrpc.RegionClient,
-	rpcs []hrpc.Call, results []hrpc.RPCResult, rpcToRes map[hrpc.Call]int) (
+	rpcs []hrpc.Call, results []hrpc.RPCResult, rpcToRes map[hrpc.Call]int,
+	rpcStartTime time.Time) (
 	retryables []hrpc.Call, shouldBackoff, unretryableError, ok bool) {
 
 	ok = true
@@ -449,6 +453,8 @@ loop:
 		select {
 		case res := <-rpc.ResultChan():
 			results[rpcToRes[rpc]] = res
+			description := rpc.Description()
+			duration := time.Since(rpcStartTime).Seconds()
 			if res.Error != nil {
 				c.handleResultError(res.Error, rpc.Region(), rc)
 				ok = false
@@ -459,8 +465,14 @@ loop:
 				case region.ServerError, region.NotServingRegionError:
 					retryables = append(retryables, rpc)
 				default:
+					// This is a final failure - track it now
+					o := operationDurationSeconds.WithLabelValues(description, "error")
+					observability.ObserveWithTrace(ctx, o, duration)
 					unretryableError = true
 				}
+			} else {
+				o := operationDurationSeconds.WithLabelValues(description, "ok")
+				observability.ObserveWithTrace(ctx, o, duration)
 			}
 
 		case <-ctx.Done():
@@ -475,11 +487,18 @@ loop:
 	// the ResultChan for the remaining RPCs. If not ready the result
 	// will be the context error.
 	for _, rpc := range rpcs[canceledIndex:] {
+		description := rpc.Description()
 		select {
 		case res := <-rpc.ResultChan():
+			duration := time.Since(rpcStartTime).Seconds()
 			results[rpcToRes[rpc]] = res
 			if res.Error != nil {
 				c.handleResultError(res.Error, rpc.Region(), rc)
+				o := operationDurationSeconds.WithLabelValues(description, "error")
+				observability.ObserveWithTrace(ctx, o, duration)
+			} else {
+				o := operationDurationSeconds.WithLabelValues(description, "ok")
+				observability.ObserveWithTrace(ctx, o, duration)
 			}
 		default:
 			results[rpcToRes[rpc]].Error = ctx.Err()
@@ -537,7 +556,7 @@ func sendBlocking(ctx context.Context, rc hrpc.RegionClient, rpc hrpc.Call) (
 	case res = <-rpc.ResultChan():
 		return res, nil
 	case <-ctx.Done():
-		return res, rpc.Context().Err()
+		return res, ctx.Err()
 	}
 }
 
@@ -1018,13 +1037,31 @@ func (c *client) establishRegion(reg hrpc.RegionInfo, addr string) {
 			// admin region is used for talking to master, so it only has one connection to
 			// master that we don't add to the cache
 			// TODO: consider combining this case with the regular regionserver path
-			client = c.newRegionClientFn(addr, c.clientType, c.rpcQueueSize, c.flushInterval,
-				c.effectiveUser, c.regionReadTimeout, nil, c.regionDialer, c.logger)
+			options := &region.RegionClientOptions{
+				QueueSize:     c.rpcQueueSize,
+				FlushInterval: c.flushInterval,
+				EffectiveUser: c.effectiveUser,
+				ReadTimeout:   c.regionReadTimeout,
+				Dialer:        c.regionDialer,
+				Logger:        c.logger,
+			}
+			client = c.newRegionClientFn(addr, c.clientType, options)
 		} else {
+			// Build options for regular region client
+			options := &region.RegionClientOptions{
+				QueueSize:            c.rpcQueueSize,
+				FlushInterval:        c.flushInterval,
+				EffectiveUser:        c.effectiveUser,
+				ReadTimeout:          c.regionReadTimeout,
+				Codec:                c.compressionCodec,
+				Dialer:               c.regionDialer,
+				Logger:               c.logger,
+				ScanControl:          c.scanControlOptions,
+				BatchRequestsControl: c.batchRequestsControlOptions,
+			}
+
 			client = c.clients.put(addr, reg, func() hrpc.RegionClient {
-				return c.newRegionClientFn(addr, c.clientType, c.rpcQueueSize, c.flushInterval,
-					c.effectiveUser, c.regionReadTimeout, c.compressionCodec,
-					c.regionDialer, c.logger)
+				return c.newRegionClientFn(addr, c.clientType, options)
 			})
 		}
 

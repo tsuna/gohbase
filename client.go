@@ -22,7 +22,7 @@ import (
 	"github.com/tsuna/gohbase/zk"
 	"google.golang.org/protobuf/proto"
 	"modernc.org/b/v2"
-)
+)t
 
 const (
 	defaultRPCQueueSize  = 100
@@ -35,6 +35,7 @@ const (
 // Client a regular HBase client
 type Client interface {
 	Scan(s *hrpc.Scan) hrpc.Scanner
+	ScanV2(s *hrpc.Scan) hrpc.ScannerV2
 	Get(g *hrpc.Get) (*hrpc.Result, error)
 	Put(p *hrpc.Mutate) (*hrpc.Result, error)
 	Delete(d *hrpc.Mutate) (*hrpc.Result, error)
@@ -43,6 +44,8 @@ type Client interface {
 	CheckAndPut(p *hrpc.Mutate, family string, qualifier string,
 		expectedValue []byte) (bool, error)
 	CheckAndMutate(cam *hrpc.CheckAndMutate) (bool, error)
+	CheckAndPutWithCompareType(p *hrpc.Mutate, family string, qualifier string,
+		expectedValue []byte, compareType pb.CompareType) (bool, error)
 	SendBatch(ctx context.Context, batch []hrpc.Call) (res []hrpc.RPCResult, allOK bool)
 	CacheRegions(table []byte) error
 	Close()
@@ -99,10 +102,7 @@ type client struct {
 	done      chan struct{}
 	closeOnce sync.Once
 
-	newRegionClientFn func(string, region.ClientType, int, time.Duration,
-		string, time.Duration, compression.Codec,
-		func(ctx context.Context, network, addr string) (net.Conn, error),
-		*slog.Logger) hrpc.RegionClient
+	newRegionClientFn func(string, region.ClientType, *region.RegionClientOptions) hrpc.RegionClient
 
 	compressionCodec compression.Codec
 
@@ -113,6 +113,10 @@ type client struct {
 	regionDialer func(ctx context.Context, network, addr string) (net.Conn, error)
 	// logger that could be defined by user
 	logger *slog.Logger
+	// scan control options for congestion control
+	scanControlOptions *region.ScanControlOptions
+	// batch requests control options for concurrency control
+	batchRequestsControlOptions *region.BatchRequestsControlOptions
 }
 
 // NewClient creates a new HBase client.
@@ -138,8 +142,11 @@ func newClient(zkquorum string, options ...Option) *client {
 		regionLookupTimeout: region.DefaultLookupTimeout,
 		regionReadTimeout:   region.DefaultReadTimeout,
 		done:                make(chan struct{}),
-		newRegionClientFn:   region.NewClient,
-		logger:              slog.Default(),
+		newRegionClientFn: func(addr string, ctype region.ClientType,
+			options *region.RegionClientOptions) hrpc.RegionClient {
+			return region.NewClient(addr, ctype, options)
+		},
+		logger: slog.Default(),
 	}
 	for _, option := range options {
 		option(c)
@@ -314,6 +321,23 @@ func Logger(logger *slog.Logger) Option {
 	}
 }
 
+// ScanControl will return an option that configures congestion control for scan requests.
+// It takes a ScanControlOptions struct which contains the controller and window limits.
+func ScanControl(options *region.ScanControlOptions) Option {
+	return func(c *client) {
+		// Store the scan control options to be used when creating region clients
+		c.scanControlOptions = options
+	}
+}
+
+// BatchRequestsControl will return an option that configures concurrency control for multi
+// requests.
+func BatchRequestsControl(options *region.BatchRequestsControlOptions) Option {
+	return func(c *client) {
+		c.batchRequestsControlOptions = options
+	}
+}
+
 // Close closes connections to hbase master and regionservers
 func (c *client) Close() {
 	c.closeOnce.Do(func() {
@@ -329,6 +353,10 @@ func (c *client) Close() {
 
 func (c *client) Scan(s *hrpc.Scan) hrpc.Scanner {
 	return newScanner(c, s, c.logger)
+}
+
+func (c *client) ScanV2(s *hrpc.Scan) hrpc.ScannerV2 {
+	return newScannerV2(c, s, c.logger)
 }
 
 func (c *client) Get(g *hrpc.Get) (*hrpc.Result, error) {
@@ -388,7 +416,13 @@ func (c *client) mutate(m *hrpc.Mutate) (*hrpc.Result, error) {
 
 func (c *client) CheckAndPut(p *hrpc.Mutate, family string,
 	qualifier string, expectedValue []byte) (bool, error) {
-	cas, err := hrpc.NewCheckAndPut(p, family, qualifier, expectedValue)
+	return c.CheckAndPutWithCompareType(p, family, qualifier, expectedValue, pb.CompareType_EQUAL)
+}
+
+func (c *client) CheckAndPutWithCompareType(p *hrpc.Mutate, family string,
+	qualifier string, expectedValue []byte, compareType pb.CompareType) (bool, error) {
+	cas, err := hrpc.NewCheckAndPutWithCompareType(
+		p, family, qualifier, expectedValue, compareType)
 	if err != nil {
 		return false, err
 	}

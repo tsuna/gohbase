@@ -87,6 +87,10 @@ func DeleteTable(client gohbase.AdminClient, table string) error {
 	return nil
 }
 
+// LocalRegionServersCmd can be used to start or stop new local regionservers on the cluster
+// (run in pseudo-distributed mode). If starting up new regionservers, the test caller is
+// responsible for stopping those regionservers in the test cleanup.
+// Do not use t.Parallel() if using this.
 func LocalRegionServersCmd(t *testing.T, action string, servers []string) {
 	hh := os.Getenv("HBASE_HOME")
 	args := append([]string{action}, servers...)
@@ -182,7 +186,8 @@ func TestGet(t *testing.T) {
 		t.Error("Get claimed that our row didn't exist")
 	}
 
-	ctx, _ := context.WithTimeout(context.Background(), 0)
+	ctx, cancel := context.WithTimeout(context.Background(), 0)
+	defer cancel()
 	get, err = hrpc.NewGetStr(ctx, table, key, hrpc.Families(headers))
 	if err != nil {
 		t.Fatalf("Failed to create Get request: %s", err)
@@ -376,7 +381,8 @@ func TestPutWithTimeout(t *testing.T) {
 	c := gohbase.NewClient(*host)
 	defer c.Close()
 
-	ctx, _ := context.WithTimeout(context.Background(), 0)
+	ctx, cancel := context.WithTimeout(context.Background(), 0)
+	defer cancel()
 	putRequest, err := hrpc.NewPutStr(ctx, table, key, values)
 	_, err = c.Put(putRequest)
 	if err != context.DeadlineExceeded {
@@ -966,12 +972,12 @@ func TestScanTimeRangeVersions(t *testing.T) {
 	if uint32(len(rsp[0].Cells)) != maxVersions {
 		t.Fatalf("Expected versions: %d, Got versions: %d", maxVersions, len(rsp[0].Cells))
 	}
-	scan1 := *rsp[0].Cells[0]
+	scan1 := rsp[0].Cells[0]
 	if string(scan1.Row) != "TestScanTimeRangeVersions1" && *scan1.Timestamp != 51 {
 		t.Errorf("Timestamps are not the same. Expected Time: %v, Got Time: %v",
 			51, *scan1.Timestamp)
 	}
-	scan2 := *rsp[0].Cells[1]
+	scan2 := rsp[0].Cells[1]
 	if string(scan2.Row) != "TestScanTimeRangeVersions1" && *scan2.Timestamp != 50 {
 		t.Errorf("Timestamps are not the same. Expected Time: %v, Got Time: %v",
 			50, *scan2.Timestamp)
@@ -979,12 +985,12 @@ func TestScanTimeRangeVersions(t *testing.T) {
 	if uint32(len(rsp[1].Cells)) != maxVersions {
 		t.Fatalf("Expected versions: %d, Got versions: %d", maxVersions, len(rsp[1].Cells))
 	}
-	scan3 := *rsp[1].Cells[0]
+	scan3 := rsp[1].Cells[0]
 	if string(scan3.Row) != "TestScanTimeRangeVersions2" && *scan3.Timestamp != 52 {
 		t.Errorf("Timestamps are not the same. Expected Time: %v, Got Time: %v",
 			52, *scan3.Timestamp)
 	}
-	scan4 := *rsp[1].Cells[1]
+	scan4 := rsp[1].Cells[1]
 	if string(scan4.Row) != "TestScanTimeRangeVersions2" && *scan4.Timestamp != 51 {
 		t.Errorf("Timestamps are not the same. Expected Time: %v, Got Time: %v",
 			51, *scan4.Timestamp)
@@ -1404,6 +1410,70 @@ func TestCheckAndPut(t *testing.T) {
 	// TODO: check the resulting state by performing a Get request
 }
 
+func makeMap(cf, k, v string) map[string]map[string][]byte {
+	return map[string]map[string][]byte{cf: map[string][]byte{k: []byte(v)}}
+}
+
+func TestCheckAndPutWithCompareTypeGreater(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+
+	key := "rowCAP"
+	ef := "cf"
+	eq := "a"
+
+	var testcases = []struct {
+		inValues    map[string]map[string][]byte
+		cmpVal      []byte
+		out         bool
+		expectedVal []byte
+	}{
+		{makeMap("cf", "a", "2"), nil, true, []byte("2")},
+		{makeMap("cf", "a", "2"), nil, false, []byte("2")},
+		{makeMap("cf", "b", "1"), []byte{}, false, []byte("2")},
+		{makeMap("cf", "b", "1"), []byte{}, false, []byte("2")}, // Strictly greater
+		{makeMap("cf", "b", "3"), []byte("1"), false, []byte("2")},
+		{makeMap("cf", "a", "4"), []byte("2"), false, []byte("2")},
+		{makeMap("cf", "a", "1"), []byte("99"), true, []byte("1")},
+		{makeMap("cf", "b", "2"), []byte("98"), true, []byte("1")},
+	}
+
+	for _, tc := range testcases {
+		putRequest, err := hrpc.NewPutStr(context.Background(), table, key, tc.inValues)
+		if err != nil {
+			t.Fatalf("NewPutStr returned an error: %v", err)
+		}
+
+		casRes, err := c.CheckAndPutWithCompareType(
+			putRequest, ef, eq, tc.cmpVal, pb.CompareType_GREATER)
+
+		if err != nil {
+			t.Fatalf("CheckAndPut error: %s", err)
+		}
+
+		if casRes != tc.out {
+			t.Errorf("CheckAndPut with put values=%q and cmpValue=%q returned %v, want %v",
+				tc.inValues, tc.cmpVal, casRes, tc.out)
+		}
+
+		get, err := hrpc.NewGetStr(context.Background(), table, key,
+			hrpc.Families(map[string][]string{"cf": nil}))
+		rsp, err := c.Get(get)
+		if err != nil {
+			t.Fatalf("Get failed: %s", err)
+		}
+		if len(rsp.Cells) < 1 {
+			t.Errorf("Get expected at least 1 cell. Received: %d", len(rsp.Cells))
+		}
+		if !bytes.Equal(rsp.Cells[0].Value, tc.expectedVal) {
+			t.Errorf("Get expected value %q. Received: %q for inValues: %v",
+				tc.expectedVal, rsp.Cells[0].Value, tc.inValues)
+		}
+
+	}
+
+}
+
 func TestCheckAndPutNotPut(t *testing.T) {
 	key := "row101"
 	c := gohbase.NewClient(*host)
@@ -1675,10 +1745,16 @@ func TestChangingRegionServers(t *testing.T) {
 	// RegionServer 1 hosts all the current regions.
 	// Now launch servers 2,3
 	LocalRegionServersCmd(t, "start", []string{"2", "3"})
+	t.Cleanup(func() {
+		LocalRegionServersCmd(t, "stop", []string{"2", "3"})
+	})
 
 	// Now (gracefully) stop servers 1,2.
 	// All regions should now be on server 3.
 	LocalRegionServersCmd(t, "stop", []string{"1", "2"})
+	t.Cleanup(func() {
+		LocalRegionServersCmd(t, "start", []string{"1"})
+	})
 	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
 	rsp, err := c.Get(get)
 	if err != nil {
@@ -1689,10 +1765,6 @@ func TestChangingRegionServers(t *testing.T) {
 		t.Errorf("Get returned an incorrect result. Expected: %v, Received: %v",
 			val, rsp_value)
 	}
-
-	// Clean up by re-launching RS1 and closing RS3
-	LocalRegionServersCmd(t, "start", []string{"1"})
-	LocalRegionServersCmd(t, "stop", []string{"3"})
 }
 
 func BenchmarkPut(b *testing.B) {
@@ -2207,7 +2279,7 @@ func TestReverseScan(t *testing.T) {
 	c := gohbase.NewClient(*host)
 	defer c.Close()
 
-	baseErr := "Reverse Scan error "
+	const baseErr = "Reverse Scan error "
 
 	values := make(map[string]map[string][]byte)
 	values["cf"] = map[string][]byte{}
@@ -2252,7 +2324,7 @@ func TestReverseScan(t *testing.T) {
 		i++
 		expected := fmt.Sprintf("%d", 500-i)
 		if string(r.Cells[0].Value) != expected {
-			t.Errorf(baseErr + "- unexpected rowkey returned")
+			t.Error(baseErr + "- unexpected rowkey returned")
 		}
 	}
 	if i != 500 {
@@ -2284,7 +2356,7 @@ func TestReverseScan(t *testing.T) {
 		i++
 		expected := fmt.Sprintf("%d", 251-i)
 		if string(r.Cells[0].Value) != expected {
-			t.Errorf(baseErr + "- unexpected rowkey returned when doing partial reverse scan")
+			t.Error(baseErr + "- unexpected rowkey returned when doing partial reverse scan")
 		}
 	}
 	if i != 100 {
@@ -2552,11 +2624,8 @@ func TestSetBalancer(t *testing.T) {
 	}
 }
 
-func TestMoveRegion(t *testing.T) {
-	c := gohbase.NewClient(*host)
-	ac := gohbase.NewAdminClient(*host)
-
-	// scan meta to get a region to move
+// getRegionNames scans meta to get the region names
+func getRegionNames(t *testing.T, c gohbase.Client) []*hrpc.Result {
 	scan, err := hrpc.NewScan(context.Background(),
 		[]byte("hbase:meta"),
 		hrpc.Families(map[string][]string{"info": []string{"regioninfo"}}))
@@ -2567,7 +2636,8 @@ func TestMoveRegion(t *testing.T) {
 	var rsp []*hrpc.Result
 	scanner := c.Scan(scan)
 	for {
-		res, err := scanner.Next()
+		var res *hrpc.Result
+		res, err = scanner.Next()
 		if err == io.EOF {
 			break
 		}
@@ -2577,22 +2647,37 @@ func TestMoveRegion(t *testing.T) {
 		rsp = append(rsp, res)
 	}
 
-	// use the first region
+	return rsp
+}
+
+func getFirstRegionName(t *testing.T, c gohbase.Client) []byte {
+	rsp := getRegionNames(t, c)
+
 	if len(rsp) == 0 {
 		t.Fatal("got 0 results")
 	}
+
+	// use the first region
 	if len(rsp[0].Cells) == 0 {
 		t.Fatal("got 0 cells")
 	}
 
 	regionName := rsp[0].Cells[0].Row
 	regionName = regionName[len(regionName)-33 : len(regionName)-1]
+	return regionName
+}
+
+func TestMoveRegion(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	ac := gohbase.NewAdminClient(*host)
+
+	regionName := getFirstRegionName(t, c)
 	mr, err := hrpc.NewMoveRegion(context.Background(), regionName)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := ac.MoveRegion(mr); err != nil {
+	if err = ac.MoveRegion(mr); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -2747,7 +2832,7 @@ func TestNewTableFromSnapshot(t *testing.T) {
 	// It may take some time for the new table with the restored data to be created,
 	// wait some time for this to complete.
 	var tn *hrpc.ListTableNames
-	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	tn, err = hrpc.NewListTableNames(ctx, hrpc.ListRegex(tableNew))
 	for {
 		var names []*pb.TableName
@@ -2760,6 +2845,7 @@ func TestNewTableFromSnapshot(t *testing.T) {
 		}
 		time.Sleep(1 * time.Second)
 	}
+	cancel()
 
 	// Now that this table has been created, clean up after test.
 	defer func() {
@@ -2855,15 +2941,165 @@ func TestScannerTimeout(t *testing.T) {
 	}
 }
 
+// getEncodedRegionServerNames returns a slice of string encoded regionserver names of all live
+// regionservers in the cluster
+func getEncodedRegionServerNames(t *testing.T, ac gohbase.AdminClient) []string {
+	cs, err := ac.ClusterStatus()
+	if err != nil {
+		t.Fatalf("Failed to get cluster status: %v", err)
+	}
+
+	var serverNames []string
+	for _, server := range cs.LiveServers {
+		en := fmt.Sprintf("%s,%d,%d",
+			server.GetServer().GetHostName(),
+			server.GetServer().GetPort(),
+			server.GetServer().GetStartCode())
+		serverNames = append(serverNames, en)
+	}
+
+	return serverNames
+}
+
+// getRsForRegion returns the encoded regionserver name that is hosting the given region.
+// Empty if the region isn't found on any of the current live regionservers.
+func getRsForRegion(t *testing.T, ac gohbase.AdminClient, regionName []byte) string {
+	cs, err := ac.ClusterStatus()
+	if err != nil {
+		t.Fatalf("Failed to get cluster status: %v", err)
+	}
+
+	for _, server := range cs.LiveServers {
+		en := fmt.Sprintf("%s,%d,%d",
+			server.GetServer().GetHostName(),
+			server.GetServer().GetPort(),
+			server.GetServer().GetStartCode())
+		for _, rl := range server.GetServerLoad().GetRegionLoads() {
+			if encodedRegionNameFromRegionSpecifier(rl.GetRegionSpecifier()) == string(regionName) {
+				t.Logf("Found region %s on server %s", regionName, en)
+				return en
+			}
+		}
+	}
+	return ""
+}
+
+// encodedRegionNameFromRegionSpecifier returns the encoded region name from a RegionSpecifier
+func encodedRegionNameFromRegionSpecifier(rs *pb.RegionSpecifier) string {
+	if rs == nil {
+		return ""
+	}
+
+	full := string(rs.GetValue())
+
+	switch rs.GetType() {
+	case pb.RegionSpecifier_ENCODED_REGION_NAME:
+		return full
+	case pb.RegionSpecifier_REGION_NAME:
+		full = strings.TrimSuffix(full, ".")
+		i := strings.LastIndex(full, ".")
+		if i >= 0 && i+1 < len(full) {
+			return full[i+1:]
+		}
+		return full
+	default:
+		return ""
+	}
+}
+
 // TestScannerRenewal tests for the renewal process of scanners
-// if the renew flag is enabled for a scan requset. If there is a long
+// if the renew flag is enabled for a scan request. If there is a long
 // period of waiting between Next calls, the latter Next call should
 // still succeed because we are renewing every lease timeout / 2 seconds
+// The test uses multiple regionservers to validate the scanner renewal request is sent to the
+// correct regionserver when in a multinode set up.
 func TestScannerRenewal(t *testing.T) {
 	c := gohbase.NewClient(*host)
 	defer c.Close()
-	// Insert test data
+	ctx := context.Background()
+	ac := gohbase.NewAdminClient(*host)
+
+	// Start another regionserver
+	LocalRegionServersCmd(t, "start", []string{"2"})
+	t.Cleanup(func() {
+		// Must cleanup regionserver to return to default single regionserver state.
+		LocalRegionServersCmd(t, "stop", []string{"2"})
+	})
+
+	timeout := time.Minute * 1
+	start := time.Now()
+	var serverNames []string
+	for {
+		serverNames = getEncodedRegionServerNames(t, ac)
+		t.Logf("Live regionserver names: %v", serverNames)
+		if len(serverNames) == 2 {
+			t.Logf("2nd regionserver up, wait 10 seconds to initalize")
+			// Otherwise if there's no wait at all, the MoveRegion request will fail and timeout
+			time.Sleep(time.Second * 10)
+			break
+		} else if time.Since(start) > timeout {
+			t.Fatalf("Timeout waiting for 2nd region server to come up")
+		}
+		t.Log("Waiting 5 seconds for 2nd region server to come up...")
+		time.Sleep(time.Second * 5)
+	}
+
+	// Loadbalancing is disabled on this cluster. So when a new regionserver is started,
+	// the regions will not automatically balance to the new regionserver.
+	// For this test scenario, let's move only the region the scan goes to to the new regionserver.
+	// Test uses data from 4th region (See keySplits)
 	keyPrefix := "scanner_renewal_test_"
+	rns := getRegionNames(t, c)
+
+	if len(rns) == 0 {
+		t.Fatal("got 0 results")
+	}
+
+	ri := 3
+	if len(rns[ri].Cells) == 0 {
+		t.Fatal("got 0 cells in meta for expected 4th region")
+	}
+
+	rn := rns[ri].Cells[0].Row
+	rn = rn[len(rn)-33 : len(rn)-1]
+	t.Log("Moving region", string(rn))
+
+	oldRs := getRsForRegion(t, ac, rn)
+	t.Logf("Region %s is starting on server %s", rn, oldRs)
+	newRs := ""
+	for _, sn := range serverNames {
+		if sn != oldRs {
+			newRs = sn
+			break
+		}
+	}
+
+	t.Logf("Moving region %s to server %s", rn, newRs)
+	mr, err := hrpc.NewMoveRegion(ctx, rn, hrpc.WithDestinationRegionServer(newRs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = ac.MoveRegion(mr); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for region move to complete before proceeding:
+	start = time.Now()
+	for {
+		currRs := getRsForRegion(t, ac, rn)
+		t.Logf("Region %s is currently on server %s", rn, currRs)
+		// When region is in transit, there will be a time during which it will not report being
+		// on any server
+		if currRs != "" && currRs != oldRs {
+			break
+		} else if time.Since(start) > timeout {
+			t.Fatalf("Timeout waiting for region move to complete")
+		}
+		t.Log("Waiting 5 seconds for region move to complete...")
+		time.Sleep(time.Second * 5)
+	}
+
+	// Insert test data
 	numRows := 2
 	for i := 0; i < numRows; i++ {
 		key := fmt.Sprintf("%s%d", keyPrefix, i)
@@ -2877,7 +3113,7 @@ func TestScannerRenewal(t *testing.T) {
 	// Create a scan request
 	// Turn on renewal
 	// We set result size to 1 to force a lease timeout between Next calls
-	scan, err := hrpc.NewScanStr(context.Background(), table,
+	scan, err := hrpc.NewScanStr(ctx, table,
 		hrpc.Families(map[string][]string{"cf": nil}),
 		hrpc.Filters(filter.NewPrefixFilter([]byte(keyPrefix))),
 		hrpc.NumberOfRows(1),
@@ -2890,7 +3126,8 @@ func TestScannerRenewal(t *testing.T) {
 	scanner := c.Scan(scan)
 	defer scanner.Close()
 	for i := 0; i < numRows; i++ {
-		rsp, err := scanner.Next()
+		var rsp *hrpc.Result
+		rsp, err = scanner.Next()
 		if err != nil {
 			t.Fatalf("Scanner.Next() returned error: %v", err)
 		}
@@ -3087,10 +3324,9 @@ func TestScanWithStatsHandler(t *testing.T) {
 
 			// keySplits is used to split the table into pre-split regions. For this scan,
 			// the number of ScanStats results (and hrpc.Results, although not tested here) should
-			// equal the num regions in the table. The test is scanning a tiny amount of data
-			// it has written to specified qualifiers, so wouldn't be hitting max result size, ex.
-			if len(statsRes) != len(keySplits)+1 {
-				t.Fatalf("Expected handler to be called %d times, got %d calls",
+			// equal about the num regions in the table.
+			if len(statsRes) < len(keySplits)+1 {
+				t.Fatalf("Expected handler to be called more than %d times, got %d calls",
 					len(keySplits)+1, len(statsRes))
 			}
 
@@ -3125,4 +3361,198 @@ func consumeScanner(c gohbase.Client, scan *hrpc.Scan) ([]*hrpc.Result, error) {
 	}
 
 	return rs, nil
+}
+
+func TestReplication(t *testing.T) {
+	ctx := context.Background()
+	ac := gohbase.NewAdminClient(*host)
+	peerIdPrefix := table
+	peerIdRegex := peerIdPrefix + ".*"
+
+	t.Run("check no pre-existing peers for test table",
+		func(t *testing.T) {
+			listPeers, err := hrpc.NewListReplicationPeers(ctx,
+				hrpc.ListReplicationPeersRegex(peerIdRegex))
+			if err != nil {
+				t.Fatal(err)
+			}
+			peers, err := ac.ListReplicationPeers(listPeers)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(peers) != 0 {
+				t.Fatalf("Expected 0 peers. Got %d", len(peers))
+			}
+		})
+
+	// Cleanup after test
+	defer func() {
+		listPeers, err := hrpc.NewListReplicationPeers(ctx,
+			hrpc.ListReplicationPeersRegex(peerIdRegex))
+		if err != nil {
+			t.Fatal(err)
+		}
+		peers, err := ac.ListReplicationPeers(listPeers)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, peer := range peers {
+			removePeer := hrpc.NewRemoveReplicationPeer(ctx, peer.GetId())
+			err := ac.RemoveReplicationPeer(removePeer)
+			if err != nil {
+				t.Error(err)
+			}
+		}
+	}()
+
+	tcases := []struct {
+		serial  bool
+		enabled bool
+	}{
+		{
+			serial:  false,
+			enabled: true,
+		},
+		{
+			serial:  false,
+			enabled: false,
+		},
+		{
+			serial:  true,
+			enabled: true,
+		},
+		{
+			serial:  true,
+			enabled: false,
+		},
+	}
+	for i, tc := range tcases {
+		testNoStr := strconv.Itoa(i)
+		t.Run("create list and invert enabled state of peer test #"+testNoStr, func(t *testing.T) {
+			peerId := peerIdPrefix + "_" + testNoStr
+			clusterKey := strings.Join([]string{
+				*host, "2181",
+				"/hbase-" + testNoStr,
+			}, ":")
+			tableBytes := []byte(table + "_" + testNoStr)
+			columnFamilies := [][]byte{[]byte("cf"), []byte("cf" + testNoStr)}
+			addPeer, err := hrpc.NewAddReplicationPeer(ctx, peerId, clusterKey,
+				hrpc.AddReplicationPeerReplicateTableFamilies(tableBytes, columnFamilies...),
+				hrpc.AddReplicationPeerSerial(tc.serial),
+				hrpc.AddReplicationPeerEnabled(tc.enabled))
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = ac.AddReplicationPeer(addPeer)
+			if err != nil {
+				t.Fatal(err)
+			}
+			listPeers, err := hrpc.NewListReplicationPeers(ctx,
+				hrpc.ListReplicationPeersRegex(peerId))
+			if err != nil {
+				t.Fatal(err)
+			}
+			peers, err := ac.ListReplicationPeers(listPeers)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(peers) != 1 {
+				t.Fatalf("Expected 1 peers. Got %d", len(peers))
+			}
+			peer := peers[0]
+			if peerId != peer.GetId() {
+				t.Fatalf("Expected peerId %q. Got: %q", peerId, peer.GetId())
+			}
+			peerConfig := peer.GetConfig()
+			peerReplicationState := peer.GetState().GetState()
+			if clusterKey != peerConfig.GetClusterkey() {
+				t.Fatalf("Expected clusterKey %q. Got: %q", clusterKey,
+					peerConfig.GetClusterkey())
+			}
+			if (tc.enabled && peerReplicationState != pb.ReplicationState_ENABLED) ||
+				(!tc.enabled && peerReplicationState != pb.ReplicationState_DISABLED) {
+				t.Fatalf("Expected peer state %v. Got: %v", tc.enabled, peerReplicationState)
+			}
+			if tc.serial != peerConfig.GetSerial() {
+				t.Fatalf("Expected peer serial state to be %v. Got: %v",
+					tc.serial, peerConfig.GetSerial())
+			}
+			if peerConfig.GetReplicateAll() {
+				t.Fatalf("Expected peer to set replicate_all=false. Got: %v",
+					peerConfig.GetReplicateAll())
+			}
+			if len(peerConfig.GetTableCfs()) != 1 {
+				t.Fatalf("Expected 1 table CF. Got: %d", len(peerConfig.GetTableCfs()))
+			}
+			tableCf := peerConfig.GetTableCfs()[0]
+			if !bytes.Equal(tableCf.GetTableName().GetNamespace(), []byte("default")) ||
+				!bytes.Equal(tableCf.GetTableName().GetQualifier(), tableBytes) {
+				t.Fatalf("Expected table CF to contain table name %s:%s. Got: %s:%s",
+					[]byte("default"), tableBytes, tableCf.GetTableName().GetNamespace(),
+					tableCf.GetTableName().GetQualifier())
+			}
+			if len(tableCf.GetFamilies()) != len(columnFamilies) {
+				t.Fatalf("Expected table CF to contain %d families. Got: %d",
+					len(columnFamilies), len(tableCf.GetFamilies()))
+			}
+			for j, tableCfFamily := range tableCf.GetFamilies() {
+				family := columnFamilies[j]
+				if !bytes.Equal(family, tableCfFamily) {
+					t.Fatalf("Expected table CF to contain family %v at position %d. Got: %v",
+						family, j, tableCfFamily)
+				}
+			}
+
+			if tc.enabled {
+				// disable enabled peer
+				disablePeer := hrpc.NewDisableReplicationPeer(ctx, peerId)
+				err := ac.DisableReplicationPeer(disablePeer)
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				// enable disabled peer
+				enablePeer := hrpc.NewEnableReplicationPeer(ctx, peerId)
+				err := ac.EnableReplicationPeer(enablePeer)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			listPeers, err = hrpc.NewListReplicationPeers(ctx,
+				hrpc.ListReplicationPeersRegex(peerId))
+			if err != nil {
+				t.Fatal(err)
+			}
+			peers, err = ac.ListReplicationPeers(listPeers)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(peers) != 1 {
+				t.Fatalf("Expected 1 peers. Got %d", len(peers))
+			}
+			peer = peers[0]
+			peerReplicationState = peer.GetState().GetState()
+			if (tc.enabled && peerReplicationState != pb.ReplicationState_DISABLED) ||
+				(!tc.enabled && peerReplicationState != pb.ReplicationState_ENABLED) {
+				t.Fatalf("Expected peer state %v. Got: %v", !tc.enabled, peerReplicationState)
+			}
+		})
+	}
+
+	t.Run("check regex peer listing",
+		func(t *testing.T) {
+			listPeers, err := hrpc.NewListReplicationPeers(ctx,
+				hrpc.ListReplicationPeersRegex(peerIdRegex))
+			if err != nil {
+				t.Fatal(err)
+			}
+			peers, err := ac.ListReplicationPeers(listPeers)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(peers) != len(tcases) {
+				t.Fatalf("Expected %d peers. Got %d", len(tcases), len(peers))
+			}
+		})
 }

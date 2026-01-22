@@ -19,17 +19,15 @@ func TestDebugStateSanity(t *testing.T) {
 	defer ctrl.Finish()
 
 	regClientAddr := "regionserver:1"
-	regClient := region.NewClient(
-		regClientAddr,
-		region.RegionClient,
-		defaultRPCQueueSize,
-		defaultFlushInterval,
-		defaultEffectiveUser,
-		region.DefaultReadTimeout,
-		client.compressionCodec,
-		nil,
-		slog.Default(),
-	)
+	options := &region.RegionClientOptions{
+		QueueSize:     defaultRPCQueueSize,
+		FlushInterval: defaultFlushInterval,
+		EffectiveUser: defaultEffectiveUser,
+		ReadTimeout:   region.DefaultReadTimeout,
+		Codec:         client.compressionCodec,
+		Logger:        slog.Default(),
+	}
+	regClient := region.NewClient(regClientAddr, region.RegionClient, options)
 	newClientFn := func() hrpc.RegionClient {
 		return regClient
 	}

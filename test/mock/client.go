@@ -14,6 +14,7 @@ import (
 	reflect "reflect"
 
 	hrpc "github.com/tsuna/gohbase/hrpc"
+	pb "github.com/tsuna/gohbase/pb"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -97,6 +98,21 @@ func (m *MockClient) CheckAndPut(arg0 *hrpc.Mutate, arg1, arg2 string, arg3 []by
 func (mr *MockClientMockRecorder) CheckAndPut(arg0, arg1, arg2, arg3 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckAndPut", reflect.TypeOf((*MockClient)(nil).CheckAndPut), arg0, arg1, arg2, arg3)
+}
+
+// CheckAndPutWithCompareType mocks base method.
+func (m *MockClient) CheckAndPutWithCompareType(arg0 *hrpc.Mutate, arg1, arg2 string, arg3 []byte, arg4 pb.CompareType) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CheckAndPutWithCompareType", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CheckAndPutWithCompareType indicates an expected call of CheckAndPutWithCompareType.
+func (mr *MockClientMockRecorder) CheckAndPutWithCompareType(arg0, arg1, arg2, arg3, arg4 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckAndPutWithCompareType", reflect.TypeOf((*MockClient)(nil).CheckAndPutWithCompareType), arg0, arg1, arg2, arg3, arg4)
 }
 
 // Close mocks base method.
@@ -183,6 +199,20 @@ func (m *MockClient) Scan(arg0 *hrpc.Scan) hrpc.Scanner {
 func (mr *MockClientMockRecorder) Scan(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scan", reflect.TypeOf((*MockClient)(nil).Scan), arg0)
+}
+
+// ScanV2 mocks base method.
+func (m *MockClient) ScanV2(arg0 *hrpc.Scan) hrpc.ScannerV2 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ScanV2", arg0)
+	ret0, _ := ret[0].(hrpc.ScannerV2)
+	return ret0
+}
+
+// ScanV2 indicates an expected call of ScanV2.
+func (mr *MockClientMockRecorder) ScanV2(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ScanV2", reflect.TypeOf((*MockClient)(nil).ScanV2), arg0)
 }
 
 // SendBatch mocks base method.

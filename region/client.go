@@ -92,6 +92,13 @@ const (
 	DefaultLookupTimeout = 30 * time.Second
 	//DefaultReadTimeout is the default region read timeout
 	DefaultReadTimeout = 30 * time.Second
+	// DefaultRPCQueueSize is the default size of the RPC queue
+	DefaultRPCQueueSize = 100
+	// DefaultFlushInterval is the default interval for flushing RPCs
+	DefaultFlushInterval = 20 * time.Millisecond
+	// DefaultEffectiveUser is the default effective user
+	DefaultEffectiveUser = "root"
+
 	// RegionClient is a ClientType that means this will be a normal client
 	RegionClient = ClientType("ClientService")
 
@@ -195,6 +202,14 @@ type client struct {
 	dialer func(ctx context.Context, network, addr string) (net.Conn, error)
 
 	logger *slog.Logger
+
+	// scan concurrency control
+	pingInterval    time.Duration
+	scanController  Controller
+	scanTokenBucket *Token
+
+	// batch requests concurrency control
+	batchRequestsTokenBucket *Token
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine
@@ -318,12 +333,32 @@ func (c *client) failSentRPCs() {
 	}
 }
 
-func (c *client) registerRPC(rpc hrpc.Call) uint32 {
+func (c *client) registerRPC(rpc hrpc.Call) (uint32, error) {
+	// Limit number of concurrent Scans if congestion control is enabled and the priority
+	// is not set
+	// If Take() returns an error the token is not taken
+	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil &&
+		hrpc.GetPriority(rpc) == 0 {
+		if err := c.scanTokenBucket.Take(rpc.Context()); err != nil {
+			return 0, err
+		}
+	}
+
+	if _, isMulti := rpc.(*multi); isMulti && c.batchRequestsTokenBucket != nil {
+		// TryTake first to know if we have hit concurrency limit yet
+		if !c.batchRequestsTokenBucket.TryTake() {
+			if err := c.batchRequestsTokenBucket.Take(rpc.Context()); err != nil {
+				return 0, err
+			}
+			concurrentBatchRequestsLimitHit.WithLabelValues(c.addr).Inc()
+		}
+	}
+
 	currID := atomic.AddUint32(&c.id, 1)
 	c.sentM.Lock()
 	c.sent[currID] = rpc
 	c.sentM.Unlock()
-	return currID
+	return currID, nil
 }
 
 func (c *client) unregisterRPC(id uint32) hrpc.Call {
@@ -331,6 +366,21 @@ func (c *client) unregisterRPC(id uint32) hrpc.Call {
 	rpc := c.sent[id]
 	delete(c.sent, id)
 	c.sentM.Unlock()
+
+	if rpc == nil {
+		return nil
+	}
+
+	// Release scan token if this was a scan request
+	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil &&
+		hrpc.GetPriority(rpc) == 0 {
+		c.scanTokenBucket.Release()
+	}
+
+	if _, isMulti := rpc.(*multi); isMulti && c.batchRequestsTokenBucket != nil {
+		c.batchRequestsTokenBucket.Release()
+	}
+
 	return rpc
 }
 
@@ -436,8 +486,15 @@ func (c *client) trySend(rpc hrpc.Call) (err error) {
 			c.fail(err)
 		}
 		if r := c.unregisterRPC(id); r != nil {
+			c.trackRPCResult(r, "error")
 			// we are the ones to unregister the rpc,
 			// return err to notify client of it
+			return err
+		}
+
+		if id == 0 {
+			// Error should be return for RPC that failed on registration stage
+			// becaus of rpc context cancelation
 			return err
 		}
 	}
@@ -461,6 +518,25 @@ func (c *client) receiveRPCs() {
 				// and return the error to caller to let them retry
 			}
 		}
+	}
+}
+
+func (c *client) trackRPCResult(rpc hrpc.Call, status string) {
+	callsCount := make(map[string]int, 0)
+	if m, ok := rpc.(*multi); ok {
+		for _, call := range m.calls {
+			if call != nil {
+				callsCount[call.Name()] += 1
+			}
+		}
+	} else {
+		rpcResultCount.WithLabelValues(
+			rpc.Name(), status, "unary").Inc()
+	}
+
+	for callName, count := range callsCount {
+		rpcResultCount.WithLabelValues(
+			callName, status, "batch").Add(float64(count))
 	}
 }
 
@@ -503,6 +579,7 @@ func (c *client) receive(r io.Reader) (err error) {
 	if rpc == nil {
 		return ServerError{fmt.Errorf("got a response with an unexpected call ID: %d", callID)}
 	}
+
 	if err := c.inFlightDown(); err != nil {
 		return ServerError{err}
 	}
@@ -517,7 +594,14 @@ func (c *client) receive(r io.Reader) (err error) {
 	// Here we know for sure that we got a response for rpc we asked.
 	// It's our responsibility to deliver the response or error to the
 	// caller as we unregistered the rpc.
-	defer func() { returnResult(rpc, response, err) }()
+	defer func() {
+		status := "ok"
+		if err != nil {
+			status = "error"
+		}
+		c.trackRPCResult(rpc, status)
+		returnResult(rpc, response, err)
+	}()
 
 	if header.Exception != nil {
 		err = exceptionToError(*header.Exception.ExceptionClassName, *header.Exception.StackTrace)
@@ -639,7 +723,10 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 	// in all the cases where c.fail() is called.
 	// If that happens, client can retry sending the rpc
 	// again potentially changing it's contents.
-	id := c.registerRPC(rpc)
+	id, err := c.registerRPC(rpc)
+	if err != nil {
+		return 0, err
+	}
 
 	b, err := marshalProto(rpc, id, request, cellblocksLen)
 	if err != nil {
@@ -806,4 +893,72 @@ func (c *client) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(state)
+}
+
+// controlLoop runs periodic ping Get requests to measure latency and implement congestion control
+func (c *client) controlLoop() {
+	c.logger.Info("starting ping loop", "interval", c.pingInterval)
+
+	ticker := time.NewTicker(c.pingInterval)
+	defer ticker.Stop()
+
+	// Create a dummy region for ping requests - use hbase:meta which always exists
+	pingRegion := NewInfo(
+		1,               // region ID
+		[]byte("hbase"), // namespace
+		[]byte("meta"),  // table
+		[]byte("dummy"), // dummy name
+		nil,             // startKey
+		nil,             // stopKey
+	)
+
+	ctx := context.Background()
+
+	// Closed loop, we are waiting for the response from the server before sending next ping
+	for {
+		select {
+		case <-c.done:
+			return
+		case <-ticker.C:
+			// Create a new Get request for each ping - use a non-existent row key
+			// This will return quickly with no data
+			get, err := hrpc.NewGet(ctx, []byte("hbase:meta"), []byte("ping"))
+			if err != nil {
+				c.logger.Error("failed to create ping get", "error", err)
+				continue
+			}
+			get.SetRegion(pingRegion)
+
+			start := time.Now()
+
+			// Send the get request
+			err = c.trySend(get)
+
+			if err != nil {
+				c.logger.Debug("ping send failure", "err", err)
+				continue
+			}
+
+			// Wait for the response
+			result := <-get.ResultChan()
+
+			// We expect that response will have an exception,
+			// but ServerError means client is failed and goroutine should exit.
+			if _, ok := result.Error.(ServerError); ok {
+				return
+			}
+
+			latency := time.Since(start)
+
+			// Record the latency and update tokens if needed
+			pingLatency.WithLabelValues(c.addr).Observe(latency.Seconds())
+			maxScans, changed := c.scanController.Latency(latency)
+			if changed {
+				c.scanTokenBucket.SetCapacity(ctx, maxScans)
+				concurrentScans.WithLabelValues(c.addr).Set(float64(maxScans))
+			}
+
+			c.logger.Debug("ping", "error", result.Error, "latency", latency)
+		}
+	}
 }
