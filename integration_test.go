@@ -1543,12 +1543,7 @@ func TestCheckAndMutate(t *testing.T) {
 	qualifier := "a"
 
 	// First, put an initial value
-	initialValues := map[string]map[string][]byte{"cf": {"a": []byte("100")}}
-	putReq, err := hrpc.NewPutStr(context.Background(), table, key, initialValues)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = c.Put(putReq)
+	err := insertKeyValueAtCol(c, key, qualifier, cf, []byte("100"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1642,49 +1637,71 @@ func TestCheckAndMutateDelete(t *testing.T) {
 	cf := "cf"
 	qualifier := "a"
 
-	// Put initial value
-	initialValues := map[string]map[string][]byte{cf: {qualifier: []byte("delete_me")}}
-	putReq, err := hrpc.NewPutStr(context.Background(), table, key, initialValues)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = c.Put(putReq)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Delete if value equals "delete_me"
-	delReq, err := hrpc.NewDelStr(context.Background(), table, key, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cmp := filter.NewBinaryComparator(filter.NewByteArrayComparable([]byte("delete_me")))
-	cam, err := hrpc.NewCheckAndMutate(delReq, cf, qualifier, pb.CompareType_EQUAL, cmp)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	result, err := c.CheckAndMutate(cam)
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name           string
+		compareType    pb.CompareType
+		compareVal     []byte
+		wantProcessed  bool
+		wantCellsAfter int
+	}{
+		{
+			name:           "not equal no match",
+			compareType:    pb.CompareType_NOT_EQUAL,
+			compareVal:     []byte("delete_me"),
+			wantCellsAfter: 1,
+		},
+		{
+			name:           "equal match deletes",
+			compareType:    pb.CompareType_EQUAL,
+			compareVal:     []byte("delete_me"),
+			wantProcessed:  true,
+			wantCellsAfter: 0,
+		},
 	}
 
-	if !result {
-		t.Error("expected delete to succeed")
-	}
+	for _, tt := range tests {
+		// Put initial value before each test case
+		initVals := map[string]map[string][]byte{cf: {qualifier: []byte("delete_me")}}
+		putReq, err := hrpc.NewPutStr(context.Background(), table, key, initVals)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		if _, err = c.Put(putReq); err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
 
-	// Verify the row was deleted
-	getReq, err := hrpc.NewGetStr(context.Background(), table, key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	getRes, err := c.Get(getReq)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(getRes.Cells) != 0 {
-		t.Errorf("expected 0 cells after delete, got %d", len(getRes.Cells))
+		// Attempt conditional delete
+		delReq, err := hrpc.NewDelStr(context.Background(), table, key, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+
+		cmp := filter.NewBinaryComparator(filter.NewByteArrayComparable(tt.compareVal))
+		cam, err := hrpc.NewCheckAndMutate(delReq, cf, qualifier, tt.compareType, cmp)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+
+		result, err := c.CheckAndMutate(cam)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		if result != tt.wantProcessed {
+			t.Errorf("%s: got processed=%v, want %v", tt.name, result, tt.wantProcessed)
+		}
+
+		// Verify cell count
+		getReq, err := hrpc.NewGetStr(context.Background(), table, key)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		getRes, err := c.Get(getReq)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		if len(getRes.Cells) != tt.wantCellsAfter {
+			t.Errorf("%s: got %d cells, want %d", tt.name, len(getRes.Cells), tt.wantCellsAfter)
+		}
 	}
 }
 
