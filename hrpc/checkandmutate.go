@@ -14,6 +14,7 @@ import (
 // CheckAndMutate performs a provided mutation if the condition is met.
 // Unlike CheckAndPut, this supports any mutation type (Put, Delete, Append, Increment)
 // and any comparison operator (LESS, LESS_OR_EQUAL, EQUAL, NOT_EQUAL, GREATER_OR_EQUAL, GREATER).
+// It also supports filter-based conditions.
 type CheckAndMutate struct {
 	*Mutate
 
@@ -21,6 +22,7 @@ type CheckAndMutate struct {
 	qualifier   []byte
 	compareType pb.CompareType
 	comparator  *pb.Comparator
+	filter      *pb.Filter
 }
 
 // NewCheckAndMutate creates a new CheckAndMutate request that will compare the value
@@ -51,16 +53,42 @@ func NewCheckAndMutate(
 	}, nil
 }
 
+// NewCheckAndMutateWithFilter creates a new CheckAndMutate request that uses the provided
+// filter for row comparison instead of a CompareType and Comparator.
+func NewCheckAndMutateWithFilter(
+	mutation *Mutate,
+	f filter.Filter,
+) (*CheckAndMutate, error) {
+	pbFilter, err := f.ConstructPBFilter()
+	if err != nil {
+		return nil, err
+	}
+
+	mutation.setSkipBatch(true)
+
+	return &CheckAndMutate{
+		Mutate: mutation,
+		filter: pbFilter,
+	}, nil
+}
+
 // ToProto converts the RPC into a protobuf message.
 func (cam *CheckAndMutate) ToProto() proto.Message {
 	mutateRequest, _, _ := cam.toProto(false, nil)
-	mutateRequest.Condition = &pb.Condition{
-		Row:         cam.key,
-		Family:      cam.family,
-		Qualifier:   cam.qualifier,
-		CompareType: cam.compareType.Enum(),
-		Comparator:  cam.comparator,
+	condition := &pb.Condition{
+		Row: cam.key,
 	}
+
+	if cam.filter != nil {
+		condition.Filter = cam.filter
+	} else {
+		condition.Family = cam.family
+		condition.Qualifier = cam.qualifier
+		condition.CompareType = cam.compareType.Enum()
+		condition.Comparator = cam.comparator
+	}
+
+	mutateRequest.Condition = condition
 	return mutateRequest
 }
 

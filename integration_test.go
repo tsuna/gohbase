@@ -1705,6 +1705,181 @@ func TestCheckAndMutateDelete(t *testing.T) {
 	}
 }
 
+func TestCheckAndMutateWithFilter(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+
+	key := "row_cam_filter"
+	cf := "cf"
+
+	tests := []struct {
+		name           string
+		setupData      map[string][]byte
+		filter         filter.Filter
+		mutationVal    []byte
+		wantProcessed  bool
+		wantFinalValue []byte
+	}{
+		{
+			name: "single qualifier check - match",
+			setupData: map[string][]byte{
+				"key1": []byte("value1"),
+			},
+			filter: filter.NewSingleColumnValueFilter(
+				[]byte(cf), []byte("key1"),
+				filter.Equal,
+				filter.NewBinaryComparator(
+					filter.NewByteArrayComparable([]byte("value1"))),
+				false, false),
+			mutationVal:    []byte("updated"),
+			wantProcessed:  true,
+			wantFinalValue: []byte("updated"),
+		},
+		{
+			name: "single qualifier check - no match",
+			setupData: map[string][]byte{
+				"key1": []byte("value1"),
+			},
+			filter: filter.NewSingleColumnValueFilter(
+				[]byte(cf), []byte("key1"),
+				filter.Equal,
+				filter.NewBinaryComparator(
+					filter.NewByteArrayComparable([]byte("wrong_value"))),
+				false, false),
+			mutationVal:    []byte("should_not_update"),
+			wantProcessed:  false,
+			wantFinalValue: []byte("value1"),
+		},
+		{
+			name: "multiple qualifiers AND logic (MustPassAll) - all match",
+			setupData: map[string][]byte{
+				"key1": []byte("v1"),
+				"key2": []byte("v2"),
+			},
+			filter: filter.NewList(filter.MustPassAll,
+				filter.NewSingleColumnValueFilter(
+					[]byte(cf), []byte("key1"),
+					filter.Equal,
+					filter.NewBinaryComparator(
+						filter.NewByteArrayComparable([]byte("v1"))),
+					false, false),
+				filter.NewSingleColumnValueFilter(
+					[]byte(cf), []byte("key2"),
+					filter.Equal,
+					filter.NewBinaryComparator(
+						filter.NewByteArrayComparable([]byte("v2"))),
+					false, false),
+			),
+			mutationVal:    []byte("all_matched"),
+			wantProcessed:  true,
+			wantFinalValue: []byte("all_matched"),
+		},
+		{
+			name: "multiple qualifiers AND logic (MustPassAll) - one fails",
+			setupData: map[string][]byte{
+				"key1": []byte("v1"),
+				"key2": []byte("v2"),
+			},
+			filter: filter.NewList(filter.MustPassAll,
+				filter.NewSingleColumnValueFilter(
+					[]byte(cf), []byte("key1"),
+					filter.Equal,
+					filter.NewBinaryComparator(
+						filter.NewByteArrayComparable([]byte("v1"))),
+					false, false),
+				filter.NewSingleColumnValueFilter(
+					[]byte(cf), []byte("key2"),
+					filter.Equal,
+					filter.NewBinaryComparator(
+						filter.NewByteArrayComparable([]byte("wrong"))),
+					false, false),
+			),
+			mutationVal:    []byte("should_not_update"),
+			wantProcessed:  false,
+			wantFinalValue: []byte("v1"),
+		},
+		{
+			name: "multiple qualifiers OR logic (MustPassOne) - one matches",
+			setupData: map[string][]byte{
+				"key1": []byte("v1"),
+				"key2": []byte("v2"),
+			},
+			filter: filter.NewList(filter.MustPassOne,
+				filter.NewSingleColumnValueFilter(
+					[]byte(cf), []byte("key1"),
+					filter.Equal,
+					filter.NewBinaryComparator(
+						filter.NewByteArrayComparable([]byte("v1"))),
+					false, false),
+				filter.NewSingleColumnValueFilter(
+					[]byte(cf), []byte("key2"),
+					filter.Equal,
+					filter.NewBinaryComparator(
+						filter.NewByteArrayComparable([]byte("wrong"))),
+					false, false),
+			),
+			mutationVal:    []byte("one_matched"),
+			wantProcessed:  true,
+			wantFinalValue: []byte("one_matched"),
+		},
+	}
+
+	// Note that these cases were meant to be run sequentially, not in parallel
+	for _, tt := range tests {
+		putReq, err := hrpc.NewPutStr(context.Background(), table, key,
+			map[string]map[string][]byte{cf: tt.setupData})
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		if _, err = c.Put(putReq); err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+
+		mutationReq, err := hrpc.NewPutStr(context.Background(), table, key,
+			map[string]map[string][]byte{cf: {"key1": tt.mutationVal}})
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+
+		cam, err := hrpc.NewCheckAndMutateWithFilter(mutationReq, tt.filter)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+
+		result, err := c.CheckAndMutate(cam)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+
+		if result != tt.wantProcessed {
+			t.Errorf("%s: got processed=%v, want %v",
+				tt.name, result, tt.wantProcessed)
+		}
+
+		getReq, err := hrpc.NewGetStr(context.Background(), table, key)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		getRes, err := c.Get(getReq)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+
+		var actualValue []byte
+		for _, cell := range getRes.Cells {
+			if string(cell.Qualifier) == "key1" {
+				actualValue = cell.Value
+				break
+			}
+		}
+
+		if !bytes.Equal(actualValue, tt.wantFinalValue) {
+			t.Errorf("%s: got value=%q, want %q",
+				tt.name, actualValue, tt.wantFinalValue)
+		}
+	}
+}
+
 func TestClose(t *testing.T) {
 	c := gohbase.NewClient(*host)
 
