@@ -6,6 +6,8 @@
 package compression
 
 import (
+	"fmt"
+
 	"github.com/tsuna/gohbase/compression/snappy"
 )
 
@@ -28,6 +30,6 @@ func New(codec string) Codec {
 	case "snappy":
 		return snappy.New()
 	default:
-		panic("uknown compression codec")
+		panic(fmt.Sprintf("unknown compression codec: %s", codec))
 	}
 }
