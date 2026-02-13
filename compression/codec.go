@@ -30,6 +30,6 @@ func New(codec string) Codec {
 	case "snappy":
 		return snappy.New()
 	default:
-		panic(fmt.Sprintf("unknown compression codec: %v", codec))
+		panic(fmt.Sprintf("unknown compression codec: %s", codec))
 	}
 }
