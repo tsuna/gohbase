@@ -90,8 +90,6 @@ var (
 const (
 	//DefaultLookupTimeout is the default region lookup timeout
 	DefaultLookupTimeout = 30 * time.Second
-	//DefaultReadTimeout is the default region read timeout
-	DefaultReadTimeout = 30 * time.Second
 	// DefaultRPCQueueSize is the default size of the RPC queue
 	DefaultRPCQueueSize = 100
 	// DefaultFlushInterval is the default interval for flushing RPCs
@@ -105,6 +103,20 @@ const (
 	// MasterClient is a ClientType that means this client will talk to the
 	// master server
 	MasterClient = ClientType("MasterService")
+)
+
+var (
+	defaultDialer = net.Dialer{
+		KeepAliveConfig: net.KeepAliveConfig{
+			Enable:   true,
+			Idle:     15 * time.Second,
+			Interval: 10 * time.Second,
+			Count:    3,
+		},
+		// tcpUserTimeout value should equal Idle + Interval*Count config.
+		// See https://blog.cloudflare.com/when-tcp-sockets-refuse-to-die/
+		ControlContext: tcpUserTimeoutControl(15*time.Second + 10*time.Second*3),
+	}
 )
 
 var bufferPool sync.Pool
@@ -182,18 +194,11 @@ type client struct {
 	sentM sync.Mutex // protects sent
 	sent  map[uint32]hrpc.Call
 
-	// inFlight is number of rpcs sent to regionserver awaiting response
-	inFlightM sync.Mutex // protects inFlight and SetReadDeadline
-	inFlight  uint32
-
 	id uint32
 
 	rpcQueueSize  int
 	flushInterval time.Duration
 	effectiveUser string
-
-	// readTimeout is the maximum amount of time to wait for regionserver reply
-	readTimeout time.Duration
 
 	// compressor for cellblocks. if nil, then no compression
 	compressor *compressor
@@ -265,33 +270,6 @@ func (c *client) Addr() string {
 // String returns a string represintation of the current region client
 func (c *client) String() string {
 	return fmt.Sprintf("RegionClient{Addr: %s}", c.addr)
-}
-
-func (c *client) inFlightUp() error {
-	c.inFlightM.Lock()
-	c.inFlight++
-	// we expect that at least the last request can be completed within readTimeout
-	if err := c.conn.SetReadDeadline(time.Now().Add(c.readTimeout)); err != nil {
-		c.inFlightM.Unlock()
-		return err
-	}
-	c.inFlightM.Unlock()
-	return nil
-}
-
-func (c *client) inFlightDown() error {
-	c.inFlightM.Lock()
-	c.inFlight--
-	// reset read timeout if we are not waiting for any responses
-	// in order to prevent from closing this client if there are no request
-	if c.inFlight == 0 {
-		if err := c.conn.SetReadDeadline(time.Time{}); err != nil {
-			c.inFlightM.Unlock()
-			return err
-		}
-	}
-	c.inFlightM.Unlock()
-	return nil
 }
 
 func (c *client) fail(err error) {
@@ -580,10 +558,6 @@ func (c *client) receive(r io.Reader) (err error) {
 		return ServerError{fmt.Errorf("got a response with an unexpected call ID: %d", callID)}
 	}
 
-	if err := c.inFlightDown(); err != nil {
-		return ServerError{err}
-	}
-
 	select {
 	case <-rpc.Context().Done():
 		// context has expired, don't bother deserializing
@@ -744,9 +718,6 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 		return id, ServerError{err}
 	}
 
-	if err := c.inFlightUp(); err != nil {
-		return id, ServerError{err}
-	}
 	return id, nil
 }
 
@@ -858,9 +829,9 @@ func (c *client) MarshalJSON() ([]byte, error) {
 		}
 	}
 
-	c.inFlightM.Lock()
-	inFlight := c.inFlight
-	c.inFlightM.Unlock()
+	c.sentM.Lock()
+	inFlight := len(c.sent)
+	c.sentM.Unlock()
 
 	// if conn is nil then we don't want to panic. So just get the addresses if conn is not nil
 	var localAddr, remoteAddr Address
@@ -879,7 +850,7 @@ func (c *client) MarshalJSON() ([]byte, error) {
 		ConnectionRemoteAddress Address
 		RegionServerAddress     string
 		ClientType              ClientType
-		InFlight                uint32
+		InFlight                int
 		Id                      uint32
 		Done_status             string
 	}{
