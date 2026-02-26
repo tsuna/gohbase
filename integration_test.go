@@ -3211,6 +3211,8 @@ func encodedRegionNameFromRegionSpecifier(rs *pb.RegionSpecifier) string {
 	}
 }
 
+// waitForRegionServers polls the regionservers in the clusters and
+// waits for the requested number of regionservers to be up
 func waitForRegionServers(t *testing.T, ac gohbase.AdminClient,
 	numRS int) ([]string, error) {
 	timeout := time.Minute * time.Duration(numRS)
@@ -3222,7 +3224,6 @@ func waitForRegionServers(t *testing.T, ac gohbase.AdminClient,
 		t.Logf("Live regionserver names: %v", serverNames)
 		if len(serverNames) == numRS {
 			t.Logf("%d regionserver(s) up, wait 10 seconds to initalize", numRS)
-			// Otherwise if there's no wait at all, the MoveRegion request will fail and timeout
 			time.Sleep(time.Second * 10)
 			break
 		} else if time.Since(start) > timeout {
