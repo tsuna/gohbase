@@ -1940,6 +1940,12 @@ func TestChangingRegionServers(t *testing.T) {
 	t.Cleanup(func() {
 		LocalRegionServersCmd(t, "stop", []string{"2", "3"})
 	})
+	ac := gohbase.NewAdminClient(*host)
+
+	_, err = waitForRegionServers(t, ac, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Now (gracefully) stop servers 1,2.
 	// All regions should now be on server 3.
@@ -1947,6 +1953,12 @@ func TestChangingRegionServers(t *testing.T) {
 	t.Cleanup(func() {
 		LocalRegionServersCmd(t, "start", []string{"1"})
 	})
+
+	_, err = waitForRegionServers(t, ac, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	get, err := hrpc.NewGetStr(context.Background(), table, key, hrpc.Families(headers))
 	rsp, err := c.Get(get)
 	if err != nil {
@@ -3199,6 +3211,38 @@ func encodedRegionNameFromRegionSpecifier(rs *pb.RegionSpecifier) string {
 	}
 }
 
+// waitForRegionServers polls the regionservers in the clusters and
+// waits for the requested number of regionservers to be up
+func waitForRegionServers(t *testing.T, ac gohbase.AdminClient,
+	numRS int) ([]string, error) {
+	timeout := time.Minute * time.Duration(numRS)
+	start := time.Now()
+	var serverNames []string
+	var err error
+	for {
+		serverNames = getEncodedRegionServerNames(t, ac)
+		t.Logf("Live regionserver names: %v", serverNames)
+		if len(serverNames) == numRS {
+			t.Logf("%d regionserver(s) up, wait 10 seconds to initalize", numRS)
+			time.Sleep(time.Second * 10)
+			break
+		} else if time.Since(start) > timeout {
+			err = fmt.Errorf("Timeout waiting for region server count to reach %d,"+
+				" current count: %d", numRS, len(serverNames))
+			break
+		}
+		if len(serverNames) > numRS {
+			t.Logf("Waiting 5 seconds for %d region server(s) to be removed...",
+				len(serverNames)-numRS)
+		} else {
+			t.Logf("Waiting 5 seconds for %d region server(s) to come up...",
+				numRS-len(serverNames))
+		}
+		time.Sleep(time.Second * 5)
+	}
+	return serverNames, err
+}
+
 // TestScannerRenewal tests for the renewal process of scanners
 // if the renew flag is enabled for a scan request. If there is a long
 // period of waiting between Next calls, the latter Next call should
@@ -3217,23 +3261,9 @@ func TestScannerRenewal(t *testing.T) {
 		// Must cleanup regionserver to return to default single regionserver state.
 		LocalRegionServersCmd(t, "stop", []string{"2"})
 	})
-
-	timeout := time.Minute * 1
-	start := time.Now()
-	var serverNames []string
-	for {
-		serverNames = getEncodedRegionServerNames(t, ac)
-		t.Logf("Live regionserver names: %v", serverNames)
-		if len(serverNames) == 2 {
-			t.Logf("2nd regionserver up, wait 10 seconds to initalize")
-			// Otherwise if there's no wait at all, the MoveRegion request will fail and timeout
-			time.Sleep(time.Second * 10)
-			break
-		} else if time.Since(start) > timeout {
-			t.Fatalf("Timeout waiting for 2nd region server to come up")
-		}
-		t.Log("Waiting 5 seconds for 2nd region server to come up...")
-		time.Sleep(time.Second * 5)
+	serverNames, err := waitForRegionServers(t, ac, 2)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	// Loadbalancing is disabled on this cluster. So when a new regionserver is started,
@@ -3276,7 +3306,8 @@ func TestScannerRenewal(t *testing.T) {
 	}
 
 	// Wait for region move to complete before proceeding:
-	start = time.Now()
+	start := time.Now()
+	timeout := time.Minute * 1
 	for {
 		currRs := getRsForRegion(t, ac, rn)
 		t.Logf("Region %s is currently on server %s", rn, currRs)
