@@ -1480,23 +1480,27 @@ func TestMutate(t *testing.T) {
 	}
 }
 
-var expectedCells = []*pb.Cell{
-	&pb.Cell{
-		Row:       []byte("row7"),
-		Family:    []byte("cf"),
-		Qualifier: []byte("b"),
-		Timestamp: proto.Uint64(1494873081120),
-		Value:     []byte("Hello my name is Dog."),
-	},
-	&pb.Cell{
-		Row:       []byte("row7"),
-		Family:    []byte("cf"),
-		Qualifier: []byte("a"),
-		Timestamp: proto.Uint64(1494873081120),
-		Value:     []byte("Hello my name is Dog."),
-		CellType:  pb.CellType_PUT.Enum(),
-	},
+var expectedCells = makeExpectedCells()
+
+func makeExpectedCells() []*pb.Cell {
+	cell1 := &pb.Cell{}
+	cell1.SetRow([]byte("row7"))
+	cell1.SetFamily([]byte("cf"))
+	cell1.SetQualifier([]byte("b"))
+	cell1.SetValue([]byte("Hello my name is Dog."))
+	cell1.SetTimestamp(1494873081120)
+
+	cell2 := &pb.Cell{}
+	cell2.SetRow([]byte("row7"))
+	cell2.SetFamily([]byte("cf"))
+	cell2.SetQualifier([]byte("a"))
+	cell2.SetValue([]byte("Hello my name is Dog."))
+	cell2.SetTimestamp(1494873081120)
+	cell2.SetCellType(pb.CellType_PUT)
+
+	return []*pb.Cell{cell1, cell2}
 }
+
 var cellblock = []byte{0, 0, 0, 48, 0, 0, 0, 19, 0, 0, 0, 21, 0, 4, 114, 111, 119, 55, 2, 99,
 	102, 97, 0, 0, 1, 92, 13, 97, 5, 32, 4, 72, 101, 108, 108, 111, 32, 109, 121, 32, 110,
 	97, 109, 101, 32, 105, 115, 32, 68, 111, 103, 46}
@@ -1563,38 +1567,28 @@ func TestDeserializeCellblocksMutate(t *testing.T) {
 }
 
 func TestDeserializeCellBlocksScan(t *testing.T) {
+	makeCell := func(qual string) *pb.Cell {
+		cell := &pb.Cell{}
+		cell.SetRow([]byte("row7"))
+		cell.SetFamily([]byte("cf"))
+		cell.SetQualifier([]byte(qual))
+		cell.SetValue([]byte("Hello my name is Dog."))
+		cell.SetTimestamp(1494873081120)
+		cell.SetCellType(pb.CellType_PUT)
+		return cell
+	}
+
 	expectedResults := []*pb.Result{
 		&pb.Result{
 			Cell: []*pb.Cell{
-				&pb.Cell{
-					Row:       []byte("row7"),
-					Family:    []byte("cf"),
-					Qualifier: []byte("c"),
-					Timestamp: proto.Uint64(1494873081120),
-					Value:     []byte("Hello my name is Dog."),
-					CellType:  pb.CellType_PUT.Enum(),
-				},
-				&pb.Cell{
-					Row:       []byte("row7"),
-					Family:    []byte("cf"),
-					Qualifier: []byte("b"),
-					Timestamp: proto.Uint64(1494873081120),
-					Value:     []byte("Hello my name is Dog."),
-					CellType:  pb.CellType_PUT.Enum(),
-				},
+				makeCell("c"),
+				makeCell("b"),
 			},
 			Partial: proto.Bool(true),
 		},
 		&pb.Result{
 			Cell: []*pb.Cell{
-				&pb.Cell{
-					Row:       []byte("row7"),
-					Family:    []byte("cf"),
-					Qualifier: []byte("a"),
-					Timestamp: proto.Uint64(1494873081120),
-					Value:     []byte("Hello my name is Dog."),
-					CellType:  pb.CellType_PUT.Enum(),
-				},
+				makeCell("a"),
 			},
 			Partial: proto.Bool(false),
 		},

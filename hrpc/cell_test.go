@@ -37,14 +37,13 @@ func TestCellV2FromCellBlock(t *testing.T) {
 		t.Errorf("expected cell2 to equal cell, but they are not: cell: %s cell2: %s", cell, cell2)
 	}
 
-	expectedCell := &pb.Cell{
-		Row:       []byte("row7"),
-		Family:    []byte("cf"),
-		Qualifier: []byte("a"),
-		Timestamp: proto.Uint64(1494873081120),
-		Value:     []byte("Hello my name is Dog."),
-		CellType:  pb.CellType_PUT.Enum(),
-	}
+	expectedCell := &pb.Cell{}
+	expectedCell.SetRow([]byte("row7"))
+	expectedCell.SetFamily([]byte("cf"))
+	expectedCell.SetQualifier([]byte("a"))
+	expectedCell.SetValue([]byte("Hello my name is Dog."))
+	expectedCell.SetTimestamp(1494873081120)
+	expectedCell.SetCellType(pb.CellType_PUT)
 
 	if !proto.Equal(expectedCell, cell.ToPBCell()) {
 		t.Errorf("expected cell %v, got cell %v", expectedCell, cell.ToPBCell())
@@ -91,23 +90,20 @@ func TestDeserializeCellblocksV2(t *testing.T) {
 		t.Errorf("invalid number of bytes read: expected %d, got %d", len(cellblocks), int(read))
 	}
 
+	makeCell := func(row string, ts uint64) *pb.Cell {
+		c := &pb.Cell{}
+		c.SetRow([]byte(row))
+		c.SetFamily([]byte("cf"))
+		c.SetQualifier([]byte("a"))
+		c.SetValue([]byte("1"))
+		c.SetTimestamp(ts)
+		c.SetCellType(pb.CellType_PUT)
+		return c
+	}
+
 	expectedCells := []*pb.Cell{
-		&pb.Cell{
-			Row:       []byte("TestScanTimeRangeVersions1"),
-			Family:    []byte("cf"),
-			Qualifier: []byte("a"),
-			Timestamp: proto.Uint64(51),
-			Value:     []byte("1"),
-			CellType:  pb.CellType_PUT.Enum(),
-		},
-		&pb.Cell{
-			Row:       []byte("TestScanTimeRangeVersions2"),
-			Family:    []byte("cf"),
-			Qualifier: []byte("a"),
-			Timestamp: proto.Uint64(52),
-			Value:     []byte("1"),
-			CellType:  pb.CellType_PUT.Enum(),
-		},
+		makeCell("TestScanTimeRangeVersions1", 51),
+		makeCell("TestScanTimeRangeVersions2", 52),
 	}
 
 	if !slices.EqualFunc(expectedCells, cells, func(a *pb.Cell, b CellV2) bool {

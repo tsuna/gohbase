@@ -238,14 +238,14 @@ func cellFromCellBlock(b []byte) (*pb.Cell, uint32, error) {
 
 	value := b[:valueLen]
 
-	return &pb.Cell{
-		Row:       key,
-		Family:    family,
-		Qualifier: qualifier,
-		Timestamp: &timestamp,
-		Value:     value,
-		CellType:  pb.CellType(cellType).Enum(),
-	}, kvLen + 4, nil
+	cell := &pb.Cell{}
+	cell.SetRow(key)
+	cell.SetFamily(family)
+	cell.SetQualifier(qualifier)
+	cell.SetValue(value)
+	cell.SetTimestamp(timestamp)
+	cell.SetCellType(pb.CellType(cellType))
+	return cell, kvLen + 4, nil
 }
 
 func deserializeCellBlocks(b []byte, cellsLen uint32) ([]*pb.Cell, uint32, error) {
@@ -325,14 +325,15 @@ func cellsV2toCells(v2 []CellV2) []*Cell {
 
 	for i, c := range v2 {
 		cellV1 := &v1Flat[i].cell
-		cellV1.Row = c.Row()
-		cellV1.Family = c.Family()
-		cellV1.Qualifier = c.Qualifier()
-		cellV1.Value = c.Value()
+		pbCell := (*pb.Cell)(cellV1)
+		pbCell.SetRow(c.Row())
+		pbCell.SetFamily(c.Family())
+		pbCell.SetQualifier(c.Qualifier())
+		pbCell.SetValue(c.Value())
 		v1Flat[i].ts = c.Timestamp()
-		cellV1.Timestamp = &v1Flat[i].ts
 		v1Flat[i].cellType = c.CellType()
-		cellV1.CellType = &v1Flat[i].cellType
+		pbCell.SetTimestamp(v1Flat[i].ts)
+		pbCell.SetCellType(v1Flat[i].cellType)
 
 		v1[i] = cellV1
 	}

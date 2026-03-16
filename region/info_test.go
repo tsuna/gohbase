@@ -19,7 +19,6 @@ import (
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/test"
 	"github.com/tsuna/gohbase/test/mock"
-	"google.golang.org/protobuf/proto"
 )
 
 // Test parsing the contents of a cell found in meta.
@@ -28,18 +27,19 @@ func TestInfoFromMeta(t *testing.T) {
 	regionName := []byte("table,,1431921690563.53e41f94d5c3087af0d13259b8c4186d.")
 	buf := []byte("PBUF\010\303\217\274\251\326)\022\020\n\007default" +
 		"\022\005table\032\000\"\000(\0000\0008\000")
-	cell := &hrpc.Cell{
-		Row:       regionName,
-		Family:    []byte("info"),
-		Qualifier: []byte("regioninfo"),
-		Timestamp: proto.Uint64(1431921690626),
-		CellType:  &put,
-	}
+	cell := &hrpc.Cell{}
+	pbCell := (*pb.Cell)(cell)
+	pbCell.SetRow(regionName)
+	pbCell.SetFamily([]byte("info"))
+	pbCell.SetQualifier([]byte("regioninfo"))
+	pbCell.SetTimestamp(1431921690626)
+	pbCell.SetCellType(put)
+
 	_, err := infoFromCell(cell)
 	if err == nil || !strings.HasPrefix(err.Error(), "empty value") {
 		t.Errorf("Unexpected error on empty value: %s", err)
 	}
-	cell.Value = buf
+	pbCell.SetValue(buf)
 	info, err := infoFromCell(cell)
 	if err != nil {
 		t.Fatalf("Failed to parse cell: %s", err)

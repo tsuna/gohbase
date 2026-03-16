@@ -43,6 +43,12 @@ var (
 		[]byte("reg2,,1234567890042.56f833d5569a27c7a43fbf547b4924a4."), nil, nil)
 )
 
+func makeCell(row string) *pb.Cell {
+	c := &pb.Cell{}
+	c.SetRow([]byte(row))
+	return c
+}
+
 func bytesSlicesEqual(a, b [][]byte) bool {
 	if len(a) != len(b) {
 		return false
@@ -442,7 +448,7 @@ func TestMultiReturnResults(t *testing.T) {
 							&pb.ResultOrException{
 								Index: proto.Uint32(4),
 								Result: &pb.Result{
-									Cell: []*pb.Cell{&pb.Cell{Row: []byte("call3")}},
+									Cell: []*pb.Cell{makeCell("call3")},
 								},
 							},
 						},
@@ -453,13 +459,13 @@ func TestMultiReturnResults(t *testing.T) {
 							&pb.ResultOrException{
 								Index: proto.Uint32(1),
 								Result: &pb.Result{
-									Cell: []*pb.Cell{&pb.Cell{Row: []byte("call0")}},
+									Cell: []*pb.Cell{makeCell("call0")},
 								},
 							},
 							&pb.ResultOrException{
 								Index: proto.Uint32(3),
 								Result: &pb.Result{
-									Cell: []*pb.Cell{&pb.Cell{Row: []byte("call2")}},
+									Cell: []*pb.Cell{makeCell("call2")},
 								},
 							},
 						},
@@ -470,13 +476,13 @@ func TestMultiReturnResults(t *testing.T) {
 							&pb.ResultOrException{
 								Index: proto.Uint32(5),
 								Result: &pb.Result{
-									Cell: []*pb.Cell{&pb.Cell{Row: []byte("call4")}},
+									Cell: []*pb.Cell{makeCell("call4")},
 								},
 							},
 							&pb.ResultOrException{
 								Index: proto.Uint32(2),
 								Result: &pb.Result{
-									Cell: []*pb.Cell{&pb.Cell{Row: []byte("call1")}},
+									Cell: []*pb.Cell{makeCell("call1")},
 								},
 							},
 						},
@@ -485,19 +491,19 @@ func TestMultiReturnResults(t *testing.T) {
 			},
 			out: []hrpc.RPCResult{
 				hrpc.RPCResult{Msg: &pb.GetResponse{Result: &pb.Result{
-					Cell: []*pb.Cell{&pb.Cell{Row: []byte("call0")}},
+					Cell: []*pb.Cell{makeCell("call0")},
 				}}},
 				hrpc.RPCResult{Msg: &pb.MutateResponse{Result: &pb.Result{
-					Cell: []*pb.Cell{&pb.Cell{Row: []byte("call1")}},
+					Cell: []*pb.Cell{makeCell("call1")},
 				}}},
 				hrpc.RPCResult{Msg: &pb.MutateResponse{Result: &pb.Result{
-					Cell: []*pb.Cell{&pb.Cell{Row: []byte("call2")}},
+					Cell: []*pb.Cell{makeCell("call2")},
 				}}},
 				hrpc.RPCResult{Msg: &pb.GetResponse{Result: &pb.Result{
-					Cell: []*pb.Cell{&pb.Cell{Row: []byte("call3")}},
+					Cell: []*pb.Cell{makeCell("call3")},
 				}}},
 				hrpc.RPCResult{Msg: &pb.MutateResponse{Result: &pb.Result{
-					Cell: []*pb.Cell{&pb.Cell{Row: []byte("call4")}},
+					Cell: []*pb.Cell{makeCell("call4")},
 				}}},
 			},
 		},
@@ -531,13 +537,13 @@ func TestMultiReturnResults(t *testing.T) {
 							&pb.ResultOrException{
 								Index: proto.Uint32(3),
 								Result: &pb.Result{
-									Cell: []*pb.Cell{&pb.Cell{Row: []byte("call2")}},
+									Cell: []*pb.Cell{makeCell("call2")},
 								},
 							},
 							&pb.ResultOrException{
 								Index: proto.Uint32(1),
 								Result: &pb.Result{
-									Cell: []*pb.Cell{&pb.Cell{Row: []byte("call0")}},
+									Cell: []*pb.Cell{makeCell("call0")},
 								},
 							},
 						},
@@ -546,12 +552,12 @@ func TestMultiReturnResults(t *testing.T) {
 			},
 			out: []hrpc.RPCResult{
 				hrpc.RPCResult{Msg: &pb.GetResponse{Result: &pb.Result{
-					Cell: []*pb.Cell{&pb.Cell{Row: []byte("call0")}},
+					Cell: []*pb.Cell{makeCell("call0")},
 				}}},
 				hrpc.RPCResult{Error: NotServingRegionError{errors.New("HBase Java " +
 					"exception org.apache.hadoop.hbase.NotServingRegionException:\nYOLO")}},
 				hrpc.RPCResult{Msg: &pb.MutateResponse{Result: &pb.Result{
-					Cell: []*pb.Cell{&pb.Cell{Row: []byte("call2")}},
+					Cell: []*pb.Cell{makeCell("call2")},
 				}}},
 				hrpc.RPCResult{Error: NotServingRegionError{errors.New("HBase Java " +
 					"exception org.apache.hadoop.hbase.NotServingRegionException:\nYOLO")}},
@@ -581,7 +587,7 @@ func TestMultiReturnResults(t *testing.T) {
 							&pb.ResultOrException{
 								Index: proto.Uint32(2),
 								Result: &pb.Result{
-									Cell: []*pb.Cell{&pb.Cell{Row: []byte("call1")}},
+									Cell: []*pb.Cell{makeCell("call1")},
 								},
 							},
 						},
@@ -591,7 +597,7 @@ func TestMultiReturnResults(t *testing.T) {
 			out: []hrpc.RPCResult{
 				hrpc.RPCResult{Error: errors.New("HBase Java exception YOLO:\nSWAG")},
 				hrpc.RPCResult{Msg: &pb.MutateResponse{Result: &pb.Result{
-					Cell: []*pb.Cell{&pb.Cell{Row: []byte("call1")}},
+					Cell: []*pb.Cell{makeCell("call1")},
 				}}},
 			},
 		},
@@ -626,7 +632,7 @@ func TestMultiReturnResults(t *testing.T) {
 							&pb.ResultOrException{
 								Index: proto.Uint32(1),
 								Result: &pb.Result{
-									Cell: []*pb.Cell{&pb.Cell{Row: []byte("call0")}},
+									Cell: []*pb.Cell{makeCell("call0")},
 								},
 							},
 						},
@@ -650,7 +656,7 @@ func TestMultiReturnResults(t *testing.T) {
 							&pb.ResultOrException{
 								Index: proto.Uint32(0),
 								Result: &pb.Result{
-									Cell: []*pb.Cell{&pb.Cell{Row: []byte("call0")}},
+									Cell: []*pb.Cell{makeCell("call0")},
 								},
 							},
 						},
@@ -674,7 +680,7 @@ func TestMultiReturnResults(t *testing.T) {
 							&pb.ResultOrException{
 								Index: proto.Uint32(2),
 								Result: &pb.Result{
-									Cell: []*pb.Cell{&pb.Cell{Row: []byte("call0")}},
+									Cell: []*pb.Cell{makeCell("call0")},
 								},
 							},
 						},
@@ -723,25 +729,23 @@ func TestMultiDeserializeCellBlocks(t *testing.T) {
 
 	getCellblock := "\x00\x00\x00\x1d\x00\x00\x00\x14\x00\x00\x00\x01\x00\x05call0" +
 		"\x02cfa\x00\x00\x01]=\xef\x95\xd4\x04*"
-	getCell := &pb.Cell{
-		Row:       []byte("call0"),
-		Family:    []byte("cf"),
-		Qualifier: []byte("a"),
-		Value:     []byte{42},
-		Timestamp: proto.Uint64(1499982697940),
-		CellType:  pb.CellType(pb.CellType_PUT).Enum(),
-	}
+	getCell := &pb.Cell{}
+	getCell.SetRow([]byte("call0"))
+	getCell.SetFamily([]byte("cf"))
+	getCell.SetQualifier([]byte("a"))
+	getCell.SetValue([]byte{42})
+	getCell.SetTimestamp(1499982697940)
+	getCell.SetCellType(pb.CellType_PUT)
 
 	appendCellblock := "\x00\x00\x00\x1e\x00\x00\x00\x14\x00\x00\x00\x02\x00\x05call1" +
 		"\x02cfa\x00\x00\x01]=\xef\x95\xec\x04**"
-	appendCell := &pb.Cell{
-		Row:       []byte("call1"),
-		Family:    []byte("cf"),
-		Qualifier: []byte("a"),
-		Value:     []byte{42, 42},
-		Timestamp: proto.Uint64(1499982697964),
-		CellType:  pb.CellType(pb.CellType_PUT).Enum(),
-	}
+	appendCell := &pb.Cell{}
+	appendCell.SetRow([]byte("call1"))
+	appendCell.SetFamily([]byte("cf"))
+	appendCell.SetQualifier([]byte("a"))
+	appendCell.SetValue([]byte{42, 42})
+	appendCell.SetTimestamp(1499982697964)
+	appendCell.SetCellType(pb.CellType_PUT)
 
 	tests := []struct {
 		calls      []hrpc.Call

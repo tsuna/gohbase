@@ -30,6 +30,17 @@ func cp(i uint64) *uint64 {
 	return &j
 }
 
+func makeTestCell(row, family, qualifier string) *pb.Cell {
+	cell := &pb.Cell{}
+	cell.SetRow([]byte(row))
+	cell.SetFamily([]byte(family))
+	cell.SetQualifier([]byte(qualifier))
+	cell.SetValue([]byte{})
+	cell.SetTimestamp(0)
+	cell.SetCellType(pb.CellType_PUT)
+	return cell
+}
+
 type scanMatcher struct {
 	scan *hrpc.Scan
 }
@@ -53,40 +64,30 @@ var resultsPB = []*pb.Result{
 	// region 1
 	{
 		Cell: []*pb.Cell{
-			{Row: []byte("a"), Family: []byte("A"), Qualifier: []byte("1"),
-				Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
-			{Row: []byte("a"), Family: []byte("A"), Qualifier: []byte("2"),
-				Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
-			{Row: []byte("a"), Family: []byte("B"), Qualifier: []byte("1"),
-				Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
+			makeTestCell("a", "A", "1"),
+			makeTestCell("a", "A", "2"),
+			makeTestCell("a", "B", "1"),
 		},
 	},
 	{
 		Cell: []*pb.Cell{
-			{Row: []byte("b"), Family: []byte("A"), Qualifier: []byte("1"),
-				Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
-			{Row: []byte("b"), Family: []byte("B"), Qualifier: []byte("2"),
-				Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
+			makeTestCell("b", "A", "1"),
+			makeTestCell("b", "B", "2"),
 		},
 	},
 	// region 2
 	{
 		Cell: []*pb.Cell{
-			{Row: []byte("bar"), Family: []byte("C"), Qualifier: []byte("1"),
-				Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
-			{Row: []byte("baz"), Family: []byte("C"), Qualifier: []byte("2"),
-				Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
-			{Row: []byte("baz"), Family: []byte("C"), Qualifier: []byte("2"),
-				Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
+			makeTestCell("bar", "C", "1"),
+			makeTestCell("baz", "C", "2"),
+			makeTestCell("baz", "C", "2"),
 		},
 	},
 	// region 3
 	{
 		Cell: []*pb.Cell{
-			{Row: []byte("yolo"), Family: []byte("D"), Qualifier: []byte("1"),
-				Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
-			{Row: []byte("yolo"), Family: []byte("D"), Qualifier: []byte("2"),
-				Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
+			makeTestCell("yolo", "D", "1"),
+			makeTestCell("yolo", "D", "2"),
 		},
 	},
 }
@@ -227,26 +228,16 @@ func TestScanner(t *testing.T) {
 }
 
 var cells = []*pb.Cell{
-	{Row: []byte("a"), Family: []byte("A"), Qualifier: []byte("1"),
-		Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}}, // 0
-	{Row: []byte("a"), Family: []byte("A"), Qualifier: []byte("2"),
-		Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
-	{Row: []byte("a"), Family: []byte("A"), Qualifier: []byte("3"),
-		Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
-	{Row: []byte("b"), Family: []byte("B"), Qualifier: []byte("1"),
-		Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}}, // 3
-	{Row: []byte("b"), Family: []byte("B"), Qualifier: []byte("2"),
-		Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}}, // 4
-	{Row: []byte("bar"), Family: []byte("B"), Qualifier: []byte("1"),
-		Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}}, // 5
-	{Row: []byte("bar"), Family: []byte("B"), Qualifier: []byte("2"),
-		Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}},
-	{Row: []byte("bar"), Family: []byte("B"), Qualifier: []byte("3"),
-		Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}}, // 7
-	{Row: []byte("foo"), Family: []byte("F"), Qualifier: []byte("1"),
-		Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}}, // 8
-	{Row: []byte("foo"), Family: []byte("F"), Qualifier: []byte("2"),
-		Timestamp: proto.Uint64(0), CellType: pb.CellType_PUT.Enum(), Value: []byte{}}, // 9
+	makeTestCell("a", "A", "1"),   // 0
+	makeTestCell("a", "A", "2"),   // 1
+	makeTestCell("a", "A", "3"),   // 2
+	makeTestCell("b", "B", "1"),   // 3
+	makeTestCell("b", "B", "2"),   // 4
+	makeTestCell("bar", "B", "1"), // 5
+	makeTestCell("bar", "B", "2"), // 6
+	makeTestCell("bar", "B", "3"), // 7
+	makeTestCell("foo", "F", "1"), // 8
+	makeTestCell("foo", "F", "2"), // 9
 }
 
 func TestPartialResults(t *testing.T) {

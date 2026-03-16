@@ -29,7 +29,6 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
-	sync "sync"
 	unsafe "unsafe"
 )
 
@@ -96,34 +95,21 @@ func (x CellType) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-// Deprecated: Do not use.
-func (x *CellType) UnmarshalJSON(b []byte) error {
-	num, err := protoimpl.X.UnmarshalJSONEnum(x.Descriptor(), b)
-	if err != nil {
-		return err
-	}
-	*x = CellType(num)
-	return nil
-}
-
-// Deprecated: Use CellType.Descriptor instead.
-func (CellType) EnumDescriptor() ([]byte, []int) {
-	return file_Cell_proto_rawDescGZIP(), []int{0}
-}
-
 // *
 // Protocol buffer version of Cell.
 type Cell struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Row           []byte                 `protobuf:"bytes,1,opt,name=row" json:"row,omitempty"`
-	Family        []byte                 `protobuf:"bytes,2,opt,name=family" json:"family,omitempty"`
-	Qualifier     []byte                 `protobuf:"bytes,3,opt,name=qualifier" json:"qualifier,omitempty"`
-	Timestamp     *uint64                `protobuf:"varint,4,opt,name=timestamp" json:"timestamp,omitempty"`
-	CellType      *CellType              `protobuf:"varint,5,opt,name=cell_type,json=cellType,enum=pb.CellType" json:"cell_type,omitempty"`
-	Value         []byte                 `protobuf:"bytes,6,opt,name=value" json:"value,omitempty"`
-	Tags          []byte                 `protobuf:"bytes,7,opt,name=tags" json:"tags,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                  protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Row         []byte                 `protobuf:"bytes,1,opt,name=row"`
+	xxx_hidden_Family      []byte                 `protobuf:"bytes,2,opt,name=family"`
+	xxx_hidden_Qualifier   []byte                 `protobuf:"bytes,3,opt,name=qualifier"`
+	xxx_hidden_Timestamp   uint64                 `protobuf:"varint,4,opt,name=timestamp"`
+	xxx_hidden_CellType    CellType               `protobuf:"varint,5,opt,name=cell_type,json=cellType,enum=pb.CellType"`
+	xxx_hidden_Value       []byte                 `protobuf:"bytes,6,opt,name=value"`
+	xxx_hidden_Tags        []byte                 `protobuf:"bytes,7,opt,name=tags"`
+	XXX_raceDetectHookData protoimpl.RaceDetectHookData
+	XXX_presence           [1]uint32
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *Cell) Reset() {
@@ -151,74 +137,254 @@ func (x *Cell) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Cell.ProtoReflect.Descriptor instead.
-func (*Cell) Descriptor() ([]byte, []int) {
-	return file_Cell_proto_rawDescGZIP(), []int{0}
-}
-
 func (x *Cell) GetRow() []byte {
 	if x != nil {
-		return x.Row
+		return x.xxx_hidden_Row
 	}
 	return nil
 }
 
 func (x *Cell) GetFamily() []byte {
 	if x != nil {
-		return x.Family
+		return x.xxx_hidden_Family
 	}
 	return nil
 }
 
 func (x *Cell) GetQualifier() []byte {
 	if x != nil {
-		return x.Qualifier
+		return x.xxx_hidden_Qualifier
 	}
 	return nil
 }
 
 func (x *Cell) GetTimestamp() uint64 {
-	if x != nil && x.Timestamp != nil {
-		return *x.Timestamp
+	if x != nil {
+		return x.xxx_hidden_Timestamp
 	}
 	return 0
 }
 
 func (x *Cell) GetCellType() CellType {
-	if x != nil && x.CellType != nil {
-		return *x.CellType
+	if x != nil {
+		if protoimpl.X.Present(&(x.XXX_presence[0]), 4) {
+			return x.xxx_hidden_CellType
+		}
 	}
 	return CellType_MINIMUM
 }
 
 func (x *Cell) GetValue() []byte {
 	if x != nil {
-		return x.Value
+		return x.xxx_hidden_Value
 	}
 	return nil
 }
 
 func (x *Cell) GetTags() []byte {
 	if x != nil {
-		return x.Tags
+		return x.xxx_hidden_Tags
 	}
 	return nil
+}
+
+func (x *Cell) SetRow(v []byte) {
+	if v == nil {
+		v = []byte{}
+	}
+	x.xxx_hidden_Row = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 7)
+}
+
+func (x *Cell) SetFamily(v []byte) {
+	if v == nil {
+		v = []byte{}
+	}
+	x.xxx_hidden_Family = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 7)
+}
+
+func (x *Cell) SetQualifier(v []byte) {
+	if v == nil {
+		v = []byte{}
+	}
+	x.xxx_hidden_Qualifier = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 7)
+}
+
+func (x *Cell) SetTimestamp(v uint64) {
+	x.xxx_hidden_Timestamp = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 7)
+}
+
+func (x *Cell) SetCellType(v CellType) {
+	x.xxx_hidden_CellType = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 4, 7)
+}
+
+func (x *Cell) SetValue(v []byte) {
+	if v == nil {
+		v = []byte{}
+	}
+	x.xxx_hidden_Value = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 5, 7)
+}
+
+func (x *Cell) SetTags(v []byte) {
+	if v == nil {
+		v = []byte{}
+	}
+	x.xxx_hidden_Tags = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 6, 7)
+}
+
+func (x *Cell) HasRow() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 0)
+}
+
+func (x *Cell) HasFamily() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 1)
+}
+
+func (x *Cell) HasQualifier() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 2)
+}
+
+func (x *Cell) HasTimestamp() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 3)
+}
+
+func (x *Cell) HasCellType() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 4)
+}
+
+func (x *Cell) HasValue() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 5)
+}
+
+func (x *Cell) HasTags() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 6)
+}
+
+func (x *Cell) ClearRow() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
+	x.xxx_hidden_Row = nil
+}
+
+func (x *Cell) ClearFamily() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 1)
+	x.xxx_hidden_Family = nil
+}
+
+func (x *Cell) ClearQualifier() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 2)
+	x.xxx_hidden_Qualifier = nil
+}
+
+func (x *Cell) ClearTimestamp() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 3)
+	x.xxx_hidden_Timestamp = 0
+}
+
+func (x *Cell) ClearCellType() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 4)
+	x.xxx_hidden_CellType = CellType_MINIMUM
+}
+
+func (x *Cell) ClearValue() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 5)
+	x.xxx_hidden_Value = nil
+}
+
+func (x *Cell) ClearTags() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 6)
+	x.xxx_hidden_Tags = nil
+}
+
+type Cell_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	Row       []byte
+	Family    []byte
+	Qualifier []byte
+	Timestamp *uint64
+	CellType  *CellType
+	Value     []byte
+	Tags      []byte
+}
+
+func (b0 Cell_builder) Build() *Cell {
+	m0 := &Cell{}
+	b, x := &b0, m0
+	_, _ = b, x
+	if b.Row != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 7)
+		x.xxx_hidden_Row = b.Row
+	}
+	if b.Family != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 7)
+		x.xxx_hidden_Family = b.Family
+	}
+	if b.Qualifier != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 7)
+		x.xxx_hidden_Qualifier = b.Qualifier
+	}
+	if b.Timestamp != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 7)
+		x.xxx_hidden_Timestamp = *b.Timestamp
+	}
+	if b.CellType != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 4, 7)
+		x.xxx_hidden_CellType = *b.CellType
+	}
+	if b.Value != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 5, 7)
+		x.xxx_hidden_Value = b.Value
+	}
+	if b.Tags != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 6, 7)
+		x.xxx_hidden_Tags = b.Tags
+	}
+	return m0
 }
 
 // *
 // Protocol buffer version of KeyValue.
 // It doesn't have those transient parameters
 type KeyValue struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Row           []byte                 `protobuf:"bytes,1,req,name=row" json:"row,omitempty"`
-	Family        []byte                 `protobuf:"bytes,2,req,name=family" json:"family,omitempty"`
-	Qualifier     []byte                 `protobuf:"bytes,3,req,name=qualifier" json:"qualifier,omitempty"`
-	Timestamp     *uint64                `protobuf:"varint,4,opt,name=timestamp" json:"timestamp,omitempty"`
-	KeyType       *CellType              `protobuf:"varint,5,opt,name=key_type,json=keyType,enum=pb.CellType" json:"key_type,omitempty"`
-	Value         []byte                 `protobuf:"bytes,6,opt,name=value" json:"value,omitempty"`
-	Tags          []byte                 `protobuf:"bytes,7,opt,name=tags" json:"tags,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                  protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Row         []byte                 `protobuf:"bytes,1,req,name=row"`
+	xxx_hidden_Family      []byte                 `protobuf:"bytes,2,req,name=family"`
+	xxx_hidden_Qualifier   []byte                 `protobuf:"bytes,3,req,name=qualifier"`
+	xxx_hidden_Timestamp   uint64                 `protobuf:"varint,4,opt,name=timestamp"`
+	xxx_hidden_KeyType     CellType               `protobuf:"varint,5,opt,name=key_type,json=keyType,enum=pb.CellType"`
+	xxx_hidden_Value       []byte                 `protobuf:"bytes,6,opt,name=value"`
+	xxx_hidden_Tags        []byte                 `protobuf:"bytes,7,opt,name=tags"`
+	XXX_raceDetectHookData protoimpl.RaceDetectHookData
+	XXX_presence           [1]uint32
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *KeyValue) Reset() {
@@ -246,58 +412,236 @@ func (x *KeyValue) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use KeyValue.ProtoReflect.Descriptor instead.
-func (*KeyValue) Descriptor() ([]byte, []int) {
-	return file_Cell_proto_rawDescGZIP(), []int{1}
-}
-
 func (x *KeyValue) GetRow() []byte {
 	if x != nil {
-		return x.Row
+		return x.xxx_hidden_Row
 	}
 	return nil
 }
 
 func (x *KeyValue) GetFamily() []byte {
 	if x != nil {
-		return x.Family
+		return x.xxx_hidden_Family
 	}
 	return nil
 }
 
 func (x *KeyValue) GetQualifier() []byte {
 	if x != nil {
-		return x.Qualifier
+		return x.xxx_hidden_Qualifier
 	}
 	return nil
 }
 
 func (x *KeyValue) GetTimestamp() uint64 {
-	if x != nil && x.Timestamp != nil {
-		return *x.Timestamp
+	if x != nil {
+		return x.xxx_hidden_Timestamp
 	}
 	return 0
 }
 
 func (x *KeyValue) GetKeyType() CellType {
-	if x != nil && x.KeyType != nil {
-		return *x.KeyType
+	if x != nil {
+		if protoimpl.X.Present(&(x.XXX_presence[0]), 4) {
+			return x.xxx_hidden_KeyType
+		}
 	}
 	return CellType_MINIMUM
 }
 
 func (x *KeyValue) GetValue() []byte {
 	if x != nil {
-		return x.Value
+		return x.xxx_hidden_Value
 	}
 	return nil
 }
 
 func (x *KeyValue) GetTags() []byte {
 	if x != nil {
-		return x.Tags
+		return x.xxx_hidden_Tags
 	}
 	return nil
+}
+
+func (x *KeyValue) SetRow(v []byte) {
+	if v == nil {
+		v = []byte{}
+	}
+	x.xxx_hidden_Row = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 7)
+}
+
+func (x *KeyValue) SetFamily(v []byte) {
+	if v == nil {
+		v = []byte{}
+	}
+	x.xxx_hidden_Family = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 7)
+}
+
+func (x *KeyValue) SetQualifier(v []byte) {
+	if v == nil {
+		v = []byte{}
+	}
+	x.xxx_hidden_Qualifier = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 7)
+}
+
+func (x *KeyValue) SetTimestamp(v uint64) {
+	x.xxx_hidden_Timestamp = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 7)
+}
+
+func (x *KeyValue) SetKeyType(v CellType) {
+	x.xxx_hidden_KeyType = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 4, 7)
+}
+
+func (x *KeyValue) SetValue(v []byte) {
+	if v == nil {
+		v = []byte{}
+	}
+	x.xxx_hidden_Value = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 5, 7)
+}
+
+func (x *KeyValue) SetTags(v []byte) {
+	if v == nil {
+		v = []byte{}
+	}
+	x.xxx_hidden_Tags = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 6, 7)
+}
+
+func (x *KeyValue) HasRow() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 0)
+}
+
+func (x *KeyValue) HasFamily() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 1)
+}
+
+func (x *KeyValue) HasQualifier() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 2)
+}
+
+func (x *KeyValue) HasTimestamp() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 3)
+}
+
+func (x *KeyValue) HasKeyType() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 4)
+}
+
+func (x *KeyValue) HasValue() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 5)
+}
+
+func (x *KeyValue) HasTags() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 6)
+}
+
+func (x *KeyValue) ClearRow() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
+	x.xxx_hidden_Row = nil
+}
+
+func (x *KeyValue) ClearFamily() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 1)
+	x.xxx_hidden_Family = nil
+}
+
+func (x *KeyValue) ClearQualifier() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 2)
+	x.xxx_hidden_Qualifier = nil
+}
+
+func (x *KeyValue) ClearTimestamp() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 3)
+	x.xxx_hidden_Timestamp = 0
+}
+
+func (x *KeyValue) ClearKeyType() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 4)
+	x.xxx_hidden_KeyType = CellType_MINIMUM
+}
+
+func (x *KeyValue) ClearValue() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 5)
+	x.xxx_hidden_Value = nil
+}
+
+func (x *KeyValue) ClearTags() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 6)
+	x.xxx_hidden_Tags = nil
+}
+
+type KeyValue_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	Row       []byte
+	Family    []byte
+	Qualifier []byte
+	Timestamp *uint64
+	KeyType   *CellType
+	Value     []byte
+	Tags      []byte
+}
+
+func (b0 KeyValue_builder) Build() *KeyValue {
+	m0 := &KeyValue{}
+	b, x := &b0, m0
+	_, _ = b, x
+	if b.Row != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 7)
+		x.xxx_hidden_Row = b.Row
+	}
+	if b.Family != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 7)
+		x.xxx_hidden_Family = b.Family
+	}
+	if b.Qualifier != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 7)
+		x.xxx_hidden_Qualifier = b.Qualifier
+	}
+	if b.Timestamp != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 7)
+		x.xxx_hidden_Timestamp = *b.Timestamp
+	}
+	if b.KeyType != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 4, 7)
+		x.xxx_hidden_KeyType = *b.KeyType
+	}
+	if b.Value != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 5, 7)
+		x.xxx_hidden_Value = b.Value
+	}
+	if b.Tags != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 6, 7)
+		x.xxx_hidden_Tags = b.Tags
+	}
+	return m0
 }
 
 var File_Cell_proto protoreflect.FileDescriptor
@@ -313,11 +657,11 @@ const file_Cell_proto_rawDesc = "" +
 	"\ttimestamp\x18\x04 \x01(\x04R\ttimestamp\x12)\n" +
 	"\tcell_type\x18\x05 \x01(\x0e2\f.pb.CellTypeR\bcellType\x12\x14\n" +
 	"\x05value\x18\x06 \x01(\fR\x05value\x12\x12\n" +
-	"\x04tags\x18\a \x01(\fR\x04tags\"\xc3\x01\n" +
-	"\bKeyValue\x12\x10\n" +
-	"\x03row\x18\x01 \x02(\fR\x03row\x12\x16\n" +
-	"\x06family\x18\x02 \x02(\fR\x06family\x12\x1c\n" +
-	"\tqualifier\x18\x03 \x02(\fR\tqualifier\x12\x1c\n" +
+	"\x04tags\x18\a \x01(\fR\x04tags\"\xd8\x01\n" +
+	"\bKeyValue\x12\x17\n" +
+	"\x03row\x18\x01 \x01(\fB\x05\xaa\x01\x02\b\x03R\x03row\x12\x1d\n" +
+	"\x06family\x18\x02 \x01(\fB\x05\xaa\x01\x02\b\x03R\x06family\x12#\n" +
+	"\tqualifier\x18\x03 \x01(\fB\x05\xaa\x01\x02\b\x03R\tqualifier\x12\x1c\n" +
 	"\ttimestamp\x18\x04 \x01(\x04R\ttimestamp\x12'\n" +
 	"\bkey_type\x18\x05 \x01(\x0e2\f.pb.CellTypeR\akeyType\x12\x14\n" +
 	"\x05value\x18\x06 \x01(\fR\x05value\x12\x12\n" +
@@ -329,21 +673,9 @@ const file_Cell_proto_rawDesc = "" +
 	"\x06DELETE\x10\b\x12\x11\n" +
 	"\rDELETE_COLUMN\x10\f\x12\x11\n" +
 	"\rDELETE_FAMILY\x10\x0e\x12\f\n" +
-	"\aMAXIMUM\x10\xff\x01BD\n" +
+	"\aMAXIMUM\x10\xff\x01BI\n" +
 	"*org.apache.hadoop.hbase.protobuf.generatedB\n" +
-	"CellProtosH\x01Z\x05../pb\xa0\x01\x01"
-
-var (
-	file_Cell_proto_rawDescOnce sync.Once
-	file_Cell_proto_rawDescData []byte
-)
-
-func file_Cell_proto_rawDescGZIP() []byte {
-	file_Cell_proto_rawDescOnce.Do(func() {
-		file_Cell_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_Cell_proto_rawDesc), len(file_Cell_proto_rawDesc)))
-	})
-	return file_Cell_proto_rawDescData
-}
+	"CellProtosH\x01Z\x05../pb\xa0\x01\x01\x92\x03\x02\b\x01b\beditionsp\xe9\a"
 
 var file_Cell_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_Cell_proto_msgTypes = make([]protoimpl.MessageInfo, 2)

@@ -32,7 +32,6 @@ import (
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
-	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -172,7 +171,8 @@ func TestGet(t *testing.T) {
 	if err != nil {
 		t.Errorf("Get returned an error: %v", err)
 	}
-	rsp_value := rsp.Cells[0].Value
+	pbCell := (*pb.Cell)(rsp.Cells[0])
+	rsp_value := pbCell.GetValue()
 	if !bytes.Equal(rsp_value, val) {
 		t.Errorf("Get returned an incorrect result. Expected: %v, Got: %v",
 			val, rsp_value)
@@ -288,9 +288,10 @@ func TestGetMultipleCells(t *testing.T) {
 		t.Errorf("Get expected 2 cells. Received: %d", num_results)
 	}
 	for _, cell := range cells {
-		if !bytes.Equal(cell.Family, cell.Value) {
+		pbCell := (*pb.Cell)(cell)
+		if !bytes.Equal(pbCell.GetFamily(), pbCell.GetValue()) {
 			t.Errorf("Get returned an incorrect result. Expected: %v, Received: %v",
-				cell.Family, cell.Value)
+				pbCell.GetFamily(), pbCell.GetValue())
 		}
 	}
 }
@@ -307,8 +308,9 @@ func TestGetNonDefaultNamespace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get returned an error: %v", err)
 	}
-	if !bytes.Equal(rsp.Cells[0].Family, []byte("info")) {
-		t.Errorf("Got unexpected column family: %q", rsp.Cells[0].Family)
+	pbCell := (*pb.Cell)(rsp.Cells[0])
+	if !bytes.Equal(pbCell.GetFamily(), []byte("info")) {
+		t.Errorf("Got unexpected column family: %q", pbCell.GetFamily())
 	}
 }
 
@@ -414,9 +416,10 @@ func TestPutMultipleCells(t *testing.T) {
 		t.Errorf("Get expected 3 cells. Received: %d", len(cells))
 	}
 	for _, cell := range cells {
-		if !bytes.Equal(cell.Qualifier, cell.Value) {
+		pbCell := (*pb.Cell)(cell)
+		if !bytes.Equal(pbCell.GetQualifier(), pbCell.GetValue()) {
 			t.Errorf("Get returned an incorrect result. Expected: %v, Received: %v",
-				cell.Qualifier, cell.Value)
+				pbCell.GetQualifier(), pbCell.GetValue())
 		}
 	}
 
@@ -442,7 +445,8 @@ func TestMultiplePutsGetsSequentially(t *testing.T) {
 		if len(rsp.Cells) != 1 {
 			t.Errorf("Incorrect number of cells returned by Get: %d", len(rsp.Cells))
 		}
-		rsp_value := rsp.Cells[0].Value
+		pbCell := (*pb.Cell)(rsp.Cells[0])
+		rsp_value := pbCell.GetValue()
 		if !bytes.Equal(rsp_value, []byte(fmt.Sprintf("%d", i))) {
 			t.Errorf("Get returned an incorrect result. Expected: %v, Got: %v",
 				[]byte(fmt.Sprintf("%d", i)), rsp_value)
@@ -489,7 +493,8 @@ func TestMultiplePutsGetsParallel(t *testing.T) {
 				t.Error(key, " got zero cells")
 				return
 			}
-			rsp_value := rsp.Cells[0].Value
+			pbCell := (*pb.Cell)(rsp.Cells[0])
+			rsp_value := pbCell.GetValue()
 			if !bytes.Equal(rsp_value, []byte(key)) {
 				t.Errorf("expected %q, got %q", key, rsp_value)
 			}
@@ -512,7 +517,7 @@ func TestTimestampIncreasing(t *testing.T) {
 			t.Errorf("Get returned an error: %v", err)
 			break
 		}
-		newTime := *rsp.Cells[0].Timestamp
+		newTime := (*pb.Cell)(rsp.Cells[0]).GetTimestamp()
 		if newTime <= oldTime {
 			t.Errorf("Timestamps are not increasing. Old Time: %v, New Time: %v",
 				oldTime, newTime)
@@ -538,7 +543,7 @@ func TestPutTimestamp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get failed: %s", err)
 	}
-	getTs := *rsp.Cells[0].Timestamp
+	getTs := (*pb.Cell)(rsp.Cells[0]).GetTimestamp()
 	if getTs != putTs {
 		t.Errorf("Timestamps are not the same. Put Time: %v, Get Time: %v",
 			putTs, getTs)
@@ -553,6 +558,15 @@ func TestDelete(t *testing.T) {
 
 	ts := uint64(50)
 
+	makeTestCell := func(family, qualifier []byte, timestamp uint64, value []byte) *hrpc.Cell {
+		cell := &pb.Cell{}
+		cell.SetFamily(family)
+		cell.SetQualifier(qualifier)
+		cell.SetTimestamp(timestamp)
+		cell.SetValue(value)
+		return (*hrpc.Cell)(cell)
+	}
+
 	tests := []struct {
 		in  func(string) (*hrpc.Mutate, error)
 		out []*hrpc.Cell
@@ -566,42 +580,12 @@ func TestDelete(t *testing.T) {
 			},
 			// should delete everything at and before the delete timestamp
 			out: []*hrpc.Cell{
-				&hrpc.Cell{
-					Family:    []byte("cf1"),
-					Qualifier: []byte("a"),
-					Timestamp: proto.Uint64(ts + 2),
-					Value:     []byte("v3"),
-				},
-				&hrpc.Cell{
-					Family:    []byte("cf1"),
-					Qualifier: []byte("b"),
-					Timestamp: proto.Uint64(ts),
-					Value:     []byte("v1"),
-				},
-				&hrpc.Cell{
-					Family:    []byte("cf2"),
-					Qualifier: []byte("a"),
-					Timestamp: proto.Uint64(ts + 2),
-					Value:     []byte("v3"),
-				},
-				&hrpc.Cell{
-					Family:    []byte("cf2"),
-					Qualifier: []byte("a"),
-					Timestamp: proto.Uint64(ts + 1),
-					Value:     []byte("v2"),
-				},
-				&hrpc.Cell{
-					Family:    []byte("cf2"),
-					Qualifier: []byte("a"),
-					Timestamp: proto.Uint64(ts),
-					Value:     []byte("v1"),
-				},
-				&hrpc.Cell{
-					Family:    []byte("cf2"),
-					Qualifier: []byte("b"),
-					Timestamp: proto.Uint64(ts),
-					Value:     []byte("v1"),
-				},
+				makeTestCell([]byte("cf1"), []byte("a"), ts+2, []byte("v3")),
+				makeTestCell([]byte("cf1"), []byte("b"), ts, []byte("v1")),
+				makeTestCell([]byte("cf2"), []byte("a"), ts+2, []byte("v3")),
+				makeTestCell([]byte("cf2"), []byte("a"), ts+1, []byte("v2")),
+				makeTestCell([]byte("cf2"), []byte("a"), ts, []byte("v1")),
+				makeTestCell([]byte("cf2"), []byte("b"), ts, []byte("v1")),
 			},
 		},
 		{
@@ -613,48 +597,13 @@ func TestDelete(t *testing.T) {
 			},
 			// should delete only the second version
 			out: []*hrpc.Cell{
-				&hrpc.Cell{
-					Family:    []byte("cf1"),
-					Qualifier: []byte("a"),
-					Timestamp: proto.Uint64(ts + 2),
-					Value:     []byte("v3"),
-				},
-				&hrpc.Cell{
-					Family:    []byte("cf1"),
-					Qualifier: []byte("a"),
-					Timestamp: proto.Uint64(ts),
-					Value:     []byte("v1"),
-				},
-				&hrpc.Cell{
-					Family:    []byte("cf1"),
-					Qualifier: []byte("b"),
-					Timestamp: proto.Uint64(ts),
-					Value:     []byte("v1"),
-				},
-				&hrpc.Cell{
-					Family:    []byte("cf2"),
-					Qualifier: []byte("a"),
-					Timestamp: proto.Uint64(ts + 2),
-					Value:     []byte("v3"),
-				},
-				&hrpc.Cell{
-					Family:    []byte("cf2"),
-					Qualifier: []byte("a"),
-					Timestamp: proto.Uint64(ts + 1),
-					Value:     []byte("v2"),
-				},
-				&hrpc.Cell{
-					Family:    []byte("cf2"),
-					Qualifier: []byte("a"),
-					Timestamp: proto.Uint64(ts),
-					Value:     []byte("v1"),
-				},
-				&hrpc.Cell{
-					Family:    []byte("cf2"),
-					Qualifier: []byte("b"),
-					Timestamp: proto.Uint64(ts),
-					Value:     []byte("v1"),
-				},
+				makeTestCell([]byte("cf1"), []byte("a"), ts+2, []byte("v3")),
+				makeTestCell([]byte("cf1"), []byte("a"), ts, []byte("v1")),
+				makeTestCell([]byte("cf1"), []byte("b"), ts, []byte("v1")),
+				makeTestCell([]byte("cf2"), []byte("a"), ts+2, []byte("v3")),
+				makeTestCell([]byte("cf2"), []byte("a"), ts+1, []byte("v2")),
+				makeTestCell([]byte("cf2"), []byte("a"), ts, []byte("v1")),
+				makeTestCell([]byte("cf2"), []byte("b"), ts, []byte("v1")),
 			},
 		},
 		{
@@ -666,36 +615,11 @@ func TestDelete(t *testing.T) {
 			},
 			// should leave cf2 untouched
 			out: []*hrpc.Cell{
-				&hrpc.Cell{
-					Family:    []byte("cf1"),
-					Qualifier: []byte("a"),
-					Timestamp: proto.Uint64(ts + 2),
-					Value:     []byte("v3"),
-				},
-				&hrpc.Cell{
-					Family:    []byte("cf2"),
-					Qualifier: []byte("a"),
-					Timestamp: proto.Uint64(ts + 2),
-					Value:     []byte("v3"),
-				},
-				&hrpc.Cell{
-					Family:    []byte("cf2"),
-					Qualifier: []byte("a"),
-					Timestamp: proto.Uint64(ts + 1),
-					Value:     []byte("v2"),
-				},
-				&hrpc.Cell{
-					Family:    []byte("cf2"),
-					Qualifier: []byte("a"),
-					Timestamp: proto.Uint64(ts),
-					Value:     []byte("v1"),
-				},
-				&hrpc.Cell{
-					Family:    []byte("cf2"),
-					Qualifier: []byte("b"),
-					Timestamp: proto.Uint64(ts),
-					Value:     []byte("v1"),
-				},
+				makeTestCell([]byte("cf1"), []byte("a"), ts+2, []byte("v3")),
+				makeTestCell([]byte("cf2"), []byte("a"), ts+2, []byte("v3")),
+				makeTestCell([]byte("cf2"), []byte("a"), ts+1, []byte("v2")),
+				makeTestCell([]byte("cf2"), []byte("a"), ts, []byte("v1")),
+				makeTestCell([]byte("cf2"), []byte("b"), ts, []byte("v1")),
 			},
 		},
 		{
@@ -710,12 +634,7 @@ func TestDelete(t *testing.T) {
 					})
 			},
 			out: []*hrpc.Cell{
-				&hrpc.Cell{
-					Family:    []byte("cf2"),
-					Qualifier: []byte("b"),
-					Timestamp: proto.Uint64(ts),
-					Value:     []byte("v1"),
-				},
+				makeTestCell([]byte("cf2"), []byte("b"), ts, []byte("v1")),
 			},
 		},
 		{
@@ -727,42 +646,12 @@ func TestDelete(t *testing.T) {
 					}, hrpc.TimestampUint64(ts), hrpc.DeleteOneVersion())
 			},
 			out: []*hrpc.Cell{
-				&hrpc.Cell{
-					Family:    []byte("cf1"),
-					Qualifier: []byte("a"),
-					Timestamp: proto.Uint64(ts + 2),
-					Value:     []byte("v3"),
-				},
-				&hrpc.Cell{
-					Family:    []byte("cf1"),
-					Qualifier: []byte("a"),
-					Timestamp: proto.Uint64(ts + 1),
-					Value:     []byte("v2"),
-				},
-				&hrpc.Cell{
-					Family:    []byte("cf2"),
-					Qualifier: []byte("a"),
-					Timestamp: proto.Uint64(ts + 2),
-					Value:     []byte("v3"),
-				},
-				&hrpc.Cell{
-					Family:    []byte("cf2"),
-					Qualifier: []byte("a"),
-					Timestamp: proto.Uint64(ts + 1),
-					Value:     []byte("v2"),
-				},
-				&hrpc.Cell{
-					Family:    []byte("cf2"),
-					Qualifier: []byte("a"),
-					Timestamp: proto.Uint64(ts),
-					Value:     []byte("v1"),
-				},
-				&hrpc.Cell{
-					Family:    []byte("cf2"),
-					Qualifier: []byte("b"),
-					Timestamp: proto.Uint64(ts),
-					Value:     []byte("v1"),
-				},
+				makeTestCell([]byte("cf1"), []byte("a"), ts+2, []byte("v3")),
+				makeTestCell([]byte("cf1"), []byte("a"), ts+1, []byte("v2")),
+				makeTestCell([]byte("cf2"), []byte("a"), ts+2, []byte("v3")),
+				makeTestCell([]byte("cf2"), []byte("a"), ts+1, []byte("v2")),
+				makeTestCell([]byte("cf2"), []byte("a"), ts, []byte("v1")),
+				makeTestCell([]byte("cf2"), []byte("b"), ts, []byte("v1")),
 			},
 		},
 		{
@@ -779,18 +668,8 @@ func TestDelete(t *testing.T) {
 					hrpc.TimestampUint64(ts+1))
 			},
 			out: []*hrpc.Cell{
-				&hrpc.Cell{
-					Family:    []byte("cf1"),
-					Qualifier: []byte("a"),
-					Timestamp: proto.Uint64(ts + 2),
-					Value:     []byte("v3"),
-				},
-				&hrpc.Cell{
-					Family:    []byte("cf2"),
-					Qualifier: []byte("a"),
-					Timestamp: proto.Uint64(ts + 2),
-					Value:     []byte("v3"),
-				},
+				makeTestCell([]byte("cf1"), []byte("a"), ts+2, []byte("v3")),
+				makeTestCell([]byte("cf2"), []byte("a"), ts+2, []byte("v3")),
 			},
 		},
 	}
@@ -855,8 +734,9 @@ func TestDelete(t *testing.T) {
 			}
 
 			for _, c := range tcase.out {
-				c.Row = []byte(t.Name())
-				c.CellType = pb.CellType_PUT.Enum()
+				pbCell := (*pb.Cell)(c)
+				pbCell.SetRow([]byte(t.Name()))
+				pbCell.SetCellType(pb.CellType_PUT)
 			}
 
 			if !reflect.DeepEqual(tcase.out, rsp.Cells) {
@@ -894,12 +774,12 @@ func TestGetTimeRangeVersions(t *testing.T) {
 	if uint32(len(rsp.Cells)) != maxVersions {
 		t.Fatalf("Expected versions: %d, Got versions: %d", maxVersions, len(rsp.Cells))
 	}
-	getTs1 := *rsp.Cells[0].Timestamp
+	getTs1 := (*pb.Cell)(rsp.Cells[0]).GetTimestamp()
 	if getTs1 != 50 {
 		t.Errorf("Timestamps are not the same. Expected Time: %v, Got Time: %v",
 			50, getTs1)
 	}
-	getTs2 := *rsp.Cells[1].Timestamp
+	getTs2 := (*pb.Cell)(rsp.Cells[1]).GetTimestamp()
 	if getTs2 != 49 {
 		t.Errorf("Timestamps are not the same. Expected Time: %v, Got Time: %v",
 			49, getTs2)
@@ -916,7 +796,7 @@ func TestGetTimeRangeVersions(t *testing.T) {
 	if uint32(len(rsp.Cells)) != 1 {
 		t.Fatalf("Expected versions: %d, Got versions: %d", 1, len(rsp.Cells))
 	}
-	getTs1 = *rsp.Cells[0].Timestamp
+	getTs1 = (*pb.Cell)(rsp.Cells[0]).GetTimestamp()
 	if getTs1 != 50 {
 		t.Errorf("Timestamps are not the same. Expected Time: %v, Got Time: %v",
 			50, getTs1)
@@ -972,28 +852,32 @@ func TestScanTimeRangeVersions(t *testing.T) {
 	if uint32(len(rsp[0].Cells)) != maxVersions {
 		t.Fatalf("Expected versions: %d, Got versions: %d", maxVersions, len(rsp[0].Cells))
 	}
-	scan1 := rsp[0].Cells[0]
-	if string(scan1.Row) != "TestScanTimeRangeVersions1" && *scan1.Timestamp != 51 {
+	scan1 := (*pb.Cell)(rsp[0].Cells[0])
+	scan1Ts := scan1.GetTimestamp()
+	if string(scan1.GetRow()) != "TestScanTimeRangeVersions1" && scan1Ts != 51 {
 		t.Errorf("Timestamps are not the same. Expected Time: %v, Got Time: %v",
-			51, *scan1.Timestamp)
+			51, scan1Ts)
 	}
-	scan2 := rsp[0].Cells[1]
-	if string(scan2.Row) != "TestScanTimeRangeVersions1" && *scan2.Timestamp != 50 {
+	scan2 := (*pb.Cell)(rsp[0].Cells[1])
+	scan2Ts := scan2.GetTimestamp()
+	if string(scan2.GetRow()) != "TestScanTimeRangeVersions1" && scan2Ts != 50 {
 		t.Errorf("Timestamps are not the same. Expected Time: %v, Got Time: %v",
-			50, *scan2.Timestamp)
+			50, scan2Ts)
 	}
 	if uint32(len(rsp[1].Cells)) != maxVersions {
 		t.Fatalf("Expected versions: %d, Got versions: %d", maxVersions, len(rsp[1].Cells))
 	}
-	scan3 := rsp[1].Cells[0]
-	if string(scan3.Row) != "TestScanTimeRangeVersions2" && *scan3.Timestamp != 52 {
+	scan3 := (*pb.Cell)(rsp[1].Cells[0])
+	scan3Ts := scan3.GetTimestamp()
+	if string(scan3.GetRow()) != "TestScanTimeRangeVersions2" && scan3Ts != 52 {
 		t.Errorf("Timestamps are not the same. Expected Time: %v, Got Time: %v",
-			52, *scan3.Timestamp)
+			52, scan3Ts)
 	}
-	scan4 := rsp[1].Cells[1]
-	if string(scan4.Row) != "TestScanTimeRangeVersions2" && *scan4.Timestamp != 51 {
+	scan4 := (*pb.Cell)(rsp[1].Cells[1])
+	scan4Ts := scan4.GetTimestamp()
+	if string(scan4.GetRow()) != "TestScanTimeRangeVersions2" && scan4Ts != 51 {
 		t.Errorf("Timestamps are not the same. Expected Time: %v, Got Time: %v",
-			51, *scan4.Timestamp)
+			51, scan4Ts)
 	}
 
 	// scan with no versions set
@@ -1167,7 +1051,8 @@ func checkResultRow(t *testing.T, res *hrpc.Result, expectedRow string, err, exp
 		t.Fatalf("Expected error %v, got error %v", expectedErr, err)
 	}
 	if len(expectedRow) > 0 && res != nil && len(res.Cells) > 0 {
-		got := string(res.Cells[0].Row)
+		pbCell := (*pb.Cell)(res.Cells[0])
+		got := string(pbCell.GetRow())
 		if got != expectedRow {
 			t.Fatalf("Expected row %s, got row %s", expectedRow, got)
 		}
@@ -1276,7 +1161,8 @@ func TestAppend(t *testing.T) {
 		t.Errorf("Append doesn't return updated value.")
 	}
 	// Verifying new result is "Hello my name is Dog."
-	result := appRsp.Cells[0].Value
+	pbCell := (*pb.Cell)(appRsp.Cells[0])
+	result := pbCell.GetValue()
 	if !bytes.Equal([]byte("Hello my name is Dog."), result) {
 		t.Errorf("Append returned an incorrect result. Expected: %v, Receieved: %v",
 			[]byte("Hello my name is Dog."), result)
@@ -1290,7 +1176,8 @@ func TestAppend(t *testing.T) {
 	if len(cells) != 1 {
 		t.Errorf("Get expected 1 cells. Received: %d", len(cells))
 	}
-	result = cells[0].Value
+	pbCell = (*pb.Cell)(cells[0])
+	result = pbCell.GetValue()
 	if !bytes.Equal([]byte("Hello my name is Dog."), result) {
 		t.Errorf("Append returned an incorrect result. Expected: %v, Receieved: %v",
 			[]byte("Hello my name is Dog."), result)
@@ -1465,9 +1352,10 @@ func TestCheckAndPutWithCompareTypeGreater(t *testing.T) {
 		if len(rsp.Cells) < 1 {
 			t.Errorf("Get expected at least 1 cell. Received: %d", len(rsp.Cells))
 		}
-		if !bytes.Equal(rsp.Cells[0].Value, tc.expectedVal) {
+		pbCell := (*pb.Cell)(rsp.Cells[0])
+		if !bytes.Equal(pbCell.GetValue(), tc.expectedVal) {
 			t.Errorf("Get expected value %q. Received: %q for inValues: %v",
-				tc.expectedVal, rsp.Cells[0].Value, tc.inValues)
+				tc.expectedVal, pbCell.GetValue(), tc.inValues)
 		}
 
 	}
@@ -1867,8 +1755,9 @@ func TestCheckAndMutateWithFilter(t *testing.T) {
 
 		var actualValue []byte
 		for _, cell := range getRes.Cells {
-			if string(cell.Qualifier) == "key1" {
-				actualValue = cell.Value
+			pbCell := (*pb.Cell)(cell)
+			if string(pbCell.GetQualifier()) == "key1" {
+				actualValue = pbCell.GetValue()
 				break
 			}
 		}
@@ -1964,7 +1853,8 @@ func TestChangingRegionServers(t *testing.T) {
 	if err != nil {
 		t.Errorf("Get returned an error: %v", err)
 	}
-	rsp_value := rsp.Cells[0].Value
+	pbCell := (*pb.Cell)(rsp.Cells[0])
+	rsp_value := pbCell.GetValue()
 	if !bytes.Equal(rsp_value, val) {
 		t.Errorf("Get returned an incorrect result. Expected: %v, Received: %v",
 			val, rsp_value)
@@ -2126,12 +2016,13 @@ func TestMaxResultsPerColumnFamilyGet(t *testing.T) {
 			t.Errorf(baseErr+"- expecting %d results; received %d", testCnt, len(result.Cells))
 		}
 		for i, x := range result.Cells {
+			pbCell := (*pb.Cell)(x)
 			// Make sure the column name and value are what is expected and in correct sequence
-			if string(x.Qualifier) != fmt.Sprintf("%02d", i) ||
-				string(x.Value) != fmt.Sprintf("value %d", i) {
+			if string(pbCell.GetQualifier()) != fmt.Sprintf("%02d", i) ||
+				string(pbCell.GetValue()) != fmt.Sprintf("value %d", i) {
 				t.Errorf(baseErr+"- unexpected return value. Expecting %s received %s",
 					fmt.Sprintf("value %d", i),
-					string(x.Value),
+					string((*pb.Cell)(x).GetValue()),
 				)
 			}
 		}
@@ -2186,10 +2077,11 @@ func TestMaxResultsPerColumnFamilyGet(t *testing.T) {
 			}
 			// make sure the cells returned are what is expected and in correct sequence
 			for i, _ := range result.Cells {
-				if string(result.Cells[i].Value) != fmt.Sprintf("value %d", offset+i) {
+				pbCell := (*pb.Cell)(result.Cells[i])
+				if string(pbCell.GetValue()) != fmt.Sprintf("value %d", offset+i) {
 					t.Errorf(baseErr+"with offset - Expected value %s but received %s",
 						fmt.Sprintf("value %d", offset+i),
-						string(result.Cells[i].Value),
+						string(pbCell.GetValue()),
 					)
 				}
 			}
@@ -2326,11 +2218,13 @@ func TestMaxResultsPerColumnFamilyScan(t *testing.T) {
 		if len(rRow.Cells) != 2 {
 			t.Errorf(baseErr+"- expected 2 columns but received %d", len(rRow.Cells))
 		}
-		if string(rRow.Cells[0].Value) != "value 10" || string(rRow.Cells[1].Value) != "value 11" {
+		pbCell0 := (*pb.Cell)(rRow.Cells[0])
+		pbCell1 := (*pb.Cell)(rRow.Cells[1])
+		if string(pbCell0.GetValue()) != "value 10" || string(pbCell1.GetValue()) != "value 11" {
 			t.Errorf(baseErr+"- unexpected cells values. "+
 				"Expected 'value 10' and 'value 11' - received %s and %s",
-				string(rRow.Cells[0].Value),
-				string(rRow.Cells[1].Value),
+				string(pbCell0.GetValue()),
+				string(pbCell1.GetValue()),
 			)
 		}
 		resultCnt++
@@ -2407,8 +2301,9 @@ func TestMultiRequest(t *testing.T) {
 			t.Error(err)
 		}
 		expV := []byte{1}
-		if !bytes.Equal(r.Cells[0].Value, expV) {
-			t.Errorf("expected %v, got %v:", expV, r.Cells[0].Value)
+		pbCell := (*pb.Cell)(r.Cells[0])
+		if !bytes.Equal(pbCell.GetValue(), expV) {
+			t.Errorf("expected %v, got %v:", expV, pbCell.GetValue())
 		}
 		wg.Done()
 	}()
@@ -2455,8 +2350,9 @@ func TestMultiRequest(t *testing.T) {
 			t.Error(err)
 		}
 		expV := []byte{4, 4}
-		if !bytes.Equal(r.Cells[0].Value, expV) {
-			t.Errorf("expected %v, got %v:", expV, r.Cells[0].Value)
+		pbCell := (*pb.Cell)(r.Cells[0])
+		if !bytes.Equal(pbCell.GetValue(), expV) {
+			t.Errorf("expected %v, got %v:", expV, pbCell.GetValue())
 		}
 		wg.Done()
 	}()
@@ -2527,7 +2423,8 @@ func TestReverseScan(t *testing.T) {
 		}
 		i++
 		expected := fmt.Sprintf("%d", 500-i)
-		if string(r.Cells[0].Value) != expected {
+		pbCell := (*pb.Cell)(r.Cells[0])
+		if string(pbCell.GetValue()) != expected {
 			t.Error(baseErr + "- unexpected rowkey returned")
 		}
 	}
@@ -2559,7 +2456,8 @@ func TestReverseScan(t *testing.T) {
 		}
 		i++
 		expected := fmt.Sprintf("%d", 251-i)
-		if string(r.Cells[0].Value) != expected {
+		pbCell := (*pb.Cell)(r.Cells[0])
+		if string(pbCell.GetValue()) != expected {
 			t.Error(baseErr + "- unexpected rowkey returned when doing partial reverse scan")
 		}
 	}
@@ -2659,8 +2557,8 @@ func TestListTableNames(t *testing.T) {
 			// filter to have only tables that we've created
 			var got []*pb.TableName
 			for _, m := range names {
-				if strings.HasPrefix(string(m.Qualifier), table) ||
-					string(m.Namespace) == "hbase" {
+				if strings.HasPrefix(string(m.GetQualifier()), table) ||
+					string(m.GetNamespace()) == "hbase" {
 					got = append(got, m)
 				}
 			}
@@ -2670,8 +2568,8 @@ func TestListTableNames(t *testing.T) {
 			}
 
 			for i, m := range tcase.match {
-				want := string(m.Qualifier)
-				got := string(tcase.match[i].Qualifier)
+				want := string(m.GetQualifier())
+				got := string(tcase.match[i].GetQualifier())
 				if want != got {
 					t.Errorf("index %d: expected: %v, got %v", i, want, got)
 				}
@@ -2795,8 +2693,9 @@ func TestRestoreSnapshot(t *testing.T) {
 	}
 
 	expV := []byte{1}
-	if !bytes.Equal(r.Cells[0].Value, expV) {
-		t.Errorf("expected %v, got %v:", expV, r.Cells[0].Value)
+	pbCell := (*pb.Cell)(r.Cells[0])
+	if !bytes.Equal(pbCell.GetValue(), expV) {
+		t.Errorf("expected %v, got %v:", expV, pbCell.GetValue())
 	}
 }
 
@@ -2866,7 +2765,8 @@ func getFirstRegionName(t *testing.T, c gohbase.Client) []byte {
 		t.Fatal("got 0 cells")
 	}
 
-	regionName := rsp[0].Cells[0].Row
+	pbCell := (*pb.Cell)(rsp[0].Cells[0])
+	regionName := pbCell.GetRow()
 	regionName = regionName[len(regionName)-33 : len(regionName)-1]
 	return regionName
 }
@@ -3072,8 +2972,9 @@ func TestNewTableFromSnapshot(t *testing.T) {
 		t.Fatal("Expected non-empty result")
 	}
 	expV := []byte{1}
-	if !bytes.Equal(r.Cells[0].Value, expV) {
-		t.Fatalf("expected %v, got %v:", expV, r.Cells[0].Value)
+	pbCell := (*pb.Cell)(r.Cells[0])
+	if !bytes.Equal(pbCell.GetValue(), expV) {
+		t.Fatalf("expected %v, got %v:", expV, pbCell.GetValue())
 	}
 
 	// Checking that the data did not get restored to the main test table:
@@ -3126,8 +3027,9 @@ func TestScannerTimeout(t *testing.T) {
 		t.Fatalf("Unexpected end of scanner")
 	}
 	expectedValue := []byte(strconv.Itoa(0))
-	if !bytes.Equal(rsp.Cells[0].Value, expectedValue) {
-		t.Errorf("Unexpected value. Got %v, want %v", rsp.Cells[0].Value, expectedValue)
+	pbCell := (*pb.Cell)(rsp.Cells[0])
+	if !bytes.Equal(pbCell.GetValue(), expectedValue) {
+		t.Errorf("Unexpected value. Got %v, want %v", pbCell.GetValue(), expectedValue)
 	}
 
 	// force lease timeout
@@ -3282,7 +3184,8 @@ func TestScannerRenewal(t *testing.T) {
 		t.Fatal("got 0 cells in meta for expected 4th region")
 	}
 
-	rn := rns[ri].Cells[0].Row
+	pbCell := (*pb.Cell)(rns[ri].Cells[0])
+	rn := pbCell.GetRow()
 	rn = rn[len(rn)-33 : len(rn)-1]
 	t.Log("Moving region", string(rn))
 
@@ -3358,8 +3261,9 @@ func TestScannerRenewal(t *testing.T) {
 			t.Fatalf("Unexpected end of scanner")
 		}
 		expectedValue := []byte(strconv.Itoa(i))
-		if !bytes.Equal(rsp.Cells[0].Value, expectedValue) {
-			t.Fatalf("Unexpected value. Got %v, want %v", rsp.Cells[0].Value, expectedValue)
+		pbCell := (*pb.Cell)(rsp.Cells[0])
+		if !bytes.Equal(pbCell.GetValue(), expectedValue) {
+			t.Fatalf("Unexpected value. Got %v, want %v", pbCell.GetValue(), expectedValue)
 		}
 		// Sleep to trigger renewal
 		time.Sleep(scannerLease * 2)
@@ -3415,8 +3319,9 @@ func TestScannerRenewalCancellation(t *testing.T) {
 		t.Fatalf("Unexpected end of scanner")
 	}
 	expectedValue := []byte(strconv.Itoa(0))
-	if !bytes.Equal(rsp.Cells[0].Value, expectedValue) {
-		t.Errorf("Unexpected value. Got %v, want %v", rsp.Cells[0].Value, expectedValue)
+	pbCell := (*pb.Cell)(rsp.Cells[0])
+	if !bytes.Equal(pbCell.GetValue(), expectedValue) {
+		t.Errorf("Unexpected value. Got %v, want %v", pbCell.GetValue(), expectedValue)
 	}
 
 	// Cancel the context

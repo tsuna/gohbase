@@ -15,6 +15,17 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+func makeCell(row, family, qual string, ts uint64, value string, ct pb.CellType) *pb.Cell {
+	cell := &pb.Cell{}
+	cell.SetRow([]byte(row))
+	cell.SetFamily([]byte(family))
+	cell.SetQualifier([]byte(qual))
+	cell.SetValue([]byte(value))
+	cell.SetTimestamp(ts)
+	cell.SetCellType(ct)
+	return cell
+}
+
 func TestCellFromCellBlock(t *testing.T) {
 	cellblock := []byte{0, 0, 0, 48, 0, 0, 0, 19, 0, 0, 0, 21, 0, 4, 114, 111, 119, 55, 2, 99,
 		102, 97, 0, 0, 1, 92, 13, 97, 5, 32, 4, 72, 101, 108, 108, 111, 32, 109, 121, 32, 110,
@@ -29,14 +40,13 @@ func TestCellFromCellBlock(t *testing.T) {
 		t.Errorf("expected %d bytes read, got %d bytes read", len(cellblock), n)
 	}
 
-	expectedCell := &pb.Cell{
-		Row:       []byte("row7"),
-		Family:    []byte("cf"),
-		Qualifier: []byte("a"),
-		Timestamp: proto.Uint64(1494873081120),
-		Value:     []byte("Hello my name is Dog."),
-		CellType:  pb.CellType_PUT.Enum(),
-	}
+	expectedCell := &pb.Cell{}
+	expectedCell.SetRow([]byte("row7"))
+	expectedCell.SetFamily([]byte("cf"))
+	expectedCell.SetQualifier([]byte("a"))
+	expectedCell.SetValue([]byte("Hello my name is Dog."))
+	expectedCell.SetTimestamp(1494873081120)
+	expectedCell.SetCellType(pb.CellType_PUT)
 
 	if !proto.Equal(expectedCell, cell) {
 		t.Errorf("expected cell %v, got cell %v", expectedCell, cell)
@@ -84,22 +94,8 @@ func TestDeserializeCellblocks(t *testing.T) {
 	}
 
 	expectedCells := []*pb.Cell{
-		&pb.Cell{
-			Row:       []byte("TestScanTimeRangeVersions1"),
-			Family:    []byte("cf"),
-			Qualifier: []byte("a"),
-			Timestamp: proto.Uint64(51),
-			Value:     []byte("1"),
-			CellType:  pb.CellType_PUT.Enum(),
-		},
-		&pb.Cell{
-			Row:       []byte("TestScanTimeRangeVersions2"),
-			Family:    []byte("cf"),
-			Qualifier: []byte("a"),
-			Timestamp: proto.Uint64(52),
-			Value:     []byte("1"),
-			CellType:  pb.CellType_PUT.Enum(),
-		},
+		makeCell("TestScanTimeRangeVersions1", "cf", "a", 51, "1", pb.CellType_PUT),
+		makeCell("TestScanTimeRangeVersions2", "cf", "a", 52, "1", pb.CellType_PUT),
 	}
 
 	if !reflect.DeepEqual(expectedCells, cells) {

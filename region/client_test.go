@@ -963,14 +963,16 @@ func TestSanity(t *testing.T) {
 		AssociatedCellCount: proto.Int32(1),
 		Stale:               proto.Bool(false),
 		Cell: []*pb.Cell{
-			&pb.Cell{
-				Row:       []byte("yolo"),
-				Family:    []byte("cf"),
-				Qualifier: []byte("swag"),
-				Value:     []byte("meow"),
-				CellType:  pb.CellType_PUT.Enum(),
-				Timestamp: proto.Uint64(0),
-			},
+			func() *pb.Cell {
+				c := &pb.Cell{}
+				c.SetRow([]byte("yolo"))
+				c.SetFamily([]byte("cf"))
+				c.SetQualifier([]byte("swag"))
+				c.SetValue([]byte("meow"))
+				c.SetCellType(pb.CellType_PUT)
+				c.SetTimestamp(0)
+				return c
+			}(),
 		},
 	}
 	if !proto.Equal(expResult, r.Result) {
@@ -1089,14 +1091,16 @@ func TestSanityCompressor(t *testing.T) {
 		AssociatedCellCount: proto.Int32(1),
 		Stale:               proto.Bool(false),
 		Cell: []*pb.Cell{
-			&pb.Cell{
-				Row:       []byte("yolo"),
-				Family:    []byte("cf"),
-				Qualifier: []byte("swag"),
-				Value:     []byte("meow"),
-				CellType:  pb.CellType_PUT.Enum(),
-				Timestamp: proto.Uint64(math.MaxInt64),
-			},
+			func() *pb.Cell {
+				c := &pb.Cell{}
+				c.SetRow([]byte("yolo"))
+				c.SetFamily([]byte("cf"))
+				c.SetQualifier([]byte("swag"))
+				c.SetValue([]byte("meow"))
+				c.SetCellType(pb.CellType_PUT)
+				c.SetTimestamp(math.MaxInt64)
+				return c
+			}(),
 		},
 	}
 	if !proto.Equal(expResult, r.Result) {

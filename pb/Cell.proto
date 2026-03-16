@@ -17,9 +17,10 @@
  */
 
 // Cell and KeyValue protos
-syntax = "proto2";
+edition = "2024";
 package pb;
 
+option features.field_presence = EXPLICIT;
 option java_package = "org.apache.hadoop.hbase.protobuf.generated";
 option java_outer_classname = "CellProtos";
 option java_generate_equals_and_hash = true;
@@ -45,13 +46,13 @@ enum CellType {
  * Protocol buffer version of Cell.
  */
 message Cell {
-  optional bytes row = 1;
-  optional bytes family = 2;
-  optional bytes qualifier = 3;
-  optional uint64 timestamp = 4;
-  optional CellType cell_type = 5;
-  optional bytes value = 6;
-  optional bytes tags = 7;
+  bytes row = 1;
+  bytes family = 2;
+  bytes qualifier = 3;
+  uint64 timestamp = 4;
+  CellType cell_type = 5;
+  bytes value = 6;
+  bytes tags = 7;
 }
 
 /**
@@ -59,11 +60,11 @@ message Cell {
  * It doesn't have those transient parameters
  */
 message KeyValue {
-  required bytes row = 1;
-  required bytes family = 2;
-  required bytes qualifier = 3;
-  optional uint64 timestamp = 4;
-  optional CellType key_type = 5;
-  optional bytes value = 6;
-  optional bytes tags = 7;
+  bytes row = 1 [features.field_presence = LEGACY_REQUIRED];
+  bytes family = 2 [features.field_presence = LEGACY_REQUIRED];
+  bytes qualifier = 3 [features.field_presence = LEGACY_REQUIRED];
+  uint64 timestamp = 4;
+  CellType key_type = 5;
+  bytes value = 6;
+  bytes tags = 7;
 }

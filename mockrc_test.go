@@ -18,37 +18,30 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+func makePBCell(row, family, qual string, value []byte) *pb.Cell {
+	cell := &pb.Cell{}
+	cell.SetRow([]byte(row))
+	cell.SetFamily([]byte(family))
+	cell.SetQualifier([]byte(qual))
+	cell.SetValue(value)
+	return cell
+}
+
 type testClient struct {
 	addr    string
 	numNSRE int32
 }
 
 var nsreRegion = &pb.Result{Cell: []*pb.Cell{
-	&pb.Cell{
-		Row:       []byte("nsre,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."),
-		Family:    []byte("info"),
-		Qualifier: []byte("regioninfo"),
-		Value: []byte("PBUF\b\xc4\xcd\xe9\x99\xe0)\x12\x0f\n\adefault\x12\x04nsre" +
-			"\x1a\x00\"\x00(\x000\x008\x00"),
-	},
-	&pb.Cell{
-		Row:       []byte("nsre,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."),
-		Family:    []byte("info"),
-		Qualifier: []byte("seqnumDuringOpen"),
-		Value:     []byte("\x00\x00\x00\x00\x00\x00\x00\x02"),
-	},
-	&pb.Cell{
-		Row:       []byte("nsre,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."),
-		Family:    []byte("info"),
-		Qualifier: []byte("server"),
-		Value:     []byte("regionserver:1"),
-	},
-	&pb.Cell{
-		Row:       []byte("nsre,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."),
-		Family:    []byte("info"),
-		Qualifier: []byte("serverstartcode"),
-		Value:     []byte("\x00\x00\x01N\x02\x92R\xb1"),
-	},
+	makePBCell("nsre,,1434573235908.56f833d5569a27c7a43fbf547b4924a4.", "info", "regioninfo",
+		[]byte("PBUF\b\xc4\xcd\xe9\x99\xe0)\x12\x0f\n\adefault\x12\x04nsre"+
+			"\x1a\x00\"\x00(\x000\x008\x00")),
+	makePBCell("nsre,,1434573235908.56f833d5569a27c7a43fbf547b4924a4.", "info", "seqnumDuringOpen",
+		[]byte("\x00\x00\x00\x00\x00\x00\x00\x02")),
+	makePBCell("nsre,,1434573235908.56f833d5569a27c7a43fbf547b4924a4.", "info", "server",
+		[]byte("regionserver:1")),
+	makePBCell("nsre,,1434573235908.56f833d5569a27c7a43fbf547b4924a4.", "info", "serverstartcode",
+		[]byte("\x00\x00\x01N\x02\x92R\xb1")),
 }}
 
 // makeRegionResult returns a region that spans the whole table
@@ -81,89 +74,56 @@ func makeRegionResult(key []byte) *pb.ScanResponse {
 	}
 	regionInfoValue = append([]byte("PBUF"), regionInfoValue...)
 
+	cell1 := &pb.Cell{}
+	cell1.SetRow(row)
+	cell1.SetFamily([]byte("info"))
+	cell1.SetQualifier([]byte("regioninfo"))
+	cell1.SetValue(regionInfoValue)
+
+	cell2 := &pb.Cell{}
+	cell2.SetRow(row)
+	cell2.SetFamily([]byte("info"))
+	cell2.SetQualifier([]byte("seqnumDuringOpen"))
+	cell2.SetValue([]byte("\x00\x00\x00\x00\x00\x00\x00\x02"))
+
+	cell3 := &pb.Cell{}
+	cell3.SetRow(row)
+	cell3.SetFamily([]byte("info"))
+	cell3.SetQualifier([]byte("server"))
+	cell3.SetValue(fqtable)
+
+	cell4 := &pb.Cell{}
+	cell4.SetRow(row)
+	cell4.SetFamily([]byte("info"))
+	cell4.SetQualifier([]byte("serverstartcode"))
+	cell4.SetValue([]byte("\x00\x00\x01N\x02\x92R\xb1"))
+
 	return &pb.ScanResponse{Results: []*pb.Result{
-		&pb.Result{Cell: []*pb.Cell{
-			&pb.Cell{
-				Row:       row,
-				Family:    []byte("info"),
-				Qualifier: []byte("regioninfo"),
-				Value:     regionInfoValue,
-			},
-			&pb.Cell{
-				Row:       row,
-				Family:    []byte("info"),
-				Qualifier: []byte("seqnumDuringOpen"),
-				Value:     []byte("\x00\x00\x00\x00\x00\x00\x00\x02"),
-			},
-			&pb.Cell{
-				Row:       row,
-				Family:    []byte("info"),
-				Qualifier: []byte("server"),
-				Value:     fqtable,
-			},
-			&pb.Cell{
-				Row:       row,
-				Family:    []byte("info"),
-				Qualifier: []byte("serverstartcode"),
-				Value:     []byte("\x00\x00\x01N\x02\x92R\xb1"),
-			},
-		}}}}
+		&pb.Result{Cell: []*pb.Cell{cell1, cell2, cell3, cell4}}}}
 }
 
 var metaRow = &pb.Result{Cell: []*pb.Cell{
-	&pb.Cell{
-		Row:       []byte("test,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."),
-		Family:    []byte("info"),
-		Qualifier: []byte("regioninfo"),
-		Value: []byte("PBUF\b\xc4\xcd\xe9\x99\xe0)\x12\x0f\n\adefault\x12\x04test" +
-			"\x1a\x00\"\x00(\x000\x008\x00"),
-	},
-	&pb.Cell{
-		Row:       []byte("test,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."),
-		Family:    []byte("info"),
-		Qualifier: []byte("seqnumDuringOpen"),
-		Value:     []byte("\x00\x00\x00\x00\x00\x00\x00\x02"),
-	},
-	&pb.Cell{
-		Row:       []byte("test,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."),
-		Family:    []byte("info"),
-		Qualifier: []byte("server"),
-		Value:     []byte("regionserver:2"),
-	},
-	&pb.Cell{
-		Row:       []byte("test,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."),
-		Family:    []byte("info"),
-		Qualifier: []byte("serverstartcode"),
-		Value:     []byte("\x00\x00\x01N\x02\x92R\xb1"),
-	},
+	makePBCell("test,,1434573235908.56f833d5569a27c7a43fbf547b4924a4.", "info", "regioninfo",
+		[]byte("PBUF\b\xc4\xcd\xe9\x99\xe0)\x12\x0f\n\adefault\x12\x04test"+
+			"\x1a\x00\"\x00(\x000\x008\x00")),
+	makePBCell("test,,1434573235908.56f833d5569a27c7a43fbf547b4924a4.", "info", "seqnumDuringOpen",
+		[]byte("\x00\x00\x00\x00\x00\x00\x00\x02")),
+	makePBCell("test,,1434573235908.56f833d5569a27c7a43fbf547b4924a4.", "info", "server",
+		[]byte("regionserver:2")),
+	makePBCell("test,,1434573235908.56f833d5569a27c7a43fbf547b4924a4.", "info", "serverstartcode",
+		[]byte("\x00\x00\x01N\x02\x92R\xb1")),
 }}
 
 var test1SplitA = &pb.Result{Cell: []*pb.Cell{
-	&pb.Cell{
-		Row:       []byte("test1,,1480547738107.825c5c7e480c76b73d6d2bad5d3f7bb8."),
-		Family:    []byte("info"),
-		Qualifier: []byte("regioninfo"),
-		Value: []byte("PBUF\b\xfbÖ\xbc\x8b+\x12\x10\n\adefault\x12\x05" +
-			"test1\x1a\x00\"\x03baz(\x000\x008\x00"),
-	},
-	&pb.Cell{
-		Row:       []byte("test1,,1480547738107.825c5c7e480c76b73d6d2bad5d3f7bb8."),
-		Family:    []byte("info"),
-		Qualifier: []byte("seqnumDuringOpen"),
-		Value:     []byte("\x00\x00\x00\x00\x00\x00\x00\v"),
-	},
-	&pb.Cell{
-		Row:       []byte("test1,,1480547738107.825c5c7e480c76b73d6d2bad5d3f7bb8."),
-		Family:    []byte("info"),
-		Qualifier: []byte("server"),
-		Value:     []byte("regionserver:1"),
-	},
-	&pb.Cell{
-		Row:       []byte("test1,,1480547738107.825c5c7e480c76b73d6d2bad5d3f7bb8."),
-		Family:    []byte("info"),
-		Qualifier: []byte("serverstartcode"),
-		Value:     []byte("\x00\x00\x01X\xb6\x83^3"),
-	},
+	makePBCell("test1,,1480547738107.825c5c7e480c76b73d6d2bad5d3f7bb8.", "info", "regioninfo",
+		[]byte("PBUF\b\xfbÖ\xbc\x8b+\x12\x10\n\adefault\x12\x05"+
+			"test1\x1a\x00\"\x03baz(\x000\x008\x00")),
+	makePBCell("test1,,1480547738107.825c5c7e480c76b73d6d2bad5d3f7bb8.", "info", "seqnumDuringOpen",
+		[]byte("\x00\x00\x00\x00\x00\x00\x00\v")),
+	makePBCell("test1,,1480547738107.825c5c7e480c76b73d6d2bad5d3f7bb8.", "info", "server",
+		[]byte("regionserver:1")),
+	makePBCell("test1,,1480547738107.825c5c7e480c76b73d6d2bad5d3f7bb8.", "info", "serverstartcode",
+		[]byte("\x00\x00\x01X\xb6\x83^3")),
 }}
 
 var m sync.RWMutex
@@ -271,11 +231,11 @@ func pbRespToRespV2(resp *pb.ScanResponse) *hrpc.ScanResponseV2 {
 		for i, cell := range res.Cell {
 			var err error
 			cellsV2[i], err = hrpc.NewCellV2(
-				cell.Row,
-				cell.Family,
-				cell.Qualifier,
+				cell.GetRow(),
+				cell.GetFamily(),
+				cell.GetQualifier(),
 				cell.GetTimestamp(),
-				cell.Value,
+				cell.GetValue(),
 				cell.GetCellType(),
 			)
 			if err != nil {

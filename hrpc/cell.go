@@ -310,13 +310,12 @@ func deserializeCellBlocksV2(b []byte, cellsLen uint32) ([]CellV2, uint32, error
 
 // ToPBCell returns this cell as a protobuf struct for a Cell.
 func (c CellV2) ToPBCell() *pb.Cell {
-	ts := c.Timestamp()
-	return &pb.Cell{
-		Row:       c.Row(),
-		Family:    c.Family(),
-		Qualifier: c.Qualifier(),
-		Timestamp: &ts,
-		Value:     c.Value(),
-		CellType:  c.CellType().Enum(),
-	}
+	cell := &pb.Cell{}
+	cell.SetRow(c.Row())
+	cell.SetFamily(c.Family())
+	cell.SetQualifier(c.Qualifier())
+	cell.SetValue(c.Value())
+	cell.SetTimestamp(c.Timestamp())
+	cell.SetCellType(c.CellType())
+	return cell
 }

@@ -396,7 +396,8 @@ func (c *client) Increment(i *hrpc.Mutate) (int64, error) {
 			len(r.Cells))
 	}
 
-	val := binary.BigEndian.Uint64(r.Cells[0].Value)
+	pbCell := (*pb.Cell)(r.Cells[0])
+	val := binary.BigEndian.Uint64(pbCell.GetValue())
 	return int64(val), nil
 }
 
