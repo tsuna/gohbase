@@ -14,17 +14,16 @@ import (
 
 // Benchmark reading cell fields using getters (opaque API)
 func BenchmarkCellGetters(b *testing.B) {
-	cell := &pb.Cell{
-		Row:       []byte("row123"),
-		Family:    []byte("cf"),
-		Qualifier: []byte("qual"),
-		Value:     []byte("value123"),
-		Timestamp: proto.Uint64(12345678),
-		CellType:  pb.CellType_PUT.Enum(),
-	}
+	cell := &pb.Cell{}
+	cell.SetRow([]byte("row123"))
+	cell.SetFamily([]byte("cf"))
+	cell.SetQualifier([]byte("qual"))
+	cell.SetValue([]byte("value123"))
+	cell.SetTimestamp(12345678)
+	cell.SetCellType(pb.CellType_PUT)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = cell.GetRow()
 		_ = cell.GetFamily()
 		_ = cell.GetQualifier()
@@ -44,31 +43,29 @@ func BenchmarkCellSetters(b *testing.B) {
 	cellType := pb.CellType_PUT
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = &pb.Cell{
-			Row:       row,
-			Family:    family,
-			Qualifier: qualifier,
-			Value:     value,
-			Timestamp: &timestamp,
-			CellType:  &cellType,
-		}
+	for b.Loop() {
+		cell := &pb.Cell{}
+		cell.SetRow(row)
+		cell.SetFamily(family)
+		cell.SetQualifier(qualifier)
+		cell.SetValue(value)
+		cell.SetTimestamp(timestamp)
+		cell.SetCellType(cellType)
 	}
 }
 
 // Benchmark marshaling cells
 func BenchmarkCellMarshal(b *testing.B) {
-	cell := &pb.Cell{
-		Row:       []byte("row123"),
-		Family:    []byte("cf"),
-		Qualifier: []byte("qual"),
-		Value:     []byte("value123"),
-		Timestamp: proto.Uint64(12345678),
-		CellType:  pb.CellType_PUT.Enum(),
-	}
+	cell := &pb.Cell{}
+	cell.SetRow([]byte("row123"))
+	cell.SetFamily([]byte("cf"))
+	cell.SetQualifier([]byte("qual"))
+	cell.SetValue([]byte("value123"))
+	cell.SetTimestamp(12345678)
+	cell.SetCellType(pb.CellType_PUT)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := proto.Marshal(cell)
 		if err != nil {
 			b.Fatal(err)
@@ -78,14 +75,13 @@ func BenchmarkCellMarshal(b *testing.B) {
 
 // Benchmark unmarshaling cells
 func BenchmarkCellUnmarshal(b *testing.B) {
-	cell := &pb.Cell{
-		Row:       []byte("row123"),
-		Family:    []byte("cf"),
-		Qualifier: []byte("qual"),
-		Value:     []byte("value123"),
-		Timestamp: proto.Uint64(12345678),
-		CellType:  pb.CellType_PUT.Enum(),
-	}
+	cell := &pb.Cell{}
+	cell.SetRow([]byte("row123"))
+	cell.SetFamily([]byte("cf"))
+	cell.SetQualifier([]byte("qual"))
+	cell.SetValue([]byte("value123"))
+	cell.SetTimestamp(12345678)
+	cell.SetCellType(pb.CellType_PUT)
 
 	data, err := proto.Marshal(cell)
 	if err != nil {
@@ -93,7 +89,7 @@ func BenchmarkCellUnmarshal(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		cell := &pb.Cell{}
 		err := proto.Unmarshal(data, cell)
 		if err != nil {
@@ -104,14 +100,13 @@ func BenchmarkCellUnmarshal(b *testing.B) {
 
 // Benchmark typical read pattern: unmarshal + read all fields
 func BenchmarkCellReadPattern(b *testing.B) {
-	cell := &pb.Cell{
-		Row:       []byte("row123"),
-		Family:    []byte("cf"),
-		Qualifier: []byte("qual"),
-		Value:     []byte("value123"),
-		Timestamp: proto.Uint64(12345678),
-		CellType:  pb.CellType_PUT.Enum(),
-	}
+	cell := &pb.Cell{}
+	cell.SetRow([]byte("row123"))
+	cell.SetFamily([]byte("cf"))
+	cell.SetQualifier([]byte("qual"))
+	cell.SetValue([]byte("value123"))
+	cell.SetTimestamp(12345678)
+	cell.SetCellType(pb.CellType_PUT)
 
 	data, err := proto.Marshal(cell)
 	if err != nil {
@@ -119,7 +114,7 @@ func BenchmarkCellReadPattern(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		cell := &pb.Cell{}
 		if err := proto.Unmarshal(data, cell); err != nil {
 			b.Fatal(err)
@@ -142,28 +137,26 @@ func BenchmarkCellAllocation(b *testing.B) {
 	value := []byte("value123")
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = &pb.Cell{
-			Row:       row,
-			Family:    family,
-			Qualifier: qualifier,
-			Value:     value,
-			Timestamp: proto.Uint64(12345678),
-			CellType:  pb.CellType_PUT.Enum(),
-		}
+	for b.Loop() {
+		cell := &pb.Cell{}
+		cell.SetRow(row)
+		cell.SetFamily(family)
+		cell.SetQualifier(qualifier)
+		cell.SetValue(value)
+		cell.SetTimestamp(12345678)
+		cell.SetCellType(pb.CellType_PUT)
 	}
 }
 
 // Benchmark that prevents compiler optimization by using the result
 func BenchmarkCellGettersNoOptimize(b *testing.B) {
-	cell := &pb.Cell{
-		Row:       []byte("row123"),
-		Family:    []byte("cf"),
-		Qualifier: []byte("qual"),
-		Value:     []byte("value123"),
-		Timestamp: proto.Uint64(12345678),
-		CellType:  pb.CellType_PUT.Enum(),
-	}
+	cell := &pb.Cell{}
+	cell.SetRow([]byte("row123"))
+	cell.SetFamily([]byte("cf"))
+	cell.SetQualifier([]byte("qual"))
+	cell.SetValue([]byte("value123"))
+	cell.SetTimestamp(12345678)
+	cell.SetCellType(pb.CellType_PUT)
 
 	var sink []byte
 	b.ResetTimer()
@@ -186,14 +179,13 @@ func BenchmarkCellRoundTrip(b *testing.B) {
 	var sink []byte
 	b.ResetTimer()
 	for b.Loop() {
-		cell := &pb.Cell{
-			Row:       row,
-			Family:    family,
-			Qualifier: qualifier,
-			Value:     value,
-			Timestamp: proto.Uint64(12345678),
-			CellType:  pb.CellType_PUT.Enum(),
-		}
+		cell := &pb.Cell{}
+		cell.SetRow(row)
+		cell.SetFamily(family)
+		cell.SetQualifier(qualifier)
+		cell.SetValue(value)
+		cell.SetTimestamp(12345678)
+		cell.SetCellType(pb.CellType_PUT)
 
 		sink = cell.GetRow()
 		sink = cell.GetValue()
@@ -213,14 +205,13 @@ func BenchmarkManyCellsAllocation(b *testing.B) {
 	for b.Loop() {
 		cells := make([]*pb.Cell, 100)
 		for i := 0; i < 100; i++ {
-			cell := &pb.Cell{
-				Row:       row,
-				Family:    family,
-				Qualifier: qualifier,
-				Value:     value,
-				Timestamp: proto.Uint64(12345678),
-				CellType:  pb.CellType_PUT.Enum(),
-			}
+			cell := &pb.Cell{}
+			cell.SetRow(row)
+			cell.SetFamily(family)
+			cell.SetQualifier(qualifier)
+			cell.SetValue(value)
+			cell.SetTimestamp(12345678)
+			cell.SetCellType(pb.CellType_PUT)
 			cells[i] = cell
 		}
 	}
@@ -231,14 +222,13 @@ func BenchmarkCellSliceOperations(b *testing.B) {
 	b.ReportAllocs()
 	cells := make([]*pb.Cell, 1000)
 	for i := range cells {
-		cell := &pb.Cell{
-			Row:       []byte("row"),
-			Family:    []byte("cf"),
-			Qualifier: []byte("qual"),
-			Value:     []byte("value"),
-			Timestamp: proto.Uint64(uint64(i)),
-			CellType:  pb.CellType_PUT.Enum(),
-		}
+		cell := &pb.Cell{}
+		cell.SetRow([]byte("row"))
+		cell.SetFamily([]byte("cf"))
+		cell.SetQualifier([]byte("qual"))
+		cell.SetValue([]byte("value"))
+		cell.SetTimestamp(uint64(i))
+		cell.SetCellType(pb.CellType_PUT)
 		cells[i] = cell
 	}
 
@@ -255,27 +245,25 @@ func BenchmarkCellSliceOperations(b *testing.B) {
 // Benchmark copying cell data
 func BenchmarkCellCopy(b *testing.B) {
 	b.ReportAllocs()
-	src := &pb.Cell{
-		Row:       []byte("row123"),
-		Family:    []byte("cf"),
-		Qualifier: []byte("qual"),
-		Value:     []byte("value123"),
-		Timestamp: proto.Uint64(12345678),
-		CellType:  pb.CellType_PUT.Enum(),
-	}
+	src := &pb.Cell{}
+	src.SetRow([]byte("row123"))
+	src.SetFamily([]byte("cf"))
+	src.SetQualifier([]byte("qual"))
+	src.SetValue([]byte("value123"))
+	src.SetTimestamp(12345678)
+	src.SetCellType(pb.CellType_PUT)
 
 	cells := make([]*pb.Cell, 1000)
 
 	b.ResetTimer()
 	for b.Loop() {
-		dst := &pb.Cell{
-			Row:       src.Row,
-			Family:    src.Family,
-			Qualifier: src.Qualifier,
-			Value:     src.Value,
-			Timestamp: src.Timestamp,
-			CellType:  src.CellType,
-		}
+		dst := &pb.Cell{}
+		dst.SetRow(src.GetRow())
+		dst.SetFamily(src.GetFamily())
+		dst.SetQualifier(src.GetQualifier())
+		dst.SetValue(src.GetValue())
+		dst.SetTimestamp(src.GetTimestamp())
+		dst.SetCellType(src.GetCellType())
 		cells = append(cells, dst)
 	}
 }
