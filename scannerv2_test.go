@@ -10,7 +10,6 @@ import (
 	"errors"
 	"io"
 	"log/slog"
-	"reflect"
 	"sync"
 	"testing"
 
@@ -352,15 +351,73 @@ func TestScanMetricsV2(t *testing.T) {
 }
 
 func TestErrorScanFromIDV2(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+	c := mock.NewMockRPCClient(ctrl)
+
+	var scannerID uint64 = 42
 	scan, err := hrpc.NewScan(context.Background(), table)
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := []*hrpc.Result{
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[:3]}),
-		hrpc.ToLocalResult(&pb.Result{Cell: cells[3:4]}),
+	scanner := newScannerV2(c, scan, slog.Default())
+
+	srange, err := hrpc.NewScanRange(scan.Context(), table, nil, nil, scan.Options()...)
+	if err != nil {
+		t.Fatal(err)
 	}
-	testErrorScanFromID(t, scan, expected)
+
+	resp := &pb.ScanResponse{
+		ScannerId:           cp(scannerID),
+		MoreResultsInRegion: proto.Bool(true),
+		Results: []*pb.Result{
+			&pb.Result{Cell: cells[:3]},
+			&pb.Result{Cell: cells[3:4]},
+		},
+	}
+	expected := []*hrpc.ScanResponseV2{pbRespToRespV2(resp)}
+	c.EXPECT().SendRPC(&scanMatcher{scan: srange}).DoAndReturn(
+		func(rpc hrpc.Call) (msg proto.Message, err error) {
+			rpc.SetRegion(region1)
+			rpc.(*hrpc.Scan).Response = pbRespToRespV2(resp)
+			return resp, nil
+		}).Times(1)
+
+	outErr := errors.New("WTF")
+
+	sid, err := hrpc.NewScanRange(scan.Context(), table, nil, nil,
+		hrpc.ScannerID(scannerID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.EXPECT().SendRPC(&scanMatcher{scan: sid}).Do(func(rpc hrpc.Call) {
+		rpc.SetRegion(region1)
+	}).Return(nil, outErr).Times(1)
+
+	// expect scan close rpc to be sent
+	var wg sync.WaitGroup
+	wg.Add(1)
+	defer wg.Wait()
+	testCallClose(sid, c, scannerID, &wg, t)
+
+	var r *hrpc.ScanResponseV2
+	var rs []*hrpc.ScanResponseV2
+	for {
+		r, err = scanner.Next()
+		if r != nil {
+			rs = append(rs, r)
+		}
+		if err != nil {
+			break
+		}
+	}
+
+	if err != outErr {
+		t.Errorf("Expected error %v, got error %v", outErr, err)
+	}
+	if !cmp.Equal(expected, rs) {
+		t.Fatalf("expected %v, got %v", expected, rs)
+	}
 }
 
 func TestErrorFirstFetchNoMetricsV2(t *testing.T) {
@@ -421,71 +478,6 @@ func TestErrorFirstFetchWithMetricsV2(t *testing.T) {
 	}
 	if r != nil {
 		t.Fatalf("expected no results, got %v", r)
-	}
-}
-
-func testErrorScanFromIDV2(t *testing.T, scan *hrpc.Scan, out []*hrpc.Result) {
-	ctrl := test.NewController(t)
-	defer ctrl.Finish()
-	c := mock.NewMockRPCClient(ctrl)
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	defer wg.Wait()
-
-	var scannerID uint64 = 42
-	scanner := newScannerV2(c, scan, slog.Default())
-
-	srange, err := hrpc.NewScanRange(scan.Context(), table, nil, nil, scan.Options()...)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	resp := &pb.ScanResponse{
-		ScannerId:           cp(scannerID),
-		MoreResultsInRegion: proto.Bool(true),
-		Results: []*pb.Result{
-			&pb.Result{Cell: cells[:3]},
-			&pb.Result{Cell: cells[3:4]},
-		},
-	}
-	c.EXPECT().SendRPC(&scanMatcher{scan: srange}).DoAndReturn(
-		func(rpc hrpc.Call) (msg proto.Message, err error) {
-			rpc.SetRegion(region1)
-			rpc.(*hrpc.Scan).Response = pbRespToRespV2(resp)
-			return resp, nil
-		}).Times(1)
-
-	outErr := errors.New("WTF")
-
-	sid, err := hrpc.NewScanRange(scan.Context(), table, nil, nil,
-		hrpc.ScannerID(scannerID))
-	if err != nil {
-		t.Fatal(err)
-	}
-	c.EXPECT().SendRPC(&scanMatcher{scan: sid}).Do(func(rpc hrpc.Call) {
-		rpc.SetRegion(region1)
-	}).Return(nil, outErr).Times(1)
-
-	// expect scan close rpc to be sent
-	testCallClose(sid, c, scannerID, &wg, t)
-
-	var rs []*hrpc.ScanResponseV2
-	for {
-		r, err := scanner.Next()
-		if r != nil {
-			rs = append(rs, r)
-		}
-		if err != nil {
-			break
-		}
-	}
-
-	if err != outErr {
-		t.Errorf("Expected error %v, got error %v", outErr, err)
-	}
-	if !reflect.DeepEqual(out, rs) {
-		t.Fatalf("expected %v, got %v", out, rs)
 	}
 }
 
