@@ -626,7 +626,7 @@ func (c *client) receive(r io.Reader) (err error) {
 	if header.CellBlockMeta != nil {
 		cellsLen = header.CellBlockMeta.GetLength()
 	}
-	if d, ok := rpc.(canDeserializeCellBlocks); cellsLen > 0 && ok {
+	if d, ok := rpc.(canDeserializeCellBlocks); ok {
 		b := b[size-cellsLen:]
 		if c.compressor != nil {
 			b, err = c.compressor.decompressCellblocks(b)

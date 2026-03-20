@@ -249,6 +249,9 @@ func cellFromCellBlock(b []byte) (*pb.Cell, uint32, error) {
 }
 
 func deserializeCellBlocks(b []byte, cellsLen uint32) ([]*pb.Cell, uint32, error) {
+	if cellsLen == 0 {
+		return nil, 0, nil
+	}
 	cells := make([]*pb.Cell, cellsLen)
 	var readLen uint32
 	for i := 0; i < int(cellsLen); i++ {
