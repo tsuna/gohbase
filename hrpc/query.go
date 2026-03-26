@@ -7,6 +7,7 @@ package hrpc
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"time"
 
@@ -14,7 +15,7 @@ import (
 	"github.com/tsuna/gohbase/pb"
 )
 
-// baseQuery bundles common fields that can be provided for quering requests: Scans and Gets
+// baseQuery bundles common fields that can be provided for querying requests: Scans and Gets
 type baseQuery struct {
 	families      map[string][]string
 	filter        *pb.Filter
@@ -150,13 +151,19 @@ func TimeRange(from, to time.Time) func(Call) error {
 // TimeRangeUint64 is used as a parameter for request creation.
 // Adds TimeRange constraint to a request.
 // from and to should be in milliseconds
-// // It will get values in range [from, to[ ('to' is exclusive).
+// It will get values in range [from, to) ('to' is exclusive).
 func TimeRangeUint64(from, to uint64) func(Call) error {
 	return func(hc Call) error {
 		if c, ok := hc.(hasQueryOptions); ok {
 			if from >= to {
-				// or equal is becuase 'to' is exclusive
+				// or equal is because 'to' is exclusive
 				return errors.New("'from' timestamp is greater or equal to 'to' timestamp")
+			}
+			// HBase timestamps are Long, cannot provide timestamps that exceed Long.MAX_VALUE or
+			// else HBase will throw an IllegalArgumentException
+			if from > MaxTimestamp || to > MaxTimestamp {
+				return fmt.Errorf("timestamp greater than MaxTimestamp: from: %d, to: %d, max: %d",
+					from, to, MaxTimestamp)
 			}
 			c.setTimeRangeUint64(from, to)
 			return nil
