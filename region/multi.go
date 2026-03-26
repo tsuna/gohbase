@@ -159,6 +159,11 @@ func (m *multi) NewResponse() proto.Message {
 
 // DeserializeCellBlocks deserializes action results from cell blocks.
 func (m *multi) DeserializeCellBlocks(msg proto.Message, b []byte) (uint32, error) {
+	// Exit early if there are no cell blocks to save some work.
+	if len(b) == 0 {
+		return 0, nil
+	}
+
 	mr := msg.(*pb.MultiResponse)
 
 	var nread uint32
