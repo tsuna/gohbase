@@ -908,6 +908,7 @@ func TestMultiDeserializeCellBlocks(t *testing.T) {
 					},
 				},
 			},
+			cellblocks: []byte(getCellblock),
 			err: errors.New(
 				"got exception for region, but still have 1 result(s) returned from it"),
 		},
@@ -923,7 +924,8 @@ func TestMultiDeserializeCellBlocks(t *testing.T) {
 					},
 				},
 			},
-			err: errors.New("no index for result in multi response"),
+			cellblocks: []byte(getCellblock),
+			err:        errors.New("no index for result in multi response"),
 		},
 		{ // no result and no exception
 			response: &pb.MultiResponse{
@@ -935,7 +937,8 @@ func TestMultiDeserializeCellBlocks(t *testing.T) {
 					},
 				},
 			},
-			err: errors.New("no result or exception for action in multi response"),
+			cellblocks: []byte(getCellblock),
+			err:        errors.New("no result or exception for action in multi response"),
 		},
 		{ // result and exception
 			response: &pb.MultiResponse{
@@ -952,7 +955,8 @@ func TestMultiDeserializeCellBlocks(t *testing.T) {
 					},
 				},
 			},
-			err: errors.New("got result and exception for action in multi response"),
+			cellblocks: []byte(getCellblock),
+			err:        errors.New("got result and exception for action in multi response"),
 		},
 		{ // single call deserialize error
 			calls: func() []hrpc.Call {
@@ -971,6 +975,7 @@ func TestMultiDeserializeCellBlocks(t *testing.T) {
 					},
 				},
 			},
+			cellblocks: []byte(getCellblock),
 			err: errors.New(
 				"error deserializing cellblocks for \"Get\" call as part of MultiResponse: OOPS"),
 		},
@@ -985,16 +990,15 @@ func TestMultiDeserializeCellBlocks(t *testing.T) {
 			}
 
 			n, err := m.DeserializeCellBlocks(tcase.response, tcase.cellblocks)
-			if l := len(tcase.cellblocks); int(n) != l {
-				t.Errorf("expected read %d, got read %d", l, n)
-			}
-
 			if !test.ErrEqual(tcase.err, err) {
 				t.Fatalf("expected %v, got %v", tcase.err, err)
 			}
 
 			if tcase.err != nil {
 				return
+			}
+			if l := len(tcase.cellblocks); int(n) != l {
+				t.Errorf("expected read %d, got read %d", l, n)
 			}
 
 			if !proto.Equal(tcase.out, tcase.response) {

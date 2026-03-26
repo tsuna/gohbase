@@ -1529,6 +1529,19 @@ func TestDeserializeCellBlocksGet(t *testing.T) {
 	if err == nil {
 		t.Error("expected error, got none")
 	}
+
+	// test empty case
+	g = &Get{}
+	getResp = &pb.GetResponse{Result: &pb.Result{
+		AssociatedCellCount: proto.Int32(0),
+	}}
+	n, err = g.DeserializeCellBlocks(getResp, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	if n != 0 {
+		t.Errorf("didn't expect any bytes to be consumed, got: %d", n)
+	}
 }
 
 func TestDeserializeCellblocksMutate(t *testing.T) {
@@ -1559,6 +1572,19 @@ func TestDeserializeCellblocksMutate(t *testing.T) {
 	_, err = m.DeserializeCellBlocks(mResp, cellblock[:10])
 	if err == nil {
 		t.Error("expected error, got none")
+	}
+
+	// test empty case
+	m = &Mutate{}
+	mResp = &pb.MutateResponse{Result: &pb.Result{
+		AssociatedCellCount: proto.Int32(0),
+	}}
+	n, err = m.DeserializeCellBlocks(mResp, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	if n != 0 {
+		t.Errorf("didn't expect any bytes to be consumed, got: %d", n)
 	}
 }
 
@@ -1643,6 +1669,29 @@ func TestDeserializeCellBlocksScan(t *testing.T) {
 	_, err = s.DeserializeCellBlocks(scanResp, cellblocks[:10])
 	if err == nil {
 		t.Error("expected error, got none")
+	}
+}
+
+func TestDeserializeCellBlocksEmpty(t *testing.T) {
+	scanResp := &pb.ScanResponse{
+		MoreResultsInRegion: proto.Bool(true),
+	}
+	s := &Scan{}
+	n, err := s.DeserializeCellBlocks(scanResp, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	if n != 0 {
+		t.Errorf("didn't expect any bytes to be consumed, got: %d", n)
+	}
+	if s.Response.ResponseSize != 0 {
+		t.Errorf("unexpected ResponseSize: %d", s.Response.ResponseSize)
+	}
+	if len(s.Response.Results) != 0 {
+		t.Errorf("unexpected Results: %v", s.Response.Results)
+	}
+	if !s.Response.MoreResultsInRegion {
+		t.Error("Expected MoreResultsInRegion to be true")
 	}
 }
 
