@@ -193,7 +193,6 @@ func TestQueueRPCMultiWithClose(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockConn := mock.NewMockConn(ctrl)
-	mockConn.EXPECT().SetReadDeadline(gomock.Any()).AnyTimes()
 
 	ncalls := 1000
 
@@ -345,7 +344,6 @@ func TestQueueRPC(t *testing.T) {
 	queueSize := 30
 	flushInterval := 20 * time.Millisecond
 	mockConn := mock.NewMockConn(ctrl)
-	mockConn.EXPECT().SetReadDeadline(gomock.Any()).AnyTimes()
 	c := &client{
 		conn:          mockConn,
 		rpcs:          make(chan []hrpc.Call),
@@ -514,7 +512,6 @@ func TestServerErrorExceptionResponse(t *testing.T) {
 	ctrl := test.NewController(t)
 	defer ctrl.Finish()
 	mockConn := mock.NewMockConn(ctrl)
-	mockConn.EXPECT().SetReadDeadline(gomock.Any()).Times(2)
 	c := &client{
 		conn:          mockConn,
 		rpcs:          make(chan []hrpc.Call),
@@ -530,9 +527,6 @@ func TestServerErrorExceptionResponse(t *testing.T) {
 	}
 
 	c.registerRPC(rpc)
-	if err := c.inFlightUp(); err != nil {
-		t.Fatal(err)
-	}
 
 	var response []byte
 	header := &pb.ResponseHeader{
@@ -626,7 +620,6 @@ func TestReceiveDecodeProtobufError(t *testing.T) {
 	mockCall.EXPECT().Name().Return("Whatever").Times(1)
 
 	c.sent[1] = mockCall
-	c.inFlight = 1
 
 	// Append mutate response with a chunk in the middle missing
 	response := []byte{6, 8, 1, 26, 2, 8, 38, 34, 0, 0, 0, 22,
@@ -636,7 +629,6 @@ func TestReceiveDecodeProtobufError(t *testing.T) {
 		Do(func(buf []byte) { binary.BigEndian.PutUint32(buf, uint32(len(response))) })
 	mockConn.EXPECT().Read(readBufSizeMatcher{l: len(response)}).Times(1).
 		Return(len(response), nil).Do(func(buf []byte) { copy(buf, response) })
-	mockConn.EXPECT().SetReadDeadline(time.Time{}).Times(1)
 	expErrorPefix := "region.RetryableError: failed to decode the response: proto:"
 
 	err := c.receive(mockConn)
@@ -675,7 +667,6 @@ func TestReceiveDeserializeCellblocksError(t *testing.T) {
 	mockCall.EXPECT().Name().Return("Get").Times(1)
 
 	c.sent[1] = callWithCellBlocksError{mockCall}
-	c.inFlight = 1
 
 	// Append mutate response
 	response := []byte{6, 8, 1, 26, 2, 8, 38, 6, 10, 4, 16, 1, 32, 0, 0, 0, 0, 34, 0, 0, 0, 22,
@@ -685,7 +676,6 @@ func TestReceiveDeserializeCellblocksError(t *testing.T) {
 		Do(func(buf []byte) { binary.BigEndian.PutUint32(buf, uint32(len(response))) })
 	mockConn.EXPECT().Read(readBufSizeMatcher{l: len(response)}).Times(1).
 		Return(len(response), nil).Do(func(buf []byte) { copy(buf, response) })
-	mockConn.EXPECT().SetReadDeadline(time.Time{}).Times(1)
 	expError := errors.New("region.RetryableError: failed to decode the response: OOPS")
 
 	err := c.receive(mockConn)
@@ -789,8 +779,6 @@ func TestProcessRPCs(t *testing.T) {
 					wgWrite.Done() // test will timeout if didn't get at least minsent
 				}
 			})
-			mockConn.EXPECT().SetReadDeadline(gomock.Any()).
-				MinTimes(tcase.minsent).MaxTimes(tcase.maxsent)
 
 			calls := make([]hrpc.Call, tcase.ncalls)
 			for i := range calls {
@@ -824,10 +812,6 @@ func TestProcessRPCs(t *testing.T) {
 			wgProcessRPCs.Wait()
 			t.Log("num batches sent", sent)
 
-			if f := int(c.inFlight); f < tcase.minsent || f > tcase.maxsent {
-				t.Errorf("expected [%d:%d] in-flight rpcs, got %d",
-					tcase.minsent, tcase.maxsent, c.inFlight)
-			}
 		})
 	}
 }
@@ -849,8 +833,6 @@ func TestRPCContext(t *testing.T) {
 		logger:        slog.Default(),
 	}
 
-	mockConn.EXPECT().SetReadDeadline(gomock.Any()).Times(1)
-
 	// queue rpc with background context
 	mockCall := mock.NewMockCall(ctrl)
 	mockCall.EXPECT().Name().Return("Get").Times(1)
@@ -870,9 +852,6 @@ func TestRPCContext(t *testing.T) {
 	// this shouldn't block
 	c.QueueRPC(callWithCancel)
 
-	if int(c.inFlight) != 1 {
-		t.Errorf("expected %d in-flight rpcs, got %d", 1, c.inFlight)
-	}
 	// clean up
 	c.Close()
 }
@@ -925,7 +904,6 @@ func TestSanity(t *testing.T) {
 		NewInfo(0, nil, []byte("test1"), []byte("test1,,lololololololololololo"), nil, nil))
 
 	mockConn.EXPECT().Write(gomock.Any()).Times(2).Return(0, nil)
-	mockConn.EXPECT().SetReadDeadline(gomock.Any()).Times(1)
 
 	c.QueueRPC(app)
 
@@ -944,7 +922,6 @@ func TestSanity(t *testing.T) {
 		mockConn.EXPECT().Read(gomock.Any()).MaxTimes(1).
 			Return(0, errors.New("closed")).Do(func(buf []byte) { <-c.done })
 	})
-	mockConn.EXPECT().SetReadDeadline(time.Time{}).Times(1)
 	wg.Add(1)
 	go func() {
 		c.receiveRPCs()
@@ -975,9 +952,6 @@ func TestSanity(t *testing.T) {
 	}
 	if !proto.Equal(expResult, r.Result) {
 		t.Errorf("expected %v, got %v", expResult, r.Result)
-	}
-	if int(c.inFlight) != 0 {
-		t.Errorf("expected %d in-flight rpcs, got %d", 0, c.inFlight)
 	}
 
 	mockConn.EXPECT().Close().Times(1)
@@ -1027,7 +1001,6 @@ func TestSanityCompressor(t *testing.T) {
 		"\b\x01\x12\x1dtest1,,lololololololololololo\x12\f\n\x04yolo\x10\x000\x00@\x01")).Return(
 		71, nil)
 	mockConn.EXPECT().Write([]byte(compressedCellblocks)).Return(58, nil)
-	mockConn.EXPECT().SetReadDeadline(gomock.Any())
 
 	c.QueueRPC(app)
 
@@ -1070,7 +1043,6 @@ func TestSanityCompressor(t *testing.T) {
 		mockConn.EXPECT().Read(gomock.Any()).MaxTimes(1).
 			Return(0, errors.New("closed")).Do(func(buf []byte) { <-c.done })
 	})
-	mockConn.EXPECT().SetReadDeadline(time.Time{}).Times(1)
 	wg.Add(1)
 	go func() {
 		c.receiveRPCs()
@@ -1101,9 +1073,6 @@ func TestSanityCompressor(t *testing.T) {
 	}
 	if !proto.Equal(expResult, r.Result) {
 		t.Errorf("expected %v, got %v", expResult, r.Result)
-	}
-	if int(c.inFlight) != 0 {
-		t.Errorf("expected %d in-flight rpcs, got %d", 0, c.inFlight)
 	}
 
 	mockConn.EXPECT().Close().Times(1)
@@ -1137,7 +1106,6 @@ func BenchmarkSendBatchMemory(b *testing.B) {
 	mockConn.EXPECT().Write(gomock.Any()).AnyTimes().Return(0, nil).Do(func(buf []byte) {
 		wgWrites.Done()
 	})
-	mockConn.EXPECT().SetReadDeadline(gomock.Any()).AnyTimes()
 
 	go c.processRPCs()
 	b.ResetTimer()
@@ -1149,40 +1117,6 @@ func BenchmarkSendBatchMemory(b *testing.B) {
 		wgWrites.Wait()
 	}
 	// we don't care about cleaning up
-}
-
-func BenchmarkSetReadDeadline(b *testing.B) {
-	l, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		b.Fatal(err)
-	}
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		conn, err := l.Accept()
-		if err != nil {
-			b.Error(err)
-		}
-		wg.Done()
-		conn.Close()
-	}()
-
-	conn, err := net.Dial("tcp", l.Addr().String())
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if err := conn.SetReadDeadline(time.Now().Add(DefaultReadTimeout)); err != nil {
-			b.Fatal(err)
-		}
-	}
-	b.StopTimer()
-
-	conn.Close()
-	l.Close()
-	wg.Wait()
 }
 
 func TestBuffer(t *testing.T) {
