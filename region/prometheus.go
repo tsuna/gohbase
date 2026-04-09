@@ -70,6 +70,16 @@ var (
 		[]string{"regionserver"},
 	)
 
+	scanQueueLatency = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "gohbase",
+			Name:      "scan_queue_latency_seconds",
+			Help:      "Time spent waiting to execute a scan request",
+			Buckets:   prometheus.ExponentialBuckets(0.001, 2, 17),
+		},
+		[]string{"regionserver"},
+	)
+
 	concurrentBatchRequests = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "gohbase",
