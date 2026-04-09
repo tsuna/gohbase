@@ -339,9 +339,11 @@ func (c *client) registerRPC(rpc hrpc.Call) (uint32, error) {
 	// If Take() returns an error the token is not taken
 	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil &&
 		hrpc.GetPriority(rpc) == 0 {
+		t := time.Now()
 		if err := c.scanTokenBucket.Take(rpc.Context()); err != nil {
 			return 0, err
 		}
+		scanQueueLatency.WithLabelValues(c.addr).Observe(time.Since(t).Seconds())
 	}
 
 	if _, isMulti := rpc.(*multi); isMulti && c.batchRequestsTokenBucket != nil {
