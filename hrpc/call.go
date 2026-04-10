@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"time"
 	"unsafe"
 
 	"github.com/tsuna/gohbase/pb"
@@ -61,6 +62,18 @@ type Call interface {
 	ResultChan() chan RPCResult
 	Description() string // Used for tracing and metrics
 	Context() context.Context
+}
+
+// RPCObserver is optionally implemented by RPCs that track
+// per-attempt timing and completion statistics.
+type RPCObserver interface {
+	// SetSendTime is called by the region client right after the RPC clears
+	// congestion control (registerRPC), before marshaling and writing to the wire.
+	SetSendTime(time.Time)
+
+	// OnComplete is called after each RPC attempt with the response,
+	// error, and whether the error is retryable.
+	OnComplete(msg proto.Message, err error, retryable bool)
 }
 
 type withOptions interface {

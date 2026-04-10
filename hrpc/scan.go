@@ -156,6 +156,7 @@ type Scan struct {
 
 	scanStatsHandler ScanStatsHandler
 	scanStatsID      int64
+	sendTime         time.Time
 
 	// Response contains the scan's response after the RPC is
 	// completed. This is only meant for use internal to gohbase.
@@ -321,6 +322,52 @@ func (s *Scan) ScannerId() uint64 {
 // ScanStatsID provides an ID assigned to this scan for collecting ScanStats
 func (s *Scan) ScanStatsID() int64 {
 	return s.scanStatsID
+}
+
+// SetSendTime implements RPCObserver. It is called by the region client
+// right after congestion control releases the RPC.
+func (s *Scan) SetSendTime(t time.Time) {
+	s.sendTime = t
+}
+
+// OnComplete implements RPCObserver. It is called after each RPC attempt
+// to deliver scan statistics to the registered ScanStatsHandler.
+func (s *Scan) OnComplete(msg proto.Message, err error, retryable bool) {
+	if s.scanStatsHandler == nil {
+		return
+	}
+
+	stats := &ScanStats{
+		Table:       s.table,
+		StartRow:    s.startRow,
+		EndRow:      s.stopRow,
+		ScannerID:   s.scannerID,
+		ScanStatsID: s.scanStatsID,
+		Start:       s.sendTime,
+		End:         time.Now(),
+		Error:       err != nil,
+		Retryable:   retryable,
+	}
+
+	if s.trackScanMetrics && msg != nil {
+		if scanres, ok := msg.(*pb.ScanResponse); ok && scanres.ScanMetrics != nil {
+			stats.ScanMetrics = make(map[string]int64)
+			for _, m := range scanres.ScanMetrics.GetMetrics() {
+				stats.ScanMetrics[m.GetName()] = m.GetValue()
+			}
+		}
+	}
+
+	if reg := s.Region(); reg != nil {
+		stats.RegionID = reg.ID()
+		if cl := reg.Client(); cl != nil {
+			stats.RegionServer = cl.Addr()
+		}
+	}
+	if s.Response != nil {
+		stats.ResponseSize = s.Response.ResponseSize
+	}
+	s.scanStatsHandler(stats)
 }
 
 // ToProto converts this Scan into a protobuf message
