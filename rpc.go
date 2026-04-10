@@ -17,7 +17,6 @@ import (
 
 	"github.com/tsuna/gohbase/hrpc"
 	"github.com/tsuna/gohbase/internal/observability"
-	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/region"
 	"github.com/tsuna/gohbase/zk"
 	"go.opentelemetry.io/otel/attribute"
@@ -105,13 +104,18 @@ func (c *client) SendRPC(rpc hrpc.Call) (msg proto.Message, err error) {
 		if err != nil {
 			return nil, err
 		}
-		rpcStart := time.Now()
 		msg, err = c.sendRPCToRegionClient(ctx, rpc, rc)
+		if o, ok := rpc.(hrpc.RPCObserver); ok {
+			retryable := false
+			switch err.(type) {
+			case region.RetryableError, region.ServerError,
+				region.NotServingRegionError:
+				retryable = true
+			}
+			o.OnComplete(msg, err, retryable)
+		}
 		switch err.(type) {
 		case region.RetryableError:
-			if scan, ok := rpc.(*hrpc.Scan); ok {
-				c.scanRpcScanStats(scan, msg, err, true, rpcStart, time.Now())
-			}
 			sp.AddEvent("retrySleep")
 			backoff, err = sleepAndIncreaseBackoff(ctx, backoff)
 			if err != nil {
@@ -119,9 +123,6 @@ func (c *client) SendRPC(rpc hrpc.Call) (msg proto.Message, err error) {
 			}
 			continue // retry
 		case region.ServerError:
-			if scan, ok := rpc.(*hrpc.Scan); ok {
-				c.scanRpcScanStats(scan, msg, err, true, rpcStart, time.Now())
-			}
 			// Retry ServerError immediately, as we want failover fast to
 			// another server. But if HBase keep sending us ServerError, we
 			// should start to backoff. We don't want to overwhelm HBase.
@@ -135,61 +136,9 @@ func (c *client) SendRPC(rpc hrpc.Call) (msg proto.Message, err error) {
 			serverErrorCount++
 			continue // retry
 		case region.NotServingRegionError:
-			if scan, ok := rpc.(*hrpc.Scan); ok {
-				c.scanRpcScanStats(scan, msg, err, true, rpcStart, time.Now())
-			}
 			continue // retry
 		}
-		if scan, ok := rpc.(*hrpc.Scan); ok {
-			c.scanRpcScanStats(scan, msg, err, false, rpcStart, time.Now())
-		}
 		return msg, err
-	}
-}
-
-func (c *client) scanRpcScanStats(scan *hrpc.Scan, resp proto.Message, err error,
-	retry bool, start, end time.Time) {
-	if scan.ScanStatsHandler() != nil {
-		stats := &hrpc.ScanStats{}
-		// Update the ScanMetrics if they are being tracked. For ScanStats, these ScanMetrics
-		// are collected per call to SendRPC and therefore may not be reflective of the entire
-		// result of the Scan request if the results are split across multiple calls to
-		// Scanner.Next().
-		if scan.TrackScanMetrics() && resp != nil {
-			scanres, ok := resp.(*pb.ScanResponse)
-			if !ok {
-				c.logger.Debug("got non ScanResponse for ScanRequest, no ScanMetrics to add")
-			} else {
-				if scanres.ScanMetrics != nil {
-					stats.ScanMetrics = make(map[string]int64)
-					for _, m := range scanres.ScanMetrics.GetMetrics() {
-						stats.ScanMetrics[m.GetName()] = m.GetValue()
-					}
-				}
-			}
-		}
-
-		stats.Table = scan.Table()
-		stats.StartRow = scan.StartRow()
-		stats.EndRow = scan.StopRow()
-		if reg := scan.Region(); reg != nil {
-			stats.RegionID = reg.ID()
-			if cl := reg.Client(); cl != nil {
-				stats.RegionServer = cl.Addr()
-			}
-		}
-		stats.ScannerID = scan.ScannerId()
-		stats.ScanStatsID = scan.ScanStatsID()
-		stats.Start = start
-		stats.End = end
-		if err != nil {
-			stats.Error = true
-		}
-		stats.Retryable = retry
-		if scan.Response != nil {
-			stats.ResponseSize = scan.Response.ResponseSize
-		}
-		scan.ScanStatsHandler()(stats)
 	}
 }
 
