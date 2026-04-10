@@ -729,6 +729,9 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
+	if o, ok := rpc.(hrpc.RPCObserver); ok {
+		o.SetSendTime(time.Now())
+	}
 
 	b, err := marshalProto(rpc, id, request, cellblocksLen)
 	if err != nil {
