@@ -1975,14 +1975,12 @@ func TestSendRPCStatsHandler(t *testing.T) {
 	}
 }
 
-// TestScanRPCScanStatsScanMetricsNonScanResponse tests the helper that updates the ScanStats when
-// there's an unexpected response, either nil or a pb message that isn't the expected ScanResponse
-// type. This scenario could arise when sendBlocking returns an error, and along with it a nil rpc
-// result. In either case the handler can still update ScanStats, but when ScanMetrics is enabled,
-// it shouldn't be able to update it since there's no ScanResponse or ScanMetrics to do so.
-func TestScanRPCScanStatsScanMetricsNonScanResponse(t *testing.T) {
-	c := newMockClient(nil)
-
+// TestScanOnCompleteNilResponse tests Scan.OnComplete when there's an unexpected response,
+// either nil or a pb message that isn't the expected ScanResponse type. This scenario could
+// arise when sendBlocking returns an error, and along with it a nil rpc result. In either case
+// the handler can still update ScanStats, but when ScanMetrics is enabled, it shouldn't be able
+// to update it since there's no ScanResponse or ScanMetrics to do so.
+func TestScanOnCompleteNilResponse(t *testing.T) {
 	ss := &hrpc.ScanStats{}
 	h := func(stats *hrpc.ScanStats) {
 		ss = stats
@@ -2010,8 +2008,6 @@ func TestScanRPCScanStatsScanMetricsNonScanResponse(t *testing.T) {
 	ri.SetClient(rc)
 	scan.SetRegion(ri)
 	expectedScanStatsID := scan.ScanStatsID()
-	start := time.Unix(0, 11)
-	end := time.Unix(0, 77)
 
 	validateStats := func() {
 		if !bytes.Equal(ss.Table, expectedTable) ||
@@ -2020,8 +2016,7 @@ func TestScanRPCScanStatsScanMetricsNonScanResponse(t *testing.T) {
 			ss.RegionID != expectedRegionID ||
 			ss.RegionServer != addr ||
 			ss.ScannerID != noScannerID ||
-			ss.ScanStatsID != expectedScanStatsID ||
-			ss.Start != start || ss.End != end {
+			ss.ScanStatsID != expectedScanStatsID {
 			t.Fatalf("ScanStats not updated as expected, got: %v", ss)
 		}
 	}
@@ -2048,8 +2043,16 @@ func TestScanRPCScanStatsScanMetricsNonScanResponse(t *testing.T) {
 	for _, tc := range tcases {
 		t.Run(tc.name, func(t *testing.T) {
 			ss = &hrpc.ScanStats{}
-			c.scanRpcScanStats(scan, nil, tc.err, false, start, end)
+			sendTime := time.Now()
+			scan.SetSendTime(sendTime)
+			scan.OnComplete(nil, tc.err, false)
 			validateStats()
+			if ss.Start != sendTime {
+				t.Fatalf("ScanStats Start %v != sendTime %v", ss.Start, sendTime)
+			}
+			if ss.End.Before(sendTime) {
+				t.Fatal("ScanStats End should be after Start")
+			}
 			if ss.ScanMetrics != nil {
 				t.Fatal("ScanStats set scanMetrics unexpectedly")
 			}
