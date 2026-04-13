@@ -67,6 +67,13 @@ type Call interface {
 // RPCObserver is optionally implemented by RPCs that track
 // per-attempt timing and completion statistics.
 type RPCObserver interface {
+	// SetQueueTime is called by the region client before requesting a
+	// congestion control token (registerRPC). The difference between
+	// this time and the SendTime is the duration spent queued by
+	// congestion control. If it is not called then congestion control
+	// is not enabled.
+	SetQueueTime(time.Time)
+
 	// SetSendTime is called by the region client right after the RPC clears
 	// congestion control (registerRPC), before marshaling and writing to the wire.
 	SetSendTime(time.Time)
