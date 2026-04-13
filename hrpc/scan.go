@@ -156,6 +156,7 @@ type Scan struct {
 
 	scanStatsHandler ScanStatsHandler
 	scanStatsID      int64
+	queueTime        time.Time
 	sendTime         time.Time
 
 	// Response contains the scan's response after the RPC is
@@ -174,6 +175,7 @@ type ScanStats struct {
 	// ScanMetrics are only collected if the client requests to track the scan metrics, when
 	// TrackScanMetrics() is enabled.
 	ScanMetrics  map[string]int64
+	QueueTime    time.Time
 	Start        time.Time
 	End          time.Time
 	ResponseSize int
@@ -324,6 +326,12 @@ func (s *Scan) ScanStatsID() int64 {
 	return s.scanStatsID
 }
 
+// SetQueueTime implements RPCObserver. It is called by the region client
+// before requesting a congestion control token.
+func (s *Scan) SetQueueTime(t time.Time) {
+	s.queueTime = t
+}
+
 // SetSendTime implements RPCObserver. It is called by the region client
 // right after congestion control releases the RPC.
 func (s *Scan) SetSendTime(t time.Time) {
@@ -343,10 +351,15 @@ func (s *Scan) OnComplete(msg proto.Message, err error, retryable bool) {
 		EndRow:      s.stopRow,
 		ScannerID:   s.scannerID,
 		ScanStatsID: s.scanStatsID,
+		QueueTime:   s.queueTime,
 		Start:       s.sendTime,
 		End:         time.Now(),
 		Error:       err != nil,
 		Retryable:   retryable,
+	}
+
+	if stats.QueueTime.IsZero() {
+		stats.QueueTime = stats.Start
 	}
 
 	if s.trackScanMetrics && msg != nil {
