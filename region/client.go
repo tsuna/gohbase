@@ -340,6 +340,10 @@ func (c *client) registerRPC(rpc hrpc.Call) (uint32, error) {
 	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil &&
 		hrpc.GetPriority(rpc) == 0 {
 		t := time.Now()
+		if o, ok := rpc.(hrpc.RPCObserver); ok {
+			o.SetQueueTime(t)
+		}
+
 		if err := c.scanTokenBucket.Take(rpc.Context()); err != nil {
 			return 0, err
 		}
