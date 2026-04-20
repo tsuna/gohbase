@@ -63,7 +63,6 @@ func newAdminClient(zkquorum string, options ...Option) AdminClient {
 		zkRoot:              defaultZkRoot,
 		effectiveUser:       defaultEffectiveUser,
 		regionLookupTimeout: region.DefaultLookupTimeout,
-		regionReadTimeout:   region.DefaultReadTimeout,
 		newRegionClientFn:   region.NewClient,
 		logger:              slog.Default(),
 	}
