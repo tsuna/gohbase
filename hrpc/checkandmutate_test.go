@@ -263,7 +263,8 @@ func TestCheckAndMutateWithFilter_SameRowManyQualifiers(t *testing.T) {
 				true, false),
 		},
 		{
-			name: "check multiple qualifiers with AND logic - one non-existent with filterIfMissing=false",
+			name: "check multiple qualifiers with AND logic - " +
+				"one non-existent with filterIfMissing=false",
 			mutation: func() (*Mutate, error) {
 				return NewPut(ctx, table, key, map[string]map[string][]byte{
 					cf: {"status": []byte("updated")},
@@ -285,7 +286,8 @@ func TestCheckAndMutateWithFilter_SameRowManyQualifiers(t *testing.T) {
 			),
 		},
 		{
-			name: "check multiple qualifiers with AND logic - one non-existent with filterIfMissing=true",
+			name: "check multiple qualifiers with AND logic - " +
+				"one non-existent with filterIfMissing=true",
 			mutation: func() (*Mutate, error) {
 				return NewPut(ctx, table, key, map[string]map[string][]byte{
 					cf: {"status": []byte("should_not_update")},
