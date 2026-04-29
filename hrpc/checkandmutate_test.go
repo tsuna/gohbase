@@ -234,6 +234,78 @@ func TestCheckAndMutateWithFilter_SameRowManyQualifiers(t *testing.T) {
 			},
 			filter: filter.NewColumnCountGetFilter(5),
 		},
+		{
+			name: "check non-existent qualifier with filterIfMissing=false (should succeed)",
+			mutation: func() (*Mutate, error) {
+				return NewPut(ctx, table, key, map[string]map[string][]byte{
+					cf: {"result": []byte("mutation_applied")},
+				})
+			},
+			filter: filter.NewSingleColumnValueFilter(
+				[]byte(cf), []byte("non_existent_key"),
+				filter.Equal,
+				filter.NewBinaryComparator(
+					filter.NewByteArrayComparable([]byte("any_value"))),
+				false, false),
+		},
+		{
+			name: "check non-existent qualifier with filterIfMissing=true (should fail)",
+			mutation: func() (*Mutate, error) {
+				return NewPut(ctx, table, key, map[string]map[string][]byte{
+					cf: {"result": []byte("should_not_apply")},
+				})
+			},
+			filter: filter.NewSingleColumnValueFilter(
+				[]byte(cf), []byte("non_existent_key"),
+				filter.Equal,
+				filter.NewBinaryComparator(
+					filter.NewByteArrayComparable([]byte("any_value"))),
+				true, false),
+		},
+		{
+			name: "check multiple qualifiers with AND logic - one non-existent with filterIfMissing=false",
+			mutation: func() (*Mutate, error) {
+				return NewPut(ctx, table, key, map[string]map[string][]byte{
+					cf: {"status": []byte("updated")},
+				})
+			},
+			filter: filter.NewList(filter.MustPassAll,
+				filter.NewSingleColumnValueFilter(
+					[]byte(cf), []byte("existing_key"),
+					filter.Equal,
+					filter.NewBinaryComparator(
+						filter.NewByteArrayComparable([]byte("expected"))),
+					false, false),
+				filter.NewSingleColumnValueFilter(
+					[]byte(cf), []byte("non_existent_key"),
+					filter.Equal,
+					filter.NewBinaryComparator(
+						filter.NewByteArrayComparable([]byte("any_value"))),
+					false, false),
+			),
+		},
+		{
+			name: "check multiple qualifiers with AND logic - one non-existent with filterIfMissing=true",
+			mutation: func() (*Mutate, error) {
+				return NewPut(ctx, table, key, map[string]map[string][]byte{
+					cf: {"status": []byte("should_not_update")},
+				})
+			},
+			filter: filter.NewList(filter.MustPassAll,
+				filter.NewSingleColumnValueFilter(
+					[]byte(cf), []byte("existing_key"),
+					filter.Equal,
+					filter.NewBinaryComparator(
+						filter.NewByteArrayComparable([]byte("expected"))),
+					false, false),
+				filter.NewSingleColumnValueFilter(
+					[]byte(cf), []byte("non_existent_key"),
+					filter.Equal,
+					filter.NewBinaryComparator(
+						filter.NewByteArrayComparable([]byte("any_value"))),
+					true, false),
+			),
+		},
 	}
 
 	for _, tt := range tests {
