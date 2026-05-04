@@ -38,7 +38,7 @@ func TestConcurrencyIncreaseOnLowLatency(t *testing.T) {
 	}
 
 	// Continue increasing until beyond maxConcurrency
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		controller.Latency(50 * time.Millisecond) // Low latency (below threshold of 100ms)
 	}
 
@@ -58,7 +58,7 @@ func TestConcurrencyDecreaseOnHighLatency(t *testing.T) {
 	}
 
 	// Start by increasing concurrency to a higher value
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		controller.Latency(50 * time.Millisecond) // Low latency to increase concurrency
 	}
 
@@ -96,7 +96,7 @@ func TestConcurrencyDecreaseOnHighLatency(t *testing.T) {
 	}
 
 	// Continue decreasing until we hit minConcurrency
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		controller.Latency(250 * time.Millisecond)
 	}
 
@@ -116,7 +116,7 @@ func TestConcurrencyNoChangeInMiddle(t *testing.T) {
 	}
 
 	// Increase concurrency to a middle value
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		controller.Latency(50 * time.Millisecond) // Low latency
 	}
 
@@ -126,7 +126,7 @@ func TestConcurrencyNoChangeInMiddle(t *testing.T) {
 	}
 
 	// Multiple reports with latency between thresholds - should stay the same
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		// Between 100ms and 200ms
 		newConcurrency, changed := controller.Latency(150 * time.Millisecond)
 		if changed {
@@ -151,7 +151,7 @@ func TestDecreaseDeltaDoublingAndHalving(t *testing.T) {
 	}
 
 	// Start by increasing concurrency to 30
-	for i := 0; i < 25; i++ {
+	for range 25 {
 		controller.Latency(50 * time.Millisecond)
 	}
 

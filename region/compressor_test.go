@@ -175,7 +175,7 @@ func benchmarkDecompressCellblocks(b *testing.B, blockLen int, blocksCount int) 
 	c := &compressor{Codec: mockCodec{}}
 
 	var compressedCellblocks []byte
-	for i := 0; i < blocksCount; i++ {
+	for range blocksCount {
 		_, err := r.Read(data)
 		if err != nil {
 			b.FailNow()

@@ -316,11 +316,7 @@ func Compare(a, b []byte) int {
 
 	// Compare keys.
 	var firstComma int
-	if aComma < bComma {
-		firstComma = aComma
-	} else {
-		firstComma = bComma
-	}
+	firstComma = min(aComma, bComma)
 	for ; i < firstComma; i++ {
 		ai := a[i]
 		bi := b[i]
