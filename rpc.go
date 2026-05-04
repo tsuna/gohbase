@@ -60,7 +60,7 @@ const (
 )
 
 func (c *client) getRegionForRpc(ctx context.Context, rpc hrpc.Call) (hrpc.RegionInfo, error) {
-	for i := 0; i < maxFindRegionTries; i++ {
+	for range maxFindRegionTries {
 		// Check the cache for a region that can handle this request
 		if reg := c.getRegionFromCache(rpc.Table(), rpc.Key()); reg != nil {
 			return reg, nil
@@ -739,10 +739,7 @@ func (c *client) getRegionFromCache(table, key []byte) hrpc.RegionInfo {
 func createRegionSearchKey(table, key []byte) []byte {
 	// Shorten the key such that the generated meta key is <= MAX_ROW_LENGTH (MaxInt16), otherwise
 	// HBase will throw an exception.
-	keylen := math.MaxInt16 - len(table) - 3
-	if len(key) < keylen {
-		keylen = len(key)
-	}
+	keylen := min(len(key), math.MaxInt16-len(table)-3)
 
 	metaKey := make([]byte, 0, len(table)+keylen+3)
 	metaKey = append(metaKey, table...)

@@ -25,7 +25,7 @@ type logger struct {
 	slogger *slog.Logger
 }
 
-func (l *logger) Printf(format string, args ...interface{}) {
+func (l *logger) Printf(format string, args ...any) {
 	l.slogger.Debug(fmt.Sprintf(format, args...))
 }
 

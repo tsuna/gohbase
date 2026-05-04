@@ -360,7 +360,7 @@ func TestEstablishClientConcurrent(t *testing.T) {
 			0,
 			nil,
 			[]byte("test"),
-			[]byte(fmt.Sprintf("test,%d,1434573235908.yoloyoloyoloyoloyoloyoloyoloyolo.", i)),
+			fmt.Appendf(nil, "test,%d,1434573235908.yoloyoloyoloyoloyoloyoloyoloyolo.", i),
 			nil, nil)
 		r.MarkUnavailable()
 		regions[i] = r
@@ -369,12 +369,9 @@ func TestEstablishClientConcurrent(t *testing.T) {
 	// all of the regions have the same region client
 	var wg sync.WaitGroup
 	for _, r := range regions {
-		r := r
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			c.establishRegion(r, "regionserver:1")
-			wg.Done()
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -1275,7 +1272,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		batch := make([]hrpc.Call, 9)
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			// Create an RPC for each region, "a"-"i"
 			batch[i] = newRPC(string(rune('a' + i)))
 		}
@@ -1288,7 +1285,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 			result, ok = c.SendBatch(context.Background(), batch)
 			close(done)
 		}()
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			// Using an Int32 as a result. A real result would be a
 			// PutResponse, but any proto.Message works for the test.
 			batch[i].ResultChan() <- hrpc.RPCResult{Msg: wrapperspb.Int32(int32(i))}
@@ -1313,7 +1310,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 
 	t.Run("error all", func(t *testing.T) {
 		batch := make([]hrpc.Call, 9)
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			// Create an RPC for each region, "a"-"i"
 			key := string(rune('a' + i))
 			batch[i] = newRPC(key)
@@ -1327,7 +1324,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 			result, ok = c.SendBatch(context.Background(), batch)
 			close(done)
 		}()
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			batch[i].ResultChan() <- hrpc.RPCResult{Error: errors.New("error")}
 		}
 		<-done
@@ -1351,7 +1348,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 
 	t.Run("error one", func(t *testing.T) {
 		batch := make([]hrpc.Call, 9)
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			// Create an RPC for each region, "a"-"i"
 			key := string(rune('a' + i))
 			batch[i] = newRPC(key)
@@ -1366,7 +1363,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 			close(done)
 		}()
 		errIndex := rand.Intn(9)
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			if i == errIndex {
 				batch[i].ResultChan() <- hrpc.RPCResult{Error: errors.New("error")}
 				continue
@@ -1404,7 +1401,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 
 	t.Run("error some", func(t *testing.T) {
 		batch := make([]hrpc.Call, 9)
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			// Create an RPC for each region, "a"-"i"
 			key := string(rune('a' + i))
 			batch[i] = newRPC(key)
@@ -1421,7 +1418,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 
 		// Error on RPCs 0 (first RPC to a region server), 4 (middle
 		// RPC to a region server), 8 (last to a region server)
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			if i%4 == 0 {
 				batch[i].ResultChan() <- hrpc.RPCResult{Error: errors.New("error")}
 				continue
@@ -1459,7 +1456,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 
 	t.Run("cancel context all", func(t *testing.T) {
 		batch := make([]hrpc.Call, 9)
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			// Create an RPC for each region, "a"-"i"
 			key := string(rune('a' + i))
 			batch[i] = newRPC(key)
@@ -1495,7 +1492,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 
 	t.Run("cancel context some", func(t *testing.T) {
 		batch := make([]hrpc.Call, 9)
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			// Create an RPC for each region, "a"-"i"
 			key := string(rune('a' + i))
 			batch[i] = newRPC(key)
@@ -1513,7 +1510,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 		// Send results on RPCs except for 0 (first RPC to a region
 		// server), 4 (middle RPC to a region server), 8 (last to a
 		// region server).
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			if i%4 == 0 {
 				continue
 			}
@@ -1563,7 +1560,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 
 	t.Run("retryable error some", func(t *testing.T) {
 		batch := make([]hrpc.Call, 9)
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			// Create an RPC for each region, "a"-"i"
 			key := string(rune('a' + i))
 			batch[i] = newRPC(key)
@@ -1578,7 +1575,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 			close(done)
 		}()
 
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			// Error some responses
 			if i%2 == 0 {
 				batch[i].ResultChan() <- hrpc.RPCResult{Error: region.RetryableError{}}
@@ -1593,7 +1590,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 		// sleep and then send back new results. Half succeed, the
 		// other half get more retryable errors.
 		<-sleepCh // Expect one call to sleepAndIncreaseBackoff
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			if i%4 == 0 {
 				batch[i].ResultChan() <- hrpc.RPCResult{Error: region.RetryableError{}}
 			} else if i%2 == 0 {
@@ -1603,7 +1600,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 
 		// Send successes for the remaining requests
 		<-sleepCh // Expect one call to sleepAndIncreaseBackoff
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			if i%4 == 0 {
 				batch[i].ResultChan() <- hrpc.RPCResult{Msg: wrapperspb.Int32(int32(i))}
 			}
@@ -1630,7 +1627,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 
 	t.Run("retryable error and non-retryable errors", func(t *testing.T) {
 		batch := make([]hrpc.Call, 9)
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			// Create an RPC for each region, "a"-"i"
 			key := string(rune('a' + i))
 			batch[i] = newRPC(key)
@@ -1645,7 +1642,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 			close(done)
 		}()
 
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			if i%4 == 0 {
 				// Non-retryable error for some
 				batch[i].ResultChan() <- hrpc.RPCResult{Error: errors.New("error")}
@@ -1659,7 +1656,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 
 		// We should see retries on retryable errors. So now send the
 		// correct response.
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			if i%4 == 0 {
 				continue
 			}
@@ -1694,7 +1691,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 
 	t.Run("not serving region error", func(t *testing.T) {
 		batch := make([]hrpc.Call, 9)
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			// Create an RPC for each region, "a"-"i"
 			key := string(rune('a' + i))
 			batch[i] = newRPC(key)
@@ -1709,7 +1706,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 			close(done)
 		}()
 
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			if i%4 == 0 {
 				// NSRE for some
 				batch[i].ResultChan() <- hrpc.RPCResult{Error: region.NotServingRegionError{}}
@@ -1719,7 +1716,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 			batch[i].ResultChan() <- hrpc.RPCResult{Msg: wrapperspb.Int32(int32(i))}
 		}
 
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			if i%4 != 0 {
 				continue
 			}
@@ -1731,7 +1728,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 
 		// We should see retries on the RPCs hitting NSREs. So now
 		// send the correct response.
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			if i%4 != 0 {
 				continue
 			}
@@ -1758,7 +1755,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 
 	t.Run("retryable error some with context cancellation", func(t *testing.T) {
 		batch := make([]hrpc.Call, 9)
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			// Create an RPC for each region, "a"-"i"
 			key := string(rune('a' + i))
 			batch[i] = newRPC(key)
@@ -1774,7 +1771,7 @@ func TestSendBatchWaitForCompletion(t *testing.T) {
 			close(done)
 		}()
 
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			// Error some responses
 			if i%2 == 0 {
 				batch[i].ResultChan() <- hrpc.RPCResult{Error: region.RetryableError{}}
