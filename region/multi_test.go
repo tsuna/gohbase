@@ -1103,7 +1103,7 @@ func BenchmarkMultiToProtoLarge(b *testing.B) {
 	}
 
 	m := newMulti(1000)
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		rpc, err := hrpc.NewPutStr(context.Background(), fmt.Sprintf("region%d", i%10), row, values)
 		if err != nil {
 			b.Fatal(err)

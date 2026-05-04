@@ -129,7 +129,7 @@ type ServerError struct {
 	error
 }
 
-func formatErr(e interface{}, err error) string {
+func formatErr(e any, err error) string {
 	if err == nil {
 		return fmt.Sprintf("%T", e)
 	}

@@ -34,7 +34,7 @@ type scanMatcher struct {
 	scan *hrpc.Scan
 }
 
-func (c *scanMatcher) Matches(x interface{}) bool {
+func (c *scanMatcher) Matches(x any) bool {
 	s, ok := x.(*hrpc.Scan)
 	if c.scan.Region() == nil {
 		c.scan.SetRegion(region.NewInfo(0, nil, nil, nil, nil, nil))
@@ -115,7 +115,7 @@ func testCallClose(scan *hrpc.Scan, c *mock.MockRPCClient, scannerID uint64,
 		t.Fatal(err)
 	}
 
-	c.EXPECT().SendRPC(&scanMatcher{scan: s}).Do(func(arg0 interface{}) {
+	c.EXPECT().SendRPC(&scanMatcher{scan: s}).Do(func(arg0 any) {
 		group.Done()
 	}).Return(&pb.ScanResponse{}, nil).Times(1)
 }
@@ -726,7 +726,6 @@ func testPartialResults(t *testing.T, scan *hrpc.Scan, expected []*hrpc.Result) 
 	scanner := newScanner(c, scan, slog.Default())
 	ctx := scan.Context()
 	for _, partial := range tcase {
-		partial := partial
 		var s *hrpc.Scan
 		var err error
 		if partial.scanFromID {

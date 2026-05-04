@@ -140,12 +140,10 @@ func TestFail(t *testing.T) {
 
 	// run multiple in parallel to make sure everything is called only once
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func() {
+	for range 100 {
+		wg.Go(func() {
 			c.fail(expectedErr)
-			wg.Done()
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -208,11 +206,9 @@ func TestQueueRPCMultiWithClose(t *testing.T) {
 	}
 
 	var wgProcessRPCs sync.WaitGroup
-	wgProcessRPCs.Add(1)
-	go func() {
+	wgProcessRPCs.Go(func() {
 		c.processRPCs()
-		wgProcessRPCs.Done()
-	}()
+	})
 
 	calls := make([]hrpc.Call, ncalls)
 	for i := range calls {
@@ -250,7 +246,7 @@ type rpcMatcher struct {
 	payload []byte
 }
 
-func (m rpcMatcher) Matches(x interface{}) bool {
+func (m rpcMatcher) Matches(x any) bool {
 	data, ok := x.([]byte)
 	if !ok {
 		return false
@@ -287,11 +283,9 @@ func TestProcessRPCsWithFail(t *testing.T) {
 	}
 
 	var wgProcessRPCs sync.WaitGroup
-	wgProcessRPCs.Add(1)
-	go func() {
+	wgProcessRPCs.Go(func() {
 		c.processRPCs()
-		wgProcessRPCs.Done()
-	}()
+	})
 
 	calls := make([]hrpc.Call, ncalls)
 	for i := range calls {
@@ -356,11 +350,9 @@ func TestQueueRPC(t *testing.T) {
 		logger:        slog.Default(),
 	}
 	var wgProcessRPCs sync.WaitGroup
-	wgProcessRPCs.Add(1)
-	go func() {
+	wgProcessRPCs.Go(func() {
 		c.processRPCs() // Writer goroutine
-		wgProcessRPCs.Done()
-	}()
+	})
 
 	// define rpcs behaviour
 	var wgWrites sync.WaitGroup
@@ -401,10 +393,8 @@ func TestQueueRPC(t *testing.T) {
 	// now we fail the regionserver, and try to queue stuff
 	mockConn.EXPECT().Close().Times(1)
 	c.fail(errors.New("ooups"))
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 100 {
+		wg.Go(func() {
 			result := make(chan hrpc.RPCResult, 1)
 			mockCall := mock.NewMockCall(ctrl)
 			mockCall.EXPECT().Context().Return(ctx).AnyTimes()
@@ -420,7 +410,7 @@ func TestQueueRPC(t *testing.T) {
 			if ErrClientClosed != err {
 				t.Errorf("expected %v, got %v", ErrClientClosed, err)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	wgProcessRPCs.Wait()
@@ -774,11 +764,9 @@ func TestProcessRPCs(t *testing.T) {
 			}
 
 			var wgProcessRPCs sync.WaitGroup
-			wgProcessRPCs.Add(1)
-			go func() {
+			wgProcessRPCs.Go(func() {
 				c.processRPCs()
-				wgProcessRPCs.Done()
-			}()
+			})
 
 			var sent int32
 			var wgWrite sync.WaitGroup
@@ -881,7 +869,7 @@ type readBufSizeMatcher struct {
 	l int
 }
 
-func (r readBufSizeMatcher) Matches(x interface{}) bool {
+func (r readBufSizeMatcher) Matches(x any) bool {
 	data, ok := x.([]byte)
 	if !ok {
 		return false
@@ -909,11 +897,9 @@ func TestSanity(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		c.processRPCs()
-		wg.Done()
-	}()
+	})
 
 	// using Append as it returns cellblocks
 	app, err := hrpc.NewAppStr(context.Background(), "test1", "yolo",
@@ -945,11 +931,9 @@ func TestSanity(t *testing.T) {
 			Return(0, errors.New("closed")).Do(func(buf []byte) { <-c.done })
 	})
 	mockConn.EXPECT().SetReadDeadline(time.Time{}).Times(1)
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		c.receiveRPCs()
-		wg.Done()
-	}()
+	})
 
 	re := <-app.ResultChan()
 	if re.Error != nil {
@@ -1002,11 +986,9 @@ func TestSanityCompressor(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		c.processRPCs()
-		wg.Done()
-	}()
+	})
 
 	// using Append as it returns cellblocks
 	app, err := hrpc.NewAppStr(context.Background(), "test1", "yolo",
@@ -1071,11 +1053,9 @@ func TestSanityCompressor(t *testing.T) {
 			Return(0, errors.New("closed")).Do(func(buf []byte) { <-c.done })
 	})
 	mockConn.EXPECT().SetReadDeadline(time.Time{}).Times(1)
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		c.receiveRPCs()
-		wg.Done()
-	}()
+	})
 
 	re := <-app.ResultChan()
 	if re.Error != nil {
@@ -1142,7 +1122,7 @@ func BenchmarkSendBatchMemory(b *testing.B) {
 	go c.processRPCs()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			wgWrites.Add(1)
 			c.QueueRPC(mockCall)
 		}
@@ -1252,15 +1232,15 @@ func TestMarshalJSON(t *testing.T) {
 		t.Fatalf("Did not expect Error to be thrown: %v", err)
 	}
 
-	var jsonUnMarshal map[string]interface{}
+	var jsonUnMarshal map[string]any
 	err = json.Unmarshal(jsonVal, &jsonUnMarshal)
 
 	if err != nil {
 		t.Fatalf("Error while unmarshalling JSON, %v", err)
 	}
 
-	actualLocalAddr := jsonUnMarshal["ConnectionLocalAddress"].(map[string]interface{})
-	actualRemoteAddr := jsonUnMarshal["ConnectionRemoteAddress"].(map[string]interface{})
+	actualLocalAddr := jsonUnMarshal["ConnectionLocalAddress"].(map[string]any)
+	actualRemoteAddr := jsonUnMarshal["ConnectionRemoteAddress"].(map[string]any)
 
 	assert.Equal(t, tcp, actualLocalAddr["Network"])
 	assert.Equal(t, tcp, actualRemoteAddr["Network"])

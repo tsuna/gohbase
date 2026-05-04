@@ -206,7 +206,7 @@ func TestRegionInfoMarshalJson(t *testing.T) {
 		t.Fatalf("Should not have thrown an error: %v", err)
 	}
 
-	var jsonUnMarshal map[string]interface{}
+	var jsonUnMarshal map[string]any
 	err = json.Unmarshal(jsonVal, &jsonUnMarshal)
 
 	if err != nil {
