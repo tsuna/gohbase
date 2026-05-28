@@ -15,6 +15,84 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+func assertColumnCondition(
+	t *testing.T,
+	cond *pb.Condition,
+	key []byte,
+	cf, qualifier string,
+	compareType pb.CompareType,
+) {
+	t.Helper()
+
+	if cond == nil {
+		t.Fatal("expected Condition to be set")
+	}
+	if !bytes.Equal(cond.Row, key) {
+		t.Errorf("expected row %q, got %q", key, cond.Row)
+	}
+	if !bytes.Equal(cond.Family, []byte(cf)) {
+		t.Errorf("expected family %q, got %q", cf, cond.Family)
+	}
+	if !bytes.Equal(cond.Qualifier, []byte(qualifier)) {
+		t.Errorf("expected qualifier %q, got %q", qualifier, cond.Qualifier)
+	}
+	if cond.GetCompareType() != compareType {
+		t.Errorf("expected compare type %v, got %v", compareType, cond.GetCompareType())
+	}
+	if cond.Comparator == nil {
+		t.Fatal("expected Comparator to be set")
+	}
+	if cond.Filter != nil {
+		t.Error("expected Filter to be nil for column condition")
+	}
+}
+
+func TestCheckAndMutateIfNotExists(t *testing.T) {
+	ctx := context.Background()
+	table := []byte("table")
+	key := []byte("key")
+	cf := "cf"
+	checkQualifier := "new_col"
+	newData := []byte("newData")
+
+	put, err := NewPut(ctx, table, key, map[string]map[string][]byte{
+		cf: {checkQualifier: newData},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cam, err := NewCheckAndMutate(put, cf, checkQualifier, pb.CompareType_EQUAL,
+		filter.NewBinaryComparator(filter.NewByteArrayComparable(nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !cam.SkipBatch() {
+		t.Error("expected SkipBatch to be true")
+	}
+
+	cam.SetRegion(mockRegionInfo("region"))
+	req := cam.ToProto().(*pb.MutateRequest)
+
+	assertColumnCondition(t, req.Condition, key, cf, checkQualifier, pb.CompareType_EQUAL)
+
+	mutation := req.Mutation
+	if mutation == nil {
+		t.Fatal("expected Mutation to be set")
+	}
+	if len(mutation.ColumnValue) != 1 || len(mutation.ColumnValue[0].QualifierValue) != 1 {
+		t.Fatalf("expected single column value, got %v", mutation.ColumnValue)
+	}
+	qv := mutation.ColumnValue[0].QualifierValue[0]
+	if got := qv.Qualifier; !bytes.Equal(got, []byte(checkQualifier)) {
+		t.Errorf("expected mutation qualifier %q, got %q", checkQualifier, got)
+	}
+	if got := qv.Value; !bytes.Equal(got, newData) {
+		t.Errorf("expected mutation value %q, got %q", newData, got)
+	}
+}
+
 func TestCheckAndMutateWithFilter(t *testing.T) {
 	ctx := context.Background()
 	table := []byte("table")

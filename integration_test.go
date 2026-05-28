@@ -1705,6 +1705,103 @@ func TestCheckAndMutateDelete(t *testing.T) {
 	}
 }
 
+func TestCheckAndMutateIfNotExistsMultipleColumns(t *testing.T) {
+	c := gohbase.NewClient(*host)
+	defer c.Close()
+
+	cf := "cf"
+	mutationQual := "target"
+	newData := []byte("newData")
+	checkColumns := []string{"key1", "key2"}
+
+	checkFilters := make([]filter.Filter, len(checkColumns))
+	for i, col := range checkColumns {
+		checkFilters[i] = columnNotExistsFilter(cf, col)
+	}
+	condFilter := filter.NewList(filter.MustPassAll, checkFilters...)
+
+	tests := []struct {
+		name          string
+		setupData     map[string][]byte
+		shouldProcess bool
+		storedVal     []byte
+	}{
+		{
+			name:          "none of the keys exist yet, will store",
+			setupData:     map[string][]byte{"other": []byte("someNewValue")},
+			shouldProcess: true,
+			storedVal:     newData,
+		},
+		{
+			name:          "one of the checked keys already exists, will not store",
+			setupData:     map[string][]byte{"key1": []byte("aValueToSomeExistingKey")},
+			shouldProcess: false,
+		},
+		{
+			name: "both of the checked keys already exists, will not store",
+			setupData: map[string][]byte{
+				"key1": []byte("aValueToSomeExistingKey"),
+				"key2": []byte("bValueToSomeExistingKey"),
+			},
+			shouldProcess: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			key := fmt.Sprintf("row_cam_ifnotexists_multi_%d", time.Now().UnixNano())
+
+			putReq, err := hrpc.NewPutStr(context.Background(), table, key,
+				map[string]map[string][]byte{cf: tt.setupData})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = c.Put(putReq); err != nil {
+				t.Fatal(err)
+			}
+
+			mutationReq, err := hrpc.NewPutStr(context.Background(), table, key,
+				map[string]map[string][]byte{cf: {mutationQual: newData}})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			cam, err := hrpc.NewCheckAndMutateWithFilter(mutationReq, condFilter)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := c.CheckAndMutate(cam)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result != tt.shouldProcess {
+				t.Errorf("got processed=%v, want %v", result, tt.shouldProcess)
+			}
+
+			getReq, err := hrpc.NewGetStr(context.Background(), table, key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			getRes, err := c.Get(getReq)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			var storedVal []byte
+			for _, cell := range getRes.Cells {
+				if string(cell.Qualifier) == mutationQual {
+					storedVal = cell.Value
+					break
+				}
+			}
+			if !bytes.Equal(storedVal, tt.storedVal) {
+				t.Errorf("got target value=%q, want %q", storedVal, tt.storedVal)
+			}
+		})
+	}
+}
+
 func TestCheckAndMutateWithFilter(t *testing.T) {
 	c := gohbase.NewClient(*host)
 	defer c.Close()
@@ -1714,6 +1811,8 @@ func TestCheckAndMutateWithFilter(t *testing.T) {
 
 	tests := []struct {
 		name           string
+		rowKey         string
+		skipSetup      bool
 		setupData      map[string][]byte
 		filter         filter.Filter
 		mutationVal    []byte
@@ -1822,20 +1921,73 @@ func TestCheckAndMutateWithFilter(t *testing.T) {
 			wantProcessed:  true,
 			wantFinalValue: []byte("one_matched"),
 		},
+		{
+			name:      "at least one checked key exists should store",
+			rowKey:    "row_cam_filter_partial",
+			setupData: map[string][]byte{"key1": []byte("v1")},
+			filter: filter.NewList(filter.MustPassAll,
+				filter.NewSingleColumnValueFilter(
+					[]byte(cf), []byte("key1"),
+					filter.Equal,
+					filter.NewBinaryComparator(
+						filter.NewByteArrayComparable([]byte("v1"))),
+					false, false),
+				filter.NewSingleColumnValueFilter(
+					[]byte(cf), []byte("key2"),
+					filter.Equal,
+					filter.NewBinaryComparator(
+						filter.NewByteArrayComparable([]byte("v2"))),
+					false, false),
+			),
+			mutationVal:    []byte("surprise_stored"),
+			wantProcessed:  true,
+			wantFinalValue: []byte("surprise_stored"),
+		},
+		{
+			// A row with no cells fails the filter check regardless of filterIfMissing.
+			// This is a quirk of HBase. No row to scan, so filter never evaluates.
+			name:      "none of the checked keys exist should not store",
+			rowKey:    "row_cam_filter_empty",
+			skipSetup: true,
+			filter: filter.NewList(filter.MustPassAll,
+				filter.NewSingleColumnValueFilter(
+					[]byte(cf), []byte("key1"),
+					filter.Equal,
+					filter.NewBinaryComparator(
+						filter.NewByteArrayComparable([]byte("v1"))),
+					false, false),
+				filter.NewSingleColumnValueFilter(
+					[]byte(cf), []byte("key2"),
+					filter.Equal,
+					filter.NewBinaryComparator(
+						filter.NewByteArrayComparable([]byte("v2"))),
+					false, false),
+			),
+			mutationVal:    []byte("never_stored"),
+			wantProcessed:  false,
+			wantFinalValue: nil,
+		},
 	}
 
 	// Note that these cases were meant to be run sequentially, not in parallel
 	for _, tt := range tests {
-		putReq, err := hrpc.NewPutStr(context.Background(), table, key,
-			map[string]map[string][]byte{cf: tt.setupData})
-		if err != nil {
-			t.Fatalf("%s: %v", tt.name, err)
-		}
-		if _, err = c.Put(putReq); err != nil {
-			t.Fatalf("%s: %v", tt.name, err)
+		rowKey := key
+		if tt.rowKey != "" {
+			rowKey = tt.rowKey
 		}
 
-		mutationReq, err := hrpc.NewPutStr(context.Background(), table, key,
+		if !tt.skipSetup {
+			putReq, err := hrpc.NewPutStr(context.Background(), table, rowKey,
+				map[string]map[string][]byte{cf: tt.setupData})
+			if err != nil {
+				t.Fatalf("%s: %v", tt.name, err)
+			}
+			if _, err = c.Put(putReq); err != nil {
+				t.Fatalf("%s: %v", tt.name, err)
+			}
+		}
+
+		mutationReq, err := hrpc.NewPutStr(context.Background(), table, rowKey,
 			map[string]map[string][]byte{cf: {"key1": tt.mutationVal}})
 		if err != nil {
 			t.Fatalf("%s: %v", tt.name, err)
@@ -1856,7 +2008,7 @@ func TestCheckAndMutateWithFilter(t *testing.T) {
 				tt.name, result, tt.wantProcessed)
 		}
 
-		getReq, err := hrpc.NewGetStr(context.Background(), table, key)
+		getReq, err := hrpc.NewGetStr(context.Background(), table, rowKey)
 		if err != nil {
 			t.Fatalf("%s: %v", tt.name, err)
 		}
@@ -2016,6 +2168,15 @@ func performNPuts(keyPrefix string, num_ops int) error {
 func insertKeyValue(c gohbase.Client, key, columnFamily string, value []byte,
 	options ...func(hrpc.Call) error) error {
 	return insertKeyValueAtCol(c, key, "a", columnFamily, value, options...)
+}
+
+// columnNotExistsFilter returns a filter that passes when the given column is absent.
+func columnNotExistsFilter(columnFamily, qualifier string) filter.Filter {
+	return filter.NewSingleColumnValueFilter(
+		[]byte(columnFamily), []byte(qualifier),
+		filter.Equal,
+		filter.NewBinaryComparator(filter.NewByteArrayComparable(nil)),
+		false, false)
 }
 
 // insertKeyValueAtCol inserts a value into the table under column col at key.
