@@ -128,6 +128,7 @@ message RequestHeader {
   // See HConstants.
   optional uint32 priority = 6;
   optional uint32 timeout = 7;
+  repeated NameBytesPair attribute = 8;
 }
 
 message ResponseHeader {
