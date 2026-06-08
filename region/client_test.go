@@ -1474,6 +1474,83 @@ func TestScanConcurrencyControlSetCapacity(t *testing.T) {
 	}
 }
 
+func TestMarshalProtoHeaderAttributes(t *testing.T) {
+	// TODO: Expand to add broader request header fields
+	tcs := []struct {
+		name       string
+		attributes map[string][]byte
+	}{
+		{
+			name:       "no attributes",
+			attributes: map[string][]byte{},
+		},
+		{
+			name: "single attribute",
+			attributes: map[string][]byte{
+				"someHeaderAttribute": []byte("42"),
+			},
+		},
+		{
+			name: "multiple attributes",
+			attributes: map[string][]byte{
+				"someHeaderAttribute":           []byte("42"),
+				"anotherAwesomeHeaderAttribute": []byte("43"),
+			},
+		},
+	}
+
+	ctx := context.Background()
+	reg := NewInfo(0, nil, []byte("table"), []byte("table,,xyz.abc."), nil, nil)
+
+	for i, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := make([]func(hrpc.Call) error, 0, len(tc.attributes))
+			for k, v := range tc.attributes {
+				opts = append(opts, hrpc.HeaderAttribute(k, v))
+			}
+			get, err := hrpc.NewGetStr(ctx, "table", "key", opts...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			get.SetRegion(reg)
+			request := get.ToProto()
+			b, err := marshalProto(get, uint32(i+1), request, 0)
+			if err != nil {
+				t.Fatalf("marshalProto: %v", err)
+			}
+			hdr := decodeHeader(t, b)
+			got := make(map[string][]byte, len(hdr.GetAttribute()))
+			for _, pair := range hdr.GetAttribute() {
+				got[pair.GetName()] = pair.GetValue()
+			}
+			if !reflect.DeepEqual(got, tc.attributes) {
+				t.Errorf("header attributes mismatch:\n got  %v\n want %v", got, tc.attributes)
+			}
+		})
+	}
+}
+
+// Don't have an unmarshal function because HBase is unmarshalling
+func decodeHeader(t *testing.T, b []byte) *pb.RequestHeader {
+	t.Helper()
+	if len(b) < 4 {
+		t.Fatalf("buffer too short: %d bytes", len(b))
+	}
+	b = b[4:] // skip 4-byte prefix
+
+	headerSize, n := protowire.ConsumeVarint(b)
+	if n < 0 {
+		t.Fatalf("invalid varint for header size")
+	}
+	b = b[n:]
+
+	var hdr pb.RequestHeader
+	if err := proto.Unmarshal(b[:headerSize], &hdr); err != nil {
+		t.Fatalf("unmarshal RequestHeader: %v", err)
+	}
+	return &hdr
+}
+
 func BenchmarkSendScanRequest(b *testing.B) {
 	var (
 		table    = []byte("table")
