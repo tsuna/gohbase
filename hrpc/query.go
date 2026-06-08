@@ -16,16 +16,17 @@ import (
 
 // baseQuery bundles common fields that can be provided for quering requests: Scans and Gets
 type baseQuery struct {
-	families      map[string][]string
-	filter        *pb.Filter
-	fromTimestamp uint64
-	toTimestamp   uint64
-	maxVersions   uint32
-	storeLimit    uint32
-	storeOffset   uint32
-	priority      uint32
-	cacheBlocks   bool
-	consistency   ConsistencyType
+	families         map[string][]string
+	filter           *pb.Filter
+	fromTimestamp    uint64
+	toTimestamp      uint64
+	maxVersions      uint32
+	storeLimit       uint32
+	storeOffset      uint32
+	priority         uint32
+	cacheBlocks      bool
+	consistency      ConsistencyType
+	headerAttributes []*pb.NameBytesPair
 }
 
 // ConsistencyType is used to specify the required consistency of data
@@ -113,6 +114,40 @@ func GetPriority(c Call) uint32 {
 		return 0
 	}
 	return p.Priority()
+}
+
+func (bq *baseQuery) HeaderAttributes() []*pb.NameBytesPair {
+	return bq.headerAttributes
+}
+
+// GetHeaderAttributes returns the request header attributes of a Call.
+// Returns nil for calls that don't support header attributes or have none set.
+func GetHeaderAttributes(c Call) []*pb.NameBytesPair {
+	a, ok := c.(interface{ HeaderAttributes() []*pb.NameBytesPair })
+	if !ok {
+		return nil
+	}
+	return a.HeaderAttributes()
+}
+
+// HeaderAttribute is an option that sets a key-value attribute on the RPC request header.
+// It can be used with Get and Scan requests. HeaderAttribute can be specified multiple times
+// and attributes will be accumulated.
+func HeaderAttribute(key string, val []byte) func(Call) error {
+	return func(c Call) error {
+		bq, ok := c.(interface {
+			setHeaderAttribute(key string, val []byte)
+		})
+		if !ok {
+			return errors.New("'HeaderAttribute' option can only be used with Get or Scan requests")
+		}
+		bq.setHeaderAttribute(key, val)
+		return nil
+	}
+}
+
+func (bq *baseQuery) setHeaderAttribute(key string, val []byte) {
+	bq.headerAttributes = append(bq.headerAttributes, &pb.NameBytesPair{Name: &key, Value: val})
 }
 
 // Families option adds families constraint to a Scan or Get request.
