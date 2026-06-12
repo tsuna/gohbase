@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"time"
 	"unsafe"
 
 	"github.com/tsuna/gohbase/pb"
@@ -61,6 +62,25 @@ type Call interface {
 	ResultChan() chan RPCResult
 	Description() string // Used for tracing and metrics
 	Context() context.Context
+}
+
+// RPCObserver is optionally implemented by RPCs that track
+// per-attempt timing and completion statistics.
+type RPCObserver interface {
+	// SetQueueTime is called by the region client before requesting a
+	// congestion control token (registerRPC). The difference between
+	// this time and the SendTime is the duration spent queued by
+	// congestion control. If it is not called then congestion control
+	// is not enabled.
+	SetQueueTime(time.Time)
+
+	// SetSendTime is called by the region client right after the RPC clears
+	// congestion control (registerRPC), before marshaling and writing to the wire.
+	SetSendTime(time.Time)
+
+	// OnComplete is called after each RPC attempt with the response,
+	// error, and whether the error is retryable.
+	OnComplete(msg proto.Message, err error, retryable bool)
 }
 
 type withOptions interface {
@@ -249,6 +269,9 @@ func cellFromCellBlock(b []byte) (*pb.Cell, uint32, error) {
 }
 
 func deserializeCellBlocks(b []byte, cellsLen uint32) ([]*pb.Cell, uint32, error) {
+	if cellsLen == 0 {
+		return nil, 0, nil
+	}
 	cells := make([]*pb.Cell, cellsLen)
 	var readLen uint32
 	for i := 0; i < int(cellsLen); i++ {

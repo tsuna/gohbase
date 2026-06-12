@@ -6,6 +6,8 @@
 package region
 
 import (
+	"time"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -66,6 +68,29 @@ var (
 			Namespace: "gohbase",
 			Name:      "concurrent_scans_limit",
 			Help:      "Max number of concurrent scans per region server",
+		},
+		[]string{"regionserver"},
+	)
+
+	scanQueueLatency = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "gohbase",
+			Name:      "scan_queue_latency_seconds",
+			Help:      "Time spent waiting to execute a scan request",
+
+			// TODO: Buckets can be removed when NativeHistogram is adopted.
+			Buckets: prometheus.ExponentialBuckets(0.001, 2, 17),
+
+			// Recommended default NativeHistogram settings:
+			NativeHistogramBucketFactor:     1.1,
+			NativeHistogramMaxBucketNumber:  100,
+			NativeHistogramMinResetDuration: time.Hour,
+
+			// 2^-20 ≈ 954ns ≈ 1us — captures "token was ready" fast
+			// path and places those results in the zero bucket. This
+			// removes histogram fidelity at sub ~1us and saves it for
+			// the higher end of the scale.
+			NativeHistogramZeroThreshold: 0x1p-20,
 		},
 		[]string{"regionserver"},
 	)

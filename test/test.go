@@ -15,11 +15,11 @@ type reporter struct {
 	gomock.TestReporter
 }
 
-func (r reporter) Errorf(format string, args ...interface{}) {
+func (r reporter) Errorf(format string, args ...any) {
 	r.TestReporter.Errorf(format, args...)
 }
 
-func (r reporter) Fatalf(format string, args ...interface{}) {
+func (r reporter) Fatalf(format string, args ...any) {
 	panic(fmt.Sprintf(format, args...))
 }
 

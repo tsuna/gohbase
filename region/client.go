@@ -129,7 +129,7 @@ type ServerError struct {
 	error
 }
 
-func formatErr(e interface{}, err error) string {
+func formatErr(e any, err error) string {
 	if err == nil {
 		return fmt.Sprintf("%T", e)
 	}
@@ -339,9 +339,15 @@ func (c *client) registerRPC(rpc hrpc.Call) (uint32, error) {
 	// If Take() returns an error the token is not taken
 	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil &&
 		hrpc.GetPriority(rpc) == 0 {
+		t := time.Now()
+		if o, ok := rpc.(hrpc.RPCObserver); ok {
+			o.SetQueueTime(t)
+		}
+
 		if err := c.scanTokenBucket.Take(rpc.Context()); err != nil {
 			return 0, err
 		}
+		scanQueueLatency.WithLabelValues(c.addr).Observe(time.Since(t).Seconds())
 	}
 
 	if _, isMulti := rpc.(*multi); isMulti && c.batchRequestsTokenBucket != nil {
@@ -626,7 +632,7 @@ func (c *client) receive(r io.Reader) (err error) {
 	if header.CellBlockMeta != nil {
 		cellsLen = header.CellBlockMeta.GetLength()
 	}
-	if d, ok := rpc.(canDeserializeCellBlocks); cellsLen > 0 && ok {
+	if d, ok := rpc.(canDeserializeCellBlocks); ok {
 		b := b[size-cellsLen:]
 		if c.compressor != nil {
 			b, err = c.compressor.decompressCellblocks(b)
@@ -726,6 +732,9 @@ func (c *client) send(rpc hrpc.Call) (uint32, error) {
 	id, err := c.registerRPC(rpc)
 	if err != nil {
 		return 0, err
+	}
+	if o, ok := rpc.(hrpc.RPCObserver); ok {
+		o.SetSendTime(time.Now())
 	}
 
 	b, err := marshalProto(rpc, id, request, cellblocksLen)
