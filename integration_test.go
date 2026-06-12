@@ -1812,7 +1812,6 @@ func TestCheckAndMutateWithFilter(t *testing.T) {
 	tests := []struct {
 		name           string
 		rowKey         string
-		skipSetup      bool
 		setupData      map[string][]byte
 		filter         filter.Filter
 		mutationVal    []byte
@@ -1939,16 +1938,15 @@ func TestCheckAndMutateWithFilter(t *testing.T) {
 						filter.NewByteArrayComparable([]byte("v2"))),
 					false, false),
 			),
-			mutationVal:    []byte("surprise_stored"),
+			mutationVal:    []byte("stored_value"),
 			wantProcessed:  true,
-			wantFinalValue: []byte("surprise_stored"),
+			wantFinalValue: []byte("stored_value"),
 		},
 		{
 			// A row with no cells fails the filter check regardless of filterIfMissing.
 			// This is a quirk of HBase. No row to scan, so filter never evaluates.
-			name:      "none of the checked keys exist should not store",
-			rowKey:    "row_cam_filter_empty",
-			skipSetup: true,
+			name:   "none of the checked keys exist should not store",
+			rowKey: "row_cam_filter_empty",
 			filter: filter.NewList(filter.MustPassAll,
 				filter.NewSingleColumnValueFilter(
 					[]byte(cf), []byte("key1"),
@@ -1971,64 +1969,66 @@ func TestCheckAndMutateWithFilter(t *testing.T) {
 
 	// Note that these cases were meant to be run sequentially, not in parallel
 	for _, tt := range tests {
-		rowKey := key
-		if tt.rowKey != "" {
-			rowKey = tt.rowKey
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			rowKey := key
+			if tt.rowKey != "" {
+				rowKey = tt.rowKey
+			}
 
-		if !tt.skipSetup {
-			putReq, err := hrpc.NewPutStr(context.Background(), table, rowKey,
-				map[string]map[string][]byte{cf: tt.setupData})
+			if len(tt.setupData) != 0 {
+				putReq, err := hrpc.NewPutStr(context.Background(), table, rowKey,
+					map[string]map[string][]byte{cf: tt.setupData})
+				if err != nil {
+					t.Fatalf("%s: %v", tt.name, err)
+				}
+				if _, err = c.Put(putReq); err != nil {
+					t.Fatalf("%s: %v", tt.name, err)
+				}
+			}
+
+			mutationReq, err := hrpc.NewPutStr(context.Background(), table, rowKey,
+				map[string]map[string][]byte{cf: {"key1": tt.mutationVal}})
 			if err != nil {
 				t.Fatalf("%s: %v", tt.name, err)
 			}
-			if _, err = c.Put(putReq); err != nil {
+
+			cam, err := hrpc.NewCheckAndMutateWithFilter(mutationReq, tt.filter)
+			if err != nil {
 				t.Fatalf("%s: %v", tt.name, err)
 			}
-		}
 
-		mutationReq, err := hrpc.NewPutStr(context.Background(), table, rowKey,
-			map[string]map[string][]byte{cf: {"key1": tt.mutationVal}})
-		if err != nil {
-			t.Fatalf("%s: %v", tt.name, err)
-		}
-
-		cam, err := hrpc.NewCheckAndMutateWithFilter(mutationReq, tt.filter)
-		if err != nil {
-			t.Fatalf("%s: %v", tt.name, err)
-		}
-
-		result, err := c.CheckAndMutate(cam)
-		if err != nil {
-			t.Fatalf("%s: %v", tt.name, err)
-		}
-
-		if result != tt.wantProcessed {
-			t.Errorf("%s: got processed=%v, want %v",
-				tt.name, result, tt.wantProcessed)
-		}
-
-		getReq, err := hrpc.NewGetStr(context.Background(), table, rowKey)
-		if err != nil {
-			t.Fatalf("%s: %v", tt.name, err)
-		}
-		getRes, err := c.Get(getReq)
-		if err != nil {
-			t.Fatalf("%s: %v", tt.name, err)
-		}
-
-		var actualValue []byte
-		for _, cell := range getRes.Cells {
-			if string(cell.Qualifier) == "key1" {
-				actualValue = cell.Value
-				break
+			result, err := c.CheckAndMutate(cam)
+			if err != nil {
+				t.Fatalf("%s: %v", tt.name, err)
 			}
-		}
 
-		if !bytes.Equal(actualValue, tt.wantFinalValue) {
-			t.Errorf("%s: got value=%q, want %q",
-				tt.name, actualValue, tt.wantFinalValue)
-		}
+			if result != tt.wantProcessed {
+				t.Errorf("%s: got processed=%v, want %v",
+					tt.name, result, tt.wantProcessed)
+			}
+
+			getReq, err := hrpc.NewGetStr(context.Background(), table, rowKey)
+			if err != nil {
+				t.Fatalf("%s: %v", tt.name, err)
+			}
+			getRes, err := c.Get(getReq)
+			if err != nil {
+				t.Fatalf("%s: %v", tt.name, err)
+			}
+
+			var actualValue []byte
+			for _, cell := range getRes.Cells {
+				if string(cell.Qualifier) == "key1" {
+					actualValue = cell.Value
+					break
+				}
+			}
+
+			if !bytes.Equal(actualValue, tt.wantFinalValue) {
+				t.Errorf("%s: got value=%q, want %q",
+					tt.name, actualValue, tt.wantFinalValue)
+			}
+		})
 	}
 }
 
