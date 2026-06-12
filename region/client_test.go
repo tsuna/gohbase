@@ -1475,7 +1475,6 @@ func TestScanConcurrencyControlSetCapacity(t *testing.T) {
 }
 
 func TestMarshalProtoHeaderAttributes(t *testing.T) {
-	// TODO: Expand to add broader request header fields
 	tcs := []struct {
 		name       string
 		attributes map[string][]byte
