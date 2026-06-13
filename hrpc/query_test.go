@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/tsuna/gohbase/filter"
+	"github.com/tsuna/gohbase/pb"
 	"github.com/tsuna/gohbase/test"
 )
 
@@ -243,5 +244,53 @@ func TestPriority(t *testing.T) {
 	_, err = NewPut(nil, nil, nil, nil, Priority(5))
 	if err == nil {
 		t.Errorf("expected error when creating Put with Priority, but got none")
+	}
+}
+
+func TestHeaderAttributes(t *testing.T) {
+	get, err := NewGet(nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := get.HeaderAttributes(); got != nil {
+		t.Errorf("expected no attributes, got %v", got)
+	}
+
+	expectedName := "some_header_attr"
+	expectedVal := []byte("some_attr_value")
+	expected := []*pb.NameBytesPair{
+		{
+			Name:  &expectedName,
+			Value: expectedVal,
+		},
+	}
+
+	get, err = NewGet(nil, nil, nil, HeaderAttribute(expectedName, expectedVal))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := get.HeaderAttributes(); !reflect.DeepEqual(expected, got) {
+		t.Errorf("expected %v, got %v", expected, got)
+	}
+
+	scan, err := NewScan(nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := scan.HeaderAttributes(); got != nil {
+		t.Errorf("expected no attributes, got %v", got)
+	}
+
+	scan, err = NewScan(nil, nil, HeaderAttribute(expectedName, expectedVal))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := scan.HeaderAttributes(); !reflect.DeepEqual(expected, got) {
+		t.Errorf("expected %v, got %v", expected, got)
+	}
+
+	_, err = NewPut(nil, nil, nil, nil, HeaderAttribute(expectedName, expectedVal))
+	if err == nil {
+		t.Errorf("expected error when creating Put with HeaderAttribute, but got none")
 	}
 }

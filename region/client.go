@@ -787,6 +787,10 @@ func marshalProto(rpc hrpc.Call, callID uint32, request proto.Message,
 		header.Priority = &p
 	}
 
+	if attrs := hrpc.GetHeaderAttributes(rpc); len(attrs) > 0 {
+		header.Attribute = attrs
+	}
+
 	if cellblocksLen > 0 {
 		header.CellBlockMeta = &pb.CellBlockMeta{
 			Length: &cellblocksLen,

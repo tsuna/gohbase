@@ -314,8 +314,9 @@ type RequestHeader struct {
 	CellBlockMeta *CellBlockMeta `protobuf:"bytes,5,opt,name=cell_block_meta,json=cellBlockMeta" json:"cell_block_meta,omitempty"`
 	// 0 is NORMAL priority.  200 is HIGH.  If no priority, treat it as NORMAL.
 	// See HConstants.
-	Priority      *uint32 `protobuf:"varint,6,opt,name=priority" json:"priority,omitempty"`
-	Timeout       *uint32 `protobuf:"varint,7,opt,name=timeout" json:"timeout,omitempty"`
+	Priority      *uint32          `protobuf:"varint,6,opt,name=priority" json:"priority,omitempty"`
+	Timeout       *uint32          `protobuf:"varint,7,opt,name=timeout" json:"timeout,omitempty"`
+	Attribute     []*NameBytesPair `protobuf:"bytes,8,rep,name=attribute" json:"attribute,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -397,6 +398,13 @@ func (x *RequestHeader) GetTimeout() uint32 {
 		return *x.Timeout
 	}
 	return 0
+}
+
+func (x *RequestHeader) GetAttribute() []*NameBytesPair {
+	if x != nil {
+		return x.Attribute
+	}
+	return nil
 }
 
 type ResponseHeader struct {
@@ -484,7 +492,7 @@ const file_RPC_proto_rawDesc = "" +
 	"\bhostname\x18\x03 \x01(\tR\bhostname\x12\x12\n" +
 	"\x04port\x18\x04 \x01(\x05R\x04port\x12 \n" +
 	"\fdo_not_retry\x18\x05 \x01(\bR\n" +
-	"doNotRetry\"\x8c\x02\n" +
+	"doNotRetry\"\xbd\x02\n" +
 	"\rRequestHeader\x12\x17\n" +
 	"\acall_id\x18\x01 \x01(\rR\x06callId\x12+\n" +
 	"\n" +
@@ -494,7 +502,8 @@ const file_RPC_proto_rawDesc = "" +
 	"\rrequest_param\x18\x04 \x01(\bR\frequestParam\x129\n" +
 	"\x0fcell_block_meta\x18\x05 \x01(\v2\x11.pb.CellBlockMetaR\rcellBlockMeta\x12\x1a\n" +
 	"\bpriority\x18\x06 \x01(\rR\bpriority\x12\x18\n" +
-	"\atimeout\x18\a \x01(\rR\atimeout\"\x99\x01\n" +
+	"\atimeout\x18\a \x01(\rR\atimeout\x12/\n" +
+	"\tattribute\x18\b \x03(\v2\x11.pb.NameBytesPairR\tattribute\"\x99\x01\n" +
 	"\x0eResponseHeader\x12\x17\n" +
 	"\acall_id\x18\x01 \x01(\rR\x06callId\x123\n" +
 	"\texception\x18\x02 \x01(\v2\x15.pb.ExceptionResponseR\texception\x129\n" +
@@ -523,19 +532,21 @@ var file_RPC_proto_goTypes = []any{
 	(*ResponseHeader)(nil),    // 5: pb.ResponseHeader
 	(*VersionInfo)(nil),       // 6: pb.VersionInfo
 	(*RPCTInfo)(nil),          // 7: pb.RPCTInfo
+	(*NameBytesPair)(nil),     // 8: pb.NameBytesPair
 }
 var file_RPC_proto_depIdxs = []int32{
 	0, // 0: pb.ConnectionHeader.user_info:type_name -> pb.UserInformation
 	6, // 1: pb.ConnectionHeader.version_info:type_name -> pb.VersionInfo
 	7, // 2: pb.RequestHeader.trace_info:type_name -> pb.RPCTInfo
 	2, // 3: pb.RequestHeader.cell_block_meta:type_name -> pb.CellBlockMeta
-	3, // 4: pb.ResponseHeader.exception:type_name -> pb.ExceptionResponse
-	2, // 5: pb.ResponseHeader.cell_block_meta:type_name -> pb.CellBlockMeta
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	8, // 4: pb.RequestHeader.attribute:type_name -> pb.NameBytesPair
+	3, // 5: pb.ResponseHeader.exception:type_name -> pb.ExceptionResponse
+	2, // 6: pb.ResponseHeader.cell_block_meta:type_name -> pb.CellBlockMeta
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_RPC_proto_init() }
