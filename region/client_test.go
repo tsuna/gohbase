@@ -1454,6 +1454,59 @@ func TestScanConcurrencyControlSetCapacity(t *testing.T) {
 	}
 }
 
+func TestRegisterRPCTokenBucketClosedReturnsClientClosed(t *testing.T) {
+	tcs := []struct {
+		name   string
+		newRPC func(context.Context) (hrpc.Call, error)
+	}{
+		{
+			name: "scan",
+			newRPC: func(ctx context.Context) (hrpc.Call, error) {
+				return hrpc.NewScanRange(ctx, []byte("table"), []byte("start"), []byte("stop"))
+			},
+		},
+		{
+			name: "batch",
+			newRPC: func(context.Context) (hrpc.Call, error) {
+				return &multi{}, nil
+			},
+		},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			done := make(chan struct{})
+			tokenBucket, err := NewToken(1, 0, done)
+			if err != nil {
+				t.Fatal(err)
+			}
+			close(done)
+
+			c := &client{
+				sent:                     make(map[uint32]hrpc.Call),
+				scanTokenBucket:          tokenBucket,
+				batchRequestsTokenBucket: tokenBucket,
+				logger:                   slog.Default(),
+			}
+			rpc, err := tc.newRPC(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			id, err := c.registerRPC(rpc)
+			if err != ErrClientClosed {
+				t.Fatalf("expected %v, got %v", ErrClientClosed, err)
+			}
+			if id != 0 {
+				t.Fatalf("expected ID 0, got %d", id)
+			}
+			if len(c.sent) != 0 {
+				t.Fatalf("expected no registered RPCs, got %d", len(c.sent))
+			}
+		})
+	}
+}
+
 func TestMarshalProtoHeaderAttributes(t *testing.T) {
 	tcs := []struct {
 		name       string
