@@ -345,6 +345,9 @@ func (c *client) registerRPC(rpc hrpc.Call) (uint32, error) {
 		}
 
 		if err := c.scanTokenBucket.Take(rpc.Context()); err != nil {
+			if errors.Is(err, tokenClosedErr) {
+				return 0, ErrClientClosed
+			}
 			return 0, err
 		}
 		scanQueueLatency.WithLabelValues(c.addr).Observe(time.Since(t).Seconds())
@@ -354,6 +357,9 @@ func (c *client) registerRPC(rpc hrpc.Call) (uint32, error) {
 		// TryTake first to know if we have hit concurrency limit yet
 		if !c.batchRequestsTokenBucket.TryTake() {
 			if err := c.batchRequestsTokenBucket.Take(rpc.Context()); err != nil {
+				if errors.Is(err, tokenClosedErr) {
+					return 0, ErrClientClosed
+				}
 				return 0, err
 			}
 			concurrentBatchRequestsLimitHit.WithLabelValues(c.addr).Inc()
