@@ -197,9 +197,6 @@ func (c *client) Dial(ctx context.Context) error {
 
 		if c.ctype == RegionClient {
 			go c.processRPCs() // Batching goroutine
-			if c.pingInterval > 0 {
-				go c.controlLoop() // Ping goroutine for Scan concurrency control
-			}
 		}
 		go c.receiveRPCs() // Reader goroutine
 	})

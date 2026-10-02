@@ -207,6 +207,8 @@ type client struct {
 	pingInterval    time.Duration
 	scanController  Controller
 	scanTokenBucket *Token
+	// controlLoopOnce starts scan-control pings after the first controlled scan request.
+	controlLoopOnce sync.Once
 
 	// batch requests concurrency control
 	batchRequestsTokenBucket *Token
@@ -339,6 +341,14 @@ func (c *client) registerRPC(rpc hrpc.Call) (uint32, error) {
 	// If Take() returns an error the token is not taken
 	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil &&
 		hrpc.GetPriority(rpc) == 0 {
+		c.controlLoopOnce.Do(func() {
+			// Start the controlLoop goroutine when sending the first scan to this RegionServer.
+			// This avoids unnecessary pings on connections that have not received scans.
+			if c.pingInterval > 0 {
+				go c.controlLoop()
+			}
+		})
+
 		t := time.Now()
 		if o, ok := rpc.(hrpc.RPCObserver); ok {
 			o.SetQueueTime(t)
