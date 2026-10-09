@@ -760,13 +760,14 @@ func (c *client) metaLookup(ctx context.Context,
 	rpc, err := hrpc.NewScanRange(ctx, metaTableName, metaKey, table,
 		hrpc.Families(infoFamily),
 		hrpc.Reversed(),
-		hrpc.CloseScanner(),
 		hrpc.NumberOfRows(1))
 	if err != nil {
 		return nil, "", err
 	}
 
 	scanner := c.Scan(rpc)
+	defer scanner.Close()
+
 	resp, err := scanner.Next()
 	if err == io.EOF {
 		return nil, "", TableNotFound
