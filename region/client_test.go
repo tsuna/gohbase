@@ -878,7 +878,7 @@ func (r readBufSizeMatcher) Matches(x any) bool {
 }
 
 func (r readBufSizeMatcher) String() string {
-	return fmt.Sprintf("buf size is equal to %q", r.l)
+	return fmt.Sprintf("buf size is equal to %d", r.l)
 }
 
 func TestSanity(t *testing.T) {
