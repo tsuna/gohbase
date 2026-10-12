@@ -131,10 +131,7 @@ func (c *client) configScanControl(opts *ScanControlOptions) error {
 	initialWindow := c.scanController.Window()
 
 	// Create token bucket with given capacity
-	tb, err := NewToken(opts.MaxWindow, opts.MinWindow, c.done)
-	if err != nil {
-		return err
-	}
+	tb := newTokenBucket(opts.MaxWindow, c.done)
 
 	if opts.Interval <= 0 {
 		return fmt.Errorf("interval must be greater than 0, got %v", opts.Interval)
@@ -142,7 +139,7 @@ func (c *client) configScanControl(opts *ScanControlOptions) error {
 
 	c.pingInterval = opts.Interval
 	c.scanTokenBucket = tb
-	c.scanTokenBucket.SetCapacity(context.Background(), initialWindow)
+	c.scanTokenBucket.setCapacity(initialWindow)
 	concurrentScans.WithLabelValues(c.addr).Set(float64(initialWindow))
 	return nil
 }
@@ -156,10 +153,7 @@ func (c *client) configBatchRequestsControl(opts *BatchRequestsControlOptions) e
 		return fmt.Errorf("max concurrency must be greater than 0, got %d", opts.MaxConcurrency)
 	}
 
-	tb, err := NewToken(opts.MaxConcurrency, opts.MaxConcurrency, c.done)
-	if err != nil {
-		return err
-	}
+	tb := newTokenBucket(opts.MaxConcurrency, c.done)
 
 	c.batchRequestsTokenBucket = tb
 	concurrentBatchRequests.WithLabelValues(c.addr).Set(float64(opts.MaxConcurrency))
