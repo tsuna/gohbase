@@ -1366,6 +1366,60 @@ func TestScanConcurrencyControl(t *testing.T) {
 	c.unregisterRPC(id3)
 }
 
+func TestScannerBypassesConcurrencyControl(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		option func(hrpc.Call) error
+	}{
+		{"close", hrpc.CloseScanner()},
+		{"renew", hrpc.RenewalScan()},
+		{"priority", hrpc.Priority(5)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			done := make(chan struct{})
+			defer close(done)
+			bucket, err := NewToken(1, 1, done)
+			if err != nil {
+				t.Fatal(err)
+			}
+			c := &client{
+				sent:            make(map[uint32]hrpc.Call),
+				scanTokenBucket: bucket,
+			}
+			if !bucket.TryTake() {
+				t.Fatal("could not fill scan token bucket")
+			}
+			scan, err := hrpc.NewScanRange(t.Context(), []byte("table"), []byte("start"), nil,
+				hrpc.ScannerID(1), tc.option)
+			if err != nil {
+				t.Fatal(err)
+			}
+			id, err := c.registerRPC(scan)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := c.unregisterRPC(id); got != scan {
+				t.Fatal(err)
+			}
+			if bucket.TryTake() {
+				t.Fatal("maintenance request released another request's token")
+			}
+			bucket.Release()
+
+			// Unregistering with an empty bucket must not release an unacquired token.
+			id, err = c.registerRPC(scan)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bucket.TryTake() {
+				t.Fatal("maintenance request acquired a scan token")
+			}
+			bucket.Release()
+			c.unregisterRPC(id)
+		})
+	}
+}
+
 func TestScanConcurrencyControlSetCapacity(t *testing.T) {
 	// Create a client with scan concurrency control enabled
 	done := make(chan struct{})

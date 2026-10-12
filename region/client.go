@@ -335,12 +335,15 @@ func (c *client) failSentRPCs() {
 	}
 }
 
+func shouldCongestionControlScan(rpc hrpc.Call) bool {
+	scan, isScan := rpc.(*hrpc.Scan)
+	// Close, renewal and high priority requests skip congestion control.
+	return isScan && !scan.IsClosing() && !scan.RenewalScan() && hrpc.GetPriority(rpc) == 0
+}
+
 func (c *client) registerRPC(rpc hrpc.Call) (uint32, error) {
-	// Limit number of concurrent Scans if congestion control is enabled and the priority
-	// is not set
-	// If Take() returns an error the token is not taken
-	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil &&
-		hrpc.GetPriority(rpc) == 0 {
+	// Apply congestion control if needed
+	if c.scanTokenBucket != nil && shouldCongestionControlScan(rpc) {
 		c.controlLoopOnce.Do(func() {
 			// Start the controlLoop goroutine when sending the first scan to this RegionServer.
 			// This avoids unnecessary pings on connections that have not received scans.
@@ -393,9 +396,8 @@ func (c *client) unregisterRPC(id uint32) hrpc.Call {
 		return nil
 	}
 
-	// Release scan token if this was a scan request
-	if _, isScan := rpc.(*hrpc.Scan); isScan && c.scanTokenBucket != nil &&
-		hrpc.GetPriority(rpc) == 0 {
+	// Return the scan token only for requests subject to congestion control.
+	if c.scanTokenBucket != nil && shouldCongestionControlScan(rpc) {
 		c.scanTokenBucket.Release()
 	}
 
