@@ -289,7 +289,7 @@ func (c *client) SendBatch(ctx context.Context, batch []hrpc.Call) (
 	backoff := backoffStart
 
 	for {
-		rpcByClient, ok := c.findClients(ctx, batch, res)
+		rpcByClient, ok := c.findClients(ctx, batch, res, rpcToRes)
 		if !ok {
 			return res, false
 		}
@@ -361,15 +361,15 @@ func (c *client) SendBatch(ctx context.Context, batch []hrpc.Call) (
 // findClients will not return on the first errror encountered. It
 // will iterate through all the RPCs to ensure that all unknown
 // regions encountered in the batch will start being initialized.
-func (c *client) findClients(ctx context.Context, batch []hrpc.Call, res []hrpc.RPCResult) (
+func (c *client) findClients(ctx context.Context, batch []hrpc.Call, res []hrpc.RPCResult, rpcToRes map[hrpc.Call]int) (
 	map[hrpc.RegionClient][]hrpc.Call, bool) {
 
 	rpcByClient := make(map[hrpc.RegionClient][]hrpc.Call)
 	ok := true
-	for i, rpc := range batch {
+	for _, rpc := range batch {
 		rc, err := c.getRegionAndClientForRPC(ctx, rpc)
 		if err != nil {
-			res[i].Error = err
+			res[rpcToRes[rpc]].Error = err
 			ok = false
 			continue // see if any more RPCs are missing regions
 		}
