@@ -6,20 +6,29 @@ on:
   pull_request:
     branches: [master]
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
-        go: [~1.26, ^1]
+        go: ['~1.26', '^1']
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
+
+      - name: Setup | Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
 
       - name: Setup | Download HBase
         run: |
-          ver=2.6.2 &&
+          ver=2.6.7 &&
           wget -nv https://archive.apache.org/dist/hbase/$ver/hbase-$ver-bin.tar.gz &&
-          echo "FAF5F0F1BEC804E8C54D74E7EB9DDD7AFD22047DA086DD6ED1709DB3ADCF034F8E69208A94655575AB322BEABCDB7C8F85D9B8FCA07902F0BE34B68FED1EA331  hbase-$ver-bin.tar.gz" | sha512sum --strict --check - &&
+          echo "9F8630CE74660486AEA32C750B7DCD2A2F13A78A2F533BF39410285C9E30100DD6D7D9882A24DA00DA712A3EF27AB6A0B69D7B4CB8E9DBE9651E07DEDCA28DC7  hbase-$ver-bin.tar.gz" | sha512sum --strict --check - &&
           tar zxf hbase-$ver-bin.tar.gz --exclude=docs &&
           ln -s hbase-$ver hbase
 
@@ -55,7 +64,7 @@ jobs:
           hbase/bin/local-regionservers.sh start 1
 
       - name: Setup | Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ matrix.go }}
 
@@ -66,14 +75,11 @@ jobs:
         run: make check
 
       - name: Test
-        run: make integration_cover HBASE_HOME=hbase
-
-      - name: Upload to Codecov
-        uses: codecov/codecov-action@v5
+        run: make integration HBASE_HOME=hbase
 
       - name: Upload HBase logs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: ${{ failure() }}
         with:
-          name: hbase-logs
+          name: hbase-logs-${{ matrix.go }}
           path: hbase/logs/
