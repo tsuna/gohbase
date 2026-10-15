@@ -206,12 +206,12 @@ type client struct {
 	// scan concurrency control
 	pingInterval    time.Duration
 	scanController  Controller
-	scanTokenBucket *Token
+	scanTokenBucket *tokenBucket
 	// controlLoopOnce starts scan-control pings after the first controlled scan request.
 	controlLoopOnce sync.Once
 
 	// batch requests concurrency control
-	batchRequestsTokenBucket *Token
+	batchRequestsTokenBucket *tokenBucket
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine
@@ -357,7 +357,7 @@ func (c *client) registerRPC(rpc hrpc.Call) (uint32, error) {
 			o.SetQueueTime(t)
 		}
 
-		if err := c.scanTokenBucket.Take(rpc.Context()); err != nil {
+		if err := c.scanTokenBucket.take(rpc.Context()); err != nil {
 			if errors.Is(err, tokenClosedErr) {
 				return 0, ErrClientClosed
 			}
@@ -367,9 +367,9 @@ func (c *client) registerRPC(rpc hrpc.Call) (uint32, error) {
 	}
 
 	if _, isMulti := rpc.(*multi); isMulti && c.batchRequestsTokenBucket != nil {
-		// TryTake first to know if we have hit concurrency limit yet
-		if !c.batchRequestsTokenBucket.TryTake() {
-			if err := c.batchRequestsTokenBucket.Take(rpc.Context()); err != nil {
+		// Use tryTake first to detect whether the concurrency limit was reached.
+		if !c.batchRequestsTokenBucket.tryTake() {
+			if err := c.batchRequestsTokenBucket.take(rpc.Context()); err != nil {
 				if errors.Is(err, tokenClosedErr) {
 					return 0, ErrClientClosed
 				}
@@ -398,11 +398,11 @@ func (c *client) unregisterRPC(id uint32) hrpc.Call {
 
 	// Return the scan token only for requests subject to congestion control.
 	if c.scanTokenBucket != nil && shouldCongestionControlScan(rpc) {
-		c.scanTokenBucket.Release()
+		c.scanTokenBucket.release()
 	}
 
 	if _, isMulti := rpc.(*multi); isMulti && c.batchRequestsTokenBucket != nil {
-		c.batchRequestsTokenBucket.Release()
+		c.batchRequestsTokenBucket.release()
 	}
 
 	return rpc
@@ -985,7 +985,7 @@ func (c *client) controlLoop() {
 			pingLatency.WithLabelValues(c.addr).Observe(latency.Seconds())
 			maxScans, changed := c.scanController.Latency(latency)
 			if changed {
-				c.scanTokenBucket.SetCapacity(ctx, maxScans)
+				c.scanTokenBucket.setCapacity(maxScans)
 				concurrentScans.WithLabelValues(c.addr).Set(float64(maxScans))
 			}
 

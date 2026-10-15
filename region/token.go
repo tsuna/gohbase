@@ -4,129 +4,121 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 )
 
 var (
 	tokenClosedErr = errors.New("token bucket closed")
 )
 
-// Token represents a token bucket with dynamic capacity adjustment.
-// It uses channels for thread-safe token management
-type Token struct {
-	buf chan struct{}
-	// Maximum number of possible token
-	capacity int
-	// Channel for capacity changes
-	change chan int
-	// Actual number of tokens available
-	number int
-	// Channel to close tokens
-	done chan struct{}
+// tokenBucket represents a token bucket with a dynamically adjustable capacity.
+type tokenBucket struct {
+	done <-chan struct{}
+
+	sema chan token
+
+	mu sync.Mutex
+	// ballast is the desired count of tokens to restrict the size of sema.
+	ballast int
+	// curBallast is the actual number of ballast tokens in sema.
+	// curBallast can be lower than ballast, in which case calls
+	// to release() aid in increasing ballast.
+	curBallast int
 }
 
-// NewToken creates a new Token bucket with the specified maximum capacity and initial length.
-// done channel used to stop manager goroutine.
-func NewToken(cap, num int, done chan struct{}) (*Token, error) {
-	if cap <= 0 || num < 0 || cap < num {
-		return nil, fmt.Errorf("incorrect max capacity (%d) and/or length (%d)", cap, num)
-	}
+type token = struct{}
 
-	t := &Token{
-		buf:      make(chan struct{}, cap),
-		capacity: cap,
-		change:   make(chan int),
-		number:   num,
-		done:     done,
-	}
-
-	for i := 0; i < t.number; i++ {
-		t.buf <- struct{}{}
-	}
-
-	go t.manager()
-
-	return t, nil
+// newTokenBucket creates a token bucket initially at the specified maximum capacity.
+// Use setCapacity to change the capacity. Closing done stops blocked operations.
+func newTokenBucket(cap int, done chan struct{}) *tokenBucket {
+	return &tokenBucket{done: done, sema: make(chan token, cap)}
 }
 
-// TryTake attempts to acquire a token without blocking.
-func (t *Token) TryTake() bool {
+func (t *tokenBucket) maxSize() int {
+	return cap(t.sema)
+}
+
+// tryTake attempts to acquire a token without blocking.
+func (t *tokenBucket) tryTake() bool {
 	select {
-	case <-t.buf:
+	case t.sema <- token{}:
 		return true
 	default:
 		return false
 	}
 }
 
-// Take acquires a token from the bucket, blocking until one is available
-// or the context is cancelled. If done is closed Take returns tokenClosedErr.
-func (t *Token) Take(ctx context.Context) error {
+// take acquires a token, blocking until one is available or the context is
+// canceled. If done is closed, take returns tokenClosedErr.
+func (t *tokenBucket) take(ctx context.Context) error {
 	select {
-	case <-ctx.Done():
-		return context.Cause(ctx)
-	case <-t.done:
-		return tokenClosedErr
-	case <-t.buf:
+	case t.sema <- token{}:
 		return nil
-	}
-}
-
-// Release returns a token to the bucket. It panics when called without previous succeful Take().
-func (t *Token) Release() {
-	select {
-	case <-t.done:
-	case t.buf <- struct{}{}:
-	default:
-		panic("token: Release() without Take()")
-	}
-}
-
-// SetCapacity dynamically adjusts the number of available tokens in the bucket.
-// The new capacity must be between 0 and the maximum capacity set during initialization.
-// The adjustment is handled asynchronously by the internal manager goroutine.
-func (t *Token) SetCapacity(ctx context.Context, c int) error {
-	if c > t.capacity || c < 0 {
-		return fmt.Errorf("capacity (%d) should be between 0 and maximum (%d)", c, t.capacity)
-	}
-
-	select {
 	case <-ctx.Done():
 		return context.Cause(ctx)
 	case <-t.done:
 		return tokenClosedErr
-	case t.change <- c:
 	}
-	return nil
 }
 
-// manager is an internal goroutine that handles dynamic capacity adjustments.
-// It continuously monitors for capacity change requests and adjusts the number
-// of tokens in the bucket accordingly by either adding or removing tokens.
-func (t *Token) manager() {
-	var in chan<- struct{}
-	var out <-chan struct{}
-	target := t.number
+// release returns a token to the bucket. It panics when called without a
+// previous successful take or tryTake.
+func (t *tokenBucket) release() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 
-	for {
+	// len(t.sema) represents the amount of sema that is occupied. It should never be below the
+	// count of ballast, otherwise that indicates release has been called without a prior call to
+	// take/tryTake.
+	if len(t.sema) <= t.curBallast {
+		panic(errors.New("release called more than take"))
+	}
+
+	// A shrink may need more ballast than setCapacity could insert while tokens
+	// were held. Convert this acquired token into ballast without removing its
+	// channel entry, so releasing it does not admit another take too early.
+	if t.incBallast() {
+		return
+	}
+	<-t.sema
+}
+
+func (t *tokenBucket) incBallast() bool {
+	if t.curBallast < t.ballast {
+		t.curBallast++
+		return true
+	}
+	return false
+}
+
+// setCapacity changes the number of available tokens. The new capacity must
+// be between 0 and the maximum capacity set during initialization.
+func (t *tokenBucket) setCapacity(size int) {
+	if size < 0 || size > t.maxSize() {
+		panic(fmt.Errorf("resize must be between 0 and maxSize, got %d", size))
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.ballast = t.maxSize() - size
+
+	// Remove ballast if there is too much.
+	for t.curBallast > t.ballast {
 		select {
-		case <-t.done:
-			return
-		case in <- struct{}{}:
-			t.number++
-		case <-out:
-			t.number--
-		case target = <-t.change:
+		case <-t.sema:
+			t.curBallast--
+		default:
+			panic(errors.New("release called more than take"))
 		}
+	}
 
-		if target > t.number {
-			in = t.buf
-			out = nil
-		} else if target < t.number {
-			in = nil
-			out = t.buf
-		} else {
-			in = nil
-			out = nil
+	// Add ballast if there's not enough. Return early if adding ballast would block.
+	// Any remaining ballast will be added by release.
+	for t.curBallast < t.ballast {
+		select {
+		case t.sema <- token{}:
+			t.curBallast++
+		default:
+			return
 		}
 	}
 }
