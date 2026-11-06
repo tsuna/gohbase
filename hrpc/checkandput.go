@@ -18,11 +18,11 @@ import (
 type CheckAndPut struct {
 	*Mutate
 
-	family    []byte
-	qualifier []byte
-
 	compareType *pb.CompareType
 	comparator  *pb.Comparator
+
+	family    []byte
+	qualifier []byte
 }
 
 // NewCheckAndPut creates a CheckAndPut with only an EQUAL compare type.

@@ -67,6 +67,9 @@ type Scanner interface {
 // ScanResponseV2 contains the response from a single Next() from a
 // ScannerV2.
 type ScanResponseV2 struct {
+	// Region is the region that was scanned for this response.
+	Region RegionInfo
+
 	// Results contains ResultV2s, each of which are the results for a
 	// single row.
 	Results []ResultV2
@@ -75,9 +78,6 @@ type ScanResponseV2 struct {
 	// completed. It is the size of the uncompressed cellblocks in the
 	// response.
 	ResponseSize int
-
-	// Region is the region that was scanned for this response.
-	Region RegionInfo
 
 	// MoreResultsInRegion is true when more results from this scan
 	// are expected from the region that was just read. If this is
@@ -135,49 +135,51 @@ type ScannerV2 interface {
 // Scan represents a scanner on an HBase table.
 type Scan struct {
 	base
-	baseQuery
+	queueTime time.Time
+	sendTime  time.Time
+
+	scanStatsHandler ScanStatsHandler
+
+	// Response contains the scan's response after the RPC is
+	// completed. This is only meant for use internal to gohbase.
+	Response *ScanResponseV2
 
 	startRow []byte
 	stopRow  []byte
 
+	attribute []*pb.NameBytesPair
+	baseQuery
+
 	scannerID uint64
 
-	maxResultSize    uint64
+	maxResultSize uint64
+
+	renewInterval    time.Duration
+	scanStatsID      int64
 	numberOfRows     uint32
 	reversed         bool
-	attribute        []*pb.NameBytesPair
 	trackScanMetrics bool
 
 	closeScanner        bool
 	allowPartialResults bool
 
-	renewInterval time.Duration
-	renewalScan   bool
-
-	scanStatsHandler ScanStatsHandler
-	scanStatsID      int64
-	queueTime        time.Time
-	sendTime         time.Time
-
-	// Response contains the scan's response after the RPC is
-	// completed. This is only meant for use internal to gohbase.
-	Response *ScanResponseV2
+	renewalScan bool
 }
 
 type ScanStats struct {
+	QueueTime time.Time
+	Start     time.Time
+	End       time.Time
+	// ScanMetrics are only collected if the client requests to track the scan metrics, when
+	// TrackScanMetrics() is enabled.
+	ScanMetrics  map[string]int64
+	RegionServer string
 	Table        []byte
 	StartRow     []byte
 	EndRow       []byte
 	RegionID     uint64
-	RegionServer string
 	ScannerID    uint64
 	ScanStatsID  int64
-	// ScanMetrics are only collected if the client requests to track the scan metrics, when
-	// TrackScanMetrics() is enabled.
-	ScanMetrics  map[string]int64
-	QueueTime    time.Time
-	Start        time.Time
-	End          time.Time
 	ResponseSize int
 	Error        bool // if the scan returned error
 	Retryable    bool // if the scan returned an error and it is retryable

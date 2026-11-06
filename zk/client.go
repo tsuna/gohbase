@@ -58,10 +58,10 @@ type Client interface {
 }
 
 type client struct {
-	zks            []string
-	sessionTimeout time.Duration
 	dialer         func(ctx context.Context, network, addr string) (net.Conn, error)
 	logger         *slog.Logger
+	zks            []string
+	sessionTimeout time.Duration
 }
 
 // NewClient establishes connection to zookeeper and returns the client

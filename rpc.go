@@ -1090,8 +1090,8 @@ func sleepAndIncreaseBackoff(ctx context.Context, backoff time.Duration) (time.D
 // zkResult contains the result of a ZooKeeper lookup (when we're looking for
 // the meta region or the HMaster).
 type zkResult struct {
-	addr string
 	err  error
+	addr string
 }
 
 // zkLookup asynchronously looks up the meta region or HMaster in ZooKeeper.
@@ -1103,7 +1103,7 @@ func (c *client) zkLookup(ctx context.Context, resource zk.ResourceName) (string
 	go func() {
 		addr, err := c.zkClient.LocateResource(resource.Prepend(c.zkRoot))
 		// This is guaranteed to never block as the channel is always buffered.
-		reschan <- zkResult{addr, err}
+		reschan <- zkResult{addr: addr, err: err}
 	}()
 	select {
 	case res := <-reschan:

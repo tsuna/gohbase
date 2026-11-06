@@ -36,10 +36,10 @@ func freeMulti(m *multi) {
 }
 
 type multi struct {
-	size  int
 	calls []hrpc.Call
 	// regions preserves the order of regions to match against RegionActionResults
 	regions []hrpc.RegionInfo
+	size    int
 }
 
 func newMulti(queueSize int) *multi {

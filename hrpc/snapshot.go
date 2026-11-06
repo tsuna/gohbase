@@ -87,8 +87,8 @@ func SnapshotSkipFlush() func(Call) error {
 
 // Snapshot represents a Snapshot HBase call
 type Snapshot struct {
-	base
 	snap
+	base
 }
 
 // NewSnapshot creates a new Snapshot request that will request a
@@ -96,12 +96,12 @@ type Snapshot struct {
 func NewSnapshot(ctx context.Context, name string, table string,
 	opts ...func(Call) error) (*Snapshot, error) {
 	sn := &Snapshot{
-		base{
+		base: base{
 			table:    []byte(table),
 			ctx:      ctx,
 			resultch: make(chan RPCResult, 1),
 		},
-		snap{
+		snap: snap{
 			name: name, table: table,
 		},
 	}

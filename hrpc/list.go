@@ -10,10 +10,10 @@ import (
 
 // ListTableNames models a ListTableNames pb call
 type ListTableNames struct {
+	regex     string
+	namespace string
 	base
-	regex            string
 	includeSysTables bool
-	namespace        string
 }
 
 // ListRegex sets a regex for ListTableNames

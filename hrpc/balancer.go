@@ -14,8 +14,8 @@ import (
 
 // SetBalancer allows to enable or disable balancer
 type SetBalancer struct {
-	base
 	req *pb.SetBalancerRunningRequest
+	base
 }
 
 // NewSetBalancer creates a new SetBalancer request that will set balancer state.

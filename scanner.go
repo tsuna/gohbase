@@ -33,19 +33,20 @@ type scanner struct {
 	RPCClient
 	// rpc is original scan query
 	rpc *hrpc.Scan
-	// curRegionScannerID is the id of scanner on current region
-	curRegionScannerID uint64
-	// startRow is the start row in the current region
-	startRow []byte
 
 	response    *hrpc.ScanResponseV2
-	resultIndex int
-
-	closed      bool
 	scanMetrics map[string]int64
 
 	logger      *slog.Logger
 	renewCancel context.CancelFunc
+	// startRow is the start row in the current region
+	startRow []byte
+
+	// curRegionScannerID is the id of scanner on current region
+	curRegionScannerID uint64
+	resultIndex        int
+
+	closed bool
 }
 
 type scannerV2 struct {
