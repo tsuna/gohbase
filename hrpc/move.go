@@ -18,8 +18,8 @@ import (
 
 // MoveRegion allows to move region to a different RegionServer.
 type MoveRegion struct {
-	base
 	req *pb.MoveRegionRequest
+	base
 }
 
 // WithDestinationRegionServer specifies destination RegionServer for MoveReqion request

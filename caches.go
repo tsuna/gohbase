@@ -19,10 +19,10 @@ import (
 // clientRegionCache is client -> region cache. Used to quickly
 // look up all the regioninfos that map to a specific client
 type clientRegionCache struct {
-	m      sync.RWMutex
 	logger *slog.Logger
 
 	regions map[hrpc.RegionClient]map[hrpc.RegionInfo]struct{}
+	m       sync.RWMutex
 }
 
 // put associates a region with client for provided addrss. It returns the client if it's already
@@ -124,11 +124,11 @@ func (rcc *clientRegionCache) debugInfo(
 
 // key -> region cache.
 type keyRegionCache struct {
-	m      sync.RWMutex
 	logger *slog.Logger
 
 	// Maps a []byte of a region start key to a hrpc.RegionInfo
 	regions *b.Tree[[]byte, hrpc.RegionInfo]
+	m       sync.RWMutex
 }
 
 func (krc *keyRegionCache) get(key []byte) ([]byte, hrpc.RegionInfo) {

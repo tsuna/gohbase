@@ -141,12 +141,12 @@ type RPCResult struct {
 type base struct {
 	ctx context.Context
 
+	region   RegionInfo
+	resultch chan RPCResult
+
 	table   []byte
 	key     []byte
 	options []func(Call) error
-
-	region   RegionInfo
-	resultch chan RPCResult
 }
 
 func (b *base) Context() context.Context {
@@ -287,11 +287,11 @@ func deserializeCellBlocks(b []byte, cellsLen uint32) ([]*pb.Cell, uint32, error
 
 // Result holds a slice of Cells as well as miscellaneous information about the response.
 type Result struct {
+	// Exists is only set if existence_only was set in the request query.
+	Exists  *bool
 	Cells   []*Cell
 	Stale   bool
 	Partial bool
-	// Exists is only set if existence_only was set in the request query.
-	Exists *bool
 }
 
 func (c *Result) String() string {

@@ -61,50 +61,18 @@ type Option func(*client)
 
 // A Client provides access to an HBase cluster.
 type client struct {
-	clientType region.ClientType
-
-	regions keyRegionCache
-
-	// Maps a hrpc.RegionInfo to the *region.Client that we think currently
-	// serves it.
-	clients clientRegionCache
-
 	metaRegionInfo hrpc.RegionInfo
 
 	adminRegionInfo hrpc.RegionInfo
 
-	// The maximum size of the RPC queue in the region client
-	rpcQueueSize int
-
 	// zkClient is zookeeper for retrieving meta and admin information
 	zkClient zk.Client
 
-	// The root zookeeper path for Hbase. By default, this is usually "/hbase".
-	zkRoot string
+	compressionCodec compression.Codec
 
-	// The zookeeper session timeout
-	zkTimeout time.Duration
-
-	// The timeout before flushing the RPC queue in the region client
-	flushInterval time.Duration
-
-	// The user used when accessing regions.
-	effectiveUser string
-
-	// How long to wait for a region lookup (either meta lookup or finding
-	// meta in ZooKeeper).  Should be greater than or equal to the ZooKeeper
-	// session timeout.
-	regionLookupTimeout time.Duration
-
-	// regionReadTimeout is the maximum amount of time to wait for regionserver reply
-	regionReadTimeout time.Duration
-
-	done      chan struct{}
-	closeOnce sync.Once
+	done chan struct{}
 
 	newRegionClientFn func(string, region.ClientType, *region.RegionClientOptions) hrpc.RegionClient
-
-	compressionCodec compression.Codec
 
 	// zkDialer is used in the zkClient to connect to the quorum
 	zkDialer func(ctx context.Context, network, addr string) (net.Conn, error)
@@ -117,6 +85,38 @@ type client struct {
 	scanControlOptions *region.ScanControlOptions
 	// batch requests control options for concurrency control
 	batchRequestsControlOptions *region.BatchRequestsControlOptions
+	clientType                  region.ClientType
+
+	// The root zookeeper path for Hbase. By default, this is usually "/hbase".
+	zkRoot string
+
+	// The user used when accessing regions.
+	effectiveUser string
+
+	regions keyRegionCache
+
+	// Maps a hrpc.RegionInfo to the *region.Client that we think currently
+	// serves it.
+	clients clientRegionCache
+
+	// The maximum size of the RPC queue in the region client
+	rpcQueueSize int
+
+	// The zookeeper session timeout
+	zkTimeout time.Duration
+
+	// The timeout before flushing the RPC queue in the region client
+	flushInterval time.Duration
+
+	// How long to wait for a region lookup (either meta lookup or finding
+	// meta in ZooKeeper).  Should be greater than or equal to the ZooKeeper
+	// session timeout.
+	regionLookupTimeout time.Duration
+
+	// regionReadTimeout is the maximum amount of time to wait for regionserver reply
+	regionReadTimeout time.Duration
+
+	closeOnce sync.Once
 }
 
 // NewClient creates a new HBase client.

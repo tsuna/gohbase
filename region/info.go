@@ -33,28 +33,27 @@ func (e OfflineRegionError) Error() string {
 
 // info describes a region.
 type info struct {
-	id        uint64 // A timestamp when the region is created
-	namespace []byte
-	table     []byte
-	name      []byte
-	startKey  []byte
-	stopKey   []byte
-	specifier *pb.RegionSpecifier
-	ctx       context.Context
-	cancel    context.CancelFunc
-
-	// The attributes before this mutex are supposed to be immutable.
-	// The attributes defined below can be changed and accesses must
-	// be protected with this mutex.
-	m sync.RWMutex
+	ctx context.Context
 
 	client hrpc.RegionClient
+
+	specifier *pb.RegionSpecifier
+	cancel    context.CancelFunc
 
 	// Once a region becomes unreachable, this channel is created, and any
 	// functions that wish to be notified when the region becomes available
 	// again can read from this channel, which will be closed when the region
 	// is available again
 	available chan struct{}
+	namespace []byte
+	table     []byte
+	name      []byte
+	startKey  []byte
+	stopKey   []byte
+	id        uint64 // A timestamp when the region is created
+
+	// m protects client and available. The remaining fields are immutable.
+	m sync.RWMutex
 }
 
 // NewInfo creates a new region info

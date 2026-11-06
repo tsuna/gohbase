@@ -87,8 +87,8 @@ func SnapshotSkipFlush() func(Call) error {
 
 // Snapshot represents a Snapshot HBase call
 type Snapshot struct {
-	base
 	snap
+	base
 }
 
 // NewSnapshot creates a new Snapshot request that will request a

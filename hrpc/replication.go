@@ -12,8 +12,8 @@ import (
 
 // ListReplicationPeers models a ListReplicationPeers pb call
 type ListReplicationPeers struct {
-	base
 	regex string
+	base
 }
 
 // ListReplicationPeersRegex sets a regex for ListReplicationPeers
@@ -75,12 +75,13 @@ func (r *ListReplicationPeers) NewResponse() proto.Message {
 // AddReplicationPeer models a AddReplicationPeer pb call
 type AddReplicationPeer struct {
 	base
-	tableCfs []*pb.TableCF
 
 	peerId     string
 	clusterKey string
-	serial     bool
-	enabled    bool
+	tableCfs   []*pb.TableCF
+
+	serial  bool
+	enabled bool
 }
 
 // AddReplicationPeerReplicateTableFamilies configures a peer to replicate the given table
@@ -227,8 +228,8 @@ func (r *AddReplicationPeer) NewResponse() proto.Message {
 
 // RemoveReplicationPeer represents a RemoveReplicationPeer HBase call
 type RemoveReplicationPeer struct {
-	base
 	peerId string
+	base
 }
 
 // RemoveReplicationPeer creates a new RemoveReplicationPeer request that will delete the
@@ -268,8 +269,8 @@ func (r *RemoveReplicationPeer) NewResponse() proto.Message {
 
 // EnableReplicationPeer represents a EnableReplicationPeer HBase call
 type EnableReplicationPeer struct {
-	base
 	peerId string
+	base
 }
 
 // EnableReplicationPeer creates a new EnableReplicationPeer request that will delete the
@@ -309,8 +310,8 @@ func (r *EnableReplicationPeer) NewResponse() proto.Message {
 
 // DisableReplicationPeer represents a DisableReplicationPeer HBase call
 type DisableReplicationPeer struct {
-	base
 	peerId string
+	base
 }
 
 // DisableReplicationPeer creates a new DisableReplicationPeer request that will delete the

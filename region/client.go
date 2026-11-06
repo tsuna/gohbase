@@ -162,38 +162,16 @@ func (e NotServingRegionError) Error() string {
 
 // client manages a connection to a RegionServer.
 type client struct {
-	connM sync.Mutex
-	conn  net.Conn
+	conn net.Conn
 
-	// Address of the RegionServer.
-	addr  string
-	ctype ClientType
-
-	// dialOnce used for concurrent calls to Dial
-	dialOnce sync.Once
-	// failOnce used for concurrent calls to fail
-	failOnce sync.Once
+	scanController Controller
 
 	rpcs chan []hrpc.Call
 	done chan struct{}
 
 	// sent contains the mapping of sent call IDs to RPC calls, so that when
-	// a response is received it can be tied to the correct RPC
-	sentM sync.Mutex // protects sent
-	sent  map[uint32]hrpc.Call
-
-	// inFlight is number of rpcs sent to regionserver awaiting response
-	inFlightM sync.Mutex // protects inFlight and SetReadDeadline
-	inFlight  uint32
-
-	id uint32
-
-	rpcQueueSize  int
-	flushInterval time.Duration
-	effectiveUser string
-
-	// readTimeout is the maximum amount of time to wait for regionserver reply
-	readTimeout time.Duration
+	// a response is received it can be tied to the correct RPC.
+	sent map[uint32]hrpc.Call
 
 	// compressor for cellblocks. if nil, then no compression
 	compressor *compressor
@@ -203,15 +181,42 @@ type client struct {
 
 	logger *slog.Logger
 
-	// scan concurrency control
-	pingInterval    time.Duration
-	scanController  Controller
 	scanTokenBucket *tokenBucket
-	// controlLoopOnce starts scan-control pings after the first controlled scan request.
-	controlLoopOnce sync.Once
 
 	// batch requests concurrency control
 	batchRequestsTokenBucket *tokenBucket
+
+	// Address of the RegionServer.
+	addr  string
+	ctype ClientType
+
+	effectiveUser string
+
+	rpcQueueSize  int
+	flushInterval time.Duration
+
+	// readTimeout is the maximum amount of time to wait for regionserver reply
+	readTimeout time.Duration
+
+	// scan concurrency control
+	pingInterval time.Duration
+
+	// dialOnce used for concurrent calls to Dial
+	dialOnce sync.Once
+	// failOnce used for concurrent calls to fail
+	failOnce sync.Once
+	// controlLoopOnce starts scan-control pings after the first controlled scan request.
+	controlLoopOnce sync.Once
+
+	connM sync.Mutex
+
+	sentM sync.Mutex // protects sent
+
+	// inFlight is number of rpcs sent to regionserver awaiting response
+	inFlightM sync.Mutex // protects inFlight and SetReadDeadline
+	inFlight  uint32
+
+	id uint32
 }
 
 // QueueRPC will add an rpc call to the queue for processing by the writer goroutine

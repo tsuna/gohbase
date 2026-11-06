@@ -48,13 +48,14 @@ var emptyQualifier = map[string][]byte{"": nil}
 type Mutate struct {
 	base
 
-	mutationType pb.MutationProto_MutationType //*int32
-
 	// values is a map of column families to a map of column qualifiers to bytes
 	values map[string]map[string][]byte
 
-	ttl              []byte
-	timestamp        uint64
+	ttl       []byte
+	timestamp uint64
+
+	mutationType pb.MutationProto_MutationType //*int32
+
 	durability       DurabilityType
 	deleteOneVersion bool
 	skipbatch        bool

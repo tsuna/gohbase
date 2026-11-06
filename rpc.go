@@ -1090,8 +1090,8 @@ func sleepAndIncreaseBackoff(ctx context.Context, backoff time.Duration) (time.D
 // zkResult contains the result of a ZooKeeper lookup (when we're looking for
 // the meta region or the HMaster).
 type zkResult struct {
-	addr string
 	err  error
+	addr string
 }
 
 // zkLookup asynchronously looks up the meta region or HMaster in ZooKeeper.

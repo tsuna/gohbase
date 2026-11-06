@@ -20,14 +20,6 @@ import (
 
 // RegionClientOptions holds configuration options for RegionClient
 type RegionClientOptions struct {
-	// QueueSize sets the RPC queue size for batching requests
-	QueueSize int
-	// FlushInterval sets the flush interval for batching RPCs
-	FlushInterval time.Duration
-	// EffectiveUser sets the effective user for the connection
-	EffectiveUser string
-	// ReadTimeout sets the read timeout for RPCs
-	ReadTimeout time.Duration
 	// Codec sets the compression codec for cellblocks
 	Codec compression.Codec
 	// Dialer sets a custom dialer for connecting to region servers
@@ -38,6 +30,14 @@ type RegionClientOptions struct {
 	ScanControl *ScanControlOptions
 	// BatchRequestsControl enables concurrency control for batch requests
 	BatchRequestsControl *BatchRequestsControlOptions
+	// EffectiveUser sets the effective user for the connection
+	EffectiveUser string
+	// QueueSize sets the RPC queue size for batching requests
+	QueueSize int
+	// FlushInterval sets the flush interval for batching RPCs
+	FlushInterval time.Duration
+	// ReadTimeout sets the read timeout for RPCs
+	ReadTimeout time.Duration
 }
 
 // ScanControlOptions holds scan congestion control configuration

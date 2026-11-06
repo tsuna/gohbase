@@ -18,11 +18,12 @@ import (
 type CheckAndMutate struct {
 	*Mutate
 
+	comparator *pb.Comparator
+	filter     *pb.Filter
+
 	family      []byte
 	qualifier   []byte
 	compareType pb.CompareType
-	comparator  *pb.Comparator
-	filter      *pb.Filter
 }
 
 // NewCheckAndMutate creates a new CheckAndMutate request that will compare the value
