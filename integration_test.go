@@ -2842,6 +2842,194 @@ func TestListTableNames(t *testing.T) {
 
 }
 
+func TestGetTableSchema(t *testing.T) {
+	ac := gohbase.NewAdminClient(*host)
+	tables := []string{
+		table + "_SCHEMA1",
+		table + "_SCHEMA2",
+	}
+
+	for _, tn := range tables {
+		if err := CreateTable(ac, tn, []string{"cf", "cf2"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	defer func() {
+		for _, tn := range tables {
+			if err := DeleteTable(ac, tn); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}()
+
+	t.Run("by regex", func(t *testing.T) {
+		req, err := hrpc.NewGetTableDescriptors(
+			context.Background(),
+			hrpc.DescribeRegex(".*_SCHEMA.*"),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		schemas, err := ac.GetTableSchema(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// filter to only our test tables
+		var got []*pb.TableSchema
+		for _, s := range schemas {
+			name := string(s.GetTableName().GetQualifier())
+			if strings.HasPrefix(name, table+"_SCHEMA") {
+				got = append(got, s)
+			}
+		}
+
+		if len(got) != 2 {
+			t.Fatalf("expected 2 schemas, got %d", len(got))
+		}
+
+		for _, s := range got {
+			var cfNames []string
+			for _, cf := range s.GetColumnFamilies() {
+				cfNames = append(cfNames, string(cf.GetName()))
+			}
+			if len(cfNames) != 2 {
+				t.Errorf("table %s: expected 2 column families, got %v",
+					string(s.GetTableName().GetQualifier()), cfNames)
+			}
+		}
+	})
+
+	t.Run("by table names", func(t *testing.T) {
+		req, err := hrpc.NewGetTableDescriptors(
+			context.Background(),
+			hrpc.DescribeTableNames([]*pb.TableName{
+				{
+					Namespace: []byte("default"),
+					Qualifier: []byte(tables[0]),
+				},
+			}),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		schemas, err := ac.GetTableSchema(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(schemas) != 1 {
+			t.Fatalf("expected 1 schema, got %d", len(schemas))
+		}
+
+		gotName := string(schemas[0].GetTableName().GetQualifier())
+		if gotName != tables[0] {
+			t.Errorf("expected table %s, got %s", tables[0], gotName)
+		}
+	})
+
+	t.Run("regex no match", func(t *testing.T) {
+		req, err := hrpc.NewGetTableDescriptors(
+			context.Background(),
+			hrpc.DescribeRegex("nonexistent_table_pattern_xyz"),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		schemas, err := ac.GetTableSchema(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(schemas) != 0 {
+			t.Errorf("expected 0 schemas, got %d", len(schemas))
+		}
+	})
+
+	t.Run("sys tables", func(t *testing.T) {
+		req, err := hrpc.NewGetTableDescriptors(
+			context.Background(),
+			hrpc.DescribeRegex(".*meta.*"),
+			hrpc.DescribeNamespace("hbase"),
+			hrpc.DescribeSysTables(true),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		schemas, err := ac.GetTableSchema(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(schemas) == 0 {
+			t.Fatal("expected at least 1 sys table schema")
+		}
+
+		found := false
+		for _, s := range schemas {
+			if string(s.GetTableName().GetQualifier()) == "meta" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("expected to find hbase:meta table schema")
+		}
+	})
+
+	t.Run("all options", func(t *testing.T) {
+		req, err := hrpc.NewGetTableDescriptors(
+			context.Background(),
+			hrpc.DescribeTableNames([]*pb.TableName{
+				{
+					Namespace: []byte("default"),
+					Qualifier: []byte(tables[0]),
+				},
+				{
+					Namespace: []byte("default"),
+					Qualifier: []byte(tables[1]),
+				},
+			}),
+			hrpc.DescribeRegex(".*_SCHEMA.*"),
+			hrpc.DescribeNamespace("default"),
+			hrpc.DescribeSysTables(false),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		schemas, err := ac.GetTableSchema(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var got []*pb.TableSchema
+		for _, s := range schemas {
+			name := string(s.GetTableName().GetQualifier())
+			if strings.HasPrefix(name, table+"_SCHEMA") {
+				got = append(got, s)
+			}
+		}
+
+		if len(got) != 2 {
+			t.Fatalf("expected 2 schemas, got %d", len(got))
+		}
+
+		for _, s := range got {
+			if len(s.GetColumnFamilies()) != 2 {
+				t.Errorf("table %s: expected 2 column families, got %d",
+					string(s.GetTableName().GetQualifier()),
+					len(s.GetColumnFamilies()))
+			}
+		}
+	})
+}
+
 // Test snapshot creation
 func TestSnapshot(t *testing.T) {
 	ac := gohbase.NewAdminClient(*host)

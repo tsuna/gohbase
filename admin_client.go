@@ -36,6 +36,7 @@ type AdminClient interface {
 	RestoreSnapshot(t *hrpc.Snapshot) error
 	ClusterStatus() (*pb.ClusterStatus, error)
 	ListTableNames(t *hrpc.ListTableNames) ([]*pb.TableName, error)
+	GetTableSchema(t *hrpc.GetTableDescriptors) ([]*pb.TableSchema, error)
 	// SetBalancer sets balancer state and returns previous state
 	SetBalancer(sb *hrpc.SetBalancer) (bool, error)
 	// MoveRegion moves a region to a different RegionServer
@@ -274,6 +275,23 @@ func (c *client) ListTableNames(t *hrpc.ListTableNames) ([]*pb.TableName, error)
 		return nil, errors.New("sendPRC returned not a GetTableNamesResponse")
 	}
 	return res.GetTableNames(), nil
+}
+
+// GetTableSchema returns the table schemas matching the given request.
+// Use hrpc.NewGetTableDescriptors to build the request, with options
+// such as DescribeTableNames, DescribeRegex, or DescribeNamespace to
+// filter which tables are returned.
+func (c *client) GetTableSchema(t *hrpc.GetTableDescriptors) ([]*pb.TableSchema, error) {
+	pbmsg, err := c.SendRPC(t)
+	if err != nil {
+		return nil, err
+	}
+
+	res, ok := pbmsg.(*pb.GetTableDescriptorsResponse)
+	if !ok {
+		return nil, errors.New("sendRPC returned not a GetTableDescriptorsResponse")
+	}
+	return res.GetTableSchema(), nil
 }
 
 func (c *client) SetBalancer(sb *hrpc.SetBalancer) (bool, error) {
