@@ -37,6 +37,7 @@ type AdminClient interface {
 	ClusterStatus() (*pb.ClusterStatus, error)
 	ListTableNames(t *hrpc.ListTableNames) ([]*pb.TableName, error)
 	GetTableSchema(t *hrpc.GetTableDescriptors) ([]*pb.TableSchema, error)
+	ModifyTable(t *hrpc.ModifyTable) error
 	// SetBalancer sets balancer state and returns previous state
 	SetBalancer(sb *hrpc.SetBalancer) (bool, error)
 	// MoveRegion moves a region to a different RegionServer
@@ -292,6 +293,21 @@ func (c *client) GetTableSchema(t *hrpc.GetTableDescriptors) ([]*pb.TableSchema,
 		return nil, errors.New("sendRPC returned not a GetTableDescriptorsResponse")
 	}
 	return res.GetTableSchema(), nil
+}
+
+// ModifyTable modifies the schema of an existing table. Use
+// GetTableSchema to retrieve the current schema.
+func (c *client) ModifyTable(t *hrpc.ModifyTable) error {
+	pbmsg, err := c.SendRPC(t)
+	if err != nil {
+		return err
+	}
+
+	_, ok := pbmsg.(*pb.ModifyTableResponse)
+	if !ok {
+		return fmt.Errorf("sendRPC returned %T, not a ModifyTableResponse", pbmsg)
+	}
+	return nil
 }
 
 func (c *client) SetBalancer(sb *hrpc.SetBalancer) (bool, error) {
