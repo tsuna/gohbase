@@ -3030,6 +3030,331 @@ func TestGetTableSchema(t *testing.T) {
 	})
 }
 
+func TestModifyTable(t *testing.T) {
+	ac := gohbase.NewAdminClient(*host)
+	tn := table + "_MODIFY"
+
+	if err := CreateTable(ac, tn, []string{"cf"}); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := DeleteTable(ac, tn); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	fetchSchema := func(t *testing.T) *pb.TableSchema {
+		t.Helper()
+		req, err := hrpc.NewGetTableDescriptors(
+			context.Background(),
+			hrpc.DescribeTableNames([]*pb.TableName{
+				{Namespace: []byte("default"), Qualifier: []byte(tn)},
+			}),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		schemas, err := ac.GetTableSchema(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(schemas) != 1 {
+			t.Fatalf("expected 1 schema, got %d", len(schemas))
+		}
+		return schemas[0]
+	}
+
+	setAttr := func(t *testing.T, schema *pb.TableSchema, key, value string) {
+		t.Helper()
+		for _, attr := range schema.GetAttributes() {
+			if string(attr.GetFirst()) == key {
+				t.Logf("%s before modify: %s", key, string(attr.GetSecond()))
+				attr.Second = []byte(value)
+				return
+			}
+		}
+		schema.Attributes = append(schema.Attributes, &pb.BytesBytesPair{
+			First:  []byte(key),
+			Second: []byte(value),
+		})
+	}
+
+	setConfig := func(t *testing.T, schema *pb.TableSchema, key, value string) {
+		t.Helper()
+		for _, cfg := range schema.GetConfiguration() {
+			if cfg.GetName() == key {
+				t.Logf("%s before modify: %s", key, cfg.GetValue())
+				cfg.Value = proto.String(value)
+				return
+			}
+		}
+		schema.Configuration = append(schema.Configuration, &pb.NameStringPair{
+			Name:  proto.String(key),
+			Value: proto.String(value),
+		})
+	}
+
+	setCFAttr := func(t *testing.T, cf *pb.ColumnFamilySchema, key, value string) {
+		t.Helper()
+		for _, attr := range cf.GetAttributes() {
+			if string(attr.GetFirst()) == key {
+				t.Logf("%s before modify: %s", key, string(attr.GetSecond()))
+				attr.Second = []byte(value)
+				return
+			}
+		}
+		cf.Attributes = append(cf.Attributes, &pb.BytesBytesPair{
+			First:  []byte(key),
+			Second: []byte(value),
+		})
+	}
+
+	t.Run("add column family", func(t *testing.T) {
+		schema := fetchSchema(t)
+		if len(schema.GetColumnFamilies()) != 1 {
+			t.Fatalf("expected 1 column family, got %d",
+				len(schema.GetColumnFamilies()))
+		}
+
+		schema.ColumnFamilies = append(schema.ColumnFamilies,
+			&pb.ColumnFamilySchema{Name: []byte("cf2")})
+
+		mt, err := hrpc.NewModifyTable(context.Background(), []byte(tn), schema)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := ac.ModifyTable(mt); err != nil {
+			t.Fatal(err)
+		}
+
+		updated := fetchSchema(t)
+		cfs := updated.GetColumnFamilies()
+		if len(cfs) != 2 {
+			t.Fatalf("expected 2 column families after modify, got %d", len(cfs))
+		}
+
+		cfNames := make(map[string]bool)
+		for _, cf := range cfs {
+			cfNames[string(cf.GetName())] = true
+		}
+		if !cfNames["cf"] || !cfNames["cf2"] {
+			t.Errorf("expected column families cf and cf2, got %v", cfNames)
+		}
+	})
+
+	t.Run("modify table attributes", func(t *testing.T) {
+		schema := fetchSchema(t)
+
+		setAttr(t, schema, "MY_CUSTOM_ATTR", "attr_value")
+
+		mt, err := hrpc.NewModifyTable(context.Background(), []byte(tn), schema)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := ac.ModifyTable(mt); err != nil {
+			t.Fatal(err)
+		}
+
+		updated := fetchSchema(t)
+		found := false
+		for _, attr := range updated.GetAttributes() {
+			if string(attr.GetFirst()) == "MY_CUSTOM_ATTR" {
+				if string(attr.GetSecond()) != "attr_value" {
+					t.Errorf("expected attribute value attr_value, got %s",
+						string(attr.GetSecond()))
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("expected to find MY_CUSTOM_ATTR in table attributes")
+		}
+	})
+
+	t.Run("modify table configuration", func(t *testing.T) {
+		schema := fetchSchema(t)
+
+		setConfig(t, schema, "hbase.table.max.filesize", "1073741824")
+
+		mt, err := hrpc.NewModifyTable(context.Background(), []byte(tn), schema)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := ac.ModifyTable(mt); err != nil {
+			t.Fatal(err)
+		}
+
+		updated := fetchSchema(t)
+		found := false
+		// While this was set in the configuration, HBase returns only attributes back.
+		for _, attr := range updated.GetAttributes() {
+			if string(attr.GetFirst()) == "hbase.table.max.filesize" {
+				if string(attr.GetSecond()) != "1073741824" {
+					t.Errorf("expected value 1073741824, got %s",
+						string(attr.GetSecond()))
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("expected to find hbase.table.max.filesize in table attributes")
+		}
+	})
+
+	t.Run("set column family TTL", func(t *testing.T) {
+		schema := fetchSchema(t)
+
+		for _, cf := range schema.ColumnFamilies {
+			if string(cf.GetName()) == "cf" {
+				setCFAttr(t, cf, "TTL", "86400")
+				break
+			}
+		}
+
+		mt, err := hrpc.NewModifyTable(context.Background(), []byte(tn), schema)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := ac.ModifyTable(mt); err != nil {
+			t.Fatal(err)
+		}
+
+		updated := fetchSchema(t)
+		found := false
+		for _, cf := range updated.GetColumnFamilies() {
+			if string(cf.GetName()) != "cf" {
+				continue
+			}
+			for _, attr := range cf.GetAttributes() {
+				if string(attr.GetFirst()) == "TTL" {
+					if string(attr.GetSecond()) != "86400" {
+						t.Errorf("expected TTL 86400, got %s",
+							string(attr.GetSecond()))
+					}
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			t.Error("expected to find TTL attribute on column family cf")
+		}
+	})
+
+	t.Run("set column family VERSIONS", func(t *testing.T) {
+		schema := fetchSchema(t)
+
+		for _, cf := range schema.ColumnFamilies {
+			if string(cf.GetName()) == "cf" {
+				setCFAttr(t, cf, "VERSIONS", "5")
+				break
+			}
+		}
+
+		mt, err := hrpc.NewModifyTable(context.Background(), []byte(tn), schema)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := ac.ModifyTable(mt); err != nil {
+			t.Fatal(err)
+		}
+
+		updated := fetchSchema(t)
+		found := false
+		for _, cf := range updated.GetColumnFamilies() {
+			if string(cf.GetName()) != "cf" {
+				continue
+			}
+			for _, attr := range cf.GetAttributes() {
+				if string(attr.GetFirst()) == "VERSIONS" {
+					if string(attr.GetSecond()) != "5" {
+						t.Errorf("expected VERSIONS 5, got %s",
+							string(attr.GetSecond()))
+					}
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			t.Error("expected to find VERSIONS attribute on column family cf")
+		}
+	})
+
+	t.Run("remove column family", func(t *testing.T) {
+		schema := fetchSchema(t)
+		if len(schema.GetColumnFamilies()) != 2 {
+			t.Fatalf("expected 2 column families, got %d",
+				len(schema.GetColumnFamilies()))
+		}
+
+		// keep only cf, remove cf2
+		filtered := make([]*pb.ColumnFamilySchema, 0, 1)
+		for _, cf := range schema.ColumnFamilies {
+			if string(cf.GetName()) != "cf2" {
+				filtered = append(filtered, cf)
+			}
+		}
+		schema.ColumnFamilies = filtered
+
+		mt, err := hrpc.NewModifyTable(context.Background(), []byte(tn), schema)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := ac.ModifyTable(mt); err != nil {
+			t.Fatal(err)
+		}
+
+		updated := fetchSchema(t)
+		cfs := updated.GetColumnFamilies()
+		if len(cfs) != 1 {
+			t.Fatalf("expected 1 column family after removing cf2, got %d", len(cfs))
+		}
+		if string(cfs[0].GetName()) != "cf" {
+			t.Errorf("expected remaining column family cf, got %s",
+				string(cfs[0].GetName()))
+		}
+	})
+
+	t.Run("table does not exist", func(t *testing.T) {
+		schema := &pb.TableSchema{
+			TableName: &pb.TableName{
+				Namespace: []byte("default"),
+				Qualifier: []byte("nonexistent_table_xyz"),
+			},
+			ColumnFamilies: []*pb.ColumnFamilySchema{
+				{Name: []byte("cf")},
+			},
+		}
+
+		mt, err := hrpc.NewModifyTable(context.Background(),
+			[]byte("nonexistent_table_xyz"), schema)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := ac.ModifyTable(mt); err == nil {
+			t.Error("expected error modifying nonexistent table, got nil")
+		}
+	})
+
+	t.Run("empty, invalid column family name", func(t *testing.T) {
+		schema := fetchSchema(t)
+
+		schema.ColumnFamilies = append(schema.ColumnFamilies,
+			&pb.ColumnFamilySchema{Name: []byte("")})
+
+		mt, err := hrpc.NewModifyTable(context.Background(), []byte(tn), schema)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := ac.ModifyTable(mt); err == nil {
+			t.Error("expected error for invalid column family name, got nil")
+		}
+	})
+}
+
 // Test snapshot creation
 func TestSnapshot(t *testing.T) {
 	ac := gohbase.NewAdminClient(*host)
