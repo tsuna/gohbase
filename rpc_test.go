@@ -33,7 +33,6 @@ import (
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/wrapperspb"
-	"modernc.org/b/v2"
 )
 
 func newRegionClientFn(addr string) func() hrpc.RegionClient {
@@ -51,7 +50,7 @@ func newMockClient(zkClient zk.Client) *client {
 		clientType: region.RegionClient,
 		regions: keyRegionCache{
 			logger:  slog.Default(),
-			regions: b.TreeNew[[]byte, hrpc.RegionInfo](region.Compare),
+			regions: newRegionCacheTree(),
 		},
 		clients: clientRegionCache{
 			logger:  slog.Default(),
@@ -216,7 +215,7 @@ func TestReestablishRegionSplit(t *testing.T) {
 
 	// check the we have correct region in regions cache
 	newRegIntf, ok := c.regions.regions.Get(
-		[]byte("test1,,1480547738107.825c5c7e480c76b73d6d2bad5d3f7bb8."))
+		newRegionCacheKey([]byte("test1,,1480547738107.825c5c7e480c76b73d6d2bad5d3f7bb8.")))
 	if !ok {
 		t.Error("Expected region is not in the cache")
 	}
@@ -273,7 +272,7 @@ func TestReestablishRegionNSRE(t *testing.T) {
 
 	// check the we have the region in regions cache
 	_, ok := c.regions.regions.Get(
-		[]byte("nsre,,1434573235908.56f833d5569a27c7a43fbf547b4924a4."))
+		newRegionCacheKey([]byte("nsre,,1434573235908.56f833d5569a27c7a43fbf547b4924a4.")))
 	if !ok {
 		t.Error("Expected region is not in the cache")
 	}
@@ -629,7 +628,7 @@ func TestFindRegion(t *testing.T) {
 					len(tcase.after), c.regions.regions.Len())
 			}
 			for _, rn := range tcase.after {
-				if _, ok := c.regions.regions.Get([]byte(rn)); !ok {
+				if _, ok := c.regions.regions.Get(newRegionCacheKey([]byte(rn))); !ok {
 					t.Errorf("Expected region %q to be in regions cache", rn)
 				}
 			}

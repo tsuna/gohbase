@@ -314,40 +314,18 @@ func Compare(a, b []byte) int {
 	// they are the first region (it's the empty start key).
 	i++ // No need to check against `length', there MUST be more bytes.
 
-	// Compare keys.
-	var firstComma int
-	firstComma = min(aComma, bComma)
-	for ; i < firstComma; i++ {
-		ai := a[i]
-		bi := b[i]
-		if ai != bi { // The keys differ.
-			return int(ai) - int(bi)
-		}
+	// Compare row keys separately from the timestamp suffix so empty keys,
+	// embedded commas and keys that are prefixes of others keep their ordering.
+	if cmp := bytes.Compare(a[i:aComma], b[i:bComma]); cmp != 0 {
+		return cmp
 	}
-	if aComma < bComma {
-		return -1002 // `a' has a shorter key.  a < b
-	} else if bComma < aComma {
-		return 1002 // `b' has a shorter key.  a > b
-	}
-
-	// Keys have the same length and have compared identical.  Compare the
-	// rest, which essentially means: use start code as a tie breaker.
-	for ; /*nothing*/ i < length; i++ {
-		ai := a[i]
-		bi := b[i]
-		if ai != bi { // The start codes differ.
-			return int(ai) - int(bi)
-		}
-	}
-
-	return len(a) - len(b)
+	return bytes.Compare(a[aComma:], b[bComma:])
 }
 
-// Because there is no `LastIndexByte()' in the standard `bytes' package.
 func findCommaFromEnd(b []byte, offset int) int {
-	for i := len(b) - 1; i > offset; i-- {
-		if b[i] == ',' {
-			return i
+	if offset+1 < len(b) {
+		if i := bytes.LastIndexByte(b[offset+1:], ','); i >= 0 {
+			return offset + 1 + i
 		}
 	}
 	panic(fmt.Errorf("no comma found in %q after offset %d", b, offset))

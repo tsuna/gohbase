@@ -21,7 +21,6 @@ import (
 	"github.com/tsuna/gohbase/region"
 	"github.com/tsuna/gohbase/zk"
 	"google.golang.org/protobuf/proto"
-	"modernc.org/b/v2"
 )
 
 const (
@@ -158,7 +157,7 @@ func newClient(zkquorum string, options ...Option) *client {
 	c.zkClient = zk.NewClient(zkquorum, c.zkTimeout, c.zkDialer, c.logger)
 	c.regions = keyRegionCache{
 		logger:  c.logger,
-		regions: b.TreeNew[[]byte, hrpc.RegionInfo](region.Compare),
+		regions: newRegionCacheTree(),
 	}
 	c.clients = clientRegionCache{
 		logger:  c.logger,

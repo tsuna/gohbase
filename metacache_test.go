@@ -609,7 +609,7 @@ func TestMetaCacheGetOverlaps(t *testing.T) {
 			client := newClient("~invalid.quorum~") // fake client
 			// set up initial cache
 			for _, region := range tt.cachedRegions {
-				client.regions.regions.Set(region.Name(), region)
+				client.regions.regions.Set(newRegionCacheKey(region.Name()), region)
 			}
 
 			expectedNames := make(regionNames, len(tt.expected))
