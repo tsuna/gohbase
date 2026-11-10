@@ -122,20 +122,53 @@ func (rcc *clientRegionCache) debugInfo(
 	return clientRegionCacheMap
 }
 
+// regionCacheKey keeps the delimiter offsets of an immutable region name so tree
+// comparisons do not repeatedly search for delimiters.
+type regionCacheKey struct {
+	name     []byte
+	tableEnd int
+	keyEnd   int
+}
+
+func newRegionCacheKey(name []byte) regionCacheKey {
+	first, last := bytes.IndexByte(name, ','), bytes.LastIndexByte(name, ',')
+	if first < 0 || last <= first {
+		panic(fmt.Errorf("invalid region cache key %q", name))
+	}
+	return regionCacheKey{name: name, tableEnd: first, keyEnd: last}
+}
+
+func compareRegionCacheKeys(a, b regionCacheKey) int {
+	if cmp := bytes.Compare(a.name[:a.tableEnd], b.name[:b.tableEnd]); cmp != 0 {
+		return cmp
+	}
+	if cmp := bytes.Compare(a.name[a.tableEnd+1:a.keyEnd],
+		b.name[b.tableEnd+1:b.keyEnd]); cmp != 0 {
+		return cmp
+	}
+	return bytes.Compare(a.name[a.keyEnd+1:], b.name[b.keyEnd+1:])
+}
+
+func newRegionCacheTree() *b.Tree[regionCacheKey, hrpc.RegionInfo] {
+	return b.TreeNew[regionCacheKey, hrpc.RegionInfo](compareRegionCacheKeys)
+}
+
 // key -> region cache.
 type keyRegionCache struct {
 	m      sync.RWMutex
 	logger *slog.Logger
 
-	// Maps a []byte of a region start key to a hrpc.RegionInfo
-	regions *b.Tree[[]byte, hrpc.RegionInfo]
+	// Maps a parsed region name to a hrpc.RegionInfo.
+	regions *b.Tree[regionCacheKey, hrpc.RegionInfo]
 }
 
 func (krc *keyRegionCache) get(key []byte) ([]byte, hrpc.RegionInfo) {
+	search := newRegionCacheKey(key)
 	krc.m.RLock()
 
-	enum, ok := krc.regions.Seek(key)
+	enum, ok := krc.regions.Seek(search)
 	if ok {
+		enum.Close()
 		krc.m.RUnlock()
 		panic(fmt.Errorf("WTF: got exact match for region search key %q", key))
 	}
@@ -148,7 +181,7 @@ func (krc *keyRegionCache) get(key []byte) ([]byte, hrpc.RegionInfo) {
 		// we are the beginning of the tree
 		return nil, nil
 	}
-	return k, v
+	return k.name, v
 }
 
 // reads whole b tree in keyRegionCache and gathers debug info.
@@ -174,7 +207,7 @@ func (krc *keyRegionCache) debugInfo(
 			break
 		}
 		regions[fmt.Sprintf("%p", v)] = v
-		regionCacheMap[string(k)] = fmt.Sprintf("%p", v)
+		regionCacheMap[string(k.name)] = fmt.Sprintf("%p", v)
 	}
 
 	return regionCacheMap
@@ -200,10 +233,11 @@ func (krc *keyRegionCache) getOverlaps(reg hrpc.RegionInfo) []hrpc.RegionInfo {
 	}
 
 	// check if key created from new region falls into any cached regions
-	key := createRegionSearchKey(fullyQualifiedTable(reg), reg.StartKey())
+	key := newRegionCacheKey(createRegionSearchKey(fullyQualifiedTable(reg), reg.StartKey()))
 	enum, ok := krc.regions.Seek(key)
 	if ok {
-		panic(fmt.Errorf("WTF: found a region with exact name as the search key %q", key))
+		enum.Close()
+		panic(fmt.Errorf("WTF: found a region with exact name as the search key %q", key.name))
 	}
 
 	// case 1: landed before the first region in cache
@@ -259,6 +293,7 @@ func (krc *keyRegionCache) getOverlaps(reg hrpc.RegionInfo) []hrpc.RegionInfo {
 // them are older. Returns a slice of overlapping regions and whether
 // passed region was put in the cache.
 func (krc *keyRegionCache) put(reg hrpc.RegionInfo) (overlaps []hrpc.RegionInfo, replaced bool) {
+	key := newRegionCacheKey(reg.Name())
 	krc.m.Lock()
 	defer krc.m.Unlock()
 
@@ -269,7 +304,7 @@ func (krc *keyRegionCache) put(reg hrpc.RegionInfo) (overlaps []hrpc.RegionInfo,
 		cachedRegionTotal.Add(float64(afterLen - beforeLen))
 	}()
 
-	krc.regions.Put(reg.Name(), func(v hrpc.RegionInfo, exists bool) (hrpc.RegionInfo, bool) {
+	krc.regions.Put(key, func(v hrpc.RegionInfo, exists bool) (hrpc.RegionInfo, bool) {
 		if exists {
 			// region is already in cache,
 			// note: regions with the same name have the same age
@@ -301,7 +336,7 @@ func (krc *keyRegionCache) put(reg hrpc.RegionInfo) (overlaps []hrpc.RegionInfo,
 	// TODO: in case overlaps are always either younger or older,
 	// we can just greedily remove them in Put function
 	for _, o := range overlaps {
-		krc.regions.Delete(o.Name())
+		krc.regions.Delete(newRegionCacheKey(o.Name()))
 		// let region establishers know that they can give up
 		o.MarkDead()
 	}
@@ -312,8 +347,9 @@ func (krc *keyRegionCache) put(reg hrpc.RegionInfo) (overlaps []hrpc.RegionInfo,
 }
 
 func (krc *keyRegionCache) del(reg hrpc.RegionInfo) bool {
+	key := newRegionCacheKey(reg.Name())
 	krc.m.Lock()
-	success := krc.regions.Delete(reg.Name())
+	success := krc.regions.Delete(key)
 	krc.m.Unlock()
 	// let region establishers know that they can give up
 	reg.MarkDead()
