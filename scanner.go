@@ -329,6 +329,7 @@ func (s *scanner) makeScanRequest(rows uint32) (*hrpc.Scan, error) {
 	if s.rpc.TrackScanMetrics() {
 		opts = append(opts, hrpc.TrackScanMetrics())
 	}
+	opts = append(opts, headerAttributeOptions(s.rpc)...)
 
 	return hrpc.NewScanRange(s.rpc.Context(),
 		s.rpc.Table(),
@@ -463,12 +464,15 @@ func (s *scanner) closeRegionScanner() {
 		// if we are closing in the middle of scanning a region,
 		// send a close scanner request
 		// TODO: add a deadline
-		rpc, err := hrpc.NewScanRange(context.Background(),
-			s.rpc.Table(), s.startRow, nil,
+		opts := []func(hrpc.Call) error{
 			hrpc.ScannerID(s.curRegionScannerID),
 			hrpc.CloseScanner(),
 			hrpc.NumberOfRows(0),
-			hrpc.ScanStatsID(s.rpc.ScanStatsID()))
+			hrpc.ScanStatsID(s.rpc.ScanStatsID()),
+		}
+		opts = append(opts, headerAttributeOptions(s.rpc)...)
+		rpc, err := hrpc.NewScanRange(context.Background(),
+			s.rpc.Table(), s.startRow, nil, opts...)
 		if err != nil {
 			panic(fmt.Sprintf("should not happen: %s", err))
 		}
@@ -486,20 +490,32 @@ func (s *scanner) renew(ctx context.Context, scannerID uint64, startRow []byte) 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	rpc, err := hrpc.NewScanRange(ctx,
-		s.rpc.Table(),
-		startRow,
-		nil,
+	opts := []func(hrpc.Call) error{
 		hrpc.ScannerID(scannerID),
 		hrpc.Priority(s.rpc.Priority()),
 		hrpc.RenewalScan(),
 		hrpc.ScanStatsID(s.rpc.ScanStatsID()),
-	)
+	}
+	opts = append(opts, headerAttributeOptions(s.rpc)...)
+	rpc, err := hrpc.NewScanRange(ctx,
+		s.rpc.Table(), startRow, nil, opts...)
 	if err != nil {
 		return err
 	}
 	_, err = s.SendRPC(rpc)
 	return err
+}
+
+func headerAttributeOptions(call hrpc.Call) []func(hrpc.Call) error {
+	attributes := hrpc.GetHeaderAttributes(call)
+	if len(attributes) == 0 {
+		return nil
+	}
+	opts := make([]func(hrpc.Call) error, 0, len(attributes))
+	for _, attribute := range attributes {
+		opts = append(opts, hrpc.HeaderAttribute(attribute.GetName(), attribute.GetValue()))
+	}
+	return opts
 }
 
 func (s *scanner) renewLoop(ctx context.Context, scannerID uint64, startRow []byte) {
