@@ -1134,7 +1134,11 @@ func TestFindClients(t *testing.T) {
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			results := make([]hrpc.RPCResult, len(tc.batch))
-			got, ok := c.findClients(context.Background(), tc.batch, results)
+			rpcToRes := make(map[hrpc.Call]int, len(tc.batch))
+			for i, rpc := range tc.batch {
+				rpcToRes[rpc] = i
+			}
+			got, ok := c.findClients(context.Background(), tc.batch, results, rpcToRes)
 			if ok && len(tc.expErrs) > 0 {
 				t.Fatalf("expected error, %v", results[3])
 
@@ -2066,5 +2070,40 @@ func TestScanOnCompleteNilResponse(t *testing.T) {
 				t.Fatal("ScanStats set retry unexpectedly")
 			}
 		})
+	}
+}
+
+// Routing failures during retries must use the original result index.
+func TestSendBatchRetryRoutingFailurePreservesSuccess(t *testing.T) {
+	ctrl := test.NewController(t)
+	defer ctrl.Finish()
+	c := newMockClient(nil)
+	c.done = make(chan struct{})
+	reg := region.NewInfo(1, nil, []byte("test"), []byte("test,,1"), nil, nil)
+	rc := mockRegion.NewMockRegionClient(ctrl)
+	reg.SetClient(rc)
+	c.regions.put(reg)
+	a, _ := hrpc.NewGetStr(context.Background(), "test", "a")
+	b, _ := hrpc.NewGetStr(context.Background(), "test", "b")
+	success := &pb.GetResponse{}
+	rc.EXPECT().QueueBatch(gomock.Any(), gomock.Any()).Do(func(_ context.Context, calls []hrpc.Call) {
+		if len(calls) != 2 {
+			t.Fatalf("expected initial batch of two, got %d", len(calls))
+		}
+		a.ResultChan() <- hrpc.RPCResult{Msg: success}
+		b.ResultChan() <- hrpc.RPCResult{Error: region.RetryableError{}}
+		// Make routing fail on the retry without starting reconnect goroutines.
+		reg.MarkUnavailable()
+		close(c.done)
+	})
+	results, ok := c.SendBatch(context.Background(), []hrpc.Call{a, b})
+	if ok || len(results) != 2 {
+		t.Fatalf("unexpected results: %v, %v", results, ok)
+	}
+	if results[0].Error != nil || results[0].Msg != success {
+		t.Fatalf("successful first request overwritten: %+v", results[0])
+	}
+	if !errors.Is(results[1].Error, ErrClientClosed) {
+		t.Fatalf("retry routing error belongs to second request: %+v", results[1])
 	}
 }
